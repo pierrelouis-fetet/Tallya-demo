@@ -10,8 +10,8 @@ rien à installer.
 
 ## Ce qui distingue ce projet
 
-**Aucune dépendance, aucune étape de compilation.** Douze mille lignes de
-JavaScript, du CSS, un fichier HTML. Pas de npm, pas de bundler, pas de
+**Aucune dépendance, aucune étape de compilation.** Plus de vingt mille lignes
+de JavaScript, du CSS, un fichier HTML. Pas de npm, pas de bundler, pas de
 framework. On clone, on ouvre, ça tourne. Le déploiement consiste à copier des
 fichiers.
 
@@ -22,14 +22,15 @@ oubliait deux poches sur cinq, le même libellé valant deux montants différent
 sur deux pages, les deux totaux justes. Les chiffres avaient l'air corrects.
 Ils étaient faux.
 
-**Trente-quatre tests, sans outillage.** Ni npm ni Node : on ouvre
+**Plusieurs centaines de tests, sans outillage.** Ni npm ni Node : on ouvre
 `/tests.html`, le titre de l'onglet donne le résultat. Chaque suite correspond
 à un défaut réellement rencontré, et la suite a été validée en la faisant
-échouer exprès. Trois de ces tests lisent le code source lui-même, pour
-attraper ce qui casse le fichier avant qu'aucun autre test ne puisse tourner.
+échouer exprès. Beaucoup d'entre eux lisent le code source lui-même : ils
+dérivent la règle du fichier au lieu de la recopier, si bien que la valeur
+écrite demain est déjà couverte.
 
 **L'application refuse d'afficher ce qu'elle ne sait pas.** Aucune source
-gratuite ne publie la composition d'un fonds : plutôt que de montrer un
+gratuite ne publie la répartition par pays d'un fonds : plutôt que de montrer un
 camembert « Monde, 100 % » pour un MSCI World réellement américain à 70 %, les
 graphiques de répartition géographique ont été retirés. Un graphique faux vaut
 moins qu'un graphique absent.
