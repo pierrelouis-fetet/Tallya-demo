@@ -1,0 +1,726 @@
+{
+ "version": 2,
+ "schemaVersion": 2,
+ "meta": {
+  "objective": 100000,
+  "objectiveYear": 2030,
+  "expectedInflow": 0,
+  "modelCapital": 0,
+  "autoRefresh": true,
+  "preferredExchange": "auto",
+  "projMonthly": 450,
+  "projRate": 5,
+  "projInflation": 2,
+  "projTarget": 0,
+  "projHorizon": 20,
+  "savedAt": "",
+  "comptesReplies": []
+ },
+ "quotes": {},
+ "sales": [],
+ "now": {},
+ "accountInfo": {},
+ "strategy": {},
+ "accounts": [],
+ "accountTypes": [
+  {
+   "id": "banque",
+   "label": "Banques",
+   "groupe": "cash"
+  },
+  {
+   "id": "pea",
+   "label": "PEA",
+   "groupe": "bourse"
+  },
+  {
+   "id": "cto",
+   "label": "CTO",
+   "groupe": "bourse"
+  },
+  {
+   "id": "crypto",
+   "label": "Crypto",
+   "groupe": "bourse"
+  },
+  {
+   "id": "pe",
+   "label": "Private equity",
+   "groupe": "pe"
+  },
+  {
+   "id": "crowdfunding",
+   "label": "Crowdfunding",
+   "groupe": "pe"
+  },
+  {
+   "id": "av",
+   "label": "Assurance vie",
+   "groupe": "bourse"
+  },
+  {
+   "id": "per",
+   "label": "PER",
+   "groupe": "bourse"
+  },
+  {
+   "id": "immo",
+   "label": "Immobilier",
+   "groupe": "pe"
+  },
+  {
+   "id": "scpi",
+   "label": "SCPI",
+   "groupe": "pe"
+  },
+  {
+   "id": "epargne",
+   "label": "Épargne réglementée",
+   "groupe": "cash"
+  }
+ ],
+ "targets": {
+  "cashToInvest": 10,
+  "classes": {
+   "actions": 70,
+   "obligations": 10,
+   "metaux": 5,
+   "crypto": 5,
+   "monetaire": 10
+  },
+  "exclues": []
+ },
+ "etabs": [
+  {
+   "id": "e_banque",
+   "nom": "Banque en ligne",
+   "notes": "",
+   "dettes": []
+  },
+  {
+   "id": "e_courtier",
+   "nom": "Courtier",
+   "notes": "",
+   "dettes": []
+  },
+  {
+   "id": "e_appart",
+   "nom": "Appartement",
+   "notes": "Deux pièces, acheté il y a deux ans.",
+   "dettes": [
+    {
+     "id": "d_pret",
+     "libelle": "Prêt immobilier sur 22 ans",
+     "montant": 238800,
+     "note": "Apport de 48 000 € à l'achat."
+    }
+   ]
+  }
+ ],
+ "comptes": [
+  {
+   "id": "c_courant",
+   "etabId": "e_banque",
+   "type": "courant",
+   "statut": "ouvert",
+   "ouvertLe": "2019-04-01",
+   "numero": "",
+   "notes": "",
+   "libelle": "Compte courant",
+   "court": "Compte courant",
+   "alloc": "",
+   "cash": [
+    {
+     "montant": 4689,
+     "affectation": "courant"
+    }
+   ],
+   "lignes": []
+  },
+  {
+   "id": "c_livret",
+   "etabId": "e_banque",
+   "type": "livret",
+   "statut": "ouvert",
+   "ouvertLe": "2019-04-01",
+   "numero": "",
+   "notes": "",
+   "libelle": "Livret A",
+   "court": "Livret A",
+   "alloc": "",
+   "cash": [
+    {
+     "montant": 12040,
+     "affectation": "precaution"
+    }
+   ],
+   "lignes": []
+  },
+  {
+   "id": "c_cto",
+   "etabId": "e_courtier",
+   "type": "cto",
+   "statut": "ouvert",
+   "ouvertLe": "2024-09-01",
+   "numero": "",
+   "notes": "",
+   "libelle": "Compte-titres",
+   "court": "Compte-titres",
+   "alloc": "",
+   "cash": [
+    {
+     "montant": 965.9,
+     "affectation": "investir"
+    }
+   ],
+   "lignes": []
+  },
+  {
+   "id": "c_appart",
+   "etabId": "e_appart",
+   "type": "immo",
+   "statut": "ouvert",
+   "ouvertLe": "2024-06-01",
+   "numero": "",
+   "notes": "",
+   "libelle": "Appartement",
+   "court": "Appartement",
+   "alloc": "",
+   "cash": [],
+   "lignes": [
+    {
+     "id": "l_appart",
+     "classe": "immobilier",
+     "libelle": "Appartement",
+     "valeur": 295000,
+     "prixDeRevient": 295000,
+     "quantite": 1,
+     "dateAcquisition": "2024-06-01"
+    }
+   ]
+  }
+ ],
+ "positions": [
+  {
+   "id": "p_nintendo",
+   "name": "Nintendo",
+   "isin": "JP3756600007",
+   "symbol": "7974.T",
+   "currency": "JPY",
+   "qty": 6,
+   "buyPrice": 9800,
+   "price": 11450,
+   "fx": 0.0061,
+   "fxBuy": 0.0061,
+   "account": "c_cto",
+   "manual": false,
+   "assetClass": "actions",
+   "role": "satellite"
+  },
+  {
+   "id": "p_capcom",
+   "name": "Capcom",
+   "isin": "JP3242800005",
+   "symbol": "9697.T",
+   "currency": "JPY",
+   "qty": 6,
+   "buyPrice": 2740,
+   "price": 3180,
+   "fx": 0.0061,
+   "fxBuy": 0.0061,
+   "account": "c_cto",
+   "manual": false,
+   "assetClass": "actions",
+   "role": "satellite"
+  },
+  {
+   "id": "p_oracle",
+   "name": "Oracle",
+   "isin": "US68389X1054",
+   "symbol": "ORCL",
+   "currency": "USD",
+   "qty": 5,
+   "buyPrice": 152.0,
+   "price": 178.4,
+   "fx": 0.92,
+   "fxBuy": 0.92,
+   "account": "c_cto",
+   "manual": false,
+   "assetClass": "actions",
+   "role": "satellite"
+  }
+ ],
+ "monthly": [
+  {
+   "date": "2025-03-01",
+   "comment": "Premier relevé, deux mois après l'achat.",
+   "v": {
+    "c_courant": 2501,
+    "c_livret": 6430,
+    "c_cto": 1021,
+    "c_appart": 295000
+   },
+   "dettes": 245600
+  },
+  {
+   "date": "2025-04-01",
+   "comment": "",
+   "v": {
+    "c_courant": 2764,
+    "c_livret": 6760,
+    "c_cto": 1105,
+    "c_appart": 295000
+   },
+   "dettes": 245200
+  },
+  {
+   "date": "2025-05-01",
+   "comment": "",
+   "v": {
+    "c_courant": 2870,
+    "c_livret": 7090,
+    "c_cto": 1173,
+    "c_appart": 295000
+   },
+   "dettes": 244800
+  },
+  {
+   "date": "2025-06-01",
+   "comment": "",
+   "v": {
+    "c_courant": 3128,
+    "c_livret": 7420,
+    "c_cto": 1203,
+    "c_appart": 295000
+   },
+   "dettes": 244400
+  },
+  {
+   "date": "2025-07-01",
+   "comment": "",
+   "v": {
+    "c_courant": 3421,
+    "c_livret": 7750,
+    "c_cto": 1301,
+    "c_appart": 295000
+   },
+   "dettes": 244000
+  },
+  {
+   "date": "2025-08-01",
+   "comment": "Prime annuelle versée.",
+   "v": {
+    "c_courant": 3640,
+    "c_livret": 8080,
+    "c_cto": 1381,
+    "c_appart": 295000
+   },
+   "dettes": 243600
+  },
+  {
+   "date": "2025-09-01",
+   "comment": "",
+   "v": {
+    "c_courant": 3698,
+    "c_livret": 8410,
+    "c_cto": 1426,
+    "c_appart": 295000
+   },
+   "dettes": 243200
+  },
+  {
+   "date": "2025-10-01",
+   "comment": "",
+   "v": {
+    "c_courant": 3749,
+    "c_livret": 8740,
+    "c_cto": 1515,
+    "c_appart": 295000
+   },
+   "dettes": 242800
+  },
+  {
+   "date": "2025-11-01",
+   "comment": "",
+   "v": {
+    "c_courant": 3829,
+    "c_livret": 9070,
+    "c_cto": 1593,
+    "c_appart": 295000
+   },
+   "dettes": 242400
+  },
+  {
+   "date": "2025-12-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4086,
+    "c_livret": 9400,
+    "c_cto": 1602,
+    "c_appart": 295000
+   },
+   "dettes": 242000
+  },
+  {
+   "date": "2026-01-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4206,
+    "c_livret": 9730,
+    "c_cto": 1727,
+    "c_appart": 295000
+   },
+   "dettes": 241600
+  },
+  {
+   "date": "2026-02-01",
+   "comment": "Révision du prix du bien, inchangé.",
+   "v": {
+    "c_courant": 4123,
+    "c_livret": 10060,
+    "c_cto": 1818,
+    "c_appart": 295000
+   },
+   "dettes": 241200
+  },
+  {
+   "date": "2026-03-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4037,
+    "c_livret": 10390,
+    "c_cto": 1888,
+    "c_appart": 295000
+   },
+   "dettes": 240800
+  },
+  {
+   "date": "2026-04-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4268,
+    "c_livret": 10720,
+    "c_cto": 1920,
+    "c_appart": 295000
+   },
+   "dettes": 240400
+  },
+  {
+   "date": "2026-05-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4350,
+    "c_livret": 11050,
+    "c_cto": 2036,
+    "c_appart": 295000
+   },
+   "dettes": 240000
+  },
+  {
+   "date": "2026-06-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4413,
+    "c_livret": 11380,
+    "c_cto": 2132,
+    "c_appart": 295000
+   },
+   "dettes": 239600
+  },
+  {
+   "date": "2026-07-01",
+   "comment": "",
+   "v": {
+    "c_courant": 4555,
+    "c_livret": 11710,
+    "c_cto": 2210,
+    "c_appart": 295000
+   },
+   "dettes": 239200
+  },
+  {
+   "date": "2026-08-01",
+   "comment": "Mois calme.",
+   "v": {
+    "c_courant": 4689,
+    "c_livret": 12040,
+    "c_cto": 2322,
+    "c_appart": 295000
+   },
+   "dettes": 238800
+  }
+ ],
+ "budget": {
+  "monthlyTarget": 1100,
+  "categories": [
+   "Courses",
+   "Restaurants",
+   "Loisirs",
+   "Voyages",
+   "Santé",
+   "Maison",
+   "Imprévus"
+  ],
+  "income": [
+   {
+    "label": "Salaire",
+    "amount": 3950
+   },
+   {
+    "label": "Prime trimestrielle",
+    "amount": 180
+   }
+  ],
+  "contributors": [],
+  "fixedCharges": [
+   {
+    "label": "Prêt immobilier",
+    "amount": 1186,
+    "period": "mois",
+    "provider": "Banque",
+    "shares": {}
+   },
+   {
+    "label": "Charges de copropriété",
+    "amount": 145,
+    "period": "mois",
+    "provider": "Syndic",
+    "shares": {}
+   },
+   {
+    "label": "Taxe foncière",
+    "amount": 1080,
+    "period": "an",
+    "provider": "Trésor public",
+    "shares": {}
+   },
+   {
+    "label": "Assurance habitation",
+    "amount": 22,
+    "period": "mois",
+    "provider": "Assureur",
+    "shares": {}
+   },
+   {
+    "label": "Électricité",
+    "amount": 94,
+    "period": "mois",
+    "provider": "Fournisseur",
+    "shares": {}
+   },
+   {
+    "label": "Internet",
+    "amount": 32,
+    "period": "mois",
+    "provider": "Opérateur",
+    "shares": {}
+   },
+   {
+    "label": "Mobile",
+    "amount": 16,
+    "period": "mois",
+    "provider": "Opérateur",
+    "shares": {}
+   },
+   {
+    "label": "Transports",
+    "amount": 49,
+    "period": "mois",
+    "provider": "Réseau urbain",
+    "shares": {}
+   }
+  ],
+  "toReview": [],
+  "supplements": [],
+  "expenses": [
+   {
+    "month": "2025-03-01",
+    "v": {
+     "Courses": 354,
+     "Restaurants": 111,
+     "Loisirs": 44,
+     "Imprévus": 178
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-04-01",
+    "v": {
+     "Courses": 348,
+     "Restaurants": 203,
+     "Loisirs": 43,
+     "Voyages": 352,
+     "Maison": 300
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-05-01",
+    "v": {
+     "Courses": 411,
+     "Restaurants": 250,
+     "Loisirs": 150,
+     "Voyages": 149,
+     "Santé": 24
+    },
+    "note": "Week-end à Lisbonne."
+   },
+   {
+    "month": "2025-06-01",
+    "v": {
+     "Courses": 335,
+     "Restaurants": 182,
+     "Loisirs": 134,
+     "Santé": 60
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-07-01",
+    "v": {
+     "Courses": 325,
+     "Restaurants": 213,
+     "Loisirs": 154,
+     "Santé": 42
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-08-01",
+    "v": {
+     "Courses": 413,
+     "Restaurants": 140,
+     "Loisirs": 69,
+     "Voyages": 338,
+     "Santé": 55
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-09-01",
+    "v": {
+     "Courses": 364,
+     "Restaurants": 117,
+     "Loisirs": 134
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-10-01",
+    "v": {
+     "Courses": 335,
+     "Restaurants": 156,
+     "Loisirs": 78,
+     "Voyages": 521,
+     "Santé": 83,
+     "Maison": 117
+    },
+    "note": "Chaudière à remplacer."
+   },
+   {
+    "month": "2025-11-01",
+    "v": {
+     "Courses": 305,
+     "Restaurants": 188,
+     "Loisirs": 82,
+     "Voyages": 137,
+     "Santé": 73,
+     "Maison": 128
+    },
+    "note": ""
+   },
+   {
+    "month": "2025-12-01",
+    "v": {
+     "Courses": 283,
+     "Restaurants": 146,
+     "Loisirs": 54
+    },
+    "note": ""
+   },
+   {
+    "month": "2026-01-01",
+    "v": {
+     "Courses": 376,
+     "Restaurants": 215,
+     "Loisirs": 89,
+     "Voyages": 255,
+     "Maison": 280
+    },
+    "note": ""
+   },
+   {
+    "month": "2026-02-01",
+    "v": {
+     "Courses": 335,
+     "Restaurants": 113,
+     "Loisirs": 66
+    },
+    "note": ""
+   },
+   {
+    "month": "2026-03-01",
+    "v": {
+     "Courses": 341,
+     "Restaurants": 154,
+     "Loisirs": 65,
+     "Voyages": 581,
+     "Santé": 63
+    },
+    "note": "Vacances d'été réservées."
+   },
+   {
+    "month": "2026-04-01",
+    "v": {
+     "Courses": 322,
+     "Restaurants": 247,
+     "Loisirs": 145,
+     "Voyages": 611,
+     "Imprévus": 231
+    },
+    "note": ""
+   },
+   {
+    "month": "2026-05-01",
+    "v": {
+     "Courses": 388,
+     "Restaurants": 194,
+     "Loisirs": 116
+    },
+    "note": ""
+   },
+   {
+    "month": "2026-06-01",
+    "v": {
+     "Courses": 307,
+     "Restaurants": 96,
+     "Loisirs": 75,
+     "Voyages": 406,
+     "Maison": 129
+    },
+    "note": ""
+   },
+   {
+    "month": "2026-07-01",
+    "v": {
+     "Courses": 300,
+     "Restaurants": 176,
+     "Loisirs": 178,
+     "Voyages": 574,
+     "Maison": 275
+    },
+    "note": "Mois calme."
+   },
+   {
+    "month": "2026-08-01",
+    "v": {
+     "Courses": 349,
+     "Restaurants": 91,
+     "Loisirs": 126,
+     "Voyages": 522
+    },
+    "note": ""
+   }
+  ]
+ }
+}

@@ -1,0 +1,20 @@
+# Clé d'accès du mode réseau local — ne doit JAMAIS partir sur Git ni en ligne
+.access-key
+
+# Python
+__pycache__/
+*.pyc
+
+# Exports et sauvegardes générés localement (ils contiennent tes montants)
+*.xlsx
+*.csv
+wealth-dashboard-*.json
+patrimoine-*.json
+positions-*.json
+historique-*.json
+
+# Système
+Thumbs.db
+desktop.ini
+.DS_Store
+_validate_palette.mjs

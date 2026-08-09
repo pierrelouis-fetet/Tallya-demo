@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "_pourquoi": [
+    "Meme logique que le dossier principal : « demo » se rattache au serveur",
+    "deja ouvert sur 8766 sans rien lancer, « demo-lancer » demarre serve.py.",
+    "Le port est fige : localStorage est lie a l'origine, et 8766 est",
+    "l'origine de la demonstration, distincte du 8765 du dossier principal."
+  ],
+  "configurations": [
+    { "name": "demo", "url": "http://localhost:8766", "port": 8766 },
+    { "name": "demo-lancer", "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py", "--port", "8766", "--no-browser"],
+      "port": 8766, "autoPort": false }
+  ]
+}

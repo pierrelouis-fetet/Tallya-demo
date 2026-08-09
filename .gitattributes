@@ -1,0 +1,12 @@
+# Les scripts batch doivent garder des fins de ligne Windows, sinon cmd.exe
+# peut mal interpréter les blocs `if`.
+*.cmd text eol=crlf
+
+# Le reste en LF : c'est ce qu'attendent les runtimes web et Python.
+*.js   text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+_headers text eol=lf
