@@ -396,7 +396,9 @@ const comptesOuverts = () => COMPTES().filter(c => c.statut !== 'archive');
 const nomCompteV2 = c => c.libelle
   || (((c.lignes || []).length === 1 && !(c.cash || []).length
        && String(c.lignes[0].libelle || '').trim()) || '')
-  || typeCompte(c.type).label;
+  /* Le repli sur le libelle du type est le seul morceau qui vienne de la
+     table et non du detenteur : lui seul se traduit. */
+  || trad(typeCompte(c.type).label);
 const nomEtabDe = c => etabById(c.etabId)?.nom || '';
 
 /* Le nom affiche d'une ligne de placement.
@@ -1817,12 +1819,12 @@ function posDayChange(p) {
    on le déduit des horaires de séance qu'il joint au cours. Sans rien de
    tout ça, on préfère se taire plutôt que d'affirmer « fermé » à tort. */
 const MARKET_STATES = {
-  REGULAR:    { cle: 'open',  label: 'ouvert' },
-  PRE:        { cle: 'pre',   label: 'pré-ouverture' },
-  PREPRE:     { cle: 'pre',   label: 'avant pré-ouverture' },
-  POST:       { cle: 'post',  label: 'après clôture' },
-  POSTPOST:   { cle: 'close', label: 'fermé' },
-  CLOSED:     { cle: 'close', label: 'fermé' },
+  REGULAR:    { cle: 'open',  label: trad('ouvert') },
+  PRE:        { cle: 'pre',   label: trad('pré-ouverture') },
+  PREPRE:     { cle: 'pre',   label: trad('avant pré-ouverture') },
+  POST:       { cle: 'post',  label: trad('après clôture') },
+  POSTPOST:   { cle: 'close', label: trad('fermé') },
+  CLOSED:     { cle: 'close', label: trad('fermé') },
 };
 
 /* Au-delà de cette ancienneté, un cours n'est plus celui d'un marché qui cote.
@@ -3194,7 +3196,7 @@ function byAccountType() {
   return [...parType.entries()]
     .filter(([, value]) => Math.abs(value) > 0.005)
     .map(([type, value]) => ({
-      label: typeCompte(type).label,
+      label: trad(typeCompte(type).label),
       value, pct: invested ? value / invested * 100 : 0,
     }))
     .sort((a, b) => b.value - a.value);

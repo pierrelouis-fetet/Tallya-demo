@@ -7464,7 +7464,9 @@ suite('Une ligne de projection annonce le taux qu’elle subit', () => {
   function fiche() {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    const phrase = src.match(/const A_PLAT = '([^']+)'/);
+    /* A_PLAT se traduit a sa declaration : la phrase francaise reste la clef,
+       et c'est elle que la fiche recoit — les tests tournent en francais. */
+    const phrase = src.match(/const A_PLAT = trad\('([^']+)'\)/);
     vrai(phrase, 'la phrase « à plat » doit vivre à un seul endroit, dans A_PLAT : '
       + 'recopiée, c’est l’un des exemplaires qui finit par mentir');
     const bloc = src.match(/\n  baseProjection: \(\) => \{[\s\S]*?\n  \},/);
@@ -10622,8 +10624,8 @@ suite('Enregistrer : une règle, deux familles', () => {
        comme frontiere. */
     const bloc = src.slice(src.indexOf('function askMonthlySnapshot'),
                            src.indexOf('const APERCUS'));
-    vrai(/id="relOk"[^>]*>Enregistrer</.test(bloc) && /id="relFermer"[^>]*>Fermer</.test(bloc),
-      'le pied porte Enregistrer et Fermer, comme la fenêtre des dépenses');
+    vrai(/id="relOk"[^>]*>\$\{trad\('Enregistrer'\)\}</.test(bloc) && /id="relFermer"[^>]*>\$\{trad\('Fermer'\)\}</.test(bloc),
+      'le pied porte Enregistrer et Fermer, traduits, comme la fenêtre des dépenses');
     vrai(!/relCancel/.test(bloc),
       '« Annuler » est parti : il ne désignait plus rien de distinct de Fermer');
     vrai(/appliquerReleve\(index/.test(bloc),

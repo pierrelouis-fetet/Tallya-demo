@@ -817,8 +817,8 @@ function viewOverview() {
              qu'a deux gestes sur telephone — et le raccourci « h » demeure. -->
         <button type="button" class="btn-oeil hero-oeil" data-action="toggle-masque"
                 aria-pressed="${masqueActif() ? 'true' : 'false'}"
-                aria-label="${masqueActif() ? 'Afficher les montants' : 'Masquer les montants'}"
-                title="${masqueActif() ? 'Afficher les montants' : 'Masquer les montants'} (touche h)">
+                aria-label="${masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants')}"
+                title="${masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants')} ${trad('(touche h)')}">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path class="o-contour" d="M1.9 12S5.9 5.6 12 5.6 22.1 12 22.1 12 18.1 18.4 12 18.4 1.9 12 1.9 12Z"/>
             <circle class="o-pupille" cx="12" cy="12" r="3"/>
@@ -1550,7 +1550,7 @@ function viewNotifs() {
       <div class="plc-ligne">
         <span class="cpt-nom">${esc(x.title)}<span class="sub">${escMontant(x.detail)}</span></span>
         <button class="btn sm ghost" data-action="goto" data-view="${esc(x.view)}"
-                data-anchor="">Voir</button>
+                data-anchor="">${trad('Voir')}</button>
         <button class="btn icon xs" data-action="masquer-notif" data-cle="${esc(x.cle)}"
                 title="${trad('Ne plus signaler')}" aria-label="Ne plus signaler : ${esc(x.title)}">✕</button>
       </div>`).join('')}
@@ -1599,7 +1599,7 @@ function viewPerformance() {
             data-action="apercu" data-apercu="perfLatente">
       <span class="t-label">${trad('Lignes en gain')}</span>
       <span class="t-value">${lat.winners} / ${lat.count}</span>
-      <span class="t-meta">${tout.count ? `${tout.wins}/${tout.count} ventes gagnantes` : 'aucune vente encore'}</span>
+      <span class="t-meta">${tout.count ? `${tout.wins}/${tout.count} ${trad('ventes gagnantes')}` : trad('aucune vente encore')}</span>
       <span class="t-go">⋯</span>
     </button>
   </div>
@@ -1657,24 +1657,24 @@ function viewPerformance() {
            baisse que le titre avait deja subie avant l'achat, et rien ne le
            dirait. C'est le defaut qui a coute la soiree du 5 aout. */
         return `<p class="hint" style="margin:12px 0 0">
-          ${sansDate} ligne${sansDate > 1 ? 's n’ont' : ' n’a'} pas de date d’achat :
-          leur écart du jour suppose que tu ${sansDate > 1 ? 'les détenais' : 'la détenais'}
-          hier soir. La date se renseigne dans la fiche de la ligne.</p>`;
+          ${sansDate} ${sansDate > 1
+            ? trad('lignes n’ont pas de date d’achat : leur écart du jour suppose que tu les détenais hier soir. La date se renseigne dans la fiche de la ligne.')
+            : trad('ligne n’a pas de date d’achat : son écart du jour suppose que tu la détenais hier soir. La date se renseigne dans la fiche de la ligne.')}</p>`;
       })()}
     </div>
     <div class="card">
       <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
            « vente par vente » au-dessus de barres trimestrielles annoncerait la
            mauvaise lecture. -->
-      <div class="card-head"><h2>Réalisée, ${st.count && !ventesSeNomment(salesRange, st.count)
-        ? `par ${pasDesVentes(salesRange)}` : 'vente par vente'}</h2>${tout.count ? plages : ''}</div>
+      <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
+        ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>${tout.count ? plages : ''}</div>
       <!-- La phrase donnait l'itineraire vers Marches pour y trouver le bouton
            « Vendre une ligne ». Il est maintenant dans le journal, deux cartes
            plus bas, sur la page ou l'on se trouve deja. -->
       ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
         <p class="empty">${tout.count
           ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
-          : 'Aucune vente enregistrée. Le journal, plus bas, porte le bouton pour en saisir une.'}</p>`}
+          : trad('Aucune vente enregistrée. Le journal, plus bas, porte le bouton pour en saisir une.')}</p>`}
     </div>
   </div>
 
@@ -1761,7 +1761,7 @@ function mountPerformance() {
    quand ces lignes-ci répondent à « qu'est-ce qui lui arrive ? ». Deux
    questions, deux réponses ; ce serait la même phrase à deux endroits qui
    poserait problème. */
-const A_PLAT = 'porté à plat, sans rendement';
+const A_PLAT = trad('porté à plat, sans rendement');
 
 /* La longueur maximale d'un nom de ligne.
 
@@ -2835,10 +2835,10 @@ function viewPositions() {
              lignes vivait sous ce tableau et disait la meme chose. Il chargeait
              l'ecran a chaque visite pour un texte qu'on lit une fois. -->
         <div class="jour-ligne entete">
-          <span>Ligne</span>
-          <span><i class="col-aide" data-aide="La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %." tabindex="0" role="button">Poids</i></span>
-          <span><i class="col-aide" data-aide="La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd'hui se compare à ton prix d'achat, et le dit sous son nom : tu ne la détenais pas hier soir." tabindex="0" role="button">Var.</i></span>
-          <span><i class="col-aide" data-aide="Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage." tabindex="0" role="button">Effet</i></span>
+          <span>${trad('Ligne')}</span>
+          <span><i class="col-aide" data-aide="${trad('La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}" tabindex="0" role="button">${trad('Poids')}</i></span>
+          <span><i class="col-aide" data-aide="${trad('La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd’hui se compare à ton prix d’achat, et le dit sous son nom : tu ne la détenais pas hier soir.')}" tabindex="0" role="button">${trad('Var.')}</i></span>
+          <span><i class="col-aide" data-aide="${trad('Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage.')}" tabindex="0" role="button">${trad('Effet')}</i></span>
         </div>
         ${j.lignes.map(l => `
           <div class="jour-ligne">
@@ -3178,11 +3178,11 @@ function salesCard() {
   <div class="card" data-anchor="ventes">
     <div class="card-head">
       <h2>${trad('Journal des ventes')}</h2>
-      ${toutes.length ? `<span class="hint">${st.count} vente${st.count > 1 ? 's' : ''}${
-        an === 'all' ? '' : ` en ${an}`} sur ${toutes.length}</span>` : ''}
+      ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
+        an === 'all' ? '' : ` ${trad('en')} ${an}`} ${trad('sur.investis', 'sur')} ${toutes.length}</span>` : ''}
       <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
-              title="${aVendre ? 'Enregistrer une vente et sa plus-value'
-                               : 'Aucune ligne de titres à vendre'}">− Vendre</button>
+              title="${aVendre ? trad('Enregistrer une vente et sa plus-value')
+                               : trad('Aucune ligne de titres à vendre')}">− ${trad('Vendre')}</button>
       <!-- La vente d'avant l'application : elle entre au journal telle qu'on
            s'en souvient, et n'ecrit rien d'autre — ni cash, ni position, ni
            patrimoine. C'est le chemin pour un PEA cloture, sans avoir a
@@ -3192,11 +3192,11 @@ function salesCard() {
     </div>
     ${toutes.length && annees.length > 1
       ? `<div class="row" style="margin:0 0 12px">${yearControl('sales-year', annees, an)}</div>` : ''}
-    ${!toutes.length ? `<p class="empty">Aucune vente enregistrée. ${aVendre
-      ? 'Le bouton « Vendre » enregistre la vente, sa plus-value, et crédite le compte de ton choix.'
-      : 'Il faut une ligne de titres avant de pouvoir en vendre une.'}</p>` : `
+    ${!toutes.length ? `<p class="empty">${trad('Aucune vente enregistrée.')} ${aVendre
+      ? trad('Le bouton « Vendre » enregistre la vente, sa plus-value, et crédite le compte de ton choix.')
+      : trad('Il faut une ligne de titres avant de pouvoir en vendre une.')}</p>` : `
     <div class="grid g-3 g-tuiles" style="margin-bottom:12px">
-      ${tile('Produit des ventes', st.gross, null, 'var(--series-1)', `${st.count} vente${st.count > 1 ? 's' : ''}`, 'ventesRealisees')}
+      ${tile(trad('Produit des ventes'), st.gross, null, 'var(--series-1)', `${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}`, 'ventesRealisees')}
       ${tile('Prix de revient vendu', st.invested, null, 'var(--series-7)', 'Coût des titres cédés')}
       <div class="tile" style="--tile-color:var(--series-2)">
         <span class="t-label">${trad('Ventes gagnantes')}</span>
@@ -3214,12 +3214,12 @@ function salesCard() {
          ainsi leur bouton d'annulation, qu'un panneau de lecture aurait perdu.
          Meme motif que le journal des apports. -->
     ${st.count ? `<details class="data-view">
-      <summary>Voir les ${st.count} vente${st.count > 1 ? 's' : ''}</summary>
+      <summary>${trad('Voir les')} ${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}</summary>
       <div class="table-wrap">
       <table>
         <thead><tr>
           <th>Date</th><th>${trad('Ligne')}</th><th>${trad('Qté')}</th>
-          <th>Prix vente <span class="u">dev.</span></th><th>Prix revient <span class="u">dev.</span></th>
+          <th>${trad('Prix vente')} <span class="u">${trad('dev.')}</span></th><th>${trad('Prix revient')} <span class="u">${trad('dev.')}</span></th>
           <th>Encaissé <span class="u">€</span></th><th>Résultat <span class="u">€</span></th>
           <th>%</th><th>Note</th><th></th>
         </tr></thead>
@@ -3985,10 +3985,10 @@ function diagnosticRoles(rr) {
   }
   const gros = [...parClasse].sort((a, b) => b[1] - a[1])[0];
   const partGros = gros && sat.value ? gros[1] / sat.value * 100 : 0;
-  const phrases = [`Le ${ROLES.core.toLowerCase()} représente <b>${fmtPct(socle.pct, 1)}</b> ${BASES.baseCibles.de}.`];
+  const phrases = [`${trad('Le')} ${ROLES.core.toLowerCase()} ${trad('représente')} <b>${fmtPct(socle.pct, 1)}</b> ${BASES.baseCibles.de}.`];
   if (gros && partGros >= 50) {
-    phrases.push(`La part arbitrable est à <b>${fmtPct(partGros, 0)}</b> ${
-      esc(gros[0].toLowerCase())} : une seule classe en porte l’essentiel.`);
+    phrases.push(`${trad('La part arbitrable est à')} <b>${fmtPct(partGros, 0)}</b> ${
+      esc(gros[0].toLowerCase())}${trad(' : une seule classe en porte l’essentiel.')}`);
   }
   return `<p class="plan-phrase" style="font-size:13.5px">${phrases.join(' ')}</p>`;
 }
@@ -4014,11 +4014,11 @@ function viewRebalance() {
   const dehorsDetail = (() => {
     const p = patrimoine();
     return [
-      ['immobilier', "d'immobilier", p.classes.immobilier],
-      ['non coté', 'de non coté', per.nonCote],
+      [trad('immobilier'), "d'immobilier", p.classes.immobilier],
+      [trad('non coté'), 'de non coté', per.nonCote],
       /* Les noms viennent d'AFFECTATIONS, comme partout : cette liste ecrivait
          « cash du quotidien et precaution », un huitieme mot pour ces euros. */
-      [`${AFFECTATION_LABEL.courant.toLowerCase()} et ${AFFECTATION_LABEL.precaution.toLowerCase()}`,
+      [`${AFFECTATION_LABEL.courant.toLowerCase()} ${trad('et')} ${AFFECTATION_LABEL.precaution.toLowerCase()}`,
        `de ${AFFECTATION_LABEL.courant.toLowerCase()} et d’${AFFECTATION_LABEL.precaution.toLowerCase()}`,
        p.courant + p.precaution + p.projet],
     ].filter(([, , v]) => v > 0.005);
@@ -4060,7 +4060,7 @@ function viewRebalance() {
   const listeMvt = (lignes, sens) => lignes.map(c =>
     `<li><b>${esc(c.label)}</b> <span class="montant-plan${sens > 0 ? ' renfort' : ''}">${
       sens > 0 ? '+' : '−'}${fmtEUR0(Math.abs(c.delta))}</span>
-      <span class="muted">pour atteindre ${fmtPct(c.targetPct, 0)}</span></li>`).join('');
+      <span class="muted">${trad('pour atteindre')} ${fmtPct(c.targetPct, 0)}</span></li>`).join('');
 
   /* Une ligne par classe, pas un tableau.
      Six colonnes ne tiennent pas dans 375 px : le tableau debordait de 109 px
@@ -4174,7 +4174,7 @@ function viewRebalance() {
              plus. Les deux sont des arbitrages, un seul poids leur suffit. La
              couleur de la page les porte, le signe et le verbe disent le sens. -->
         <span class="reeq-ecart ${ecartFait ? 'muted' : 'a-faire'}">${ecartFait
-          ? 'à la cible'
+          ? trad('à la cible')
           /* Le montant se detache du verbe pour porter sa couleur seul : vert
              quand il faut renforcer — on ajoute, c'est le sens de la croissance
              et le geste qu'on vient chercher ici — neutre quand il faut alleger
@@ -4182,10 +4182,10 @@ function viewRebalance() {
              verbe reste gris dans les deux cas : c'est une consigne, pas un
              chiffre. */
           : `<b class="${row.delta > 0 ? 'renfort' : ''}">${
-                row.delta > 0 ? '+' : '−'}${fmtEUR0(Math.abs(row.delta))}</b> à ${
-              row.delta > 0 ? 'renforcer'
+                row.delta > 0 ? '+' : '−'}${fmtEUR0(Math.abs(row.delta))}</b> ${
+              row.delta > 0 ? trad('à renforcer')
               /* Réduire de la trésorerie, c'est la placer, pas l'alléger. */
-              : row.cle === 'cashToInvest' ? 'placer' : 'alléger'}`}</span>
+              : row.cle === 'cashToInvest' ? trad('à placer') : trad('à alléger')}`}</span>
       </div>
     </li>`;
   };
@@ -4216,14 +4216,14 @@ function viewRebalance() {
        rebalancer.
        (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
        gabarit, un backtick y fermerait la chaine.) -->
-  <p class="perimetre perimetre-tete">Ces cibles ne portent que sur
-    <b>${trad('tes comptes d’investissement')}</b> et leur trésorerie,
+  <p class="perimetre perimetre-tete">${trad('Ces cibles ne portent que sur')}
+    <b>${trad('tes comptes d’investissement')}</b> ${trad('et leur trésorerie,')}
     ${fmtEUR0(r.base)}${aide(trad("PEA, compte-titres, assurance-vie, PER, portefeuille de cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger donnerait des pourcentages qu’aucune décision ne peut suivre. L’onglet Patrimoine, lui, montre tout."))}.</p>
 
   <!-- Ce qu'il y a a faire, avant tout le reste. -->
   <div class="card plan">
-    <div class="card-head"><h2>Ce qu'il y a à faire${aide(trad("Les mouvements qui ramènent chaque classe à sa cible. Quand tes pourcentages totalisent 100 %, ce qu’il faut vendre finance exactement ce qu’il faut acheter."))}</h2>
-      <span class="hint">${mouvements.length ? `${mouvements.length} mouvement${mouvements.length > 1 ? 's' : ''}` : 'rien à faire'}</span></div>
+    <div class="card-head"><h2>${trad('Ce qu’il y a à faire')}${aide(trad("Les mouvements qui ramènent chaque classe à sa cible. Quand tes pourcentages totalisent 100 %, ce qu’il faut vendre finance exactement ce qu’il faut acheter."))}</h2>
+      <span class="hint">${mouvements.length ? `${mouvements.length} ${mouvements.length > 1 ? trad('mouvements') : trad('mouvement')}` : trad('rien à faire')}</span></div>
     ${!mouvements.length
       ? `<p class="empty">${trad('✓ Chaque classe est à sa cible. Rien à arbitrer.')}</p>`
       : `
@@ -4240,7 +4240,7 @@ function viewRebalance() {
            en tete de la carte, a chaque visite. -->
       <div class="plan-cols">
         ${alleger.length ? `<div>
-          <h3>${alleger.every(c => c.cle === 'cashToInvest') ? 'À placer' : 'À alléger'}</h3>
+          <h3>${alleger.every(c => c.cle === 'cashToInvest') ? trad('À placer') : trad('À alléger')}</h3>
           <ul>${listeMvt(alleger, -1)}</ul>
         </div>` : ''}
         ${renforcer.length ? `<div>
@@ -4251,12 +4251,12 @@ function viewRebalance() {
                se dispenser, et l'intitulé d'à côté dit « À placer », pas
                « À alléger ». -->
           ${dispo && !alleger.every(c => c.cle === 'cashToInvest')
-            ? `<p class="hint" style="margin:8px 0 0">Ta trésorerie disponible en couvre ${fmtEUR0(Math.min(dispo, totalAchat))} sans rien vendre.</p>` : ''}
+            ? `<p class="hint" style="margin:8px 0 0">${trad('Ta trésorerie disponible en couvre')} ${fmtEUR0(Math.min(dispo, totalAchat))} ${trad('sans rien vendre.')}</p>` : ''}
         </div>` : ''}
       </div>
       ${equilibre ? '' : `<p class="hint" style="margin:12px 0 0">
-        Ventes et achats ne s'équilibrent pas (${fmtEUR0(totalVente)} contre ${fmtEUR0(totalAchat)})
-        parce que tes cibles totalisent ${sumT} % et non 100 %.</p>`}`}
+        ${trad('Ventes et achats ne s’équilibrent pas')} (${fmtEUR0(totalVente)} ${trad('contre')} ${fmtEUR0(totalAchat)})
+        ${trad('parce que tes cibles totalisent')} ${sumT} % ${trad('et non 100 %.')}</p>`}`}
   </div>
 
   ${sumT === 100 ? '' : `
@@ -4332,10 +4332,10 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
            les laissait sans destination : on apprenait qu'un tiers du patrimoine
            echappait a cette page sans savoir ou le retrouver. La ligne dit
            maintenant ce qu'ils sont, et mene la ou ils se lisent. -->
-      ${per.montantDehors > 0 ? `<dt class="muted">Reste de ${BASES.avoirs.nom.toLowerCase()}, non arbitrable<span class="sub">${
-        esc(dehorsDetail.map(([lib]) => lib).join(' · '))}, suivis dans l’<button type="button"
+      ${per.montantDehors > 0 ? `<dt class="muted">${trad('Reste de')} ${BASES.avoirs.nom.toLowerCase()}${trad(', non arbitrable')}<span class="sub">${
+        esc(dehorsDetail.map(([lib]) => lib).join(' · '))}${trad(', suivis dans l’')}<button type="button"
           class="mois-lien" data-action="sous-onglet" data-route="allocation"
-          >onglet ${SOUS_ONGLETS.allocation[0][1]}</button></span></dt>
+          >${trad('onglet')} ${SOUS_ONGLETS.allocation[0][1]}</button></span></dt>
         <dd class="muted">${fmtEUR(per.montantDehors)}</dd>
       <dt>${BASES.avoirs.nom}</dt><dd>${fmtEUR(per.brut)}</dd>` : ''}
     </dl>
@@ -4418,7 +4418,7 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
          explique. -->
     ${rr.parNature.some(n => n.nature === 'Titre en direct') ? `
       <p class="hint" style="margin:12px 0 0">
-        Hachuré : titre en direct. Plein : fonds.${aide(trad("La nature est déduite de l’instrument et se corrige dans la fiche de chaque ligne. Elle n’entre pas dans les cibles, qui portent sur la classe d’actif : sur le risque, pas sur l’enveloppe."))}
+        ${trad('Hachuré : titre en direct. Plein : fonds.')}${aide(trad("La nature est déduite de l’instrument et se corrige dans la fiche de chaque ligne. Elle n’entre pas dans les cibles, qui portent sur la classe d’actif : sur le risque, pas sur l’enveloppe."))}
       </p>` : ''}
   </div>`;
 }
@@ -4515,11 +4515,11 @@ function viewHistory() {
        l'accueil ne repoussait que d'une semaine — deux gestes, un seul mot. */
     const p = currentMonthPending();
     if (!p.missing) return '';
-    return `<div class="note">⤒ <span><b>${esc(p.label)} n'est pas encore enregistré.</b>
-      Depuis sa ligne, reprendre d'un coup tous les montants actuels
-      (${fmtEUR0(nowTotals().total)}) tient en un geste.</span>
+    return `<div class="note">⤒ <span><b>${esc(p.label)} ${trad('n’est pas encore enregistré.')}</b>
+      ${trad('Depuis sa ligne, reprendre d’un coup tous les montants actuels')}
+      (${fmtEUR0(nowTotals().total)}) ${trad('tient en un geste.')}</span>
       ${sortiesRappel('releve', p.label,
-        '<button class="btn sm" data-action="go-snapshot">Aller à la ligne</button>')}</div>`;
+        `<button class="btn sm" data-action="go-snapshot">${trad('Aller à la ligne')}</button>`)}</div>`;
   })()}
 
   ${carteEvolution()}
@@ -4556,7 +4556,7 @@ function viewHistory() {
             annee === 'all' ? 'toutes années' : esc(String(annee))} · ${fmtSigned(d.net)} net`
         : tout.length
           ? `aucune en ${annee === 'all' ? 'mémoire' : esc(String(annee))} · ${tout.length} au total`
-          : 'héritage, prime, vente d’un bien, ou une grosse dépense'}</span>
+          : trad('héritage, prime, vente d’un bien, ou une grosse dépense')}</span>
       <!-- Le meme selecteur que celui du releve mensuel, et la meme variable.
 
            Le journal suit l'annee de la page, mais il se rend **au-dessus** de la
@@ -4582,9 +4582,9 @@ function viewHistory() {
       <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
       <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button></div>
     ${!liste.length && !tout.length ? `
-    <p class="small muted" style="margin:0">Rien pour l’instant. Une somme reçue ou dépensée
-      une seule fois se note ici, avec sa date : le rythme d’accumulation sait alors que
-      ce mois-là ne dit rien de ton épargne.</p>`
+    <p class="small muted" style="margin:0">${trad('Rien pour l’instant. Une somme reçue ou dépensée '
+      + 'une seule fois se note ici, avec sa date : le rythme d’accumulation sait alors que '
+      + 'ce mois-là ne dit rien de ton épargne.')}</p>`
     /* Une annee vide n'est pas un journal vide, et les deux ne se disent pas
        pareil : « rien pour l'instant » devant dix lignes rangees ailleurs serait
        faux, et enverrait chercher un defaut. */
@@ -5170,7 +5170,7 @@ function viewAccounts() {
        dont le type ne figure pas dans TYPES_COMPTE y garde un groupe au lieu de
        disparaitre de la page sans quitter son total. Un test somme la fonction. */
     corps = groupesParEnveloppe(ouverts).map(g =>
-      groupe(`t-${g.id}`, g.label, '', g.comptes.map(c => ligneCompte(c)).join(''),
+      groupe(`t-${g.id}`, trad(g.label), '', g.comptes.map(c => ligneCompte(c)).join(''),
              g.total, '', teinteDominante(g.comptes))).join('');
   }
   /* Il y avait un troisieme onglet, « Placement », qui groupait les lignes par
@@ -5542,7 +5542,7 @@ function boutonEnregistrerFiche(retour = 'accounts') {
   return `
       <div class="fiche-valider">
         <button class="btn ghost" data-action="annuler-fiche"
-                data-view="${esc(retour)}">Annuler</button>
+                data-view="${esc(retour)}">${trad('Annuler')}</button>
         <button class="btn primary" data-action="enregistrer-fiche"
                 data-view="${esc(retour)}">${trad('Enregistrer et fermer')}</button>
       </div>`;
@@ -6613,7 +6613,7 @@ function viewBudget(section = 'depenses') {
         <b>${fmtEUR0(stats.average)} ${trad('/ mois')}</b>${stats.moisEnCoursExclu
           ? `<span class="sub">${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, le mois en cours est écarté')}</span>` : ''}</span>
       <span class="${classeDepassement(stats.average, f.target)}">${
-        stats.average ? `${fmtSigned(stats.average - f.target)} vs objectif` : ''}</span>
+        stats.average ? `${fmtSigned(stats.average - f.target)} ${trad('vs objectif')}` : ''}</span>
     </div>
     <p class="small muted" style="margin:12px 0 0">
       ${trad('Vert sous l’objectif, orange au-dessus, rouge à partir de')} ${fmtPct(SEUIL_DEPASSEMENT_GRAVE * 100, 0)} ${trad('de dépassement. Survole une barre pour la note du mois.')}
@@ -6698,7 +6698,7 @@ function viewBudget(section = 'depenses') {
       <div class="charges-tete">
         <div class="ct-chiffre">
           <b>${fmtEUR(f.fixed)}</b>
-          <span class="muted">par mois, ${fmtPct(f.fixedPct, 1)} de tes revenus</span>
+          <span class="muted">${trad('par mois,')} ${fmtPct(f.fixedPct, 1)} ${trad('de tes revenus')}</span>
         </div>
         <div class="ct-cote">
           <div class="ct-petit">
@@ -6883,7 +6883,7 @@ function viewBudget(section = 'depenses') {
           <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
           <dt>− Dépenses (moy. ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
           <dt><b>${trad('= Épargne théorique')}</b>${aide(trad("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est une prévision tirée de tes saisies, pas un montant constaté sur un compte."))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>
-          <dt>Taux d'épargne${aide(trad("Part de tes revenus que cette épargne théorique représente. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+          <dt>${trad('Taux d’épargne')}${aide(trad("Part de tes revenus que cette épargne théorique représente. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
           <dt>Objectif d'investissement${aide(trad("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent."))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
         </dl>
         ${rec.realPerMonth != null ? `
@@ -7828,12 +7828,12 @@ const ACTIONS = {
     Store.save();
     rendNotifs();
     majOnglets();
-    toast('Notification masquée. On la ramène depuis Notifications.');
+    toast(trad('Notification masquée. On la ramène depuis Notifications.'));
   },
   'rendre-notifs'() {
     rendreNotifs();
     Store.save(); render();
-    toast('Toutes les notifications sont réaffichées');
+    toast(trad('Toutes les notifications sont réaffichées'));
   },
   /* Une famille entière s'éteint, depuis le menu de réglages. */
   /* L'interrupteur bascule ce qu'il trouve, il ne recoit plus une valeur.
@@ -9627,7 +9627,7 @@ const ACTIONS = {
         btn.disabled = false;
       }
     } catch (e) {
-      toast('Échec : ' + e.message);
+      toast(trad('Échec :') + ' ' + e.message);
       btn.disabled = false;
     }
   },
@@ -9659,11 +9659,11 @@ const ACTIONS = {
       if (empty) { toast('Aucun symbole à suivre'); return; }
       const ok = changes.filter(c => !c.error).length;
       const ko = changes.length - ok;
-      toast(`${ok} cours mis à jour${ko ? ` · ${ko} en échec` : ''}`);
+      toast(`${ok} ${trad('cours mis à jour')}${ko ? ` · ${ko} ${trad('en échec')}` : ''}`);
     } catch (e) {
       if (btn) { btn.disabled = false; if (label !== null) btn.textContent = label; }
       majEtatCours();
-      toast('Échec : ' + e.message);
+      toast(trad('Échec :') + ' ' + e.message);
     }
   },
   async 'cloud-push'() {
@@ -9756,7 +9756,7 @@ const ACTIONS = {
        il n'existe pas de version juste de ce geste. La saisie a la main reste
        ouverte par la fenetre du mois, qui elle avertit et laisse passer. */
     if (!moisRevolu(row.date)) {
-      toast(`${fmtMonth(row.date)} n’a pas encore eu lieu`);
+      toast(`${fmtMonth(row.date)} ${trad('n’a pas encore eu lieu')}`);
       return;
     }
     const t = nowTotals();
@@ -9994,7 +9994,7 @@ function fenetreRevenus() {
     <div class="row" style="margin-top:12px">
       <button class="btn sm ghost" data-action="add-income">${trad('+ Ajouter une source de revenu')}</button>
     </div>`;
-  $('#modalFoot').innerHTML = `<button class="btn" id="revClose" type="button">Fermer</button>`;
+  $('#modalFoot').innerHTML = `<button class="btn" id="revClose" type="button">${trad('Fermer')}</button>`;
   montrerModal(m);
 
   const fermer = () => {
@@ -10022,8 +10022,8 @@ function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX)
         </div>
       </div>`;
     $('#modalFoot').innerHTML =
-      `<button class="btn ghost" id="txtCancel" type="button">Annuler</button>
-       <button class="btn" id="txtOk" type="button">Valider</button>`;
+      `<button class="btn ghost" id="txtCancel" type="button">${trad('Annuler')}</button>
+       <button class="btn" id="txtOk" type="button">${trad('Valider')}</button>`;
     montrerModal(m);
     const champ = $('#txtValeur');
     focusChamp(champ);
@@ -10156,9 +10156,9 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
        `.modal-foot` les fait deja se replier, mais le repli tombait ou il
        tombait. Une ligne declaree vaut mieux qu'un repli subi. */
     $('#modalFoot').innerHTML =
-      `<button class="btn ghost" id="frmCancel" type="button">Annuler</button>
-       <button class="btn" id="frmOk" type="button">${esc(ok)}</button>
-       ${encore ? `<button class="btn ghost btn-encore" id="frmEncore" type="button">${esc(encore)}</button>` : ''}`;
+      `<button class="btn ghost" id="frmCancel" type="button">${trad('Annuler')}</button>
+       <button class="btn" id="frmOk" type="button">${esc(trad(ok))}</button>
+       ${encore ? `<button class="btn ghost btn-encore" id="frmEncore" type="button">${esc(trad(encore))}</button>` : ''}`;
     montrerModal(m);
 
     /* Un champ peut dependre d'un autre : une action ne se loge pas sur un
@@ -10272,8 +10272,8 @@ function askChoice(titre, message, options, valeur) {
         </div>
       </div>`;
     $('#modalFoot').innerHTML =
-      `<button class="btn ghost" id="chxCancel" type="button">Annuler</button>
-       <button class="btn" id="chxOk" type="button">Valider</button>`;
+      `<button class="btn ghost" id="chxCancel" type="button">${trad('Annuler')}</button>
+       <button class="btn" id="chxOk" type="button">${trad('Valider')}</button>`;
     montrerModal(m);
     const champ = $('#chxVal');
     focusChamp(champ);
@@ -10310,9 +10310,9 @@ function askConfirm(texte, { danger = true, ok = 'Confirmer', refus = 'Annuler' 
        montant, qui est un SVG en mode discret. */
     $('#confirmMsg').innerHTML = escMontant(message).replace(/\n/g, '<br>');
     $('#confirmMsg').hidden = !message;
-    oui.textContent = ok;
+    oui.textContent = trad(ok);
     oui.className = 'btn' + (danger ? ' danger' : '');
-    non.textContent = refus;
+    non.textContent = trad(refus);
     montrerModal(m);
     oui.focus({ preventScroll: true });
 
@@ -10781,8 +10781,8 @@ function askPosition(index) {
       `<button class="btn ghost" id="posSell" type="button">− Vendre</button>
        <button class="btn ghost" id="posBuy" type="button">+ Acheter</button>
        <span class="spacer"></span>
-       <button class="btn" id="posSave" type="button">Enregistrer</button>
-       <button class="btn ghost" id="posOk" type="button">Fermer</button>`;
+       <button class="btn" id="posSave" type="button">${trad('Enregistrer')}</button>
+       <button class="btn ghost" id="posOk" type="button">${trad('Fermer')}</button>`;
     montrerModal(m);
 
     const fermer = v => {
@@ -10994,8 +10994,8 @@ function askExpenseMonth(index) {
     const m = $('#modal');
     apercuOuvert = null;
 
-    $('#modalTitle').textContent = `Dépenses de ${fmtMonth(r.month)}`;
-    $('#modalSub').innerHTML = cible ? `Objectif mensuel : ${fmtEUR0(cible)}` : '';
+    $('#modalTitle').textContent = `${trad('Dépenses de')} ${fmtMonth(r.month)}`;
+    $('#modalSub').innerHTML = cible ? `${trad('Objectif mensuel :')} ${fmtEUR0(cible)}` : '';
     /* Le détail par catégorie vit dans la fenêtre jusqu'à Enregistrer : on
        peut découper, recoller, annuler, sans rien avoir écrit. */
     const detail = {};
@@ -11004,8 +11004,8 @@ function askExpenseMonth(index) {
       if (d) detail[c] = d.map(l => ({ montant: l.montant, libelle: l.libelle || '' }));
     }
 
-    $('#modalTitle').textContent = `Dépenses de ${fmtMonth(r.month)}`;
-    $('#modalSub').innerHTML = cible ? `Objectif mensuel : ${fmtEUR0(cible)}` : '';
+    $('#modalTitle').textContent = `${trad('Dépenses de')} ${fmtMonth(r.month)}`;
+    $('#modalSub').innerHTML = cible ? `${trad('Objectif mensuel :')} ${fmtEUR0(cible)}` : '';
     $('#modalBody').innerHTML = `
       <div class="dep-total" id="depTotal"></div>
       <div class="dep-grille">
@@ -11017,8 +11017,8 @@ function askExpenseMonth(index) {
                       title="${trad('Voir le détail des montants')}"></button>
               <span class="spacer"></span>
               <button type="button" class="dep-plus" data-ajout-cat="${esc(c)}"
-                      title="Ajouter un montant détaillé à ${esc(c)}"
-                      aria-label="Ajouter un montant à ${esc(c)}">+</button>
+                      title="${trad('Ajouter un montant détaillé à')} ${esc(c)}"
+                      aria-label="${trad('Ajouter un montant à')} ${esc(c)}">+</button>
             </label>
             <input type="text" inputmode="decimal" data-cat="${esc(c)}"
                    value="${r.v?.[c] ?? ''}" placeholder="" autocomplete="off">
@@ -11036,9 +11036,9 @@ function askExpenseMonth(index) {
            la pastille qui l'ouvre, le nom est une etiquette et ne fait que
            donner le focus au champ. Elle dit maintenant ce qui repond. -->
       <p class="hint" style="margin:12px 0 0">
-        Plusieurs dépenses dans une catégorie : tape-les additionnées,
-        <b>100+50+70</b>. La pastille <b>${trad('1 montant')}</b> ouvre le détail, où
-        chaque montant se renomme.
+        ${trad('Plusieurs dépenses dans une catégorie : tape-les additionnées,')}
+        <b>100+50+70</b>. ${trad('La pastille')} <b>${trad('1 montant')}</b> ${trad('ouvre le détail, où '
+        + 'chaque montant se renomme.')}
       </p>
       <div class="field" style="margin-top:12px">
         <label>${trad('Note du mois')}</label>
@@ -11058,8 +11058,8 @@ function askExpenseMonth(index) {
     $('#modalFoot').innerHTML =
       `<button class="btn ghost sm" id="depAutres" type="button">${trad('Voir les autres mois')}</button>
        <span class="spacer"></span>
-       <button class="btn" id="depOk" type="button">Enregistrer</button>
-       <button class="btn ghost" id="depFermer" type="button">Fermer</button>`;
+       <button class="btn" id="depOk" type="button">${trad('Enregistrer')}</button>
+       <button class="btn ghost" id="depFermer" type="button">${trad('Fermer')}</button>`;
     montrerModal(m);
 
     const champs = $$('#modalBody [data-cat]');
@@ -11072,7 +11072,7 @@ function askExpenseMonth(index) {
       $('#depTotal').innerHTML = `
         <span class="dep-somme">${fmtEUR(t)}</span>
         ${cible ? `<span class="dep-ecart ${classeDepassement(t, cible)}">
-          ${ecart > 0 ? '▲' : '▼'} ${fmtSigned(Math.abs(ecart) * (ecart > 0 ? 1 : -1))} vs objectif</span>` : ''}`;
+          ${ecart > 0 ? '▲' : '▼'} ${fmtSigned(Math.abs(ecart) * (ecart > 0 ? 1 : -1))} ${trad('vs objectif')}</span>` : ''}`;
     };
 
     /* La pastille annonce le nombre de montants et ouvre le détail pour le
@@ -11089,7 +11089,7 @@ function askExpenseMonth(index) {
          vide a cote des 20 EUR qu'on voulait juste intituler. */
       const un = n || (valeurChamp(champDe(cat)) ? 1 : 0);
       el.hidden = !un;
-      el.textContent = un ? `${un} montant${un > 1 ? 's' : ''}` : '';
+      el.textContent = un ? `${un} ${un > 1 ? trad('montants') : trad('montant')}` : '';
     };
 
     /* Un montant tape dans le champ de la categorie devient une ligne de
@@ -11415,7 +11415,7 @@ function askMonthlySnapshot(index) {
     const m = $('#modal');
     apercuOuvert = null;
 
-    $('#modalTitle').textContent = `Relevé de ${fmtMonth(r.date)}`;
+    $('#modalTitle').textContent = `${trad('Relevé de')} ${fmtMonth(r.date)}`;
     /* « Valeur des avoirs » plutôt que rien : chaque champ porte ce que le
        compte valait, crédits non déduits. Sans le dire, on ne savait pas s'il
        fallait saisir 150 000 € pour un studio ou les 20 000 € qui restent une
@@ -11423,8 +11423,8 @@ function askMonthlySnapshot(index) {
        à deux endroits différents. */
     /* escMontant : le montant du dernier releve est un SVG en mode discret. */
     $('#modalSub').innerHTML = escMontant((avant
-      ? `Dernier relevé, ${fmtMonth(avant.date)} : ${fmtEUR0(precedent)}`
-      : 'Aucun relevé avant celui-ci') + ' · valeurs brutes, crédits à part');
+      ? `${trad('Dernier relevé,')} ${fmtMonth(avant.date)} : ${fmtEUR0(precedent)}`
+      : trad('Aucun relevé avant celui-ci')) + ` · ${trad('valeurs brutes, crédits à part')}`);
     $('#modalBody').innerHTML = `
       <div class="dep-total" id="relTotal"></div>
       ${/* Sans avoirs saisis, la photo vaut zero : proposer d'ecraser douze
@@ -11446,8 +11446,8 @@ function askMonthlySnapshot(index) {
       <p class="hint" style="margin:6px 0 14px; text-align:center">Remplir tous les champs
         automatiquement${aide(trad("Chaque champ ci-dessous reçoit la valeur actuelle du compte correspondant. Rien n’est enregistré avant que tu ne cliques sur « Enregistrer » : tu peux corriger ce qu’il a écrit, ou renoncer."))}</p>` : ''}
       ${revolu ? '' : `
-      <p class="avert">Ce mois n’a pas encore eu lieu. Il n’y a pas de montants à en
-        reprendre, et ce que tu saisirais ici serait lu comme un relevé passé.</p>`}
+      <p class="avert">${trad('Ce mois n’a pas encore eu lieu. Il n’y a pas de montants à en '
+        + 'reprendre, et ce que tu saisirais ici serait lu comme un relevé passé.')}</p>`}
       <div class="dep-grille">
         ${comptes.map(a => `
           <div class="field">
@@ -11489,8 +11489,8 @@ function askMonthlySnapshot(index) {
    un bouton qui n'enregistre plus en fermant, il ne designait plus rien de
    distinct de Fermer.*/
     $('#modalFoot').innerHTML =
-      `<button class="btn" id="relOk" type="button">Enregistrer</button>
-       <button class="btn ghost" id="relFermer" type="button">Fermer</button>`;
+      `<button class="btn" id="relOk" type="button">${trad('Enregistrer')}</button>
+       <button class="btn ghost" id="relFermer" type="button">${trad('Fermer')}</button>`;
     montrerModal(m);
 
     const champs = $$('#modalBody [data-compte]');
@@ -11641,7 +11641,7 @@ const APERCUS = {
 
       return {
         titre: CLASSES_ACTIFS[classe],
-        sous: `${groupes.length} usage${groupes.length > 1 ? 's' : ''} · modifiable ici même`,
+        sous: `${groupes.length} ${groupes.length > 1 ? trad('usages') : trad('usage')} · ${trad('modifiable ici même')}`,
         total: poches().classes.liquidites,
         lignes: [],
         live: sommes,
@@ -11839,9 +11839,9 @@ const APERCUS = {
     return {
       titre: cle ? AFFECTATION_LABEL[cle] : BASES.liquidites.nom,
       sous: cle
-        ? `Les comptes qui portent cette poche. ${
-            lignes.length ? 'Modifiable directement ici' : 'Aucun compte ne la porte pour l’instant'}`
-        : 'Modifiable directement, ces montants se saisissent à la main',
+        ? `${trad('Les comptes qui portent cette poche.')} ${
+            lignes.length ? trad('Modifiable directement ici') : trad('Aucun compte ne la porte pour l’instant')}`
+        : trad('Modifiable directement, ces montants se saisissent à la main'),
       total: lignes.reduce((s, l) => s + l.valeur, 0), lignes,
       vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
     };
@@ -11879,17 +11879,17 @@ const APERCUS = {
     const sansCible = !(num(g.obj) > 0);
     return {
       titre: `${trad('Objectif à fin')} ${an}`,
-      sous: sansCible ? 'aucune cible fixée' : `${fmtPct(g.pct, 1)} atteint`,
+      sous: sansCible ? trad('aucune cible fixée') : `${fmtPct(g.pct, 1)} ${trad('atteint')}`,
       total: g.total,
-      totalNote: sansCible ? 'ton patrimoine aujourd’hui' : `sur ${fmtEUR0(g.obj)}`,
+      totalNote: sansCible ? trad('ton patrimoine aujourd’hui') : `${trad('sur.objectif', 'sur')} ${fmtEUR0(g.obj)}`,
       lignes: sansCible ? [] : [
-        { label: trad('Il te manque'), meta: `d'ici fin ${an}`, valeur: Math.max(0, -g.remaining) },
-        { label: trad('Rythme nécessaire'), meta: `${pj.monthsLeft} mois restants`, valeur: pj.needed },
+        { label: trad('Il te manque'), meta: `${trad('d’ici fin')} ${an}`, valeur: Math.max(0, -g.remaining) },
+        { label: trad('Rythme nécessaire'), meta: `${pj.monthsLeft} ${pj.monthsLeft > 1 ? trad('mois restants') : trad('mois restant')}`, valeur: pj.needed },
         { label: trad('Ton rythme observé'), meta: trad('moyenne mensuelle'), valeur: pj.paceRate },
-        { label: `Fin ${an} à ce rythme`, meta: pj.onTrackPace ? 'objectif atteint' : 'sous l\'objectif', valeur: pj.atPace },
+        { label: `${trad('Fin')} ${an} ${trad('à ce rythme')}`, meta: pj.onTrackPace ? trad('objectif atteint') : trad('sous l’objectif'), valeur: pj.atPace },
       ],
       champs: [
-        { label: `Montant visé pour fin ${an} (€)`, path: 'meta.objective', step: 500 },
+        { label: `${trad('Montant visé pour fin')} ${an} (€)`, path: 'meta.objective', step: 500 },
         /* Trente ans d'horizon, pas soixante-quinze. La liste allait jusqu'a
            2100 : elle faisait defiler des dizaines d'annees que personne ne
            choisit pour un objectif de patrimoine, et sur telephone il fallait
@@ -11898,7 +11898,7 @@ const APERCUS = {
         { label: trad('Objectif à fin…'), path: 'meta.objectiveYear',
           options: Array.from({ length: 31 }, (_, i) => {
             const y = anCourante + i;
-            return [y, `fin ${y}${i ? `, dans ${i} an${i > 1 ? 's' : ''}` : ', cette année'}`];
+            return [y, `${trad('fin')} ${y}${i ? `, ${trad('dans')} ${i} ${i > 1 ? trad('ans') : trad('an')}` : `, ${trad('cette année')}`}`];
           }) },
       ],
       vue: 'history', ancre: '', cta: trad('Voir les relevés'),
@@ -11925,16 +11925,16 @@ const APERCUS = {
     const base = p.poches.marche + p.poches.autres;
     const verses = Math.max(0, j.contributed - base - plat);
     return {
-      titre: `Projection à ${projHorizon} ans`,
-      sous: `au ${fmtDate(date.toISOString().slice(0, 10))}, même période de l'année qu'aujourd'hui`,
+      titre: `${trad('Projection à')} ${projHorizon} ${trad('ans')}`,
+      sous: `${trad('au')} ${fmtDate(date.toISOString().slice(0, 10))}${trad(', même période de l’année qu’aujourd’hui')}`,
       total: j.total,
       totalNote: `${trad('dont')} ${fmtEUR0(j.gains)} ${trad('de rendement')}`,
       lignes: [
-        { label: trad('Ce que tu as déjà'), meta: "aujourd'hui, hors immobilier", valeur: base },
-        ...(plat ? [{ label: plat > 0 ? 'Ton immobilier net' : 'Tes crédits',
+        { label: trad('Ce que tu as déjà'), meta: trad('aujourd’hui, hors immobilier'), valeur: base },
+        ...(plat ? [{ label: plat > 0 ? trad('Ton immobilier net') : trad('Tes crédits'),
                       meta: A_PLAT, valeur: plat }] : []),
         { label: trad('Ce que tu verses'),
-          meta: `${fmtEUR0(s.monthly)} × ${projHorizon * 12} mois`, valeur: verses },
+          meta: `${fmtEUR0(s.monthly)} × ${projHorizon * 12} ${trad('mois')}`, valeur: verses },
         /* « Rendement des autres actifs » nommait une poche qui n'existe plus
            depuis que le non cote et les liquidites ont chacun le leur : ce
            montant est celui du seul non cote, les liquidites ne produisant
@@ -11943,14 +11943,14 @@ const APERCUS = {
            evite de le lire comme un rendement moyen du patrimoine. */
         ...(num(s.rateAutres) ? [
           { label: trad('Rendement des actifs de marché'),
-            meta: `${fmtPct(s.rate, 1)} par an`, valeur: num(j.gainsMarche) },
+            meta: `${fmtPct(s.rate, 1)} ${trad('par an')}`, valeur: num(j.gainsMarche) },
           { label: trad('Rendement du non coté'),
-            meta: `${fmtPct(s.rateAutres, 1)} par an`, valeur: num(j.gainsAutres) },
+            meta: `${fmtPct(s.rateAutres, 1)} ${trad('par an')}`, valeur: num(j.gainsAutres) },
         ] : [
           { label: trad('Ce que le rendement ajoute'),
-            meta: `${fmtPct(s.rate, 1)} par an sur tes actifs de marché`, valeur: j.gains },
+            meta: `${fmtPct(s.rate, 1)} ${trad('par an sur tes actifs de marché')}`, valeur: j.gains },
         ]),
-        { label: trad('Après inflation'), meta: `${fmtPct(s.inflation, 1)} par an retirée, en euros d'aujourd'hui`, valeur: j.real },
+        { label: trad('Après inflation'), meta: `${fmtPct(s.inflation, 1)} ${trad('par an retirée, en euros d’aujourd’hui')}`, valeur: j.real },
       ],
       vue: 'objective', ancre: '', cta: trad('Voir la trajectoire'),
     };
@@ -11998,18 +11998,18 @@ const APERCUS = {
     const t = nowTotals();
     const s = projectionSettings();
     const q = pochesProjection(t);
-    const tauxM = `${fmtPct(s.rate)} par an`;
-    const tauxNC = num(s.rateAutres) ? `${fmtPct(s.rateAutres)} par an` : A_PLAT;
+    const tauxM = `${fmtPct(s.rate)} ${trad('par an')}`;
+    const tauxNC = num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('par an')}` : A_PLAT;
     return {
       titre: trad('Ce que tu as déjà'),
-      sous: trad('La base de la projection') + (num(t.immo) ? ', ton immobilier à part' : ''),
+      sous: trad('La base de la projection') + (num(t.immo) ? trad(', ton immobilier à part') : ''),
       total: q.marche + q.autres,
-      totalNote: 'chaque ligne porte le taux qui lui est appliqué',
+      totalNote: trad('chaque ligne porte le taux qui lui est appliqué'),
       lignes: [
         { label: trad('Actifs de marché'), meta: tauxM, valeur: num(t.bourse) },
-        { label: 'Cryptomonnaies', meta: tauxM, valeur: num(t.crypto) },
+        { label: trad('Cryptomonnaies'), meta: tauxM, valeur: num(t.crypto) },
         { label: trad('Non coté'), meta: tauxNC, valeur: q.nonCote },
-        { label: 'Liquidités', meta: A_PLAT, valeur: q.liquidites },
+        { label: trad('Liquidités'), meta: A_PLAT, valeur: q.liquidites },
       ].filter(l => Math.abs(l.valeur) > 0.005),
       vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
@@ -12042,19 +12042,19 @@ const APERCUS = {
       for (const d of (e.dettes || [])) {
         if (!num(d.montant)) continue;
         lignes.push({ label: d.libelle || 'Crédit',
-                      meta: `capital restant dû · ${e.nom}`, valeur: -num(d.montant) });
+                      meta: `${trad('capital restant dû')} · ${e.nom}`, valeur: -num(d.montant) });
       }
     }
     const plat = partPlate();
     const aUnBien = lignes.some(l => l.valeur > 0);
     const aImmo = num(nowTotals().immo) > 0.005, aBiens = num(nowTotals().biens) > 0.005;
     return {
-      titre: !aUnBien ? 'Tes crédits'
-           : aImmo && aBiens ? 'Ton immobilier et tes biens, nets'
-           : aBiens ? 'Tes biens de valeur, nets' : 'Ton immobilier net',
+      titre: !aUnBien ? trad('Tes crédits')
+           : aImmo && aBiens ? trad('Ton immobilier et tes biens, nets')
+           : aBiens ? trad('Tes biens de valeur, nets') : trad('Ton immobilier net'),
       sous: trad('Ce que la projection porte à plat'),
       total: plat,
-      totalNote: 'Aucun rendement ne lui est appliqué',
+      totalNote: trad('Aucun rendement ne lui est appliqué'),
       lignes,
       vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
@@ -12062,7 +12062,7 @@ const APERCUS = {
   investiTotal: () => ({
     titre: BASES.place.nom, sous: trad('Tout sauf le cash de vie'),
     total: nowTotals().invested,
-    totalNote: `${fmtPct(nowTotals().total ? nowTotals().invested / nowTotals().total * 100 : 0)} du patrimoine`,
+    totalNote: `${fmtPct(nowTotals().total ? nowTotals().invested / nowTotals().total * 100 : 0)} ${trad('du patrimoine')}`,
     lignes: allocationByAccount().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
     vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
   }),
@@ -12086,10 +12086,10 @@ const APERCUS = {
     const r = rebalanceRows();
     return {
       titre: trad('Écarts à la cible'), sous: trad('Ce qu’il faudrait déployer (+) ou alléger (−)'),
-      total: r.base, totalNote: 'comptes d’investissement',
+      total: r.base, totalNote: trad('comptes d’investissement'),
       lignes: lignesAvecTresorerie(r).map(c => ({
-        label: c.label, meta: `${fmtEUR0(c.value)} pour ${fmtEUR0(c.targetVal)} visés`, valeur: c.delta })),
-      vue: 'rebalance', ancre: '', cta: 'Ajuster',
+        label: c.label, meta: `${fmtEUR0(c.value)} ${trad('pour')} ${fmtEUR0(c.targetVal)} ${trad('visés')}`, valeur: c.delta })),
+      vue: 'rebalance', ancre: '', cta: trad('Ajuster'),
     };
   },
 
@@ -12098,8 +12098,8 @@ const APERCUS = {
     const an = budgetAnnee();
     const st = expenseYearStats(an);
     return {
-      titre: `Dépenses ${an}`, sous: `${st.months} mois renseignés`,
-      total: st.total, totalNote: `${fmtEUR0(st.average)} par mois en moyenne`,
+      titre: `${trad('Dépenses')} ${an}`, sous: `${st.months} ${st.months > 1 ? trad('mois renseignés') : trad('mois renseigné')}`,
+      total: st.total, totalNote: `${fmtEUR0(st.average)} ${trad('par mois en moyenne')}`,
       lignes: expenseSeries(an).filter(r => r.total).reverse()
         .map(r => ({ label: r.label, meta: r.note ? String(r.note).slice(0, 60) : '', valeur: r.total })),
       vue: 'budget', ancre: '', cta: trad('Voir le détail'),
@@ -12109,11 +12109,11 @@ const APERCUS = {
     const an = budgetAnnee();
     const st = expenseYearStats(an);
     return {
-      titre: trad('Moyenne mensuelle'), sous: `objectif ${fmtEUR0(budgetFrame().target)} par mois`,
+      titre: trad('Moyenne mensuelle'), sous: `${trad('objectif')} ${fmtEUR0(budgetFrame().target)} ${trad('par mois')}`,
       total: st.average,
       totalNote: st.average > budgetFrame().target
-        ? `${fmtEUR0(st.average - budgetFrame().target)} au-dessus de l’objectif`
-        : `${fmtEUR0(budgetFrame().target - st.average)} sous l’objectif`,
+        ? `${fmtEUR0(st.average - budgetFrame().target)} ${trad('au-dessus de l’objectif')}`
+        : `${fmtEUR0(budgetFrame().target - st.average)} ${trad('sous l’objectif')}`,
       lignes: expenseByCategory(an).map(c => ({ label: c.label, meta: fmtPct(c.pct, 1), valeur: c.average })),
       vue: 'budget', ancre: '', cta: trad('Voir le détail'),
     };
@@ -12143,9 +12143,9 @@ const APERCUS = {
     const total = postes.reduce((s, x) => s + x.v, 0);
     return {
       titre: trad('Ce qui sort chaque mois'),
-      sous: `${postes.length} poste${postes.length > 1 ? 's' : ''} · ${fmtEUR0(total * 12)} sur douze mois`,
+      sous: `${postes.length} ${postes.length > 1 ? trad('postes') : trad('poste')} · ${fmtEUR0(total * 12)} ${trad('sur douze mois')}`,
       total,
-      totalNote: `${fmtPct(budgetFrame().fixedPct, 1)} de tes revenus`,
+      totalNote: `${fmtPct(budgetFrame().fixedPct, 1)} ${trad('de tes revenus')}`,
       /*         Le total a l'annee etait deja en sous-titre — 29 332 EUR — mais poste par
          poste il fallait multiplier de tete, et c'est a cette echelle qu'on decide
          de garder un abonnement : 21 EUR par mois se lisent autrement a 252 EUR
@@ -12162,18 +12162,18 @@ const APERCUS = {
          et la bulle est le seul endroit qui puisse rapprocher les deux. */
       html: postes.length ? `<div class="flow">${postes.map(x => `
         <div class="flow-row" tabindex="0" role="button" data-aide="${esc(
-          `${x.nom} : ${fmtEUR0(x.v * 12)} sur douze mois${x.periode === 'mois' ? ''
-            : `, facturée ${CHARGE_PERIODE_LABEL[x.periode]} ${fmtEUR0(x.facture)}`}`)}">
+          `${x.nom} : ${fmtEUR0(x.v * 12)} ${trad('sur douze mois')}${x.periode === 'mois' ? ''
+            : `, ${trad('facturée')} ${CHARGE_PERIODE_LABEL[x.periode]} ${fmtEUR0(x.facture)}`}`)}">
           <span class="flow-label">${esc(x.nom)}</span>
           <div class="flow-bar"><div style="width:${Math.max(1.5, total ? x.v / total * 100 : 0).toFixed(1)}%;
             background:var(--degrade-budget)"></div></div>
           <b class="flow-val">${fmtEUR0(x.v)}</b>
           <span class="flow-pct">${fmtPct(total ? x.v / total * 100 : 0, 1)}</span>
         </div>`).join('')}</div>
-        <p class="small muted" style="margin:12px 0 0">Touche une ligne pour voir
-          ce qu’elle coûte sur douze mois. Les parts se rapportent aux
-          ${fmtEUR0(total)} qui sortent chaque mois.</p>`
-        : '<p class="empty" style="margin:0">Aucune charge fixe déclarée.</p>',
+        <p class="small muted" style="margin:12px 0 0">${trad('Touche une ligne pour voir '
+          + 'ce qu’elle coûte sur douze mois. Les parts se rapportent aux')}
+          ${fmtEUR0(total)} ${trad('qui sortent chaque mois.')}</p>`
+        : `<p class="empty" style="margin:0">${trad('Aucune charge fixe déclarée.')}</p>`,
       vue: 'budget', ancre: 'charges', cta: trad('Modifier les charges'),
     };
   },
@@ -12183,7 +12183,7 @@ const APERCUS = {
     const st = salesStats(salesRange);
     return {
       titre: trad('Ventes réalisées'), sous: rangeLabel(salesRange),
-      total: st.gross, totalNote: `${fmtSigned(st.realised)} de plus-value`,
+      total: st.gross, totalNote: `${fmtSigned(st.realised)} ${trad('de plus-value')}`,
       lignes: st.sales.map(v => ({
         label: v.name, meta: `${fmtDate(v.date)} · ${num(v.qty)} × ${fmtCur(v.price, v.currency)}`,
         valeur: v.realised })),
@@ -12196,7 +12196,7 @@ const APERCUS = {
     const lat = latentPnl();
     return {
       titre: trad('Plus-value latente'), sous: `${lat.winners} ${trad('lignes en gain sur')} ${lat.count}`,
-      total: lat.pnl, totalNote: `${fmtSignedPct(lat.pct)} sur ${fmtEUR0(lat.invested)} investis`,
+      total: lat.pnl, totalNote: `${fmtSignedPct(lat.pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(lat.invested)} ${trad('investis')}`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
@@ -12207,9 +12207,9 @@ const APERCUS = {
   perfRealisee: () => {
     const st = salesStats(salesRange);
     return {
-      titre: `Réalisée · ${rangeLabel(salesRange)}`,
-      sous: st.count ? `${st.wins} ventes gagnantes sur ${st.count}` : 'aucune vente sur la période',
-      total: st.realised, totalNote: `${fmtEUR0(st.gross)} encaissés`,
+      titre: `${trad('Réalisée')} · ${rangeLabel(salesRange)}`,
+      sous: st.count ? `${st.wins} ${trad('ventes gagnantes sur')} ${st.count}` : trad('aucune vente sur la période'),
+      total: st.realised, totalNote: `${fmtEUR0(st.gross)} ${trad('encaissés')}`,
       lignes: st.sales.map(v => ({ label: v.name, meta: fmtDate(v.date), valeur: v.realised })),
       vue: 'performance', ancre: 'ventes', cta: trad('Voir le journal'),
     };
@@ -12221,7 +12221,7 @@ const APERCUS = {
       total: lat.pnl + tout.realised,
       lignes: [
         { label: trad('Plus-value latente'), meta: `${lat.count} ${trad('lignes détenues')}`, valeur: lat.pnl },
-        { label: trad('Plus-value encaissée'), meta: `${tout.count} ventes`, valeur: tout.realised },
+        { label: trad('Plus-value encaissée'), meta: `${tout.count} ${tout.count > 1 ? trad('ventes') : trad('vente')}`, valeur: tout.realised },
       ],
       vue: 'performance', ancre: '', cta: trad('Rester ici'),
     };
@@ -12242,18 +12242,18 @@ const APERCUS = {
     const sous = sens !== 'sur';
     const rows = sous ? stats.sousObjectif : stats.surObjectif;
     return {
-      titre: `${sous ? 'Mois sous l’objectif' : 'Mois au-dessus de l’objectif'} · ${an}`,
-      sous: `objectif ${fmtEUR0(cible)} par mois`
-        + (stats.moisEnCoursExclu ? ' · le mois en cours, incomplet, est écarté' : ''),
+      titre: `${sous ? trad('Mois sous l’objectif') : trad('Mois au-dessus de l’objectif')} · ${an}`,
+      sous: `${trad('objectif')} ${fmtEUR0(cible)} ${trad('par mois')}`
+        + (stats.moisEnCoursExclu ? ` · ${trad('le mois en cours, incomplet, est écarté')}` : ''),
       total: rows.reduce((s, r) => s + r.total, 0),
-      totalNote: `${rows.length} mois`,
+      totalNote: `${rows.length} ${trad('mois')}`,
       /* La note du mois se lit ici. « 2 400 € au-dessus » sans sa raison
          n'apprend rien : c'est le commentaire saisi dans le détail mensuel qui
          dit s'il s'agit d'un déménagement ou d'un mois qui a dérapé. */
       lignes: rows.slice().reverse().map(r => ({
         label: r.label,
-        meta: [sous ? `${fmtEUR0(cible - r.total)} de marge`
-                    : `${fmtEUR0(r.total - cible)} au-dessus`,
+        meta: [sous ? `${fmtEUR0(cible - r.total)} ${trad('de marge')}`
+                    : `${fmtEUR0(r.total - cible)} ${trad('au-dessus')}`,
                r.note || ''].filter(Boolean).join(' · '),
         valeur: r.total })),
       vue: 'budget', ancre: '', cta: trad('Voir le détail'),
@@ -12340,7 +12340,7 @@ const APERCUS = {
     const pnl = portfolioPnl();
     return {
       titre: trad('Valeur du portefeuille'), sous: `${Store.state.positions.length} ${trad('lignes de titres')}`,
-      total: pnl.value, totalNote: `${fmtSignedPct(pnl.pct)} sur le prix de revient`,
+      total: pnl.value, totalNote: `${fmtSignedPct(pnl.pct)} ${trad('sur le prix de revient')}`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${num(p.qty)} × ${fmtCur(p.price, p.currency)}`,
                      valeur: posValue(p), perf: posPerfPct(p) }))
@@ -12352,9 +12352,9 @@ const APERCUS = {
   investiTitres: () => ({
     titre: trad('Montant investi'), sous: trad('Ce que tes lignes t’ont coûté'),
     total: portfolioPnl().invested,
-    totalNote: `pour ${fmtEUR0(portfolioPnl().value)} de valeur actuelle`,
+    totalNote: `${trad('pour')} ${fmtEUR0(portfolioPnl().value)} ${trad('de valeur actuelle')}`,
     lignes: Store.state.positions
-      .map(p => ({ label: p.name, meta: `${num(p.qty)} × ${fmtCur(p.buyPrice, p.currency)} à l’achat`,
+      .map(p => ({ label: p.name, meta: `${num(p.qty)} × ${fmtCur(p.buyPrice, p.currency)} ${trad('à l’achat')}`,
                    valeur: posInvested(p) }))
       .sort((a, b) => b.valeur - a.valeur),
     vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
@@ -12365,8 +12365,8 @@ const APERCUS = {
     const j = dayPerformance();
     return {
       titre: trad('Plus / moins-value latente'),
-      sous: `${fmtSignedPct(pnl.pct)} · ${j.lignes.length ? `${fmtSigned(j.eur)} aujourd’hui` : 'pas de cours du jour'}`,
-      total: pnl.pnl, totalNote: `sur ${fmtEUR0(pnl.invested)} investis`,
+      sous: `${fmtSignedPct(pnl.pct)} · ${j.lignes.length ? `${fmtSigned(j.eur)} ${trad('aujourd’hui')}` : trad('pas de cours du jour')}`,
+      total: pnl.pnl, totalNote: `${trad('sur.investis', 'sur')} ${fmtEUR0(pnl.invested)} ${trad('investis')}`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
@@ -12394,19 +12394,19 @@ const APERCUS = {
     return {
       titre: trad('Crédits en cours'),
       sous: cr.lignes.length
-        ? `${cr.lignes.length} crédit${cr.lignes.length > 1 ? 's' : ''} · modifiable ici même`
-        : 'aucun crédit',
+        ? `${cr.lignes.length} ${cr.lignes.length > 1 ? trad('crédits') : trad('crédit')} · ${trad('modifiable ici même')}`
+        : trad('aucun crédit'),
       totalTexte: `−${fmtEUR(cr.reste)}`,
       total: cr.reste,
-      totalNote: `à retrancher de ${fmtEUR0(patrimoine().brut)} d’avoirs`,
+      totalNote: `${trad('à retrancher de')} ${fmtEUR0(patrimoine().brut)} ${trad('d’avoirs')}`,
       lignes: cr.lignes.map(c => ({
         label: c.libelle,
         /* L'intitule ouvre la fiche complete : taux, mensualite, preteur, capital
            emprunte. Ce panneau ne porte que le solde ; le reste ne change qu'une
            fois, et il faut pouvoir y aller sans passer par la page Comptes. */
         ouvre: { action: 'editer-credit', donnees: { etab: c.etabId, i: c.index } },
-        meta: [c.etabNom, c.preteur, c.taux ? `${fmtNombre(c.taux)} % l’an` : '',
-               c.mensualite ? `${fmtEUR0(c.mensualite)} par mois` : ''].filter(Boolean).join(' · '),
+        meta: [c.etabNom, c.preteur, c.taux ? `${fmtNombre(c.taux)} % ${trad('l’an')}` : '',
+               c.mensualite ? `${fmtEUR0(c.mensualite)} ${trad('par mois')}` : ''].filter(Boolean).join(' · '),
         /* Le chemin d'ecriture passe par l'index de l'etablissement et celui de la
            dette chez lui : c'est le meme couple que la fenetre d'edition, et le
            tri par montant de la liste ne le decale pas. */
@@ -12449,13 +12449,13 @@ const APERCUS = {
       /* Le total ne se commente pas de la meme façon quand rien n'a cote : « sur
          la cloture precedente » promet une comparaison qui n'a pas eu lieu. */
       totalNote: j.toutHorsSeance
-        ? 'aucune de tes lignes n’a coté depuis minuit'
-        : `${fmtSignedPct(j.pct)} sur la clôture précédente`,
+        ? trad('aucune de tes lignes n’a coté depuis minuit')
+        : `${fmtSignedPct(j.pct)} ${trad('sur la clôture précédente')}`,
       lignes: j.lignes.map(l => ({
         label: l.name,
         meta: [l.exchange || l.symbol, l.market?.label,
-               l.horsSeance ? (l.quoteTime ? `cours ${fmtCoursQuand(l.quoteTime)}`
-                                           : 'pas coté aujourd’hui') : ''].filter(Boolean).join(' · '),
+               l.horsSeance ? (l.quoteTime ? `${trad('cours')} ${fmtCoursQuand(l.quoteTime)}`
+                                           : trad('pas coté aujourd’hui')) : ''].filter(Boolean).join(' · '),
         valeur: l.eur, perf: l.pct,
       })),
       vue: 'positions', ancre: 'jour', cta: trad('Voir la séance'),
@@ -12467,10 +12467,10 @@ const APERCUS = {
   cashInvestir: () => ({
     titre: BASES.cashPlacer.nom, sous: trad('Liquidités posées chez tes courtiers'),
     total: stockTotals().cashToInvest,
-    totalNote: `${fmtPct(stockTotals().balance ? stockTotals().cashToInvest / stockTotals().balance * 100 : 0)} du portefeuille`,
+    totalNote: `${fmtPct(stockTotals().balance ? stockTotals().cashToInvest / stockTotals().balance * 100 : 0)} ${trad('du portefeuille')}`,
     lignes: entreesInvestir().map(({ compte, idxCompte, idxCash }) => ({
       label: nomCompteV2(compte),
-      meta: [nomEtabDe(compte), typeCompte(compte.type).label].filter(Boolean).join(' · '),
+      meta: [nomEtabDe(compte), trad(typeCompte(compte.type).label)].filter(Boolean).join(' · '),
       champ: `comptes.${idxCompte}.cash.${idxCash}.montant`,
     })),
     vue: 'accounts', ancre: '', cta: trad('Voir les comptes'),
@@ -12529,7 +12529,7 @@ function appliquerDiffere(bloc = $('#modalBody')) {
    vouvoyait des deux cotes, et corriger le premier exemplaire seul aurait fait
    dire « vos avoirs » a l'ouverture et « tes avoirs » a la premiere frappe. */
 const noteApercu = a => a.totalNote
-  || `${fmtPct(patrimoine().brut ? a.total / patrimoine().brut * 100 : 0, 1)} de tes avoirs`;
+  || `${fmtPct(patrimoine().brut ? a.total / patrimoine().brut * 100 : 0, 1)} ${trad('de tes avoirs')}`;
 
 function openApercu(cle, arg) {
   const a = APERCUS[cle]?.(arg);
@@ -12585,8 +12585,8 @@ function openApercu(cle, arg) {
   if (!saisissable) delete $('#modalBody').dataset.differe;
   const ailleurs = a.vue && a.vue !== currentView() && !saisissable;
   $('#modalFoot').innerHTML =
-    `<button class="btn ghost" data-action="modal-close">Fermer</button>
-     ${saisissable ? '<button class="btn" data-action="apercu-enregistrer">Enregistrer</button>' : ''}
+    `<button class="btn ghost" data-action="modal-close">${trad('Fermer')}</button>
+     ${saisissable ? `<button class="btn" data-action="apercu-enregistrer">${trad('Enregistrer')}</button>` : ''}
      ${ailleurs ? `<button class="btn" data-action="goto" data-view="${a.vue}" data-anchor="${a.ancre}">${esc(a.cta)} →</button>` : ''}`;
   /* `montrerModal` et non `hidden = false` : c'est elle qui gele le fond, et
      l'apercu passait a cote. La page derriere restait donc libre de defiler, et
@@ -13083,8 +13083,8 @@ function majOnglets() {
   const dep = depensesEnAttente();
   const rel = currentMonthPending();
   const enAttente = [
-    dep.missing ? `${dep.label} : dépenses pas encore saisies` : '',
-    rel.missing ? `${rel.label} : relevé pas encore enregistré` : '',
+    dep.missing ? `${dep.label} : ${trad('dépenses pas encore saisies')}` : '',
+    rel.missing ? `${rel.label} : ${trad('relevé pas encore enregistré')}` : '',
   ].filter(Boolean);
 
   const pastille = (id, actif, texte) => {
@@ -13121,8 +13121,8 @@ function renderSidebar() {
   const rel = currentMonthPending();
   pastille('#badgeBudget',
     { missing: dep.missing || rel.missing, label: (dep.missing ? dep : rel).label },
-    [dep.missing ? 'dépenses pas encore saisies' : '',
-     rel.missing ? 'relevé pas encore enregistré' : ''].filter(Boolean).join(' et '));
+    [dep.missing ? trad('dépenses pas encore saisies') : '',
+     rel.missing ? trad('relevé pas encore enregistré') : ''].filter(Boolean).join(` ${trad('et')} `));
 
   /* Le patrimoine clignote brièvement quand il bouge : on voit qu'une saisie
      a porté, sans avoir à chercher où. */
@@ -13171,8 +13171,8 @@ function renderSidebar() {
   document.body.classList.toggle('discret', on);
   for (const oeil of $$('[data-action="toggle-masque"]')) {
     oeil.setAttribute('aria-pressed', on ? 'true' : 'false');
-    oeil.title = (on ? 'Afficher les montants' : 'Masquer les montants') + ' (touche h)';
-    oeil.setAttribute('aria-label', on ? 'Afficher les montants' : 'Masquer les montants');
+    oeil.title = (on ? trad('Afficher les montants') : trad('Masquer les montants')) + ' ' + trad('(touche h)');
+    oeil.setAttribute('aria-label', on ? trad('Afficher les montants') : trad('Masquer les montants'));
   }
   /* Le patrimoine du menu est lui aussi une bascule : son infobulle doit
      dire l'etat courant, comme l'oeil. */
