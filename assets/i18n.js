@@ -14,8 +14,18 @@
 const LANGS = [['fr', 'Français'], ['en', 'English']];
 const LANG_KEY = 'wealth-dashboard:lang';
 
+/* La demonstration s'ouvre en anglais, le depot prive en francais.
+
+   C'est la seule divergence de langue entre les deux, et elle se tient : ici le
+   README, les captures et jusqu'aux donnees de la graine sont anglais. Ouvrir
+   en francais donnait une premiere impression qui contredisait tout le reste,
+   pour un visiteur qui arrive de GitHub.
+
+   Le repli reste le francais partout ailleurs dans le fichier : c'est la langue
+   des clefs, celle qui s'affiche quand une traduction manque. Seul le defaut au
+   premier chargement change, et le selecteur de Preferences reste maitre. */
 function currentLang() {
-  try { return localStorage.getItem(LANG_KEY) || 'fr'; } catch (e) { return 'fr'; }
+  try { return localStorage.getItem(LANG_KEY) || 'en'; } catch (e) { return 'en'; }
 }
 
 function setLang(code) {

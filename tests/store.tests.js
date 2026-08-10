@@ -4632,6 +4632,28 @@ suite('Les balises de version ne mentent pas', () => {
      guillemet qui ferme l'attribut. */
   const versions = src => src.split('?v=').slice(1).map(b => b.split('"')[0]);
 
+  test('effacer rend un tableau de bord complet, pas une coquille', () => {
+    /* La graine est ecrite dans l'ancien modele, un compte par ligne de releve.
+       C'est la migration qui en tire les etablissements, les comptes et leurs
+       poches — posee telle quelle, elle rend `comptes` absent et tout ce qui en
+       descend a zero. « Tout effacer » la posait crument : l'ecran affichait
+       0 EUR sur huit cartes, et le premier enregistrement figeait ce vide pour
+       les visites suivantes. Le meme piege est deja documente dans `load()`,
+       corrige la et jamais ici. */
+    const src = lireSource('assets/app.js');
+    const debut = src.indexOf("async 'wipe'()");
+    vrai(debut > 0, 'l’action doit exister');
+    const bloc = src.slice(debut, src.indexOf("'snapshot-row'", debut));
+    vrai(/Store\.migrate\(\)/.test(bloc) && /refreshAccounts\(\)/.test(bloc),
+      'la graine passe par la migration, sinon l’écran affiche 0 € sur tout');
+
+    /* Et la preuve par le calcul : la graine migree porte des comptes et un
+       patrimoine, la graine crue n'en porte aucun. */
+    Fixture.poser();
+    vrai(comptesOuverts().length > 0 && patrimoine().brut > 0,
+      'un état construit porte des comptes et un patrimoine');
+  });
+
   test('le HTML se revalide, les assets versionnés se gardent', () => {
     /* Le numero dans l'URL ne suffit pas seul. Il rend chaque version des
        assets unique — une adresse jamais vue est une adresse retelechargee —

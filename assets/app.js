@@ -9826,7 +9826,16 @@ const ACTIONS = {
        clef a elle, pour qu'un visiteur qui remet tout a zero ne touche pas les
        donnees d'un tableau de bord reel ouvert dans le meme navigateur. */
     try { localStorage.removeItem(cleStockage()); } catch (e) {}
+    /* La graine passe par la migration, comme partout ailleurs ou elle sert.
+       Elle est ecrite dans l'ancien modele, un compte par ligne de releve :
+       c'est la migration qui en tire les etablissements, les comptes et leurs
+       poches. Posee telle quelle, elle rendait un etat a moitie construit —
+       `comptes` absent, et tout ce qui en descend a zero. L'ecran affichait
+       donc 0 EUR sur huit cartes apres un effacement, et le premier
+       enregistrement figeait cet etat vide pour les visites suivantes. */
     Store.state = structuredClone(SEED);
+    Store.migrate();
+    refreshAccounts();
     render(); toast(trad('Données effacées'));
   },
   /* Photo de la situation actuelle, écrite dans une ligne précise du relevé. */
