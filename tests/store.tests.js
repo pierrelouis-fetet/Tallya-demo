@@ -9731,7 +9731,9 @@ suite('La page Actifs range ce qu’on tient chez un tiers et ce qu’on tient s
        laquelle. */
     vrai(!/'Hors établissement'/.test(src),
       'plus de groupe nommé par ce qui lui manque');
-    vrai(/'Chez toi', 'ni banque ni courtier'/.test(src),
+    /* Les deux mots passent par trad() depuis le chantier des deux langues :
+       la clef reste la phrase francaise, que ce controle compare. */
+    vrai(/trad\('Chez toi'\), trad\('ni banque ni courtier'\)/.test(src),
       'il se nomme par ce qu’il est');
   });
 

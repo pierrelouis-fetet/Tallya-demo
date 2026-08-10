@@ -16,11 +16,11 @@
 /* Types de compte. `group` pilote tous les calculs (cash de vie / bourse /
    private market) ; `label` n'est qu'un regroupement d'affichage. */
 const SEED_ACCOUNT_TYPES = [
-  { id: 'banque',       label: 'Banques',        group: 'cash' },
+  { id: 'banque',       label: 'Banks',        group: 'cash' },
   { id: 'pea',          label: 'PEA',            group: 'bourse' },
   { id: 'cto',          label: 'CTO',            group: 'bourse' },
   { id: 'crypto',       label: 'Crypto',         group: 'bourse' },
-  { id: 'levier',       label: 'Levier / dette', group: 'bourse' },
+  { id: 'levier',       label: 'Leverage / debt', group: 'bourse' },
   { id: 'pe',           label: 'Private equity', group: 'pe' },
   { id: 'crowdfunding', label: 'Crowdfunding',   group: 'pe' },
 ];
@@ -34,22 +34,22 @@ const SEED_VERSION = 2;
 
 const SEED_ACCOUNTS = [
   // --- Cash de vie -------------------------------------------------
-  { id: 'courant',  label: 'Compte courant', short: 'Courant', group: 'cash', broker: 'Banque en ligne', type: 'banque' },
-  { id: 'livret',   label: 'Livret A',       short: 'Livret A', group: 'cash', broker: 'Banque en ligne', type: 'banque' },
-  { id: 'especes',  label: 'Espèces',        short: 'Espèces',  group: 'cash', broker: 'Espèces', type: 'banque' },
+  { id: 'courant',  label: 'Current account', short: 'Current', group: 'cash', broker: 'Online bank', type: 'banque' },
+  { id: 'livret',   label: 'Livret A',       short: 'Livret A', group: 'cash', broker: 'Online bank', type: 'banque' },
+  { id: 'especes',  label: 'Cash on hand', short: 'Cash',  group: 'cash', broker: 'Cash on hand', type: 'banque' },
 
   // --- Bourse ------------------------------------------------------
   // Les deux poches de cash d'un compte titres : de l'argent deja verse au
   // courtier mais pas encore investi. Il compte dans les liquidites, pas
   // dans les actifs de marche.
-  { id: 'cashPea',  label: 'Cash PEA',       short: 'Cash PEA', group: 'bourse', broker: 'Courtier', type: 'pea', role: 'cash', alloc: 'Cash PEA/CTO' },
-  { id: 'cashCto',  label: 'Cash CTO',       short: 'Cash CTO', group: 'bourse', broker: 'Courtier', type: 'cto', role: 'cash', alloc: 'Cash PEA/CTO' },
-  { id: 'pea',      label: 'PEA',            short: 'PEA',      group: 'bourse', broker: 'Courtier', holdings: true, type: 'pea' },
-  { id: 'cto',      label: 'Compte titres',  short: 'CTO',      group: 'bourse', broker: 'Courtier', holdings: true, type: 'cto' },
-  { id: 'crypto',   label: 'Portefeuille crypto', short: 'Crypto', group: 'bourse', broker: 'Courtier', type: 'crypto', holdings: true, alloc: 'Crypto' },
+  { id: 'cashPea',  label: 'Cash PEA',       short: 'Cash PEA', group: 'bourse', broker: 'Broker', type: 'pea', role: 'cash', alloc: 'Cash PEA/CTO' },
+  { id: 'cashCto',  label: 'Cash CTO',       short: 'Cash CTO', group: 'bourse', broker: 'Broker', type: 'cto', role: 'cash', alloc: 'Cash PEA/CTO' },
+  { id: 'pea',      label: 'PEA',            short: 'PEA',      group: 'bourse', broker: 'Broker', holdings: true, type: 'pea' },
+  { id: 'cto',      label: 'Compte titres',  short: 'CTO',      group: 'bourse', broker: 'Broker', holdings: true, type: 'cto' },
+  { id: 'crypto',   label: 'Crypto portfolio', short: 'Crypto', group: 'bourse', broker: 'Broker', type: 'crypto', holdings: true, alloc: 'Crypto' },
 
   // --- Private market ----------------------------------------------
-  { id: 'fondsNonCote', label: 'Fonds non coté', short: 'Non coté', group: 'pe', broker: 'Société de gestion', type: 'pe', alloc: 'Private Equity' },
+  { id: 'fondsNonCote', label: 'Unlisted fund', short: 'Unlisted', group: 'pe', broker: 'Fund manager', type: 'pe', alloc: 'Private Equity' },
 
   /* --- Immobilier, et le crédit qui va avec -------------------------
      Sans bien immobilier, la démonstration ne montrait ni la classe
@@ -61,8 +61,8 @@ const SEED_ACCOUNTS = [
      crédit de son établissement. Il porte donc le même établissement que
      l'appartement, sans quoi la fiche du bien ne trouverait pas son prêt et
      annoncerait 150 000 € comme si tout était acquis. */
-  { id: 'appart',     label: 'Appartement',     short: 'Appartement', group: 'pe',     broker: 'Crédit immobilier', type: 'immo' },
-  { id: 'pretAppart', label: 'Prêt immobilier', short: 'Prêt',        group: 'bourse', broker: 'Crédit immobilier', type: 'levier', role: 'margin' },
+  { id: 'appart',     label: 'Flat',            short: 'Flat', group: 'pe',     broker: 'Mortgage lender', type: 'immo' },
+  { id: 'pretAppart', label: 'Mortgage',        short: 'Loan',        group: 'bourse', broker: 'Mortgage lender', type: 'levier', role: 'margin' },
 ];
 
 /* Lignes mensuelles : { date: 'YYYY-MM-DD', v: { accountId: montant }, comment,
@@ -72,13 +72,13 @@ const SEED_ACCOUNTS = [
    dans `v` entrerait dans le brut, alors que le net vaut le brut moins les
    dettes. Le mettre aux deux endroits l'aurait compté deux fois. */
 const SEED_MONTHLY = [
-  { date: '2023-09-01', comment: 'Premier relevé : on part de ce qui existe déjà', dettes: 88090,
+  { date: '2023-09-01', comment: 'First statement: starting from what is already there', dettes: 88090,
     v: { courant:1346, livret:3650, especes:93, cashPea:360, cashCto:198, pea:6563, cto:3842, crypto:846, fondsNonCote:1000, appart:145000 } },
   { date: '2023-10-01', comment: '', dettes: 87705,
     v: { courant:1392, livret:3900, especes:96, cashPea:720, cashCto:396, pea:7326, cto:4199, crypto:935, fondsNonCote:1000, appart:145000 } },
   { date: '2023-11-01', comment: '', dettes: 87320,
     v: { courant:1438, livret:4150, especes:99, cashPea:1080, cashCto:594, pea:8089, cto:4556, crypto:1024, fondsNonCote:1000, appart:145000 } },
-  { date: '2023-12-01', comment: 'Fêtes : le compte courant absorbe', dettes: 86935,
+  { date: '2023-12-01', comment: 'Festive season: the current account takes the hit', dettes: 86935,
     v: { courant:1068, livret:4400, especes:102, cashPea:1440, cashCto:792, pea:8852, cto:4913, crypto:1113, fondsNonCote:1000, appart:145000 } },
   { date: '2024-01-01', comment: '', dettes: 86550,
     v: { courant:1114, livret:4650, especes:105, cashPea:1800, cashCto:990, pea:9615, cto:5270, crypto:1202, fondsNonCote:1000, appart:145000 } },
@@ -88,13 +88,13 @@ const SEED_MONTHLY = [
     v: { courant:1206, livret:4532, especes:111, cashPea:2520, cashCto:1386, pea:11141, cto:5984, crypto:1380, fondsNonCote:1000, appart:145000 } },
   { date: '2024-04-01', comment: '', dettes: 85395,
     v: { courant:1252, livret:4782, especes:114, cashPea:2880, cashCto:1584, pea:11904, cto:6341, crypto:1469, fondsNonCote:2000, appart:145000 } },
-  { date: '2024-05-01', comment: 'Premier versement programmé sur le PEA', dettes: 85010,
+  { date: '2024-05-01', comment: 'First scheduled payment into the PEA', dettes: 85010,
     v: { courant:1298, livret:5032, especes:117, cashPea:324, cashCto:1782, pea:12667, cto:6698, crypto:1558, fondsNonCote:2000, appart:145000 } },
   { date: '2024-06-01', comment: '', dettes: 84625,
     v: { courant:1344, livret:5282, especes:120, cashPea:684, cashCto:1980, pea:13430, cto:7055, crypto:1647, fondsNonCote:2000, appart:145000 } },
   { date: '2024-07-01', comment: '', dettes: 84240,
     v: { courant:1390, livret:5532, especes:74, cashPea:1044, cashCto:2178, pea:14193, cto:7412, crypto:1736, fondsNonCote:2000, appart:145000 } },
-  { date: '2024-08-01', comment: 'Recul général des marchés sur l’été', dettes: 83855,
+  { date: '2024-08-01', comment: 'Markets down across the board over the summer', dettes: 83855,
     v: { courant:1006, livret:5782, especes:77, cashPea:1404, cashCto:2376, pea:13909, cto:7225, crypto:1460, fondsNonCote:2000, appart:145000 } },
   { date: '2024-09-01', comment: '', dettes: 83470,
     v: { courant:1052, livret:6032, especes:80, cashPea:1764, cashCto:2574, pea:14672, cto:7582, crypto:1549, fondsNonCote:2000, appart:145000 } },
@@ -104,7 +104,7 @@ const SEED_MONTHLY = [
     v: { courant:1144, livret:6532, especes:86, cashPea:2484, cashCto:297, pea:16198, cto:8296, crypto:1727, fondsNonCote:2000, appart:145000 } },
   { date: '2024-12-01', comment: '', dettes: 82315,
     v: { courant:1190, livret:6782, especes:89, cashPea:2844, cashCto:495, pea:16961, cto:8653, crypto:1816, fondsNonCote:2000, appart:145000 } },
-  { date: '2025-01-01', comment: 'Appartement réestimé à 150 000 €', dettes: 81930,
+  { date: '2025-01-01', comment: 'Flat revalued at €150,000', dettes: 81930,
     v: { courant:1236, livret:7032, especes:92, cashPea:3204, cashCto:693, pea:17724, cto:9010, crypto:1905, fondsNonCote:2000, appart:150000 } },
   { date: '2025-02-01', comment: '', dettes: 81545,
     v: { courant:1282, livret:7282, especes:95, cashPea:3564, cashCto:891, pea:18487, cto:9367, crypto:1994, fondsNonCote:2000, appart:150000 } },
@@ -116,25 +116,25 @@ const SEED_MONTHLY = [
     v: { courant:1420, livret:8032, especes:104, cashPea:464, cashCto:1485, pea:20776, cto:10438, crypto:2261, fondsNonCote:2000, appart:150000 } },
   { date: '2025-06-01', comment: '', dettes: 80005,
     v: { courant:1466, livret:8282, especes:107, cashPea:824, cashCto:1683, pea:21539, cto:10795, crypto:2350, fondsNonCote:2000, appart:150000 } },
-  { date: '2025-07-01', comment: 'Vacances : rien d’investi ce mois-ci', dettes: 79620,
+  { date: '2025-07-01', comment: 'Holidays: nothing invested this month', dettes: 79620,
     v: { courant:1119, livret:8532, especes:110, cashPea:1184, cashCto:1881, pea:22302, cto:11152, crypto:2439, fondsNonCote:2000, appart:150000 } },
   { date: '2025-08-01', comment: '', dettes: 79235,
     v: { courant:1165, livret:8782, especes:113, cashPea:1544, cashCto:2079, pea:23065, cto:11509, crypto:2528, fondsNonCote:2000, appart:150000 } },
-  { date: '2025-09-01', comment: 'Renouvellement du matériel, épargne au ralenti', dettes: 78850,
+  { date: '2025-09-01', comment: 'Gear replaced, saving slowed down', dettes: 78850,
     v: { courant:1211, livret:8309, especes:116, cashPea:1904, cashCto:2277, pea:23828, cto:11866, crypto:2617, fondsNonCote:2500, appart:150000 } },
   { date: '2025-10-01', comment: '', dettes: 78465,
     v: { courant:1257, livret:8559, especes:119, cashPea:2264, cashCto:248, pea:24591, cto:12223, crypto:2706, fondsNonCote:2500, appart:150000 } },
-  { date: '2025-11-01', comment: 'Baisse des marchés, le non coté ne bouge pas', dettes: 78080,
+  { date: '2025-11-01', comment: 'Markets down, unlisted holdings unchanged', dettes: 78080,
     v: { courant:1303, livret:8809, especes:122, cashPea:2624, cashCto:446, pea:24086, cto:11951, crypto:2180, fondsNonCote:2500, appart:150000 } },
   { date: '2025-12-01', comment: '', dettes: 77695,
     v: { courant:1349, livret:9059, especes:187, cashPea:2984, cashCto:644, pea:24849, cto:12308, crypto:2269, fondsNonCote:2500, appart:150000 } },
-  { date: '2025-12-31', comment: 'Clôture 2025', dettes: 77695,
+  { date: '2025-12-31', comment: '2025 close', dettes: 77695,
     v: { courant:1430, livret:9059, especes:187, cashPea:2984, cashCto:644, pea:24849, cto:12308, crypto:2269, fondsNonCote:2500, appart:150000 } },
   { date: '2026-01-01', comment: '', dettes: 77310,
     v: { courant:1395, livret:9309, especes:190, cashPea:334, cashCto:842, pea:25612, cto:12665, crypto:2358, fondsNonCote:2500, appart:150000 } },
   { date: '2026-02-01', comment: '', dettes: 76925,
     v: { courant:1441, livret:9559, especes:193, cashPea:694, cashCto:104, pea:25584, cto:12631, crypto:2153, fondsNonCote:2500, appart:150000 } },
-  { date: '2026-03-01', comment: 'Mois le plus lourd de l’année', dettes: 76540,
+  { date: '2026-03-01', comment: 'The heaviest month of the year', dettes: 76540,
     v: { courant:981, livret:8828, especes:196, cashPea:1054, cashCto:302, pea:26347, cto:12988, crypto:2242, fondsNonCote:3000, appart:150000 } },
   { date: '2026-04-01', comment: '', dettes: 76155,
     v: { courant:1027, livret:9078, especes:199, cashPea:1414, cashCto:500, pea:27110, cto:13345, crypto:2331, fondsNonCote:3000, appart:150000 } },
@@ -142,13 +142,13 @@ const SEED_MONTHLY = [
     v: { courant:1073, livret:9328, especes:142, cashPea:1774, cashCto:698, pea:27873, cto:13702, crypto:2420, fondsNonCote:3000, appart:150000 } },
   { date: '2026-06-01', comment: '', dettes: 75385,
     v: { courant:1119, livret:9578, especes:145, cashPea:2134, cashCto:896, pea:28636, cto:14059, crypto:2509, fondsNonCote:3000, appart:150000 } },
-  { date: '2026-07-01', comment: 'Prime versée, le cash remonte', dettes: 75000,
+  { date: '2026-07-01', comment: 'Bonus paid, cash back up', dettes: 75000,
     v: { courant:1398, livret:9828, especes:148, cashPea:2494, cashCto:1094, pea:29399, cto:14416, crypto:2598, fondsNonCote:3000, appart:150000 } },
   /* Le mois en cours est renseigne : une demonstration ne doit pas s ouvrir
      sur deux rappels de saisie. Ses montants suivent juillet, et le total
      colle a ce que les positions valent aux cours du jour — sans quoi la
      courbe ferait une marche entre le dernier releve et « Auj. ». */
-  { date: '2026-08-01', comment: 'Mois courant : relevé pris en début de mois', dettes: 74615,
+  { date: '2026-08-01', comment: 'Current month: statement taken at the start of the month', dettes: 74615,
     v: { courant:1398, livret:9828, especes:148, cashPea:2494, cashCto:1097, pea:30395, cto:15194, crypto:2597, fondsNonCote:3000, appart:150000 } },
   { date: '2026-09-01', comment: '', v: {} },
   { date: '2026-10-01', comment: '', v: {} },
@@ -295,7 +295,7 @@ function blankState() {
     strategy: structuredClone(SEED_STRATEGY),
     accountTypes: structuredClone(SEED_ACCOUNT_TYPES),
     accounts: [
-      { id: 'compteCourant', label: 'Compte courant', short: 'Courant',
+      { id: 'compteCourant', label: 'Current account', short: 'Current',
         group: 'cash', type: 'banque', broker: '' },
       { id: 'livret', label: 'Livret', short: 'Livret',
         group: 'cash', type: 'banque', broker: '' },

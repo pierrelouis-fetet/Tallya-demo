@@ -12,8 +12,8 @@
    ============================================================= */
 
 const EXPENSE_CATEGORIES = [
-  'Courses', 'Restos', 'Imprévus', 'Abonnements',
-  'Shopping', 'Voyages', 'Loisirs', 'Transport', 'Autres',
+  'Groceries', 'Dining', 'Unexpected', 'Subscriptions',
+  'Shopping', 'Travel', 'Leisure', 'Transport', 'Other',
 ];
 
 const SEED_BUDGET = {
@@ -24,84 +24,84 @@ const SEED_BUDGET = {
      revenu variable se saisit à son plancher, le surplus se lit ensuite dans
      l'écart entre l'épargne théorique et la croissance réelle. */
   income: [
-    { label: 'Salaire', amount: 2800 },
-    { label: 'Part du colocataire', amount: 450 },
+    { label: 'Salary', amount: 2800 },
+    { label: 'Flatmate’s share', amount: 450 },
   ],
 
   /* Personnes avec qui des charges sont partagees. Ces parts sont
      indicatives : le budget deduit la charge en entier, et ce qu'elles
      versent figure dans les revenus.
      Un rôle, pas quelqu'un : le jeu de démonstration ne nomme personne. */
-  contributors: [{ id: 'coloc', name: 'Colocataire' }],
+  contributors: [{ id: 'coloc', name: 'Flatmate' }],
   fixedCharges: [
-    { label: 'Loyer (charges comprises)', amount: 900.00, shares: { coloc: 450.00 }, provider: 'Bailleur' },
-    { label: 'Électricité et gaz',        amount: 110.00, shares: { coloc: 55.00 },  provider: 'Fournisseur énergie' },
-    { label: 'Assurance habitation',      amount: 18.00,  shares: { coloc: 9.00 },   provider: 'Assureur' },
-    { label: 'Internet',                  amount: 32.00,  shares: { coloc: 16.00 },  provider: 'Opérateur' },
-    { label: 'Transports en commun',      amount: 88.00,  shares: {}, provider: 'Réseau régional' },
-    { label: 'Forfait mobile',            amount: 15.00,  shares: {}, provider: 'Opérateur' },
-    { label: 'Salle de sport',            amount: 29.00,  shares: {}, provider: 'Salle de quartier' },
-    { label: 'Musique en ligne',          amount: 11.00,  shares: {}, provider: 'Service musical' },
-    { label: 'Vidéo en ligne',            amount: 9.00,   shares: {}, provider: 'Service vidéo' },
-    { label: 'Sauvegarde en ligne',       amount: 3.00,   shares: {}, provider: 'Hébergeur' },
+    { label: 'Rent (bills included)', amount: 900.00, shares: { coloc: 450.00 }, provider: 'Landlord' },
+    { label: 'Electricity and gas',        amount: 110.00, shares: { coloc: 55.00 },  provider: 'Energy supplier' },
+    { label: 'Home insurance',      amount: 18.00,  shares: { coloc: 9.00 },   provider: 'Insurer' },
+    { label: 'Internet',                  amount: 32.00,  shares: { coloc: 16.00 },  provider: 'Telecom operator' },
+    { label: 'Public transport',      amount: 88.00,  shares: {}, provider: 'Regional network' },
+    { label: 'Mobile plan',            amount: 15.00,  shares: {}, provider: 'Telecom operator' },
+    { label: 'Gym',            amount: 29.00,  shares: {}, provider: 'Local gym' },
+    { label: 'Music streaming',          amount: 11.00,  shares: {}, provider: 'Music service' },
+    { label: 'Video streaming',            amount: 9.00,   shares: {}, provider: 'Video service' },
+    { label: 'Online backup',       amount: 3.00,   shares: {}, provider: 'Hosting provider' },
   ],
 
   /* Lignes annuelles à repasser en revue une fois par an. Elles ne pèsent pas
      sur le budget mensuel, elles servent à ne pas les oublier. */
   toReview: [
-    { label: 'Nom de domaine',   amount: 15, period: 'an', when: 'Mars',    note: 'À conserver' },
-    { label: 'Antivirus',        amount: 60, period: 'an', when: 'Juin',    note: "Vérifier l'utilité avant renouvellement" },
-    { label: 'Revue des abonnements', amount: 0, period: '', when: '',      note: 'Passer en revue tous les prélèvements annuels' },
+    { label: 'Domain name',   amount: 15, period: 'an', when: 'March',    note: 'Worth keeping' },
+    { label: 'Antivirus',        amount: 60, period: 'an', when: 'June',    note: 'Check it is still useful before renewing' },
+    { label: 'Subscription review', amount: 0, period: '', when: '',      note: 'Go through every yearly direct debit' },
   ],
 
   /* Achats récurrents dont le coût réel ne se voit qu'à l'année : une petite
      somme chaque semaine finit par peser autant qu'une charge fixe. */
   supplements: [
-    { label: 'Café',           perDay: '2 tasses', perYear: '730 tasses', annual: 220.00 },
-    { label: 'Pain',           perDay: '1 demi',   perYear: '365 demis',  annual: 240.00 },
-    { label: 'Eau pétillante', perDay: '1 L',      perYear: '365 L',      annual: 180.00 },
+    { label: 'Coffee',        perDay: '2 cups',   perYear: '730 cups',   annual: 220.00 },
+    { label: 'Bread',         perDay: 'half a loaf', perYear: '365 halves', annual: 240.00 },
+    { label: 'Sparkling water', perDay: '1 L',    perYear: '365 L',      annual: 180.00 },
   ],
 
   /* Dépenses mensuelles par catégorie. Les mois à venir restent vides : c'est
      ce qui déclenche le rappel de saisie et fait vivre la démonstration. */
   expenses: [
-    { month: '2025-03-01', note: 'Premier mois suivi, tout n’est pas encore ventilé',
-      v: { Courses: 280, Restos: 190, Transport: 40, Autres: 260 } },
-    { month: '2025-04-01', note: 'Mois calme',
-      v: { Courses: 305, Restos: 165, Abonnements: 60, Transport: 35, Autres: 120 } },
-    { month: '2025-05-01', note: 'Week-end prolongé',
-      v: { Courses: 290, Restos: 210, Voyages: 240, Transport: 30, Loisirs: 45 } },
-    { month: '2025-06-01', note: 'Seul mois nettement sous objectif',
-      v: { Courses: 265, Restos: 150, Abonnements: 60, Transport: 35 } },
-    { month: '2025-07-01', note: 'Vacances : deux semaines hors de chez soi',
-      v: { Courses: 210, Restos: 320, Voyages: 620, Loisirs: 90, Transport: 25 } },
-    { month: '2025-08-01', note: 'Retour de vacances, rentrée à préparer',
-      v: { Courses: 330, Restos: 180, Shopping: 240, Abonnements: 60, Transport: 40 } },
-    { month: '2025-09-01', note: 'Renouvellement du matériel informatique',
-      v: { Courses: 315, Restos: 195, Shopping: 480, Transport: 40, Loisirs: 35 } },
-    { month: '2025-10-01', note: 'Réparation imprévue sur le vélo',
-      v: { Courses: 300, Restos: 205, 'Imprévus': 180, Abonnements: 60, Transport: 40 } },
-    { month: '2025-11-01', note: 'Achats anticipés pour les fêtes',
-      v: { Courses: 340, Restos: 175, Shopping: 390, Transport: 35, Loisirs: 50 } },
-    { month: '2025-12-01', note: 'Fêtes et déplacements en famille',
-      v: { Courses: 380, Restos: 290, Shopping: 260, Voyages: 210, Loisirs: 60 } },
+    { month: '2025-03-01', note: 'First month tracked, not everything is split out yet',
+      v: { Groceries: 280, Dining: 190, Transport: 40, Other: 260 } },
+    { month: '2025-04-01', note: 'Quiet month',
+      v: { Groceries: 305, Dining: 165, Subscriptions: 60, Transport: 35, Other: 120 } },
+    { month: '2025-05-01', note: 'Long weekend',
+      v: { Groceries: 290, Dining: 210, Travel: 240, Transport: 30, Leisure: 45 } },
+    { month: '2025-06-01', note: 'The only month clearly under target',
+      v: { Groceries: 265, Dining: 150, Subscriptions: 60, Transport: 35 } },
+    { month: '2025-07-01', note: 'Holidays: two weeks away from home',
+      v: { Groceries: 210, Dining: 320, Travel: 620, Leisure: 90, Transport: 25 } },
+    { month: '2025-08-01', note: 'Back from holidays, autumn to get ready for',
+      v: { Groceries: 330, Dining: 180, Shopping: 240, Subscriptions: 60, Transport: 40 } },
+    { month: '2025-09-01', note: 'Computer gear replaced',
+      v: { Groceries: 315, Dining: 195, Shopping: 480, Transport: 40, Leisure: 35 } },
+    { month: '2025-10-01', note: 'Unexpected bike repair',
+      v: { Groceries: 300, Dining: 205, 'Unexpected': 180, Subscriptions: 60, Transport: 40 } },
+    { month: '2025-11-01', note: 'Christmas shopping done early',
+      v: { Groceries: 340, Dining: 175, Shopping: 390, Transport: 35, Leisure: 50 } },
+    { month: '2025-12-01', note: 'Festive season and family travel',
+      v: { Groceries: 380, Dining: 290, Shopping: 260, Travel: 210, Leisure: 60 } },
 
-    { month: '2026-01-01', note: 'Reprise, mois volontairement sobre',
-      v: { Courses: 285, Restos: 145, Abonnements: 60, Transport: 40 } },
-    { month: '2026-02-01', note: 'Électroménager à remplacer',
-      v: { Courses: 300, Restos: 170, 'Imprévus': 420, Transport: 40 } },
-    { month: '2026-03-01', note: 'Mois lourd : caution et frais d’installation',
-      v: { Courses: 320, Restos: 230, 'Imprévus': 640, Shopping: 130, Transport: 45 } },
-    { month: '2026-04-01', note: 'Équipement de printemps',
-      v: { Courses: 310, Restos: 215, Shopping: 350, Loisirs: 55, Transport: 40 } },
-    { month: '2026-05-01', note: 'Voyage réservé à l’avance',
-      v: { Courses: 295, Restos: 240, Voyages: 480, Abonnements: 60, Transport: 35 } },
-    { month: '2026-06-01', note: 'Mois calme, gros réassort de courses',
-      v: { Courses: 395, Restos: 185, Loisirs: 40, Transport: 40 } },
-    { month: '2026-07-01', note: 'Vacances : le poste voyages porte presque tout',
-      v: { Courses: 190, Restos: 260, Voyages: 870, Transport: 25 } },
-    { month: '2026-08-01', note: 'Mois en cours, saisi au fil de l’eau',
-      v: { Courses: 205, Restos: 145, Abonnements: 60, Transport: 35 } },
+    { month: '2026-01-01', note: 'Back on track, a deliberately lean month',
+      v: { Groceries: 285, Dining: 145, Subscriptions: 60, Transport: 40 } },
+    { month: '2026-02-01', note: 'Kitchen appliance to replace',
+      v: { Groceries: 300, Dining: 170, 'Unexpected': 420, Transport: 40 } },
+    { month: '2026-03-01', note: 'Heavy month: deposit and moving-in costs',
+      v: { Groceries: 320, Dining: 230, 'Unexpected': 640, Shopping: 130, Transport: 45 } },
+    { month: '2026-04-01', note: 'Spring kit',
+      v: { Groceries: 310, Dining: 215, Shopping: 350, Leisure: 55, Transport: 40 } },
+    { month: '2026-05-01', note: 'Trip booked in advance',
+      v: { Groceries: 295, Dining: 240, Travel: 480, Subscriptions: 60, Transport: 35 } },
+    { month: '2026-06-01', note: 'Quiet month, a big grocery restock',
+      v: { Groceries: 395, Dining: 185, Leisure: 40, Transport: 40 } },
+    { month: '2026-07-01', note: 'Holidays: the travel line carries almost all of it',
+      v: { Groceries: 190, Dining: 260, Travel: 870, Transport: 25 } },
+    { month: '2026-08-01', note: 'Current month, entered as it goes',
+      v: { Groceries: 205, Dining: 145, Subscriptions: 60, Transport: 35 } },
     { month: '2026-09-01', note: '', v: {} },
     { month: '2026-10-01', note: '', v: {} },
     { month: '2026-11-01', note: '', v: {} },

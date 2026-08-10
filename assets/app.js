@@ -5171,7 +5171,7 @@ function viewAccounts() {
        la somme de ses parts sans que rien ne le dise. */
     const enDirect = ETABS().filter(estEtabDeBiens).map(groupeEtab).join('')
       + (sansContenant.length
-        ? groupe('e-sans', 'Chez toi', 'ni banque ni courtier',
+        ? groupe('e-sans', trad('Chez toi'), trad('ni banque ni courtier'),
             sansContenant.map(c => ligneCompte(c, false)).join(''),
             sansContenant.reduce((s, c) => s + valeurCompte(c), 0), '',
             teinteDominante(sansContenant))

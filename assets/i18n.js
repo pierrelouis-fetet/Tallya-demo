@@ -1377,6 +1377,8 @@ const I18N = {
     "Type": "Type",
     "Étape": "Step",
     "sur ce compte": "on this account",
+    "Chez toi": "At home",
+    "ni banque ni courtier": "neither bank nor broker",
     "Pas d’argent déclaré sur ce compte. « Scinder » ajoute une première part.": "No money declared on this account. “Split” adds a first share.",
     "sur.etape": "of",
     "cela détermine les placements possibles": "this decides which holdings are possible",
