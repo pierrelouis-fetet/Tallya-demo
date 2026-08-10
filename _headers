@@ -4,5 +4,34 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()
 
+# Les fichiers d'assets portent un numero de version dans leur URL
+# (`?v=2026-08-21x-demo`) : une adresse qui change est une adresse que le navigateur
+# n'a jamais vue, donc il retelecharge. Tant que le numero ne bouge pas,
+# l'adresse ne bouge pas non plus, et le fichier peut etre garde un an. C'est
+# `immutable` qui le dit : ne meme pas revalider.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Le HTML, lui, ne peut pas porter de numero : on tape l'adresse nue. C'est
+# donc le seul maillon capable de servir un vieux document, qui reclamerait
+# alors les vieux `?v=` et figerait toute la chaine — un deploiement pousse,
+# et rien qui change a l'ecran. Il se revalide a chaque chargement : 304 si
+# rien n'a bouge, ce qui ne coute presque rien.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/tests.html
+  Cache-Control: no-cache
+
+# Le service worker decide quand les autres fichiers sont remplaces : le garder
+# en cache reviendrait a confier la mise a jour a la version qu'on essaie
+# justement de remplacer. Meme raison pour le manifeste, que le systeme relit
+# pour l'icone et le nom de l'application installee.
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+
 /api/*
   Cache-Control: no-store

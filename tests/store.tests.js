@@ -4632,6 +4632,35 @@ suite('Les balises de version ne mentent pas', () => {
      guillemet qui ferme l'attribut. */
   const versions = src => src.split('?v=').slice(1).map(b => b.split('"')[0]);
 
+  test('le HTML se revalide, les assets versionnés se gardent', () => {
+    /* Le numero dans l'URL ne suffit pas seul. Il rend chaque version des
+       assets unique — une adresse jamais vue est une adresse retelechargee —
+       mais le HTML, lui, se demande a l'adresse nue : c'est le seul maillon qui
+       peut servir un vieux document, lequel reclamerait alors les vieux `?v=`
+       et figerait toute la chaine. On a deploye et regarde une version d'avant
+       plus d'une fois.
+
+       Les deux regles vont ensemble et n'ont de sens qu'ensemble : le HTML se
+       revalide toujours, les assets ne se revalident jamais. */
+    const h = lireSource('_headers');
+    vrai(h, '_headers doit être lisible pour ce contrôle');
+
+    const bloc = cle => {
+      const i = h.indexOf('\n' + cle + '\n');
+      return i < 0 ? '' : h.slice(i, h.indexOf('\n/', i + 1) + 1 || undefined);
+    };
+    vrai(/max-age=31536000/.test(bloc('/assets/*')) && /immutable/.test(bloc('/assets/*')),
+      'les assets portent leur version dans l’URL : ils peuvent être gardés un an');
+    for (const page of ['/', '/index.html', '/tests.html']) {
+      vrai(/no-cache/.test(bloc(page)),
+        `${page} doit se revalider : c’est lui qui porte les numéros de version`);
+    }
+    /* Le service worker decide quand les autres fichiers sont remplaces : le
+       mettre en cache confierait la mise a jour a la version qu'on remplace. */
+    vrai(/no-cache/.test(bloc('/sw.js')),
+      'le service worker ne se met pas en cache, il est ce qui met à jour');
+  });
+
   test('l’application dit quelle version elle exécute', () => {
     /* Deux fois dans la même journée du 5 août, la question « est-ce que je
        regarde bien la version déployée ? » a coûté une demi-heure — et `ETAT.md`
