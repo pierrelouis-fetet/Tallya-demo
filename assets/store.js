@@ -317,7 +317,7 @@ const motDateCompte = t => estUnBien(t) ? 'Date d’achat' : 'Date d’ouverture
 
    Le mot se derive du meme drapeau `direct` que tout le reste, pour qu'un type
    ajoute demain n'ait qu'une chose a declarer. */
-const motCompte = t => estDetenuEnDirect(t) ? 'bien' : 'compte';
+const motCompte = t => trad(estDetenuEnDirect(t) ? 'bien' : 'compte');
 
 /* --- comment nommer le contenant ---------------------------------------
    Le niveau du dessus est un contenant, et son nom depend de ce qu'il
@@ -358,7 +358,9 @@ const majuscule = m => String(m || '').charAt(0).toUpperCase() + String(m || '')
    pour que le pluriel ne se recopie pas a chaque endroit qui compte. */
 function motContenu(etabId, n) {
   const mot = contenantDeLEtab(etabId).contenu || 'compte';
-  return `${mot}${n > 1 ? 's' : ''}`;
+  /* Le pluriel se forme sur le mot francais, puis le tout se traduit : les
+     quatre formes (compte, comptes, bien, biens) ont chacune leur clef. */
+  return trad(`${mot}${n > 1 ? 's' : ''}`);
 }
 
 const contenantDuType = typeId =>

@@ -9583,12 +9583,18 @@ suite('Le balisage et le dictionnaire disent le même mot', () => {
     /* Chaque libelle statique du balisage, avec sa clef. Le texte peut porter
        des elements freres — le badge « ✎ » de Budget vit hors du span — donc on
        ne lit que le contenu direct de l'element marque. */
-    const paires = [...html.matchAll(/data-i18n="([\w.]+)"[^>]*>([^<]*)</g)];
+    /* Deux familles de clefs coexistent : les clefs pointees (nav.*), dont le
+       francais vit dans le dictionnaire FR, et les clefs-phrases, dont le
+       contrat de repli est que la clef EST le texte francais. Pour celles-ci,
+       la coherence exigible est l'egalite du balisage et de la clef. */
+    const paires = [...html.matchAll(/data-i18n="([^"]+)"[^>]*>([^<]*)</g)];
     vrai(paires.length > 8, 'index.html doit porter ses libellés balisés');
 
     const fautes = [];
     for (const [, cle, texte] of paires) {
-      const attendu = dico.get(cle);
+      /* Une clef pointee a la forme segment.segment, sans point final :
+         « Projeter. » finit par un point, c'est une phrase. */
+      const attendu = dico.get(cle) ?? (/^[a-z]\w*(\.\w+)+$/i.test(cle) ? undefined : cle);
       if (attendu === undefined) { fautes.push(`${cle} : absente du dictionnaire`); continue; }
       const dit = texte.trim();
       if (dit && dit !== attendu) fautes.push(`${cle} : « ${dit} » dans le balisage, « ${attendu} » au dictionnaire`);
@@ -9604,7 +9610,7 @@ suite('Le balisage et le dictionnaire disent le même mot', () => {
     const js = lireSource('assets/i18n.js');
     vrai(/data-i18n="nav\.accounts"[^>]*>Actifs</.test(html),
       'le menu de gauche');
-    vrai(/<span>Actifs<\/span>/.test(html), 'la barre d’onglets du téléphone');
+    vrai(/<span data-i18n="nav\.accounts">Actifs<\/span>/.test(html), 'la barre d’onglets du téléphone, désormais balisée pour la traduction');
     vrai(/'nav\.accounts': 'Actifs',/.test(js), 'le dictionnaire français');
     vrai(/'nav\.accounts': 'Assets',/.test(js), 'et l’anglais suit');
     vrai(!/data-i18n="nav\.accounts"[^>]*>Comptes</.test(html),
@@ -9865,8 +9871,10 @@ suite('Un bien se crée seul, s’estime, et se modifie par un bouton', () => {
     eq(motCompte(typeCompte('pea')), 'compte');
 
     const src = lireSource('assets/app.js');
-    for (const motif of ['Nom du \\$\\{motCompte', 'Type de \\$\\{motCompte',
-                         'Valeur du \\$\\{motCompte']) {
+    /* Les intitules passent par trad() depuis le chantier des deux langues :
+       le fragment francais est la clef, le mot du compte reste derive. */
+    for (const motif of ["trad\\('Nom du'\\)\\} \\$\\{motCompte", "trad\\('Type de'\\)\\} \\$\\{motCompte",
+                         "trad\\('Valeur du'\\)\\} \\$\\{motCompte"]) {
       vrai(new RegExp(motif).test(src), `la fiche dérive « ${motif} »`);
     }
     vrai(/hero-label">\$\{majuscule\(motCompte\(t\)\)\}/.test(src),
@@ -9889,7 +9897,7 @@ suite('Un bien se crée seul, s’estime, et se modifie par un bouton', () => {
     vrai(fn.length > 1000, 'la fonction doit être trouvable');
     vrai(/class="btn sm ghost plc-modif"[\s\S]{0,120}?data-action="editer-placement"/.test(fn),
       'un bouton « Modifier » explicite au bout de la rangée');
-    vrai(/>Modifier<\/button>/.test(fn), 'et il porte le mot');
+    vrai(/>\$\{trad\('Modifier'\)\}<\/button>/.test(fn), 'et il porte le mot, traduit');
     vrai(!/class="mois-lien" data-action="editer-placement"/.test(fn),
       'le nom n’est plus un lien déguisé');
     /* `l.ref != null` : l'indice de la premiere ligne vaut zero, et le tester en
@@ -10941,6 +10949,27 @@ suite('Un type de compte peut naître à la main', () => {
       'plus aucune liste de types recopiée depuis la table');
   });
 
+  test('la fenêtre du type libre dit le comportement, chaque famille offerte', () => {
+    /* Le champ s'annoncait « Poche de patrimoine » : ce mot designe partout
+       ailleurs les classes de la repartition, et la liste offrait trois
+       libelles qui n'en font pas partie. La question porte sur le
+       comportement, et le defaut suit l'exemple du champ du nom — un plan
+       d'epargne logement est de l'argent disponible, pas un compte de titres
+       range en bourse. */
+    const src = lireSource('assets/app.js');
+    const debut = src.indexOf('async function demanderTypePerso');
+    vrai(debut > 0, 'la fenêtre doit être trouvable');
+    const bloc = src.slice(debut, src.indexOf('function askForm', debut));
+    for (const poche of Object.keys(FORME_POCHE)) {
+      vrai(bloc.includes(`['${poche}', trad(`),
+        `la famille « ${poche} » se choisit : la liste suit FORME_POCHE`);
+    }
+    vrai(/cle: 'poche',[^\n]*valeur: 'cash'/.test(bloc),
+      'le défaut est celui de l’exemple du nom');
+    vrai(!bloc.includes('Poche de patrimoine'),
+      'le champ ne s’annonce plus comme une poche de la répartition');
+  });
+
   test('la migration pose typesPerso, et la rejouer ne change rien', () => {
     const s1 = Fixture.poser(); s1.typesPerso = undefined;
     Store.state.typesPerso = Store.state.typesPerso || [];
@@ -10983,6 +11012,29 @@ suite('La traduction des écrans ne peut pas heurter les totaux', () => {
 
 suite('Le dictionnaire anglais ne laisse pas de trou', () => {
 
+  test('une clef ne se déclare qu’une fois', () => {
+    /* Deux sessions ont pose « sur » chacune de son cote, over puis of : en
+       JavaScript la derniere declaration gagne sans un mot, et « over 7
+       closed months » est devenu « of 7 closed months » sans que rien ne le
+       dise. Un homographe se resout par une clef pointee avec son francais
+       en repli, trad('sur.objectif', 'sur') ; un doublon, lui, n'a jamais
+       raison d'exister. */
+    const js = lireSource('assets/i18n.js');
+    vrai(js, 'i18n.js doit être lisible pour ce contrôle');
+    const bloc = js.slice(js.indexOf('const I18N'), js.indexOf('const FR'));
+    const vues = new Map();
+    const doubles = [];
+    const re = /^\s*(?:'((?:[^'\\]|\\.)+)'|"((?:[^"\\]|\\.)+)")\s*:/gm;
+    let m;
+    while ((m = re.exec(bloc))) {
+      const cle = m[1] ?? m[2];
+      if (vues.has(cle)) doubles.push(cle); else vues.set(cle, true);
+    }
+    vrai(vues.size > 500, `le dictionnaire doit être lu en entier (${vues.size} clefs)`);
+    eq(doubles.join(' | '), '',
+      'clef déclarée deux fois : la dernière gagnerait en silence');
+  });
+
   test('chaque clé française a sa traduction', () => {
     const manquantes = Object.keys(FR).filter(c => !I18N.en[c]);
     eq(manquantes.join(', '), '', 'ces clés n’ont pas d’anglais');
@@ -10995,5 +11047,25 @@ suite('Le dictionnaire anglais ne laisse pas de trou', () => {
     const copiees = Object.keys(FR).filter(c =>
       I18N.en[c] === FR[c] && String(FR[c]).trim().split(/\s+/).length > 2);
     eq(copiees.join(', '), '', 'ces phrases sont restées en français');
+  });
+});
+
+suite('La licence ne ment pas', () => {
+  test('le fichier LICENSE porte la licence que le README annonce', () => {
+    /* La regle se derive du README : c'est lui qui annonce la licence au
+       lecteur, le fichier LICENSE doit donc dire la meme chose. L'AGPL et la
+       GPL v3 se ressemblent paragraphe pour paragraphe, seule la premiere
+       porte AFFERO en tete, et c'est sa clause reseau qui fonde la phrase du
+       README sur les versions modifiees mises en ligne. Le fichier a deja
+       porte la GPL simple sous un README qui annoncait l'AGPL, et l'onglet
+       licence de GitHub l'a dit avant les tests. */
+    const readme = lireSource('README.md');
+    const licence = lireSource('LICENSE');
+    vrai(readme !== null, 'README.md doit se lire');
+    vrai(licence !== null, 'LICENSE doit se lire');
+    vrai(/AGPL/.test(readme),
+      'le README n’annonce plus l’AGPL : mettre ce test d’accord avec lui');
+    vrai(licence.includes('GNU AFFERO GENERAL PUBLIC LICENSE'),
+      'le README annonce l’AGPL, le fichier LICENSE porte autre chose');
   });
 });

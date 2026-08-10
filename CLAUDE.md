@@ -148,6 +148,13 @@ bien (`bienId`).
   Nettoyage fait une fois, 185 paragraphes et phrases retirés, `index.html`
   allégé de 43 % : ne pas le refaire une deuxième fois.
 
+- **On développe en deux langues, français et anglais, dans le même geste.**
+  Toute chaîne affichée naît enveloppée de `trad()` avec sa clé dans
+  `i18n.js`, traduction anglaise comprise, dans le même commit. Le rattrapage
+  de 2026 a montré le prix de l'autre méthode : près de deux mille chaînes
+  reprises une à une, sur plusieurs jours. Une chaîne posée sans sa clé n'est
+  pas un raccourci, c'est un bug. Seules les données du détenteur (noms de
+  comptes, d'établissements, libellés saisis) ne se traduisent jamais.
 - **Pas de tiret cadratin (—) dans le texte affiché.** Une virgule, un
   deux-points ou une parenthèse. Les commentaires de code peuvent en garder.
 - **Le texte affiché porte ses accents ; les commentaires, non.** Les

@@ -1109,26 +1109,26 @@ function viewOverview() {
             return `
           <button type="button" class="mlist" data-action="apercu" data-apercu="jourTitres">
             <span class="ml-nom">${trad('Aujourd’hui')}<span class="sub">${j.hausse} ${trad('en hausse')}, ${
-              j.baisse} en baisse${j.sansDonnee ? `, ${j.sansDonnee} sans cours de veille` : ''}${
-              j.horsSeance ? `, ${j.horsSeance} sans cours du jour` : ''}</span></span>
+              j.baisse} ${trad('en baisse')}${j.sansDonnee ? `, ${j.sansDonnee} ${trad('sans cours de veille')}` : ''}${
+              j.horsSeance ? `, ${j.horsSeance} ${trad('sans cours du jour')}` : ''}</span></span>
             <span class="ml-chiffres"><b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
               <span class="${cls(j.eur)}">${fmtSignedPct(j.pct)}</span></span>
             <span class="ml-chev" aria-hidden="true">›</span>
           </button>`;
           })()}
           <button type="button" class="mlist" data-action="apercu" data-apercu="portefeuille">
-            <span class="ml-nom">Valeur<span class="sub">${Store.state.positions.length} ligne${
-              Store.state.positions.length > 1 ? 's' : ''} de titres</span></span>
+            <span class="ml-nom">${trad('Valeur')}<span class="sub">${Store.state.positions.length} ${
+              Store.state.positions.length > 1 ? trad('lignes de titres') : trad('ligne de titres')}</span></span>
             <span class="ml-chiffres"><b>${fmtEUR(pnl.value)}</b></span>
             <span class="ml-chev" aria-hidden="true">›</span>
           </button>
           <button type="button" class="mlist" data-action="apercu" data-apercu="investiTitres">
-            <span class="ml-nom">Investi<span class="sub">${trad('ce que ces lignes t’ont coûté')}</span></span>
+            <span class="ml-nom">${trad('Investi')}<span class="sub">${trad('ce que ces lignes t’ont coûté')}</span></span>
             <span class="ml-chiffres"><b>${fmtEUR(pnl.invested)}</b></span>
             <span class="ml-chev" aria-hidden="true">›</span>
           </button>
           <button type="button" class="mlist" data-action="apercu" data-apercu="pnlLatent">
-            <span class="ml-nom">Plus-value latente<span class="sub">${trad('tant que tu ne vends pas')}</span></span>
+            <span class="ml-nom">${trad('Plus-value latente')}<span class="sub">${trad('tant que tu ne vends pas')}</span></span>
             <span class="ml-chiffres"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
               <span class="${cls(pnl.pnl)}">${fmtSignedPct(pnl.pct)}</span></span>
             <span class="ml-chev" aria-hidden="true">›</span>
@@ -1800,7 +1800,7 @@ Object.defineProperty(window, 'projHorizon', {
 const selecteurHorizon = () => `
   <select data-action-change="proj-horizon" style="width:auto">
     ${PROJECTION_CHOICES.map(h => `<option value="${h}" ${h === projHorizon ? 'selected' : ''}>
-      ${h} ans, ${new Date().getFullYear() + h}</option>`).join('')}
+      ${h} ${trad('ans')}, ${new Date().getFullYear() + h}</option>`).join('')}
   </select>`;
 
 /* Le depliant des hypotheses. Ferme par defaut : le resume des valeurs sert
@@ -1844,10 +1844,10 @@ function viewObjective() {
   <button type="button" class="card goal card-link" data-action="apercu" data-apercu="objectif"
           title="${trad('Modifier l\'objectif')}">
     <div class="card-head">
-      <h2>Objectif à fin ${esc(an)}</h2>
+      <h2>${trad('Objectif à fin')} ${esc(an)}</h2>
       <span class="hint">${mois
-        ? `${mois} mois restant${mois > 1 ? 's' : ''}`
-        : 'dernier mois'} · ${fmtPct(g.pct, 2)} atteint</span>
+        ? `${mois} ${mois > 1 ? trad('mois restants') : trad('mois restant')}`
+        : trad('dernier mois')} · ${fmtPct(g.pct, 2)} ${trad('atteint')}</span>
     </div>
     <!-- L'écart en tête, le patrimoine en note.
 
@@ -1870,15 +1870,15 @@ function viewObjective() {
            dont on te charge, et il allongeait la phrase pour ne rien ajouter :
            l'intitule de la carte dit deja qu'il s'agit d'un objectif. -->
       <span class="muted">${g.remaining >= 0
-        ? 'de dépassement'
+        ? trad('de dépassement')
         : mois
-          ? `restants, soit ${fmtEUR0(-g.remaining / mois)} ${trad('/ mois')} sur ${mois} mois`
-          : 'restants avant la fin de l’année'}</span>
+          ? `${trad('restants, soit')} ${fmtEUR0(-g.remaining / mois)} ${trad('/ mois sur')} ${mois} ${trad('mois')}`
+          : trad('restants avant la fin de l’année')}</span>
     </div>
     <div class="goal-bar"><div class="goal-fill" style="width:${Math.min(100, Math.max(0, g.pct)).toFixed(2)}%"></div></div>
     <div class="goal-foot">
-      <span>${fmtEUR(g.total)} <span class="muted">sur ${fmtEUR0(g.obj)}</span></span>
-      <span>${g.remaining >= 0 ? 'Objectif atteint 🎉' : ''}</span>
+      <span>${fmtEUR(g.total)} <span class="muted">${trad('sur.objectif', 'sur')} ${fmtEUR0(g.obj)}</span></span>
+      <span>${g.remaining >= 0 ? `${trad('Objectif atteint')} 🎉` : ''}</span>
     </div>
   </button>`;
   };
@@ -1914,7 +1914,7 @@ function viewObjective() {
      muet sans qu'aucune erreur ne le signale. */
   const champ = (label, path, paliers, format, aideTexte, valeur) => `
     <div class="field">
-      <label>${esc(label)}${aideTexte ? aide(aideTexte) : ''}</label>
+      <label>${esc(trad(label))}${aideTexte ? aide(aideTexte) : ''}</label>
       <select data-path="${path}" data-type="num">
         ${listeChoix(path, paliers, valeur, format)}
       </select>
@@ -1965,11 +1965,11 @@ function viewObjective() {
       /* L'intitule suit ce que la part contient vraiment : avec une montre et
          sans studio, « Ton immobilier net » mentirait. Meme logique que la
          fiche immobilierNet qui s'ouvre dessus. */
-      { label: plat < 0 ? 'Tes crédits'
+      { label: plat < 0 ? trad('Tes crédits')
              : num(nowTotals().biens) > 0.005
-               ? (num(nowTotals().immo) > 0.005 ? 'Ton immobilier et tes biens, nets'
-                                                : 'Tes biens de valeur, nets')
-               : 'Ton immobilier net',
+               ? (num(nowTotals().immo) > 0.005 ? trad('Ton immobilier et tes biens, nets')
+                                                : trad('Tes biens de valeur, nets'))
+               : trad('Ton immobilier net'),
         value: plat, couleur: couleurClasse('immobilier'), apercu: 'immobilierNet',
         aide: trad('Aucun rendement ne lui est appliqué : la projection le porte tel quel') },
       { label: trad('Ce que tu verses'), value: verses, couleur: S1(), apercu: 'horizon' },
@@ -2009,7 +2009,7 @@ function viewObjective() {
     ${parts.map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="${esc(x.apercu)}"
-              title="${esc(x.aide || `Voir le détail de ${x.label}`)}">
+              title="${esc(x.aide || `${trad('Voir le détail de')} ${trad(x.label)}`)}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
           <span class="repart-nom">${esc(trad(x.label))}</span>
@@ -2029,9 +2029,9 @@ function viewObjective() {
          qu'on sait vraiment lire. La ligne ne s'affiche qu'avec une inflation
          non nulle, sans quoi elle repeterait le total. -->
     <dl class="kv repart-pied">
-      <dt><b>Total en ${dernier.year}</b></dt><dd><b>${fmtEUR(dernier.total)}</b></dd>
-      ${s.inflation ? `<dt>Soit, après inflation${
-        aide(`Le même montant, une fois retirée une inflation de ${fmtPct(s.inflation, 0)} par an pendant ${projHorizon} ans. C'est ce que cette somme permettrait d'acheter aux prix que tu connais.`)
+      <dt><b>${trad('Total en')} ${dernier.year}</b></dt><dd><b>${fmtEUR(dernier.total)}</b></dd>
+      ${s.inflation ? `<dt>${trad('Soit, après inflation')}${
+        aide(`${trad('Le même montant, une fois retirée une inflation de')} ${fmtPct(s.inflation, 0)} ${trad('par an pendant')} ${projHorizon} ${trad('ans. C’est ce que cette somme permettrait d’acheter aux prix que tu connais.')}`)
       }</dt><dd>${fmtEUR(dernier.real)}</dd>` : ''}
     </dl>
   </div>`;
@@ -2054,10 +2054,10 @@ function viewObjective() {
            et chevron a droite. -->
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
-          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} · marché ${fmtPct(s.rate, 0)} ·
-            non coté ${num(s.rateAutres) ? fmtPct(s.rateAutres, 0) : 'à plat'} ·
-            inflation ${fmtPct(s.inflation, 0)}${num(s.target) ? ` · cible ${fmtEUR0(s.target)}` : ''}</span>
-          <span class="pli-action">Régler</span>
+          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} · ${trad('marché')} ${fmtPct(s.rate, 0)} ·
+            ${trad('non coté')} ${num(s.rateAutres) ? fmtPct(s.rateAutres, 0) : trad('à plat')} ·
+            ${trad('inflation')} ${fmtPct(s.inflation, 0)}${num(s.target) ? ` · ${trad('cible')} ${fmtEUR0(s.target)}` : ''}</span>
+          <span class="pli-action">${trad('Régler')}</span>
         </summary>
       <div class="modal-champs" style="margin-top:12px">
         ${champ('Versement mensuel', 'meta.projMonthly', paliers(10000, 50),
@@ -2070,8 +2070,8 @@ function viewObjective() {
                    « Versé sur » et non « Investis en » : l'imperatif se lisait
                    comme un conseil, et cette application n'en donne pas. */
                 num(Store.state.meta.projMonthly)
-                  ? `Ton budget dégage ${fmtEUR0(suggestedMonthly())} par mois. Versé chaque mois sur tes actifs de marché`
-                  : `Repris de ton budget ; choisis une valeur pour la figer. Versé chaque mois sur tes actifs de marché`,
+                  ? `${trad('Ton budget dégage')} ${fmtEUR0(suggestedMonthly())} ${trad('par mois.')} ${trad('Versé chaque mois sur tes actifs de marché')}`
+                  : `${trad('Repris de ton budget ; choisis une valeur pour la figer.')} ${trad('Versé chaque mois sur tes actifs de marché')}`,
                 s.monthly)}
         <!-- Un seul taux s'appliquait a tout, et il ne decrivait qu'une partie
              de ce qu'il touchait. Deux champs maintenant, chacun nommant sa
@@ -2101,9 +2101,9 @@ function viewObjective() {
              Le cash a investir a quitte cette poche : il ne capitalise plus, donc
              la phrase n'a plus a le mentionner. Voir pochesProjection(). -->
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
-                v => `${fmtPct(v, 0)} par an`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} de titres et de crypto. `
-                + 'C’est une hypothèse de travail : aucun rendement n’est garanti')}
+                v => `${fmtPct(v, 0)} ${trad('par an')}`,
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de titres et de crypto.')} `
+                + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'))}
         <!--    Ce taux couvrait « les autres actifs », soit le non cote ET les liquidites
    : deux choses sans rapport sous un seul pourcentage. Les liquidites ne
    capitalisent pas ici, livret ou non, donc il n'y a rien a regler pour elles
@@ -2111,8 +2111,8 @@ function viewObjective() {
    page d'hypotheses en font deux de trop. Ce taux ne parle plus que du non
    cote, et son intitule le dit.-->
         ${champ('Rendement du non coté', 'meta.projRateAutres', paliers(20, 1),
-                v => v ? `${fmtPct(v, 0)} par an` : 'aucun, porté à plat',
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c'est à toi de l'affirmer, pas à l'application`)}
+                v => v ? `${fmtPct(v, 0)} ${trad('par an')}` : trad('aucun, porté à plat'),
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} ${trad('de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application')}`)}
         <!-- La troisieme poche, dite sans etre reglable.
 
              Deux taux se reglaient, trois poches existaient, et la derniere
@@ -2125,27 +2125,27 @@ function viewObjective() {
              ainsi de la meme facon, et celle qui ne se regle pas se voit comme
              telle sans qu'une phrase ait a l'expliquer. -->
         <div class="field">
-          <label>Rendement des liquidités${aide(
-            `${fmtEUR0(capitalisation({ years: 1 }).poches.liquidites)} de liquidités, `
-            + 'livret ou non, y compris le cash déjà chez ton courtier : tant qu’il '
+          <label>${trad('Rendement des liquidités')}${aide(
+            `${fmtEUR0(capitalisation({ years: 1 }).poches.liquidites)} ${trad('de liquidités,')} `
+            + trad('livret ou non, y compris le cash déjà chez ton courtier : tant qu’il '
             + 'n’est pas placé, il ne rapporte rien. Elles traversent donc la '
-            + 'projection telles quelles, et il n’y a rien à régler.')}</label>
+            + 'projection telles quelles, et il n’y a rien à régler.'))}</label>
           <p class="valeur-figee">${trad('aucun, portées à plat')}</p>
         </div>
         ${champ('Inflation', 'meta.projInflation', paliers(20, 1),
-                v => `${fmtPct(v, 0)} par an`,
-                'Alimente les lignes « Après inflation » : le résultat traduit en euros d’aujourd’hui')}
+                v => `${fmtPct(v, 0)} ${trad('par an')}`,
+                trad('Alimente les lignes « Après inflation » : le résultat traduit en euros d’aujourd’hui'))}
         ${champ('Cible long terme', 'meta.projTarget',
                 [0, ...paliers(1000000, 50000, 50000), 1500000, 2000000, 3000000, 5000000],
-                v => v ? fmtEUR0(v) : 'aucune',
-                'Optionnel, pour savoir quand tu la franchis')}
+                v => v ? fmtEUR0(v) : trad('aucune'),
+                trad('Optionnel, pour savoir quand tu la franchis'))}
       </div>
       <!-- Le bouton ne sert que si une valeur manuelle est figee : quand le
            versement suit deja le budget, il proposait de reprendre un montant
            deja repris, et cliquer ne changeait rien a l'ecran. -->
       ${num(Store.state.meta.projMonthly) ? `
       <button class="btn sm ghost" data-action="proj-use-budget" style="margin-top:12px">
-        Reprendre ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} depuis le budget</button>` : ''}
+        ${trad('Reprendre')} ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} ${trad('depuis le budget')}</button>` : ''}
       </details>
 
       <!-- Les notes restent hors du depliant : la faisabilite de la cible et
@@ -2159,9 +2159,9 @@ function viewObjective() {
            courbe, la ou l'on regarde ce que la note corrige. -->
 
       ${s.target ? `<div class="note" style="margin-top:12px">
-        ${anneeAtteinte ? `◎ <span>Cible de <b>${fmtEUR0(s.target)}</b> franchie en
-            <b>${anneeAtteinte.year}${anneeAtteinte.months ? ` (+${anneeAtteinte.months} mois)` : ''}</b>,
-            soit dans ${Math.round(anneeAtteinte.yearsFromNow)} ans.</span>`
+        ${anneeAtteinte ? `◎ <span>${trad('Cible de')} <b>${fmtEUR0(s.target)}</b> ${trad('franchie en')}
+            <b>${anneeAtteinte.year}${anneeAtteinte.months ? ` (+${anneeAtteinte.months} ${trad('mois')})` : ''}</b>,
+            ${trad('soit dans')} ${Math.round(anneeAtteinte.yearsFromNow)} ${trad('ans')}.</span>`
           : (() => {
             /* Seule la part qui capitalise entre dans le calcul des leviers,
                et la cible se mesure donc au meme etalon : atteindre 500 000 EUR
@@ -2172,26 +2172,26 @@ function viewObjective() {
             const req = targetRequirements({ start: g.total - plat, target: s.target - plat,
               monthly: s.monthly, rate: s.rate, years: projHorizon });
             const lignes = [];
-            if (req.years) lignes.push(`attendre <b>${req.years.toFixed(1).replace('.', ',')} ans</b> `
-              + `(soit ${new Date().getFullYear() + Math.ceil(req.years)}) sans rien changer`);
-            if (req.monthly != null) lignes.push(`passer à <b>${fmtEUR0(req.monthly)} par mois</b> `
-              + `au lieu de ${fmtEUR0(s.monthly)}`);
-            if (req.rate != null) lignes.push(`obtenir <b>${fmtPct(req.rate, 1)} par an</b> `
-              + `au lieu de ${fmtPct(s.rate, 1)}`);
-            return `⚠ <span>Avec ces hypothèses, la cible de <b>${fmtEUR0(s.target)}</b>
-              n'est pas atteinte en ${projHorizon} ans : tu arrives à ${fmtEUR0(dernier.total)}.<br>
-              Pour y parvenir, il faudrait ${lignes.length ? '' : 'revoir les hypothèses'}
+            if (req.years) lignes.push(`${trad('attendre')} <b>${req.years.toFixed(1).replace('.', enAnglais() ? '.' : ',')} ${trad('ans')}</b> `
+              + `(${trad('soit')} ${new Date().getFullYear() + Math.ceil(req.years)}) ${trad('sans rien changer')}`);
+            if (req.monthly != null) lignes.push(`${trad('passer à')} <b>${fmtEUR0(req.monthly)} ${trad('par mois')}</b> `
+              + `${trad('au lieu de')} ${fmtEUR0(s.monthly)}`);
+            if (req.rate != null) lignes.push(`${trad('obtenir')} <b>${fmtPct(req.rate, 1)} ${trad('par an')}</b> `
+              + `${trad('au lieu de')} ${fmtPct(s.rate, 1)}`);
+            return `⚠ <span>${trad('Avec ces hypothèses, la cible de')} <b>${fmtEUR0(s.target)}</b>
+              ${trad('n’est pas atteinte en')} ${projHorizon} ${trad('ans : tu arrives à')} ${fmtEUR0(dernier.total)}.<br>
+              ${trad('Pour y parvenir, il faudrait')} ${lignes.length ? '' : trad('revoir les hypothèses')}
               ${lignes.length ? `:<br>${lignes.map(l => `• ${l}`).join('<br>')}` : ''}
               ${req.rate == null && req.monthly != null
-                ? '<br><span class="muted">Aucun rendement réaliste ne suffit à lui seul.</span>' : ''}</span>`;
+                ? `<br><span class="muted">${trad('Aucun rendement réaliste ne suffit à lui seul.')}</span>` : ''}</span>`;
           })()}
       </div>` : ''}
 
       <div class="note" style="margin-top:12px">
-        ⓘ <span>Cette page applique une formule de capitalisation à
-        <b>tes</b> hypothèses. Ce n'est pas une prévision : un portefeuille réel
-        ne progresse jamais de façon régulière, et une mauvaise séquence de
-        marché en début de période change beaucoup le résultat.</span>
+        ⓘ <span>${trad('Cette page applique une formule de capitalisation à')}
+        <b>${trad('tes')}</b> ${trad('hypothèses. Ce n’est pas une prévision : un portefeuille réel '
+        + 'ne progresse jamais de façon régulière, et une mauvaise séquence de '
+        + 'marché en début de période change beaucoup le résultat.')}</span>
       </div>
     </div>
 
@@ -2200,7 +2200,7 @@ function viewObjective() {
            commande. Le répéter ici donnerait deux listes réglant la même
            valeur sur un même écran. -->
       <div class="card-head">
-        <h2>Trajectoire</h2>
+        <h2>${trad('Trajectoire')}</h2>
         <!-- L'en-tete ne disait que la duree, alors que le versement et les
              taux gouvernent toute la courbe et ne se lisaient que deux cartes
              plus bas. Un graphique doit porter ses propres hypotheses.
@@ -2210,7 +2210,7 @@ function viewObjective() {
              versement, et les taux descendent sous la courbe, ou il y a la
              place de nommer chaque poche au lieu de dire « hors immobilier »,
              qui annonçait ce que le taux exclut plutot que ce qu'il touche. -->
-        <span class="hint">Sur ${projHorizon} ans, jusqu’en ${dernier.year} · ${
+        <span class="hint">${trad('Sur')} ${projHorizon} ${trad('ans, jusqu’en')} ${dernier.year} · ${
           fmtEUR0(s.monthly)} ${trad('/ mois')}</span>
       </div>
       <div class="chart" id="chartProjection"></div>
@@ -2227,8 +2227,7 @@ function viewObjective() {
              pointillees sans nom ressemblent a un defaut d'affichage. Sa place
              est ici, avec les autres cles du dessin, et son echantillon est
              pointille comme elle. -->
-        <span><i class="legend-bande"></i>Si le rendement fait deux points de plus
-          ou de moins</span>
+        <span><i class="legend-bande"></i>${trad('Si le rendement fait deux points de plus ou de moins')}</span>
       </div>
       <!-- Les taux, nommes par ce sur quoi ils portent. Deux phrases plutot
            qu'une mention dans l'en-tete : chaque poche a un nom, et le lecteur
@@ -2243,15 +2242,15 @@ function viewObjective() {
              choses sans rapport, le non cote et les liquidites ; elles sont
              maintenant citees separement, et les liquidites sont annoncees comme
              ce qu'elles sont : plates par construction, sans reglage. -->
-        ${fmtPct(s.rate)} par an sur tes actifs de marché.
-        ${num(s.rateAutres) ? `${fmtPct(s.rateAutres)} sur ton non coté.`
-                            : 'Ton non coté est porté à plat.'}
+        ${fmtPct(s.rate)} ${trad('par an sur tes actifs de marché.')}
+        ${num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('sur ton non coté.')}`
+                            : trad('Ton non coté est porté à plat.')}
         <!-- « Tes liquidites non investies » laissait croire que les autres,
              elles, capitalisaient : le cash qui attend chez le courtier est
              pourtant porte a plat comme le reste. La poche entiere, sans
              qualificatif, et le versement mensuel dit juste apres ou va
              l'argent qu'on place vraiment. -->
-        Tes liquidités sont portées à plat, le cash qui attend chez ton courtier compris.
+        ${trad('Tes liquidités sont portées à plat, le cash qui attend chez ton courtier compris.')}
       </p>
       <!-- LA note de la page, unique : ce que la courbe ne projette pas. Elle
            remplace deux avertissements qui se recoupaient, l'un ici, l'autre
@@ -2274,28 +2273,28 @@ function viewObjective() {
            doit nommer ce qu'elle couvre, sinon une montre seule ferait dire
            « ton immobilier » a quelqu'un qui n'en a pas. */
         const aImmo = num(t0.immo) > 0.005, aBiens = num(t0.biens) > 0.005;
-        const sujet = aImmo && aBiens ? 'Ton immobilier et tes biens sont portés à leur'
-                    : aBiens ? 'Tes biens de valeur sont portés à leur'
-                    : 'Ton immobilier est porté à sa';
+        const sujet = aImmo && aBiens ? trad('Ton immobilier et tes biens sont portés à leur')
+                    : aBiens ? trad('Tes biens de valeur sont portés à leur')
+                    : trad('Ton immobilier est porté à sa');
         if (!plat && !dettes) return '';
         const note = txt => `<p class="small muted" style="margin:12px 0 0">${txt}</p>`;
         if (plat > 0) return note(dettes
-          ? `${sujet} valeur d'aujourd'hui, ${fmtEUR0(plat)} nets, du
-             premier point au dernier. Ni le prix, ni le capital que tes mensualités
-             remboursent chaque mois, ni la fin du prêt ne sont projetés : la courbe
-             sous-estime cette part, elle ne la surestime jamais.`
-          : `${sujet} valeur d'aujourd'hui, ${fmtEUR0(plat)}, du
-             premier point au dernier : la courbe ne prête à cette part ni hausse ni baisse.`);
+          ? `${sujet} ${trad('valeur d’aujourd’hui,')} ${fmtEUR0(plat)} ${trad('nets, du '
+             + 'premier point au dernier. Ni le prix, ni le capital que tes mensualités '
+             + 'remboursent chaque mois, ni la fin du prêt ne sont projetés : la courbe '
+             + 'sous-estime cette part, elle ne la surestime jamais.')}`
+          : `${sujet} ${trad('valeur d’aujourd’hui,')} ${fmtEUR0(plat)}${trad(', du '
+             + 'premier point au dernier : la courbe ne prête à cette part ni hausse ni baisse.')}`);
         if (!plat) return note(
-          `Le capital que tes mensualités remboursent chaque mois n'est pas projeté :
-           la courbe sous-estime ton patrimoine, elle ne le surestime jamais.`);
+          trad('Le capital que tes mensualités remboursent chaque mois n’est pas projeté : '
+           + 'la courbe sous-estime ton patrimoine, elle ne le surestime jamais.'));
         return note(bien
-          ? `Tes crédits dépassent aujourd'hui la valeur de ton bien : cette part nette,
-             ${fmtEUR0(plat)}, est portée telle quelle. Son remboursement n'est pas
-             projeté : la courbe sous-estime ton patrimoine, elle ne le surestime jamais.`
-          : `Tes crédits sont portés à leur montant d'aujourd'hui, ${fmtEUR0(Math.abs(plat))},
-             du premier point au dernier. Leur remboursement n'est pas projeté : la courbe
-             sous-estime ton patrimoine, elle ne le surestime jamais.`);
+          ? `${trad('Tes crédits dépassent aujourd’hui la valeur de ton bien : cette part nette,')}
+             ${fmtEUR0(plat)}${trad(', est portée telle quelle. Son remboursement n’est pas '
+             + 'projeté : la courbe sous-estime ton patrimoine, elle ne le surestime jamais.')}`
+          : `${trad('Tes crédits sont portés à leur montant d’aujourd’hui,')} ${fmtEUR0(Math.abs(plat))}${trad(', '
+             + 'du premier point au dernier. Leur remboursement n’est pas projeté : la courbe '
+             + 'sous-estime ton patrimoine, elle ne le surestime jamais.')}`);
       })()}
     </div>
   </div>
@@ -2306,8 +2305,8 @@ function viewObjective() {
       <!-- Meme raison que sur Trajectoire : avec deux taux, l'en-tete ne peut
            plus les annoncer tous les deux sans deborder. Le tableau porte les
            memes hypotheses que la courbe juste au-dessus, qui les detaille. -->
-      <span class="hint">${fmtEUR0(s.monthly)} ${trad('/ mois')} à ${fmtPct(s.rate)} par an${
-        num(s.rateAutres) ? ', et le détail au-dessus' : ''}</span>
+      <span class="hint">${fmtEUR0(s.monthly)} ${trad('/ mois')} ${trad('à')} ${fmtPct(s.rate)} ${trad('par an')}${
+        num(s.rateAutres) ? trad(', et le détail au-dessus') : ''}</span>
     </div>
     <!-- Six colonnes sous 768 px, c'est la regle du projet qui casse. Le
          telephone garde les trois qui repondent a la question de la carte :
@@ -2320,7 +2319,7 @@ function viewObjective() {
       <table>
         <thead><tr>
           <th>Horizon</th>
-          <th class="large-seulement">Apports</th>
+          <th class="large-seulement">${trad('Apports')}</th>
           <th class="large-seulement">${trad('Gains cumulés')}</th>
           <!-- « Après inflation », comme le pied de la premiere carte et la
                fiche horizon : un meme montant porte le meme nom partout. Le
@@ -2339,8 +2338,8 @@ function viewObjective() {
           const retenu = j.horizon === projHorizon;
           return `
           <tr>
-            <td class="name">${j.horizon} ans <span class="muted">· ${j.year}</span>${
-              retenu ? ' <span class="hint">horizon retenu</span>' : ''}</td>
+            <td class="name">${j.horizon} ${trad('ans')} <span class="muted">· ${j.year}</span>${
+              retenu ? ` <span class="hint">${trad('horizon retenu')}</span>` : ''}</td>
             <td class="large-seulement">${fmtEUR0(j.contributed)}</td>
             <td class="up large-seulement">${fmtEUR0(j.gains)}</td>
             <td><b>${fmtEUR0(j.total)}</b></td>
@@ -2363,8 +2362,8 @@ function viewObjective() {
       </table>
     </div>
     <p class="hint" style="margin-top:12px">
-      « Apports » : ce que tu as déjà, ${fmtEUR0(g.total)} aujourd'hui, plus ce que tu verses.
-      Chaque horizon est compté à partir d'aujourd'hui, donc à la même période de l'année.
+      ${trad('« Apports » : ce que tu as déjà,')} ${fmtEUR0(g.total)} ${trad('aujourd’hui, plus ce que tu verses. '
+      + 'Chaque horizon est compté à partir d’aujourd’hui, donc à la même période de l’année.')}
     </p>
   </div>
 
@@ -2804,9 +2803,9 @@ function viewPositions() {
              cours de veille » designe les lignes absentes de la liste, faute de
              reference ; « sans cours du jour » celles qui y sont avec un ecart
              nul, parce que notre prix date d'avant minuit. -->
-        <span class="hint">${j.hausse} en hausse · ${j.baisse} en baisse
-          ${j.sansDonnee ? `· ${j.sansDonnee} sans cours de veille` : ''}
-          ${j.horsSeance && !j.toutHorsSeance ? `· ${j.horsSeance} sans cours du jour` : ''}</span>
+        <span class="hint">${j.hausse} ${trad('en hausse')} · ${j.baisse} ${trad('en baisse')}
+          ${j.sansDonnee ? `· ${j.sansDonnee} ${trad('sans cours de veille')}` : ''}
+          ${j.horsSeance && !j.toutHorsSeance ? `· ${j.horsSeance} ${trad('sans cours du jour')}` : ''}</span>
       </div>
 
       <!--    Rien n'a cote depuis minuit : le total est nul par construction, et
@@ -2826,8 +2825,8 @@ function viewPositions() {
              change : une ligne prise aujourd'hui compte depuis son achat, et
              annoncer « depuis la clôture d'hier » serait alors faux du montant
              que le titre avait deja perdu avant qu'on l'achete. -->
-        <span class="jour-note">sur tes lignes de titres depuis la clôture d'hier${
-          j.lignes.some(l => l.depuisAchat) ? ', ou depuis ton achat du jour' : ''}</span>
+        <span class="jour-note">${trad('sur tes lignes de titres depuis la clôture d’hier')}${
+          j.lignes.some(l => l.depuisAchat) ? `, ${trad('ou depuis ton achat du jour')}` : ''}</span>
       </div>`}
 
       <div class="jour-lignes">
@@ -2971,7 +2970,7 @@ function viewPositions() {
     ${parts.map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="${esc(x.apercu)}"
-              title="${esc(x.aide || `Voir le détail de ${x.label}`)}">
+              title="${esc(x.aide || `${trad('Voir le détail de')} ${trad(x.label)}`)}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
           <span class="repart-nom">${esc(trad(x.label))}</span>
@@ -3887,7 +3886,7 @@ function viewAllocation() {
     <dl class="kv repart-pied">
       <dt>${BASES.avoirs.nom}<span class="sub">${trad('la base des pourcentages ci-dessus')}</span></dt>
         <dd>${fmtEUR(t.brut)}</dd>
-      ${t.dettes ? `<dt>Crédits en cours${aide(trad("Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas."))}</dt>
+      ${t.dettes ? `<dt>${trad('Crédits en cours')}${aide(trad("Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas."))}</dt>
         <dd class="dette">−${fmtEUR(t.dettes)}</dd>
         <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>` : ''}
     </dl>
@@ -4628,8 +4627,8 @@ function viewHistory() {
          sortie ou de l'absence d'entrees. Ils restent hors du depliant : ce sont
          trois lignes, et c'est ce qu'on vient lire. -->
     <dl class="kv" style="margin-top:12px">
-      ${d.entrees ? `<dt>Entrées</dt><dd class="up">${fmtSigned(d.entrees)}</dd>` : ''}
-      ${d.sorties ? `<dt>Sorties</dt><dd class="down">${fmtSigned(d.sorties)}</dd>` : ''}
+      ${d.entrees ? `<dt>${trad('Entrées')}</dt><dd class="up">${fmtSigned(d.entrees)}</dd>` : ''}
+      ${d.sorties ? `<dt>${trad('Sorties')}</dt><dd class="down">${fmtSigned(d.sorties)}</dd>` : ''}
       <dt>Net${aide(trad("La somme de tes entrées et de tes sorties exceptionnelles, toutes dates confondues. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution."))}</dt>
         <dd class="${cls(d.net)}">${fmtSigned(d.net)}</dd>
     </dl>`}
@@ -4647,7 +4646,7 @@ function viewHistory() {
       ${yearControl('history-year', annees, annee)}
     </div>
     <div class="row" style="margin:-4px 0 12px">
-      <span class="hint">${lignes.length} mois affiché${lignes.length > 1 ? 's' : ''}</span>
+      <span class="hint">${lignes.length} ${lignes.length > 1 ? trad('mois affichés') : trad('mois affiché')}</span>
       <span class="spacer"></span>
       <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
       <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
@@ -4880,7 +4879,9 @@ function teinteGroupe() {
    et la règle vit ici plutôt qu'en deux copies, la liste et la fiche. */
 function sousTitreCompte(c, avecEtab = true) {
   const nom = nomCompteV2(c);
-  return [avecEtab ? nomEtabDe(c) : '', typeCompte(c.type).label]
+  /* Le libelle du type se traduit a l'affichage : la table le porte en
+     francais, et les noms saisis (compte, etablissement) restent tels quels. */
+  return [avecEtab ? nomEtabDe(c) : '', trad(typeCompte(c.type).label)]
     .filter(x => x && x !== nom).join(' · ');
 }
 
@@ -4890,8 +4891,8 @@ function ligneCompte(c, avecEtab = true) {
   return `
   <div class="cpt-swipe" data-compte="${esc(c.id)}">
     <div class="cpt-actions" aria-hidden="true">
-      <button class="btn sm" data-action="fiche-compte" data-id="${esc(c.id)}">Modifier</button>
-      <button class="btn sm ghost" data-action="archiver-compte" data-id="${esc(c.id)}">Archiver</button>
+      <button class="btn sm" data-action="fiche-compte" data-id="${esc(c.id)}">${trad('Modifier')}</button>
+      <button class="btn sm ghost" data-action="archiver-compte" data-id="${esc(c.id)}">${trad('Archiver')}</button>
     </div>
     <button type="button" class="cpt-ligne" data-action="fiche-compte" data-id="${esc(c.id)}">
       <span class="cpt-nom">${esc(nomCompteV2(c))}
@@ -4975,7 +4976,7 @@ function lignePlacement(l, compte, editable = false) {
         ? `<span class="sub ${cls(gain)}">${fmtSigned(gain)}</span>` : '<span class="sub">&nbsp;</span>'}</span>
     ${modifiable ? `<button type="button" class="btn sm ghost plc-modif"
         data-action="editer-placement" data-id="${esc(compte.id)}" data-i="${l.ref}"
-        title="Modifier ${esc(libelle)}">Modifier</button>` : ''}`;
+        title="${trad('Modifier')} ${esc(libelle)}">${trad('Modifier')}</button>` : ''}`;
 
   /* Dans une fiche, la ligne porte déjà une liste déroulante : elle reste
      inerte, un bouton dans un bouton n'existe pas. Ailleurs — la vue par type
@@ -5137,9 +5138,9 @@ function viewAccounts() {
         </div>` : '';
       return groupe(`e-${e.id}`, e.nom,
         siens.length ? `${siens.length} ${motContenu(e.id, siens.length)}`
-                     : `plus aucun ${motContenu(e.id, 1)}`, orphelin + lignes + dette, totalE,
+                     : `${trad('plus aucun')} ${motContenu(e.id, 1)}`, orphelin + lignes + dette, totalE,
         `<button type="button" class="btn sm ghost" data-action="fiche-etab" data-id="${esc(e.id)}"
-                 title="Ouvrir la fiche de ${esc(e.nom)}">Fiche ›</button>`,
+                 title="${trad('Ouvrir la fiche')} · ${esc(e.nom)}">${trad('Fiche')} ›</button>`,
         teinteDominante(siens));
     };
 
@@ -5203,23 +5204,12 @@ function viewAccounts() {
   <dl class="kv cpt-resume">
     <dt>${BASES.avoirs.nom}${aide(trad("La somme des comptes ouverts de cette page. Le même nombre que sur l’accueil : si les deux diffèrent, c’est qu’un compte est archivé ou qu’un montant vient d’être corrigé."))}</dt><dd>${fmtEUR(pat.brut)}</dd>
     ${pat.dettes ? `
-    <dt>Crédits en cours${aide(trad("Le capital qu’il te reste à rembourser. Les comptes archivés ne comptent pas."))}</dt>
+    <dt>${trad('Crédits en cours')}${aide(trad("Le capital qu’il te reste à rembourser. Les comptes archivés ne comptent pas."))}</dt>
       <dd class="dette">−${fmtEUR(pat.dettes)}</dd>
     <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(pat.net)}</b></dd>` : ''}
   </dl>
 
-  <!-- Trois mots sans ambiguite, la ou « Type de compte » et « Type de
-       placement » ne se distinguaient pas d'un coup d'oeil et debordaient
-       chacun sur deux lignes.
-
-       « Enveloppe » dit ce que ce regroupement fait vraiment : il compte par
-       regime fiscal. Un PEA est exonere apres cinq ans, une assurance-vie a
-       le sien, un CTO est impose sur ses gains — et c'est la question « ou va
-       mon prochain versement » qu'aucune autre page ne pose. J'avais propose
-       de retirer ce regroupement en le croyant sans objet ; il repond a une
-       vraie question, il lui manquait son nom.
-
-       Ce commutateur a la forme des sous-onglets des autres pages, et sa place :
+  <!-- Ce commutateur a la forme des sous-onglets des autres pages, et sa place :
        une barre a lui, en tete, plutot qu'un bouton coince a gauche d'un champ
        de recherche. C'est le meme geste — choisir comment lire la page — et
        Comptes etait la seule ou il ne se presentait pas pareil.
@@ -5229,18 +5219,18 @@ function viewAccounts() {
        les boutons se dimensionnaient sur leur texte et le lavis serait tombe a
        cote.
 
-       « Où » et non « Établissement » : cet onglet montre desormais deux
+       « Comptes et supports » et non « Établissement » : cet onglet montre deux
        sections, les comptes tenus par un tiers et les biens tenus soi-meme, et
-       un appartement n'est dans aucun etablissement. Le mot nommait la moitie de
-       ce qu'on lit. « Où » est la question posee, et c'est le seul mot qui
-       couvre a la fois une banque et ton salon. -->
+       un appartement n'est dans aucun etablissement. Le mot doit couvrir les
+       deux. « Type », en face, nomme le regroupement par nature de compte,
+       du meme mot que la fenetre qui regle ce type. -->
   ${barreCommutateur([
-    ['banque', 'Où'], ['type', 'Enveloppe'],
+    ['banque', 'Comptes et supports'], ['type', 'Type'],
   ], compteVue, 'compte-vue', 'vue')}
 
   <div class="card" style="padding:12px 16px">
     <div class="row" style="gap:10px">
-      <input id="chercheCompte" type="search" placeholder="Rechercher…" value="${esc(compteRecherche)}"
+      <input id="chercheCompte" type="search" placeholder="${trad('Rechercher…')}" value="${esc(compteRecherche)}"
              style="max-width:12em; text-align:left" aria-label="${trad('Rechercher un compte ou un placement')}">
       <span class="spacer"></span>
       <!-- Replier les sept groupes un par un pour obtenir la vue de structure,
@@ -5787,8 +5777,8 @@ function viewFicheCompte(id) {
         <span class="ml-chev" aria-hidden="true">›</span>
       </button>`).join('')}</div>
     <dl class="kv" style="margin-top:12px">
-      <dt>Valeur du ${motCompte(t)}</dt><dd>${fmtEUR(valeur)}</dd>
-      <dt>Crédits chez ${esc(etab.nom)}</dt><dd class="dette">−${fmtEUR(total)}</dd>
+      <dt>${trad('Valeur du')} ${motCompte(t)}</dt><dd>${fmtEUR(valeur)}</dd>
+      <dt>${trad('Crédits chez')} ${esc(etab.nom)}</dt><dd class="dette">−${fmtEUR(total)}</dd>
       <dt><b>${trad('Ce que tu possèdes')}</b>${aide(trad("La valeur du compte moins ce que tu dois à cet établissement. C’est ce montant qui compte dans ton patrimoine net. Si l’établissement tient plusieurs comptes, le crédit est déduit une seule fois du patrimoine, pas une fois par compte."))}</dt>
       <!-- Un solde negatif se peint comme une dette : devoir plus que ce que le
            compte porte est un etat reel, et il ne doit pas se lire comme un
@@ -5799,14 +5789,14 @@ function viewFicheCompte(id) {
           <span class="muted">${trad('de tes capitaux propres')}</span></dd>` : ''}
     </dl>
     <button class="btn sm ghost" data-action="fiche-etab" data-id="${esc(etab.id)}"
-            style="margin-top:12px">Fiche ${esc(etab.nom)} ›</button>`}
+            style="margin-top:12px">${trad('Fiche')} ${esc(etab.nom)} ›</button>`}
   </div>`;
   })()}
 
   <div class="grid g-2">
     <div class="card">
       <div class="card-head"><h2>Informations</h2>
-        <button class="btn sm ghost" data-action="modifier-compte" data-id="${esc(c.id)}">Modifier</button></div>
+        <button class="btn sm ghost" data-action="modifier-compte" data-id="${esc(c.id)}">${trad('Modifier')}</button></div>
       <!-- Ces champs se lisent, ils ne se saisissent plus.
 
            Le montant des liquidites, lui, reste en saisie directe ailleurs sur
@@ -5826,7 +5816,7 @@ function viewFicheCompte(id) {
              au-dessus de la ligne « Type de compte » : « Bien de valeur /
              Bien de valeur ». Un champ vide se dit vide, il ne se remplit pas
              du voisin. -->
-        <dt>Nom du ${motCompte(t)}</dt><dd>${c.libelle ? esc(c.libelle)
+        <dt>${trad('Nom du')} ${motCompte(t)}</dt><dd>${c.libelle ? esc(c.libelle)
           : `<span class="muted">${trad('non renseigné')}</span>`}</dd>
         <!-- Le type se change, ce qui n'etait pas le cas.
 
@@ -5842,7 +5832,7 @@ function viewFicheCompte(id) {
              la fenetre en gardant la saisie plutot que de la perdre.
              (Aucun guillemet oblique ici : ce commentaire vit dans un litteral
              de gabarit, un backtick y fermerait la chaine.) -->
-        <dt>Type de ${motCompte(t)}${aide(t.interne
+        <dt>${trad('Type de')} ${motCompte(t)}${aide(t.interne
           ? 'Les espèces n’ont pas d’établissement : personne ne les tient pour '
           + 'toi. Ce compte existe une fois, il ne se choisit pas dans la liste '
           + 'et ne se supprime pas. S’il n’y a plus de billets, mets-le à 0.'
@@ -5898,7 +5888,7 @@ function viewFicheCompte(id) {
       <div class="row" style="gap:8px">
         ${c.statut === 'archive'
           ? `<button class="btn sm" data-action="restaurer-compte" data-id="${esc(c.id)}">Restaurer</button>`
-          : `<button class="btn sm ghost" data-action="archiver-compte" data-id="${esc(c.id)}">Archiver</button>`}
+          : `<button class="btn sm ghost" data-action="archiver-compte" data-id="${esc(c.id)}">${trad('Archiver')}</button>`}
         <button class="btn sm ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">${trad('Clôturer et supprimer')}</button>
       </div>
       <p class="small muted" style="margin:12px 0 0">
@@ -5944,25 +5934,25 @@ function viewFicheEtab(id) {
            de gabarit, un backtick y fermerait la chaine.) -->
       <h2 class="fiche-nom"><span class="cpt-pastille" aria-hidden="true"></span>${esc(e.nom)}</h2>
       <div class="cpt-net">${fmtEUR(total - credits)}</div>
-      <span class="sub">${siens.length} ${motContenu(e.id, siens.length)}${credits ? ` · ${fmtEUR0(credits)} de crédits` : ''}</span>
+      <span class="sub">${siens.length} ${motContenu(e.id, siens.length)}${credits ? ` · ${fmtEUR0(credits)} ${trad('de crédits')}` : ''}</span>
     </div>
     <button class="btn sm ghost" style="margin-left:auto"
-            data-action="modifier-etab" data-id="${esc(e.id)}">Modifier</button>
+            data-action="modifier-etab" data-id="${esc(e.id)}">${trad('Modifier')}</button>
   </div>
 
   <div class="card">
     <!-- La carte s'appelait « Comptes rattachés » sans offrir d'en rattacher
          un : il fallait revenir à la liste, relancer l'ajout, et rechoisir
          l'établissement sur la page duquel on se trouvait déjà. -->
-    <div class="card-head"><h2>${majuscule(motContenu(e.id, 2))} rattachés</h2>
+    <div class="card-head"><h2>${majuscule(motContenu(e.id, 2))} ${trad('rattachés')}</h2>
       <button class="btn sm ghost" data-action="ajouter-compte" data-etab="${esc(e.id)}"
-              title="Ajouter un ${motContenu(e.id, 1)} chez ${esc(e.nom)}"
+              title="${trad('Ajouter un')} ${motContenu(e.id, 1)} ${trad('chez')} ${esc(e.nom)}"
               >+ ${majuscule(motContenu(e.id, 1))}</button></div>
     ${siens.length ? siens.map(c => ligneCompte(c, false)).join('')
       : `<div class="empty">
           <p style="margin:0 0 12px">${trad('Aucun compte ici pour l’instant.')}</p>
           <button class="btn sm" data-action="ajouter-compte" data-etab="${esc(e.id)}"
-            >+ Ajouter un compte chez ${esc(e.nom)}</button>
+            >+ ${trad('Ajouter un')} ${motContenu(e.id, 1)} ${trad('chez')} ${esc(e.nom)}</button>
         </div>`}
   </div>
 
@@ -6320,7 +6310,7 @@ function viewBudget(section = 'depenses') {
            derriere la premiere des quatre barres. -->
       ${(() => {
         const parts = [
-          ['Charges fixes', f.fixed, 'var(--series-2)', f.fixedPct, 'ancre'],
+          [trad('Charges fixes'), f.fixed, 'var(--series-2)', f.fixedPct, 'ancre'],
           [trad('Objectif dépenses'), f.target, 'var(--series-4)', f.targetPct, 'objectif'],
           [trad('Reste à investir / épargner'), f.investTarget, 'var(--series-1)', f.investTargetPct],
         ];
@@ -6342,11 +6332,11 @@ function viewBudget(section = 'depenses') {
              total estime lui aussi, et le partage qui en decoule. Le dire ici
              plutot que sur chaque ecran derive : c'est le chiffre-source. -->
         <button type="button" class="flux-total" data-action="toggle-revenus"
-                title="Voir et modifier les sources de revenus${revenuEstime()
-                  ? ' · une partie est déclarée en montant estimé' : ''}">
+                title="${trad('Voir et modifier les sources de revenus')}${revenuEstime()
+                  ? trad(' · une partie est déclarée en montant estimé') : ''}">
           <b>${revenuEstime() ? '≈ ' : ''}${fmtEUR0(f.income)}</b>
-          <span class="muted">${sources} source${sources > 1 ? 's' : ''} de revenus${
-            revenuEstime() ? ', en partie estimés' : ''}</span>
+          <span class="muted">${sources} ${sources > 1 ? trad('sources de revenus') : trad('source de revenus')}${
+            revenuEstime() ? trad(', en partie estimés') : ''}</span>
           <span class="flux-chev" aria-hidden="true">›</span>
         </button>
         <div class="hero-barre" role="img"
@@ -8166,10 +8156,10 @@ const ACTIONS = {
 
     for (;;) {
       const valeur = (cle, defaut) => (saisi ? saisi[cle] : defaut);
-      const champs = [{ cle: 'libelle', label: `Nom du ${motCompte(typeCompte(c.type))}`, type: 'texte',
+      const champs = [{ cle: 'libelle', label: `${trad('Nom du')} ${motCompte(typeCompte(c.type))}`, type: 'texte',
         valeur: valeur('libelle', c.libelle || ''), exemple: t.label }];
 
-      if (!t.interne) champs.push({ cle: 'type', label: `Type de ${motCompte(t)}`, type: 'liste',
+      if (!t.interne) champs.push({ cle: 'type', label: `${trad('Type de')} ${motCompte(t)}`, type: 'liste',
         options: [...typesCompteChoix().map(x => [x.id, x.label]),
                   ['__nouveau', trad('+ Autre type…')]],
         valeur: valeur('type', c.type),
@@ -8219,7 +8209,7 @@ const ACTIONS = {
           valeur: valeur('clotureLe', c.clotureLe || ''),
           aide: trad('facultative, elle situe le compte dans le temps') });
 
-      const v = await askForm({ titre: `Modifier le ${motCompte(typeCompte(c.type))}`, sous: nomCompteV2(c),
+      const v = await askForm({ titre: `${trad('Modifier le')} ${motCompte(typeCompte(c.type))}`, sous: nomCompteV2(c),
                                 champs, ok: 'Enregistrer' });
       if (!v) return;
 
@@ -9934,7 +9924,7 @@ function fenetreRevenus() {
      variable lisse en moyenne n'est pas un fait, et le sous-titre ne doit pas
      le vendre comme tel. */
   $('#modalSub').innerHTML = escMontant(
-    `${revenuEstime() ? '≈ ' : ''}${fmtEUR0(total)} par mois sur ${b.income.length} source${b.income.length > 1 ? 's' : ''}`
+    `${revenuEstime() ? '≈ ' : ''}${fmtEUR0(total)} ${trad('par mois sur')} ${b.income.length} ${b.income.length > 1 ? trad('sources') : trad('source')}`
     + (revenuEstime() ? ', dont des montants estimés' : ''));
   /* La colonne « Bien » n'apparait que s'il y a un bien immobilier a proposer :
      sans logement locatif, elle serait une colonne vide de plus dans un tableau
@@ -10086,10 +10076,17 @@ async function demanderTypePerso() {
     champs: [
       { cle: 'nom', label: trad('Nom du nouveau type'), type: 'texte',
         exemple: trad('ex. Plan d’épargne logement') },
-      { cle: 'poche', label: trad('Poche de patrimoine'), type: 'liste', valeur: 'bourse',
-        options: [['cash', trad('Cash de vie')], ['bourse', trad('Bourse')],
-                  ['pe', trad('Non coté')]],
-        aide: trad('elle commande les regroupements d’écran et la disponibilité') },
+      /* La question porte sur le comportement, pas sur une « poche » : ce mot
+         designe partout ailleurs les classes de la repartition, et la liste
+         n'offre que les trois familles de types. Chaque option decrit ce que
+         la famille change, avec des exemples. Le defaut suit l'exemple du
+         champ du nom : un plan d'epargne logement est de l'argent disponible,
+         pas un compte de titres. */
+      { cle: 'poche', label: trad('Il se comporte comme'), type: 'liste', valeur: 'cash',
+        options: [['cash', trad('De l’argent disponible (livret, compte courant)')],
+                  ['bourse', trad('Un compte de titres (PEA, CTO)')],
+                  ['pe', trad('Une part ou un placement non coté')]],
+        aide: trad('ce choix commande les regroupements d’écran et la disponibilité') },
     ],
   });
   if (!r || !String(r.nom || '').trim()) return null;
@@ -11881,7 +11878,7 @@ const APERCUS = {
        pourcentage n'existe que sur une base positive. */
     const sansCible = !(num(g.obj) > 0);
     return {
-      titre: `Objectif à fin ${an}`,
+      titre: `${trad('Objectif à fin')} ${an}`,
       sous: sansCible ? 'aucune cible fixée' : `${fmtPct(g.pct, 1)} atteint`,
       total: g.total,
       totalNote: sansCible ? 'ton patrimoine aujourd’hui' : `sur ${fmtEUR0(g.obj)}`,
@@ -11969,7 +11966,7 @@ const APERCUS = {
       if (nowValue(a.id)) lignes.push({ label: a.label, meta: 'liquidités', valeur: nowValue(a.id) });
     }
     return {
-      titre: 'Bourse', sous: `${Store.state.positions.length} lignes de titres et liquidités`,
+      titre: trad('Bourse'), sous: `${Store.state.positions.length} ${trad('lignes de titres et liquidités')}`,
       total: nowByGroup().bourse, lignes: lignes.sort((a, b) => b.valeur - a.valeur),
       vue: 'positions', ancre: 'jour', cta: trad('Voir les marchés'),
     };
@@ -12198,7 +12195,7 @@ const APERCUS = {
   perfLatente: () => {
     const lat = latentPnl();
     return {
-      titre: trad('Plus-value latente'), sous: `${lat.winners} lignes en gain sur ${lat.count}`,
+      titre: trad('Plus-value latente'), sous: `${lat.winners} ${trad('lignes en gain sur')} ${lat.count}`,
       total: lat.pnl, totalNote: `${fmtSignedPct(lat.pct)} sur ${fmtEUR0(lat.invested)} investis`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
@@ -12223,7 +12220,7 @@ const APERCUS = {
       titre: trad('Résultat total'), sous: trad('Latent et encaissé depuis le début'),
       total: lat.pnl + tout.realised,
       lignes: [
-        { label: trad('Plus-value latente'), meta: `${lat.count} lignes détenues`, valeur: lat.pnl },
+        { label: trad('Plus-value latente'), meta: `${lat.count} ${trad('lignes détenues')}`, valeur: lat.pnl },
         { label: trad('Plus-value encaissée'), meta: `${tout.count} ventes`, valeur: tout.realised },
       ],
       vue: 'performance', ancre: '', cta: trad('Rester ici'),
@@ -12342,7 +12339,7 @@ const APERCUS = {
   portefeuille: () => {
     const pnl = portfolioPnl();
     return {
-      titre: trad('Valeur du portefeuille'), sous: `${Store.state.positions.length} lignes de titres`,
+      titre: trad('Valeur du portefeuille'), sous: `${Store.state.positions.length} ${trad('lignes de titres')}`,
       total: pnl.value, totalNote: `${fmtSignedPct(pnl.pct)} sur le prix de revient`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${num(p.qty)} × ${fmtCur(p.price, p.currency)}`,
@@ -12443,11 +12440,11 @@ const APERCUS = {
          collee a une donnee vieille est pire que pas d'heure du tout : elle
          certifie ce qu'elle devrait mettre en doute. */
       sous: j.lignes.length
-        ? [`${j.hausse} en hausse`, `${j.baisse} en baisse`,
-           j.sansDonnee ? `${j.sansDonnee} sans cours de veille` : '',
-           j.horsSeance ? `${j.horsSeance} sans cours du jour` : '',
-           j.asOfMarche ? `cours ${fmtCoursQuand(j.asOfMarche)}` : ''].filter(Boolean).join(' · ')
-        : 'pas de clôture de veille en mémoire',
+        ? [`${j.hausse} ${trad('en hausse')}`, `${j.baisse} ${trad('en baisse')}`,
+           j.sansDonnee ? `${j.sansDonnee} ${trad('sans cours de veille')}` : '',
+           j.horsSeance ? `${j.horsSeance} ${trad('sans cours du jour')}` : '',
+           j.asOfMarche ? `${trad('cours')} ${fmtCoursQuand(j.asOfMarche)}` : ''].filter(Boolean).join(' · ')
+        : trad('pas de clôture de veille en mémoire'),
       total: j.eur,
       /* Le total ne se commente pas de la meme façon quand rien n'a cote : « sur
          la cloture precedente » promet une comparaison qui n'a pas eu lieu. */
