@@ -196,19 +196,19 @@ const Quotes = (() => {
      Tous ces symboles ont ete verifies contre la passerelle avant d'etre
      inscrits ici : une tuile morte est pire que pas de tuile. */
   const FAMILLES_REPERES = [
-    ['indices', 'Indices', [
+    ['indices', trad('Indices'), [
       ['^GSPC',     'S&P 500'],
       ['^IXIC',     'Nasdaq'],
       ['^FCHI',     'CAC 40'],
       ['^STOXX50E', 'Stoxx 50'],
       ['^N225',     'Nikkei'],
     ]],
-    ['metaux', 'Métaux', [
-      ['GC=F', 'Or'],
-      ['SI=F', 'Argent'],
-      ['PL=F', 'Platine'],
+    ['metaux', trad('Métaux'), [
+      ['GC=F', trad('Or')],
+      ['SI=F', trad('Argent')],
+      ['PL=F', trad('Platine')],
       ['PA=F', 'Palladium'],
-      ['HG=F', 'Cuivre'],
+      ['HG=F', trad('Cuivre')],
     ]],
     ['crypto', 'Crypto', [
       ['BTC-USD', 'Bitcoin'],
@@ -216,7 +216,7 @@ const Quotes = (() => {
       ['SOL-USD', 'Solana'],
       ['XRP-USD', 'XRP'],
     ]],
-    ['devises', 'Devises', [
+    ['devises', trad('Devises'), [
       ['EURUSD=X',  'EUR/USD'],
       ['EURGBP=X',  'EUR/GBP'],
       ['EURCHF=X',  'EUR/CHF'],

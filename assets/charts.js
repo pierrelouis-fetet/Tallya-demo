@@ -201,8 +201,8 @@ const Charts = (() => {
   const kEur = v => {
     if (masqueActif()) return '•••';   // les axes chiffrés trahiraient le total
     const a = Math.abs(v);
-    if (a >= 1000) return (v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' k€';
-    return Math.round(v).toLocaleString('fr-FR') + ' €';
+    if (a >= 1000) return (v / 1000).toLocaleString(locale(), { maximumFractionDigits: 1 }) + ' k€';
+    return Math.round(v).toLocaleString(locale()) + ' €';
   };
 
   /* =========================================================

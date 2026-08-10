@@ -40,14 +40,19 @@ async function getText(url, ttl = 45) {
 
 /* La derniere cloture connue avant le jour du cours, lue en pas horaire.
 
-   Appelee seulement quand la serie journaliere a un trou : Yahoo laisse
-   parfois un jour sans cloture sur plusieurs lignes a la fois. C'est une
-   panne de donnees, pas un jour sans seance.
+   Appelee seulement quand la serie journaliere a un trou. Yahoo en a deja
+   laisse un sur plusieurs lignes le meme jour — DCAM.PA, NATO.PA, BTC-USD et
+   EUR/USD ensemble : c'est une panne de donnees, pas un jour sans seance.
 
-   Ne rien publier supprimerait l'ecart du jour partout en meme temps ;
-   enjamber le trou ferait compter deux seances. La serie horaire tranche : sa
-   derniere barre de la veille tombe a quelques points de base de la cloture
-   officielle — c'est le dernier echange connu avant minuit, pas le fixing. */
+   Refuser de publier une cloture supprimait alors l'ecart du jour partout a la
+   fois — « 3 sans cours de veille » sur cinq lignes — ce qui est trop cher
+   paye ; l'enjamber pour prendre l'avant-veille faisait compter deux seances.
+   La serie horaire porte la reponse : mesuree contre le courtier, sa derniere
+   barre de la veille donne 6,202 pour une cloture reelle de 6,203, et 19,186
+   pour 19,202.
+
+   Ce n'est pas la cloture officielle, c'est le dernier echange connu avant
+   minuit. L'ecart tient au fixing de cloture, quelques points de base. */
 async function clotureVeilleHoraire(symbol, jourDuCours) {
   const url = 'https://query1.finance.yahoo.com/v8/finance/chart/'
             + `${encodeURIComponent(symbol)}?interval=1h&range=5d`;
@@ -121,10 +126,11 @@ async function yahooQuote(symbol) {
   const reelles = closes.filter(v => v != null);
   /* La bougie d'abord, le champ de Yahoo ensuite — et non l'inverse.
 
-     `meta.previousClose` ment. Mesure contre un courtier : 6,121 annonces
-     pour 6,203 reels, 18,445 pour 19,202. L'ecart du jour passait de +0,60 %
-     a +1,99 %, et de +1,25 % a +5,22 % — trois fois le mouvement reel. Le
-     calcul etait juste, sa reference etait fausse.
+     `meta.previousClose` ment. Mesure : 6,121 pour DCAM.PA quand le courtier
+     disait 6,203, et 18,445 pour NATO.PA contre 19,202. L'ecart du
+     jour passait de +0,60 % a +1,99 %, et de +1,25 % a +5,22 % : Tallya
+     annonçait 302 EUR de mouvement pour 100 reels. Le calcul etait juste, sa
+     reference etait fausse.
 
      La derniere cloture dont le jour precede celui du cours est une donnee de
      la serie, pas un champ calcule ailleurs : elle se verifie, et elle ne peut
@@ -422,12 +428,24 @@ async function handleState(request, env) {
 
 /* ---------------- routage ---------------- */
 
-/* ---------------- garde-fou : ouvert, et c'est voulu ----------------
-   Ce dépôt est la démonstration publique : ses données sont fictives par
-   construction, il n'a rien à protéger. L'ouverture est déclarée ici plutôt
-   que dans une variable d'hébergeur, qui disparaît quand le projet est
-   recréé. Poser DASHBOARD_PASSWORD ou brancher Access referme le site — les
-   deux chemins restent, pour qui repartirait d'ici avec de vraies données. */
+/* ---------------- garde-fou : ouvert dans CE dépôt, et lui seul ----------------
+   Le dépôt principal ferme par défaut : sans Cloudflare Access devant, son
+   Worker ne sert RIEN, parce qu'un déploiement mal configuré doit échouer
+   visiblement plutôt que publier un patrimoine en clair.
+
+   Ici, la même règle produit l'inverse de son intention. Ce dépôt est la
+   démonstration publique : ses données sont fictives par construction (voir
+   l'en-tête d'assets/seed.js), il n'a rien à protéger, et son unique raison
+   d'être est d'être ouvert. Dépendre d'une variable d'environnement rendait
+   la mise en ligne fragile — un projet Cloudflare recréé, une variable posée
+   sur le mauvais environnement, et le visiteur tombe sur « Accès fermé » au
+   lieu de la démonstration.
+
+   L'ouverture est donc déclarée dans le code, là où elle se lit et se
+   versionne, plutôt que dans un réglage d'hébergeur qu'on oublie. La garde
+   reste entière : poser DASHBOARD_PASSWORD ou brancher Access referme le
+   site — quelqu'un qui repartirait de ce dépôt pour ses vraies données a
+   les deux chemins, et ce commentaire pour l'avertir. */
 const DEMO_PUBLIQUE = true;
 
 function accessEmail(request) {

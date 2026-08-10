@@ -108,9 +108,10 @@ def yahoo_quote(symbol: str) -> dict:
     # six séances plus tôt avec range=5d. Prendre la seconde transformait la
     # performance du jour en performance de la semaine.
     #
-    # Et previousClose ment. Mesure contre un courtier : 6,121 annonces pour
-    # 6,203 reels, 18,445 pour 19,202. L'ecart du jour passait de +0,60 % a
-    # +1,99 %, et de +1,25 % a +5,22 % — trois fois le mouvement reel.
+    # Et previousClose ment. Mesure : Yahoo annonçait 6,121 pour
+    # DCAM.PA quand le courtier disait 6,203, et 18,445 pour NATO.PA contre
+    # 19,202. L'ecart du jour passait de +0,60 % a +1,99 %, et de +1,25 % a
+    # +5,22 % : Tallya annonçait 302 EUR de mouvement pour 100 reels.
     #
     # La serie de bougies, elle, ne ment pas : on prend la derniere cloture dont
     # le jour precede celui du cours. C'est une donnee, pas un champ calcule

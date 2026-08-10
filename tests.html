@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tallya — tests</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="assets/styles.css?v=2026-08-20v-demo">
+<link rel="stylesheet" href="assets/styles.css?v=2026-08-21c-demo">
 <style>
   body { padding: 24px; max-width: 900px; margin: 0 auto; }
   h1 { font-size: 22px; margin: 0 0 4px; }
@@ -44,17 +44,25 @@
   `Fixture.poser()`. La page peut donc tourner sur la machine de n'importe qui
   sans rien voir de personnel, et deux exécutions donnent le même résultat.
 -->
-<script src="assets/i18n.js?v=2026-08-20v-demo"></script>
-<script src="assets/seed-budget.js?v=2026-08-20v-demo"></script>
-<script src="assets/seed.js?v=2026-08-20v-demo"></script>
-<script src="assets/store.js?v=2026-08-20v-demo"></script>
+<script src="assets/i18n.js?v=2026-08-21c-demo"></script>
+<script src="assets/seed-budget.js?v=2026-08-21c-demo"></script>
+<script src="assets/seed.js?v=2026-08-21c-demo"></script>
+<script src="assets/store.js?v=2026-08-21c-demo"></script>
 
-<script src="tests/harness.js?v=2026-08-20v-demo"></script>
-<script src="tests/fixture.js?v=2026-08-20v-demo"></script>
-<script src="tests/store.tests.js?v=2026-08-20v-demo"></script>
+<script src="tests/harness.js?v=2026-08-21c-demo"></script>
+<script src="tests/fixture.js?v=2026-08-21c-demo"></script>
+<script src="tests/store.tests.js?v=2026-08-21c-demo"></script>
 
 <script>
-  const r = Tests.run();
+  /* Les tests documentent le francais : ils s'executent donc en francais,
+     quelle que soit la langue de l'application. Cette page partage son
+     origine avec elle, donc son localStorage — la langue du detenteur est
+     remise telle quelle a la fin, meme si une suite echoue. Sans cette
+     garde, passer l'application en anglais peignait sept faux echecs. */
+  const langueDetenteur = currentLang();
+  setLang('fr');
+  let r;
+  try { r = Tests.run(); } finally { setLang(langueDetenteur); }
   const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
   const bilan = document.getElementById('bilan');

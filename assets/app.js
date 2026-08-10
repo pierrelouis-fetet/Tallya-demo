@@ -34,10 +34,10 @@ let savedTimer = null;
 function flashSaved() {
   const f = $('#savedFlag');
   if (!f) return;
-  f.textContent = 'Sauvegardé ✓';
+  f.textContent = trad('Sauvegardé ✓');
   f.classList.add('flash');
   clearTimeout(savedTimer);
-  savedTimer = setTimeout(() => { f.classList.remove('flash'); f.textContent = 'Sauvegardé localement'; }, 1400);
+  savedTimer = setTimeout(() => { f.classList.remove('flash'); f.textContent = trad('Sauvegardé localement'); }, 1400);
 }
 
 /* Le champ qui vient d'etre enregistre le dit lui-meme.
@@ -528,7 +528,7 @@ function barreCommutateur(choix, actif, action, cle) {
     <div class="segmented">
       ${choix.map(([v, label]) => `<button data-action="${esc(action)}"
         data-${esc(cle)}="${esc(v)}" class="${v === actif ? 'on' : ''}"
-        aria-pressed="${v === actif}">${esc(label)}</button>`).join('')}
+        aria-pressed="${v === actif}">${esc(trad(label))}</button>`).join('')}
     </div>
   </div>`;
 }
@@ -542,7 +542,7 @@ function barreSousOnglets(vue) {
     <div class="segmented">
       ${choix.map(([cle, label, route]) => `<button data-action="sous-onglet"
         data-route="${route}" class="${cle === on ? 'on' : ''}"
-        aria-pressed="${cle === on}">${esc(label)}${
+        aria-pressed="${cle === on}">${esc(trad(label))}${
           PASTILLE_SOUS_ONGLET[cle]?.() ? '<i class="pastille-onglet" aria-hidden="true"></i>' : ''
         }</button>`).join('')}
     </div>
@@ -560,15 +560,15 @@ function barreSousOnglets(vue) {
    affichee, les liquidites restent toujours, sinon un patrimoine tout juste
    ouvert n'aurait plus de graphique du tout. */
 const SERIES_PATRIMOINE = () => [
-  { key: 'cash',   label: 'Liquidités',       color: S1() },
-  { key: 'bourse', label: 'Actifs de marché', color: S2() },
-  { key: 'crypto', label: 'Cryptomonnaies',   color: S5() },
-  { key: 'pe',     label: 'Non coté',         color: S3() },
-  { key: 'immo',   label: 'Immobilier',       color: S4() },
+  { key: 'cash',   label: trad('Liquidités'),       color: S1() },
+  { key: 'bourse', label: trad('Actifs de marché'), color: S2() },
+  { key: 'crypto', label: trad('Cryptomonnaies'),   color: S5() },
+  { key: 'pe',     label: trad('Non coté'),         color: S3() },
+  { key: 'immo',   label: trad('Immobilier'),       color: S4() },
   /* La sixieme poche, nee avec la classe : sans elle, une montre comptait
      dans le total du graphique sans appartenir a aucune bande, et la pile
      cessait de faire le total. seriesUtiles() la tait chez qui n'a rien. */
-  { key: 'biens',  label: 'Biens de valeur',  color: Charts.cssv('--series-9') },
+  { key: 'biens',  label: trad('Biens de valeur'),  color: Charts.cssv('--series-9') },
 ];
 function seriesUtiles(points) {
   return SERIES_PATRIMOINE().filter(s => s.key === 'cash'
@@ -645,12 +645,12 @@ function carteEvolution(avecDetail = false) {
            répète là où le regard se pose, comme le sélecteur d'année de
            Budget. Toujours affichée, y compris sans crédit, elle dit alors
            ce que la courbe montre. -->
-      <div class="card-head"><h2>Évolution du patrimoine</h2>
+      <div class="card-head"><h2>${trad('Évolution du patrimoine')}</h2>
         <span class="segmented seg-mini">
           <button data-action="evo-base" data-net="1" class="${evoNet ? 'on' : ''}"
-                  title="Tes avoirs moins tes crédits">Net</button>
+                  title="${trad('Tes avoirs moins tes crédits')}">${trad('Net')}</button>
           <button data-action="evo-base" data-net="" class="${evoNet ? '' : 'on'}"
-                  title="La valeur de tes avoirs, crédits non déduits">Brut</button>
+                  title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
         </span>
         ${rangeControl('evo-range', evoRange)}</div>
       <div class="chart" id="chartEvo"></div>
@@ -674,7 +674,7 @@ function detailEvolution() {
   const cols = seriesUtiles(pts);
   return `
     <details class="data-view" ${evoDetailOuvert ? 'open' : ''} id="evoDetail">
-      <summary>Voir les données</summary>
+      <summary>${trad('Voir les données')}</summary>
       <div class="row" style="margin:10px 0 6px">
         <span class="hint">${pts.length} point${pts.length > 1 ? 's' : ''}</span>
         <span class="spacer"></span>
@@ -682,7 +682,7 @@ function detailEvolution() {
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Mois</th>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th>Total</th></tr></thead>
+          <thead><tr><th>${trad('Mois')}</th>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th>Total</th></tr></thead>
           <tbody>${pts.map(p => `<tr><td class="name">${esc(p.label)}</td>${
             cols.map(c => `<td>${fmtEUR0(Number(p[c.key]) || 0)}</td>`).join('')
           }<td><b>${fmtEUR0(p.total)}</b></td></tr>`).join('')
@@ -712,10 +712,10 @@ function sortiesRappel(genre, label, avant = '') {
   return `<span class="rappel-sorties">
     ${avant}
     <button type="button" class="btn sm ghost" data-action="reporter-rappel" data-genre="${esc(genre)}"
-            title="Repousse ce rappel de ${REPORT_JOURS} jours">Plus tard</button>
+            title="Repousse ce rappel de ${REPORT_JOURS} jours">${trad('Plus tard')}</button>
     <button type="button" class="btn icon xs" data-action="taire-rappel" data-genre="${esc(genre)}"
             aria-label="Ne plus demander ${esc(label)} ce mois-ci"
-            title="Ne plus le demander ce mois-ci">✕</button>
+            title="${trad('Ne plus le demander ce mois-ci')}">✕</button>
   </span>`;
 }
 
@@ -755,10 +755,10 @@ function viewOverview() {
   ${moisEnAttente.missing ? `
   <div class="rappel card-cliquable">
     <button type="button" class="card-couvre" data-action="go-snapshot"
-            aria-label="Prendre le snapshot de ${esc(moisEnAttente.label)}"></button>
+            aria-label="${trad('Prendre le snapshot de')} ${esc(moisEnAttente.label)}"></button>
     <span class="rappel-pastille"></span>
-    <span class="rappel-texte"><b>Prendre le snapshot de ${esc(moisEnAttente.label)} ›</b><br>
-      <span class="muted">Enregistre ${fmtEUR0(nowTotals().total)} dans tes données mensuelles</span></span>
+    <span class="rappel-texte"><b>${trad('Prendre le snapshot de')} ${esc(moisEnAttente.label)} ›</b><br>
+      <span class="muted">${trad('Enregistre')} ${fmtEUR0(nowTotals().total)} ${trad('dans tes données mensuelles')}</span></span>
     ${sortiesRappel('releve', moisEnAttente.label)}
   </div>` : ''}
 
@@ -775,7 +775,7 @@ function viewOverview() {
             aria-label="Saisir les dépenses de ${esc(depEnAttente.label)}"></button>
     <span class="rappel-pastille"></span>
     <span class="rappel-texte"><b>Saisir les dépenses de ${esc(depEnAttente.label)} ›</b><br>
-      <span class="muted">Le mois est clos, ce qu’il a coûté reste à enregistrer</span></span>
+      <span class="muted">${trad('Le mois est clos, ce qu’il a coûté reste à enregistrer')}</span></span>
     ${sortiesRappel('depenses', depEnAttente.label)}
   </div>` : ''}
 
@@ -786,8 +786,8 @@ function viewOverview() {
        montant reste au-dessus et garde son geste. -->
   <div class="hero card-cliquable">
     <button type="button" class="card-couvre" data-action="apercu" data-apercu="patrimoineTotal"
-            aria-label="Voir la répartition du patrimoine par actif"
-            title="Voir la répartition par actif"></button>
+            aria-label="${trad('Voir la répartition du patrimoine par actif')}"
+            title="${trad('Voir la répartition par actif')}"></button>
     <div>
       <!-- Brut ou net, au choix, sur le chiffre que toute la page décline.
            Net par défaut : c'est ce qu'on possède réellement. Le brut sert
@@ -801,12 +801,12 @@ function viewOverview() {
            Le mot ne manque pas, le sous-titre de la page dit deja « photo
            instantanee », et les deux ecarts en dessous nomment leurs dates. -->
       <div class="hero-label">
-        <span>Patrimoine ${evoNet ? 'net' : 'brut'}</span>
+        <span>${evoNet ? trad('Patrimoine net') : trad('Patrimoine brut')}</span>
         <span class="segmented seg-mini">
           <button data-action="hero-base" data-net="1" class="${evoNet ? 'on' : ''}"
-                  title="Tes avoirs moins tes crédits">Net</button>
+                  title="${trad('Tes avoirs moins tes crédits')}">${trad('Net')}</button>
           <button data-action="hero-base" data-net="" class="${evoNet ? '' : 'on'}"
-                  title="La valeur de tes avoirs, crédits non déduits">Brut</button>
+                  title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
         </span>
         <!-- Le masquage vivait sur le montant lui-meme, pour que le geste tombe
              la ou le regard est deja. Mais le montant est aussi l'endroit ou
@@ -835,8 +835,8 @@ function viewOverview() {
            dernier releve enregistre, dont la date depend de la saisie, et le
            marche la fait osciller de quelques dizaines d'euros. Les deux
            horizons qui restent sont ancres sur des dates fixes. -->
-      ${deltaBlock('depuis le 1er janvier', d.ytd)}
-      ${deltaBlock('depuis le début', d.all)}
+      ${deltaBlock(trad('depuis le 1er janvier'), d.ytd)}
+      ${deltaBlock(trad('depuis le début'), d.all)}
     </div>
     <!-- Une courbe vivait ici. Elle tracait la meme serie que la carte
          « Evolution du patrimoine », deux cents pixels plus bas, mais sans axe,
@@ -858,7 +858,7 @@ function viewOverview() {
            jamais. La legende est la liste juste en dessous, memes couleurs et
            memes montants, et la carte entiere ouvre le detail part par part. -->
       <div class="hero-barre" role="img"
-           aria-label="Répartition : ${parts.map(x => `${x.label} ${fmtPct(x.pct, 0)}`).join(', ')}">
+           aria-label="${trad('Répartition')} : ${parts.map(x => `${trad(x.label)} ${fmtPct(x.pct, 0)}`).join(', ')}">
         ${parts.map(x => `<i style="width:${x.pct.toFixed(2)}%;background:${x.couleur}"></i>`).join('')}
       </div>`;
     })()}
@@ -879,7 +879,7 @@ function viewOverview() {
               title="Voir le détail de ${esc(x.label)}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
-          <span class="repart-nom">${esc(x.label)}</span>
+          <span class="repart-nom">${esc(trad(x.label))}</span>
           <b>${fmtEUR(x.value)}</b>
           <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
         </span>
@@ -911,8 +911,8 @@ function viewOverview() {
            lignes qui vivait ici etait de la comptabilite posee sous la premiere
            chose qu'on voit. -->
       <button type="button" class="repart-credits" data-action="apercu" data-apercu="credits"
-              title="Voir et mettre à jour tes crédits">
-        <span>Crédits en cours</span>
+              title="${trad('Voir et mettre à jour tes crédits')}">
+        <span>${trad('Crédits en cours')}</span>
         <b class="dette">−${fmtEUR(cr.reste)}</b>
         <span class="ml-chev" aria-hidden="true">›</span>
       </button>`;
@@ -938,7 +938,7 @@ function viewOverview() {
 
   <div class="grid g-2-1">
     <div class="card">
-      <div class="card-head"><h2>Rythme d'accumulation</h2>
+      <div class="card-head"><h2>${trad('Rythme d\'accumulation')}</h2>
         ${rangeControl('pace-range', paceRange)}</div>
       <div class="chart" id="chartPace"></div>
       ${(() => {
@@ -965,25 +965,21 @@ function viewOverview() {
                comptait l'argent tombe du ciel comme un effort mensuel, et une
                grosse sortie comme un effort manque. Elle ne s'affiche que s'il y a
                eu un mouvement exceptionnel sur la periode. -->
-          <dt>Dont ${p.apports < 0 ? 'sorties exceptionnelles' : 'entrées extérieures'}${aide(
-              'Les entrées et sorties exceptionnelles de la période affichée : un héritage, '
-            + 'une prime, la vente d’un bien, ou à l’inverse une voiture, des travaux. Elles '
-            + 'déplacent ton patrimoine sans rien dire de ton épargne, et la moyenne du '
-            + 'dessous les compte : hors elles, ton rythme propre est de '
-            + fmtEUR0(p.averageHorsApports) + ' par mois. Le journal est dans Budget, '
-            + 'onglet Relevés.')}</dt>
+          <dt>${trad('Dont')} ${p.apports < 0 ? trad('sorties exceptionnelles') : trad('entrées extérieures')}${aide(
+              trad('Les entrées et sorties exceptionnelles de la période affichée : un héritage, une prime, la vente d’un bien, ou à l’inverse une voiture, des travaux. Elles déplacent ton patrimoine sans rien dire de ton épargne, et la moyenne du dessous les compte : hors elles, ton rythme propre est de')
+            + ' ' + fmtEUR0(p.averageHorsApports) + ' ' + trad('par mois. Le journal est dans Budget, onglet Relevés.'))}</dt>
             <dd><button type="button" class="mois-lien ${cls(p.apports)}" data-action="goto" data-view="history"
-                        data-anchor="" title="Voir le journal des entrées et sorties exceptionnelles"
+                        data-anchor="" title="${trad('Voir le journal des entrées et sorties exceptionnelles')}"
                 >${fmtSigned(p.apports)}</button></dd>` : ''}
-          <dt>Moyenne mensuelle du patrimoine${aide("Moyenne des variations du patrimoine net d’un mois sur l’autre, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Le mois en cours reste dehors : il est incomplet.")}
-            <span class="sub">marchés et apports compris</span></dt><dd class="${cls(p.average)}">${fmtSigned(p.average)}</dd>
-          <dt>Épargne que ton budget laisse${aide("Revenus moins charges fixes moins tes dépenses moyennes. C’est une prévision tirée de tes saisies, là où la ligne du dessus est une variation constatée. L’écart entre les deux vient des marchés et des apports : Budget le détaille.")}
-            <span class="sub">prévision, hors marchés</span></dt>
+          <dt>${trad('Moyenne mensuelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d’un mois sur l’autre, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Le mois en cours reste dehors : il est incomplet."))}
+            <span class="sub">${trad('marchés et apports compris')}</span></dt><dd class="${cls(p.average)}">${fmtSigned(p.average)}</dd>
+          <dt>${trad('Épargne que ton budget laisse')}${aide(trad("Revenus moins charges fixes moins tes dépenses moyennes. C’est une prévision tirée de tes saisies, là où la ligne du dessus est une variation constatée. L’écart entre les deux vient des marchés et des apports : Budget le détaille."))}
+            <span class="sub">${trad('prévision, hors marchés')}</span></dt>
             <dd><button type="button" class="mois-lien" data-action="goto" data-view="budget" data-anchor=""
-                        title="Voir le rapprochement dans Budget">${fmtEUR0(budgetee.theoretical)}</button></dd>
-          <dt>Mois en hausse</dt><dd>${p.positive} / ${p.count}</dd>
-          ${p.best ? `<dt>Meilleur mois</dt><dd>${esc(p.best.label)} · ${fmtSigned(p.best.delta)}</dd>` : ''}
-          ${p.worst ? `<dt>Pire mois</dt><dd>${esc(p.worst.label)} · ${fmtSigned(p.worst.delta)}</dd>` : ''}
+                        title="${trad('Voir le rapprochement dans Budget')}">${fmtEUR0(budgetee.theoretical)}</button></dd>
+          <dt>${trad('Mois en hausse')}</dt><dd>${p.positive} / ${p.count}</dd>
+          ${p.best ? `<dt>${trad('Meilleur mois')}</dt><dd>${esc(p.best.label)} · ${fmtSigned(p.best.delta)}</dd>` : ''}
+          ${p.worst ? `<dt>${trad('Pire mois')}</dt><dd>${esc(p.worst.label)} · ${fmtSigned(p.worst.delta)}</dd>` : ''}
         </dl>`;
       })()}
     </div>
@@ -991,8 +987,8 @@ function viewOverview() {
        ensuite le cap. La jauge ne compte que l'épargne de précaution, c'est elle que la
        règle des 3 à 6 mois vise, pas l'argent déjà promis à autre chose. -->
   <div class="card">
-    <div class="card-head"><h2>Autonomie financière${aide("Combien de mois tu tiendrais si tes revenus s'arrêtaient demain. La jauge compte ton épargne de précaution ; la liste ajoute ce qui pourrait être mobilisé ensuite, du plus accessible au plus lent, en mois cumulés. L'immobilier et le non coté se vendent, mais en quelques mois et avec une décote si tu es pressé. Ce qui est bloqué jusqu'à son échéance reste affiché mais sort du cumul : cet argent n'arrivera pas, quoi qu'il se passe demain. Un titre coté se vend en séance, mais le virement met deux à trois jours ouvrés à arriver : c'est ce délai, pas la liquidité, qui le range en « quelques jours ». Casser un PEA de moins de cinq ans lui coûte son avantage fiscal, pas son accès. Coût mensuel retenu : charges fixes plus dépenses moyennes.")}</h2>
-      <span class="hint">si les revenus s'arrêtaient</span></div>
+    <div class="card-head"><h2>${trad('Autonomie financière')}${aide(trad("Combien de mois tu tiendrais si tes revenus s'arrêtaient demain. La jauge compte ton épargne de précaution ; la liste ajoute ce qui pourrait être mobilisé ensuite, du plus accessible au plus lent, en mois cumulés. L'immobilier et le non coté se vendent, mais en quelques mois et avec une décote si tu es pressé. Ce qui est bloqué jusqu'à son échéance reste affiché mais sort du cumul : cet argent n'arrivera pas, quoi qu'il se passe demain. Un titre coté se vend en séance, mais le virement met deux à trois jours ouvrés à arriver : c'est ce délai, pas la liquidité, qui le range en « quelques jours ». Casser un PEA de moins de cinq ans lui coûte son avantage fiscal, pas son accès. Coût mensuel retenu : charges fixes plus dépenses moyennes."))}</h2>
+      <span class="hint">${trad('si les revenus s\'arrêtaient')}</span></div>
     ${(() => {
       const r = runway();
       /* Le coussin réel : l'épargne de précaution plus l'argent des dépenses
@@ -1003,14 +999,14 @@ function viewOverview() {
       const state = cover >= 3 ? 'up' : cover >= 1.5 ? '' : 'down';
       return `
         <div class="goal-top goal-top-empile" style="margin-bottom:8px">
-          <b class="${state}">${fmtMois(cover)} mois</b>
-          <span class="muted">épargne de précaution + cash disponible · ${fmtEUR0(ep)}</span>
+          <b class="${state}">${fmtMois(cover)} ${trad('mois')}</b>
+          <span class="muted">${trad('épargne de précaution + cash disponible')} · ${fmtEUR0(ep)}</span>
         </div>
         <div class="goal-bar"><div class="goal-fill" style="width:${Math.min(100, cover / 6 * 100).toFixed(0)}%;
           background:${cover >= 3 ? 'var(--good)' : cover >= 1.5 ? 'var(--warning)' : 'var(--critical)'}"></div></div>
         <!-- Le « 0 » de l'origine flottait seul sous la barre : une jauge part
              toujours de zéro, et isolé il se lisait comme une valeur. -->
-        <div class="goal-foot"><span></span><span>cible 3 à 6 mois</span></div>
+        <div class="goal-foot"><span></span><span>${trad('cible 3 à 6 mois')}</span></div>
         <!-- L'argent des projets, nomme.
 
              Ils n'y rejoignent pas : un argent qui a deja un travail n'est pas
@@ -1020,21 +1016,21 @@ function viewOverview() {
              desormais a l'ecran. -->
         ${pk.projet > 0.005 ? `
         <p class="small muted" style="margin:8px 0 0">
-          + ${fmtEUR0(pk.projet)} réservés à un projet, disponibles si tu y touches.
-          ${aide('Ils ne comptent pas dans le coussin : la règle des 3 à 6 mois vise '
+          + ${fmtEUR0(pk.projet)} ${trad('réservés à un projet, disponibles si tu y touches.')}
+          ${aide(trad('Ils ne comptent pas dans le coussin : la règle des 3 à 6 mois vise '
           + 'ce qui n’a pas encore d’emploi. Ils sont bien là, et ils figurent dans '
           + '« Disponible tout de suite » juste en dessous : c’est ce qui explique '
-          + 'l’écart entre les deux montants.')}
+          + 'l’écart entre les deux montants.'))}
         </p>` : ''}
         <ul class="runway">${r.tiers.filter(x => x.value > 0).map(x => `
           <li class="rw-ligne${x.horsCumul ? ' rw-hors' : ''}">
-            <div class="rw-haut"><span class="rw-lab">${esc(x.label)}</span><b class="rw-val">${fmtEUR0(x.value)}</b></div>
-            <div class="rw-bas"><span class="rw-note">${esc(x.note)}</span>
+            <div class="rw-haut"><span class="rw-lab">${esc(trad(x.label))}</span><b class="rw-val">${fmtEUR0(x.value)}</b></div>
+            <div class="rw-bas"><span class="rw-note">${esc(trad(x.note))}</span>
               <span class="tag rw-mois">${x.horsCumul
-                ? 'hors autonomie' : `${fmtMois(x.months)} mois cumulés`}</span></div>
+                ? trad('hors autonomie') : `${fmtMois(x.months)} ${trad('mois cumulés')}`}</span></div>
           </li>`).join('')}</ul>
         <p class="small muted" style="margin:12px 0 0">
-          Coût de la vie retenu : ${fmtEUR0(r.burn)} / mois (charges fixes + dépenses moyennes).
+          ${trad('Coût de la vie retenu :')} ${fmtEUR0(r.burn)} ${trad('/ mois (charges fixes + dépenses moyennes).')}
         </p>`;
     })()}
   </div>
@@ -1083,8 +1079,8 @@ function viewOverview() {
              performance se rejoignent sur une ligne, deux lectures du meme
              calcul qui ouvraient le meme panneau, et le lien d'en-tete mene a
              Marches pour qui veut les lignes plutot qu'un total. -->
-        <div class="card-head"><h2>Portefeuille titres</h2>
-          <a class="hint lien-vue" href="#/positions">Marchés →</a></div>
+        <div class="card-head"><h2>${trad('Portefeuille titres')}</h2>
+          <a class="hint lien-vue" href="#/positions">${trad('Marchés')} →</a></div>
         <div class="mlist-groupe">
           <!-- L'ecart du jour en premier, parce que l'onglet s'appelle
                « Aujourd'hui » et que la carte n'y montrait que des cumuls : la
@@ -1104,15 +1100,15 @@ function viewOverview() {
                n'avait pas encore de cours. */
             if (!j.lignes.length || j.toutHorsSeance) return `
           <div class="mlist" style="cursor:default">
-            <span class="ml-nom">Aujourd’hui<span class="sub">${j.lignes.length
-              ? `aucune ligne n’a coté depuis minuit${j.asOfMarche
-                  ? ` · cours ${esc(fmtCoursQuand(j.asOfMarche))}` : ''}`
-              : 'pas de clôture de veille en mémoire'}</span></span>
-            <span class="ml-chiffres"><b class="muted">hors séance</b></span>
+            <span class="ml-nom">${trad('Aujourd’hui')}<span class="sub">${j.lignes.length
+              ? `${trad('aucune ligne n’a coté depuis minuit')}${j.asOfMarche
+                  ? ` · ${trad('cours')} ${esc(fmtCoursQuand(j.asOfMarche))}` : ''}`
+              : trad('pas de clôture de veille en mémoire')}</span></span>
+            <span class="ml-chiffres"><b class="muted">${trad('hors séance')}</b></span>
           </div>`;
             return `
           <button type="button" class="mlist" data-action="apercu" data-apercu="jourTitres">
-            <span class="ml-nom">Aujourd’hui<span class="sub">${j.hausse} en hausse, ${
+            <span class="ml-nom">${trad('Aujourd’hui')}<span class="sub">${j.hausse} ${trad('en hausse')}, ${
               j.baisse} en baisse${j.sansDonnee ? `, ${j.sansDonnee} sans cours de veille` : ''}${
               j.horsSeance ? `, ${j.horsSeance} sans cours du jour` : ''}</span></span>
             <span class="ml-chiffres"><b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
@@ -1127,12 +1123,12 @@ function viewOverview() {
             <span class="ml-chev" aria-hidden="true">›</span>
           </button>
           <button type="button" class="mlist" data-action="apercu" data-apercu="investiTitres">
-            <span class="ml-nom">Investi<span class="sub">ce que ces lignes t’ont coûté</span></span>
+            <span class="ml-nom">Investi<span class="sub">${trad('ce que ces lignes t’ont coûté')}</span></span>
             <span class="ml-chiffres"><b>${fmtEUR(pnl.invested)}</b></span>
             <span class="ml-chev" aria-hidden="true">›</span>
           </button>
           <button type="button" class="mlist" data-action="apercu" data-apercu="pnlLatent">
-            <span class="ml-nom">Plus-value latente<span class="sub">tant que tu ne vends pas</span></span>
+            <span class="ml-nom">Plus-value latente<span class="sub">${trad('tant que tu ne vends pas')}</span></span>
             <span class="ml-chiffres"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
               <span class="${cls(pnl.pnl)}">${fmtSignedPct(pnl.pct)}</span></span>
             <span class="ml-chev" aria-hidden="true">›</span>
@@ -1240,7 +1236,7 @@ function rangeControl(action, courant) {
 function nomCompte(a) {
   const i = Store.state.accounts.indexOf(a);
   return `<input class="acct-nom" data-path="accounts.${i}.label" value="${esc(a.label)}"
-                 title="Renommer ce compte, le nom suit partout" autocomplete="off">`;
+                 title="${trad('Renommer ce compte, le nom suit partout')}" autocomplete="off">`;
 }
 
 /* Pastille de couleur, à poser devant un libellé pour le relier à sa part dans
@@ -1394,20 +1390,20 @@ function monteAides() {
    ETAT.md est l'autre reponse, celle qui compare au lieu d'empiler. */
 function yearControl(action, annees, courante) {
   return `
-    <select data-action-change="${action}" class="annee" title="Année affichée">
+    <select data-action-change="${action}" class="annee" title="${trad('Année affichée')}">
       ${annees.map(y => `<option value="${y}" ${String(y) === String(courante) ? 'selected' : ''}>${y}</option>`).join('')}
     </select>`;
 }
 
 function tile(label, value, pct, color, meta, apercu, arg) {
   const inner = `
-    <span class="t-label">${esc(label)}</span>
+    <span class="t-label">${esc(trad(label))}</span>
     <span class="t-value">${fmtEUR(value)}</span>
     <span class="t-meta">${pct == null ? '' : `<span class="tag">${fmtPct(pct)}</span>`}${escMontant(meta || '')}</span>`;
   if (!apercu) return `<div class="tile" style="--tile-color:${color}">${inner}</div>`;
   return `<button type="button" class="tile tile-link" style="--tile-color:${color}"
             data-action="apercu" data-apercu="${esc(apercu)}"${arg ? ` data-arg="${esc(arg)}"` : ''}
-            title="Voir le détail de ${esc(label)}">${inner}<span class="t-go">⋯</span></button>`;
+            title="${trad('Voir le détail de')} ${esc(trad(label))}">${inner}<span class="t-go">⋯</span></button>`;
 }
 
 /* ------------------------------------------------------------
@@ -1498,10 +1494,8 @@ function viewNotifs() {
          deux gestes au lieu d'un, et qui cache son etat derriere un mot la ou
          une position se lit d'un coup d'oeil. -->
     <div class="card-head"><h2>Notifications</h2>
-      <span class="hint">${n.length ? `${n.length} en attente` : 'rien à signaler'}</span></div>
-    <p class="hint" style="margin:0 0 12px">La cloche de l’en-tête montre les saisies
-      qui restent à faire et les contrôles de cohérence : ce que l’application sait
-      d’incomplet ou de faux. Une famille éteinte ne compte plus dans sa pastille.</p>
+      <span class="hint">${n.length ? `${n.length} ${trad('en attente')}` : trad('rien à signaler')}</span></div>
+    <p class="hint" style="margin:0 0 12px">${trad('La cloche de l’en-tête montre les saisies qui restent à faire et les contrôles de cohérence : ce que l’application sait d’incomplet ou de faux. Une famille éteinte ne compte plus dans sa pastille.')}</p>
     <div class="bascules">
       ${FAMILLES_NOTIF.map(([cle, nom, quoi]) => {
         const actif = reglagesNotifs()[cle];
@@ -1524,49 +1518,41 @@ function viewNotifs() {
          détecte, et personne ne fait ses comptes deux fois par mois. -->
     <div class="modal-champs" style="margin-top:12px">
       <div class="field">
-        <label>Jour du rappel${aide(
-          'Avant ce jour, la cloche ne réclame ni relevé ni dépenses. Utile si tu '
-          + 'fais tes comptes à date fixe : payé le 15, tu ne veux pas d’une '
-          + 'pastille allumée quinze jours pour rien. Les mois, eux, restent '
-          + 'calendaires : ce réglage déplace le rappel, pas le calcul.')}</label>
+        <label>${trad('Jour du rappel')}${aide(trad("Avant ce jour, la cloche ne réclame ni relevé ni dépenses. Utile si tu fais tes comptes à date fixe : payé le 15, tu ne veux pas d’une pastille allumée quinze jours pour rien. Les mois, eux, restent calendaires : ce réglage déplace le rappel, pas le calcul."))}</label>
         <select data-path="meta.jourRappel" data-type="num">
           ${Array.from({ length: 28 }, (_, i) => i + 1).map(j =>
             `<option value="${j}" ${j === jourRappel() ? 'selected' : ''}>${
-              j === 1 ? 'le 1er du mois' : `le ${j} du mois`}</option>`).join('')}
+              j === 1 ? trad('le 1er du mois') : `${trad('le')} ${j} ${trad('du mois')}`}</option>`).join('')}
         </select>
         <!-- 28 au plus, parce que fevrier existe : un jour 30 ne serait jamais
              atteint deux mois par an, et le rappel se tairait sans raison
              lisible. -->
         <span class="hint">${jourRappelAtteint()
-          ? 'Ce jour est passé : les saisies en attente sont réclamées.'
-          : `La cloche attendra le ${jourRappel()} pour réclamer les saisies de ce mois.`}</span>
+          ? trad('Ce jour est passé : les saisies en attente sont réclamées.')
+          : `${trad('La cloche attendra le')} ${jourRappel()} ${trad('pour réclamer les saisies de ce mois.')}`}</span>
       </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Masquées une à une</h2>
-      <span class="hint">par leur croix, dans le panneau</span></div>
+    <div class="card-head"><h2>${trad('Masquées une à une')}</h2>
+      <span class="hint">${trad('par leur croix, dans le panneau')}</span></div>
     ${masquees.length ? `
-      <p class="hint" style="margin:0 0 12px">${masquees.length} notification${
-        masquees.length > 1 ? 's' : ''} ne ${masquees.length > 1 ? 'reviendront' : 'reviendra'}
-        plus. Une alerte masquée reste vraie : elle ne s’affiche plus, elle ne se
-        corrige pas.</p>
-      <button class="btn sm ghost" data-action="rendre-notifs">Tout réafficher</button>`
-      : `<p class="empty">Aucune. La croix d’une ligne du panneau la fait disparaître,
-         et c’est ici qu’on la ramène.</p>`}
+      <p class="hint" style="margin:0 0 12px">${masquees.length} ${masquees.length > 1 ? trad('notifications ne reviendront plus.') : trad('notification ne reviendra plus.')} ${trad('Une alerte masquée reste vraie : elle ne s’affiche plus, elle ne se corrige pas.')}</p>
+      <button class="btn sm ghost" data-action="rendre-notifs">${trad('Tout réafficher')}</button>`
+      : `<p class="empty">${trad('Aucune. La croix d’une ligne du panneau la fait disparaître, et c’est ici qu’on la ramène.')}</p>`}
   </div>
 
   ${n.length ? `
   <div class="card">
-    <div class="card-head"><h2>En attente</h2></div>
+    <div class="card-head"><h2>${trad('En attente')}</h2></div>
     ${n.map(x => `
       <div class="plc-ligne">
         <span class="cpt-nom">${esc(x.title)}<span class="sub">${escMontant(x.detail)}</span></span>
         <button class="btn sm ghost" data-action="goto" data-view="${esc(x.view)}"
                 data-anchor="">Voir</button>
         <button class="btn icon xs" data-action="masquer-notif" data-cle="${esc(x.cle)}"
-                title="Ne plus signaler" aria-label="Ne plus signaler : ${esc(x.title)}">✕</button>
+                title="${trad('Ne plus signaler')}" aria-label="Ne plus signaler : ${esc(x.title)}">✕</button>
       </div>`).join('')}
   </div>` : ''}`;
 }
@@ -1590,9 +1576,9 @@ function viewPerformance() {
   <div class="grid g-4 g-tuiles">
     <button type="button" class="tile tile-link" style="--tile-color:${lat.pnl >= 0 ? 'var(--good)' : 'var(--critical)'}"
             data-action="apercu" data-apercu="perfLatente">
-      <span class="t-label">Plus-value latente</span>
+      <span class="t-label">${trad('Plus-value latente')}</span>
       <span class="t-value ${cls(lat.pnl)}">${fmtSigned(lat.pnl)}</span>
-      <span class="t-meta"><span class="tag">${fmtSignedPct(lat.pct)}</span>pas encore vendue</span>
+      <span class="t-meta"><span class="tag">${fmtSignedPct(lat.pct)}</span>${trad('pas encore vendue')}</span>
       <span class="t-go">⋯</span>
     </button>
     <button type="button" class="tile tile-link" style="--tile-color:${st.realised >= 0 ? 'var(--good)' : 'var(--critical)'}"
@@ -1604,14 +1590,14 @@ function viewPerformance() {
     </button>
     <button type="button" class="tile tile-link" style="--tile-color:${total >= 0 ? 'var(--good)' : 'var(--critical)'}"
             data-action="apercu" data-apercu="perfTotale">
-      <span class="t-label">Résultat total</span>
+      <span class="t-label">${trad('Résultat total')}</span>
       <span class="t-value ${cls(total)}">${fmtSigned(total)}</span>
-      <span class="t-meta">latente + réalisée depuis le début</span>
+      <span class="t-meta">${trad('latente + réalisée depuis le début')}</span>
       <span class="t-go">⋯</span>
     </button>
     <button type="button" class="tile tile-link" style="--tile-color:var(--series-2)"
             data-action="apercu" data-apercu="perfLatente">
-      <span class="t-label">Lignes en gain</span>
+      <span class="t-label">${trad('Lignes en gain')}</span>
       <span class="t-value">${lat.winners} / ${lat.count}</span>
       <span class="t-meta">${tout.count ? `${tout.wins}/${tout.count} ventes gagnantes` : 'aucune vente encore'}</span>
       <span class="t-go">⋯</span>
@@ -1630,20 +1616,20 @@ function viewPerformance() {
        deja par ailleurs. -->
   ${latentSeries().length >= 2 ? `
   <div class="card">
-    <div class="card-head"><h2>Plus-value latente dans le temps</h2>
+    <div class="card-head"><h2>${trad('Plus-value latente dans le temps')}</h2>
       <span class="hint">${latentSeries().length} relevés</span></div>
     <div class="chart" id="perfLatentTemps"></div>
   </div>` : ''}
 
   <div class="grid g-1-2">
     <div class="card">
-      <div class="card-head"><h2>Latente, ligne par ligne</h2>
+      <div class="card-head"><h2>${trad('Latente, ligne par ligne')}</h2>
         <span class="hint">${lat.count} ligne${lat.count > 1 ? 's' : ''}</span></div>
       <div class="chart" id="perfLatente"></div>
       <dl class="kv" style="margin-top:12px">
-        <dt>Valeur du portefeuille</dt><dd>${fmtEUR(lat.value)}</dd>
-        <dt>Prix de revient</dt><dd>${fmtEUR(lat.invested)}</dd>
-        <dt>Écart</dt><dd class="${cls(lat.pnl)}"><b>${fmtSigned(lat.pnl)}</b></dd>
+        <dt>${trad('Valeur du portefeuille')}</dt><dd>${fmtEUR(lat.value)}</dd>
+        <dt>${trad('Prix de revient')}</dt><dd>${fmtEUR(lat.invested)}</dd>
+        <dt>${trad('Écart')}</dt><dd class="${cls(lat.pnl)}"><b>${fmtSigned(lat.pnl)}</b></dd>
         <!-- « Rendement annuel » vivait ici, et il est parti.
 
              Le chiffre n'etait alors ni pondere par le temps, ni par les
@@ -1687,14 +1673,14 @@ function viewPerformance() {
            plus bas, sur la page ou l'on se trouve deja. -->
       ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
         <p class="empty">${tout.count
-          ? `Aucune vente sur cette période. ${tout.count} au total : élargis la plage.`
+          ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
           : 'Aucune vente enregistrée. Le journal, plus bas, porte le bouton pour en saisir une.'}</p>`}
     </div>
   </div>
 
   ${st.count ? `
   <div class="card">
-    <div class="card-head"><h2>Cumul des plus-values encaissées</h2>
+    <div class="card-head"><h2>${trad('Cumul des plus-values encaissées')}</h2>
       <span class="hint">${esc(libellePlage)} · ${st.count} vente${st.count > 1 ? 's' : ''}, dans l'ordre</span></div>
     <div class="chart" id="perfCumul"></div>
   </div>` : ''}
@@ -1849,14 +1835,14 @@ function viewObjective() {
        fenêtre. */
     if (!(num(g.obj) > 0)) return `
   <button type="button" class="card goal card-link goal-vide" data-action="apercu"
-          data-apercu="objectif" title="Fixer un objectif de patrimoine">
+          data-apercu="objectif" title="${trad('Fixer un objectif de patrimoine')}">
     <span>Aucun objectif fixé pour ${esc(an)}</span>
-    <span class="muted">En poser un →</span>
+    <span class="muted">${trad('En poser un →')}</span>
   </button>`;
 
     return `
   <button type="button" class="card goal card-link" data-action="apercu" data-apercu="objectif"
-          title="Modifier l'objectif">
+          title="${trad('Modifier l\'objectif')}">
     <div class="card-head">
       <h2>Objectif à fin ${esc(an)}</h2>
       <span class="hint">${mois
@@ -1886,7 +1872,7 @@ function viewObjective() {
       <span class="muted">${g.remaining >= 0
         ? 'de dépassement'
         : mois
-          ? `restants, soit ${fmtEUR0(-g.remaining / mois)} / mois sur ${mois} mois`
+          ? `restants, soit ${fmtEUR0(-g.remaining / mois)} ${trad('/ mois')} sur ${mois} mois`
           : 'restants avant la fin de l’année'}</span>
     </div>
     <div class="goal-bar"><div class="goal-fill" style="width:${Math.min(100, Math.max(0, g.pct)).toFixed(2)}%"></div></div>
@@ -1971,7 +1957,7 @@ function viewObjective() {
       /* Sa fiche est baseProjection, pas « Patrimoine total » : la barre vaut
          la base qui capitalise, et la fiche qui s'ouvre doit faire exactement
          ce montant, ligne a ligne. L'autre fiche en montrait le quintuple. */
-      { label: 'Ce que tu as déjà', value: g.total - plat, couleur: 'var(--series-3)', apercu: 'baseProjection' },
+      { label: trad('Ce que tu as déjà'), value: g.total - plat, couleur: 'var(--series-3)', apercu: 'baseProjection' },
       /* « net » et non « a plat » : un intitule dit ce qu'il compte, la valeur
          du bien moins le capital restant du. Comment la projection le traite
          est dit deux fois ailleurs, dans l'infobulle de cette ligne et sous la
@@ -1985,22 +1971,22 @@ function viewObjective() {
                                                 : 'Tes biens de valeur, nets')
                : 'Ton immobilier net',
         value: plat, couleur: couleurClasse('immobilier'), apercu: 'immobilierNet',
-        aide: 'Aucun rendement ne lui est appliqué : la projection le porte tel quel' },
-      { label: 'Ce que tu verses', value: verses, couleur: S1(), apercu: 'horizon' },
+        aide: trad('Aucun rendement ne lui est appliqué : la projection le porte tel quel') },
+      { label: trad('Ce que tu verses'), value: verses, couleur: S1(), apercu: 'horizon' },
       /* Le rendement se coupe en deux des que la seconde poche en a un. Tant
          qu'elle est a zero, une ligne « 0 EUR » ne dirait rien : le filtre plus
          bas l'ecarte, et « Ce que le rendement ajoute » reste seul et complet.
          Deux lignes ou une, la somme des parts fait le total. */
       ...(num(s.rateAutres) ? [
-        { label: 'Rendement des actifs de marché', value: num(dernier.gainsMarche),
+        { label: trad('Rendement des actifs de marché'), value: num(dernier.gainsMarche),
           couleur: S2(), apercu: 'horizon' },
         /* « des autres actifs » designait une poche qui n'existe plus : ce gain
            est celui du non cote, les liquidites ne produisant rien. Le nom est
            celui de son reglage, dans « Tes hypotheses ». */
-        { label: 'Rendement du non coté', value: num(dernier.gainsAutres),
+        { label: trad('Rendement du non coté'), value: num(dernier.gainsAutres),
           couleur: couleurClasse('nonCote'), apercu: 'horizon' },
       ] : [
-        { label: 'Ce que le rendement ajoute', value: dernier.gains, couleur: S2(), apercu: 'horizon' },
+        { label: trad('Ce que le rendement ajoute'), value: dernier.gains, couleur: S2(), apercu: 'horizon' },
       ]),
     ].filter(x => Math.abs(num(x.value)) > 0.005)
      .map(x => ({ ...x, pct: dernier.total ? num(x.value) / dernier.total * 100 : 0 }));
@@ -2014,7 +2000,7 @@ function viewObjective() {
          qu'il gouverne, et quitte Trajectoire : un seul réglage, posé avant
          tout ce qu'il modifie. -->
     <div class="card-head">
-      <h2>De quoi sera fait ton patrimoine</h2>
+      <h2>${trad('De quoi sera fait ton patrimoine')}</h2>
       <label class="row" style="gap:8px; font-size:12px; color:var(--text-secondary)">
         Horizon
         ${selecteurHorizon()}
@@ -2026,7 +2012,7 @@ function viewObjective() {
               title="${esc(x.aide || `Voir le détail de ${x.label}`)}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
-          <span class="repart-nom">${esc(x.label)}</span>
+          <span class="repart-nom">${esc(trad(x.label))}</span>
           <b>${fmtEUR(x.value)}</b>
           <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
         </span>
@@ -2053,7 +2039,7 @@ function viewObjective() {
 
   <div class="grid g-1-2">
     <div class="card">
-      <div class="card-head"><h2>Tes hypothèses</h2></div>
+      <div class="card-head"><h2>${trad('Tes hypothèses')}</h2></div>
       <!-- Les cinq reglages et leurs textes d'aide pesaient plus lourd que le
            graphique qu'ils gouvernent. Ils se replient donc, et c'est le resume
            des valeurs qui sert de poignee : les hypotheses restent lisibles
@@ -2068,14 +2054,14 @@ function viewObjective() {
            et chevron a droite. -->
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
-          <span class="pli-valeurs">${fmtEUR0(s.monthly)} / mois · marché ${fmtPct(s.rate, 0)} ·
+          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} · marché ${fmtPct(s.rate, 0)} ·
             non coté ${num(s.rateAutres) ? fmtPct(s.rateAutres, 0) : 'à plat'} ·
             inflation ${fmtPct(s.inflation, 0)}${num(s.target) ? ` · cible ${fmtEUR0(s.target)}` : ''}</span>
           <span class="pli-action">Régler</span>
         </summary>
       <div class="modal-champs" style="margin-top:12px">
         ${champ('Versement mensuel', 'meta.projMonthly', paliers(10000, 50),
-                v => `${fmtEUR0(v)} / mois`,
+                v => `${fmtEUR0(v)} ${trad('/ mois')}`,
                 /* Ou vont ces euros etait une hypothese invisible : ils
                    capitalisent tous au taux des actifs de marche. Elle est
                    porteuse, surtout depuis que la poche « autres » vaut zero par
@@ -2144,7 +2130,7 @@ function viewObjective() {
             + 'livret ou non, y compris le cash déjà chez ton courtier : tant qu’il '
             + 'n’est pas placé, il ne rapporte rien. Elles traversent donc la '
             + 'projection telles quelles, et il n’y a rien à régler.')}</label>
-          <p class="valeur-figee">aucun, portées à plat</p>
+          <p class="valeur-figee">${trad('aucun, portées à plat')}</p>
         </div>
         ${champ('Inflation', 'meta.projInflation', paliers(20, 1),
                 v => `${fmtPct(v, 0)} par an`,
@@ -2159,7 +2145,7 @@ function viewObjective() {
            deja repris, et cliquer ne changeait rien a l'ecran. -->
       ${num(Store.state.meta.projMonthly) ? `
       <button class="btn sm ghost" data-action="proj-use-budget" style="margin-top:12px">
-        Reprendre ${fmtEUR0(suggestedMonthly())} / mois depuis le budget</button>` : ''}
+        Reprendre ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} depuis le budget</button>` : ''}
       </details>
 
       <!-- Les notes restent hors du depliant : la faisabilite de la cible et
@@ -2225,7 +2211,7 @@ function viewObjective() {
              place de nommer chaque poche au lieu de dire « hors immobilier »,
              qui annonçait ce que le taux exclut plutot que ce qu'il touche. -->
         <span class="hint">Sur ${projHorizon} ans, jusqu’en ${dernier.year} · ${
-          fmtEUR0(s.monthly)} / mois</span>
+          fmtEUR0(s.monthly)} ${trad('/ mois')}</span>
       </div>
       <div class="chart" id="chartProjection"></div>
       <!-- « Ce que tu verses » nommait une bande qui vaut le capital de depart
@@ -2234,8 +2220,8 @@ function viewObjective() {
            deja » de « ce que tu verses ». Deux vocabulaires pour une seule
            page, et le plus vague etait sur le graphique. -->
       <div class="legend">
-        <span><i style="background:${S1()}"></i>Ce que tu as déjà et ce que tu verses</span>
-        <span><i style="background:${S2()}"></i>Ce que le rendement ajoute</span>
+        <span><i style="background:${S1()}"></i>${trad('Ce que tu as déjà et ce que tu verses')}</span>
+        <span><i style="background:${S2()}"></i>${trad('Ce que le rendement ajoute')}</span>
         <!-- La bande etait expliquee, mais dans le paragraphe en petits
              caracteres sous les taux : personne ne l'y lisait, et deux courbes
              pointillees sans nom ressemblent a un defaut d'affichage. Sa place
@@ -2316,11 +2302,11 @@ function viewObjective() {
 
   <div class="card">
     <div class="card-head">
-      <h2>Par horizon</h2>
+      <h2>${trad('Par horizon')}</h2>
       <!-- Meme raison que sur Trajectoire : avec deux taux, l'en-tete ne peut
            plus les annoncer tous les deux sans deborder. Le tableau porte les
            memes hypotheses que la courbe juste au-dessus, qui les detaille. -->
-      <span class="hint">${fmtEUR0(s.monthly)} / mois à ${fmtPct(s.rate)} par an${
+      <span class="hint">${fmtEUR0(s.monthly)} ${trad('/ mois')} à ${fmtPct(s.rate)} par an${
         num(s.rateAutres) ? ', et le détail au-dessus' : ''}</span>
     </div>
     <!-- Six colonnes sous 768 px, c'est la regle du projet qui casse. Le
@@ -2335,13 +2321,13 @@ function viewObjective() {
         <thead><tr>
           <th>Horizon</th>
           <th class="large-seulement">Apports</th>
-          <th class="large-seulement">Gains cumulés</th>
+          <th class="large-seulement">${trad('Gains cumulés')}</th>
           <!-- « Après inflation », comme le pied de la premiere carte et la
                fiche horizon : un meme montant porte le meme nom partout. Le
                nom precedent, « En euros d'aujourd'hui », debordait de 45 px a
                375 px et imposait un en-tete sur deux lignes ; il reste dans
                les textes d'aide, ou il explique ce que celui-ci veut dire. -->
-          <th>Patrimoine</th><th>Après inflation</th>
+          <th>Patrimoine</th><th>${trad('Après inflation')}</th>
         </tr></thead>
         <!-- La ligne de l'horizon retenu se nomme. Sans elle, changer la durée
              dans le pied du tableau faisait bouger le graphique et le total de
@@ -2370,7 +2356,7 @@ function viewObjective() {
         <tr class="ligne-libre">
           <td colspan="5">
             <label class="row" style="gap:8px">
-              <span class="hint">Voir un autre horizon</span>
+              <span class="hint">${trad('Voir un autre horizon')}</span>
               ${selecteurHorizon()}
             </label>
           </td></tr></tbody>
@@ -2409,7 +2395,7 @@ function mountObjective() {
     /* « Versé » mentait dans la bulle : la bande contient aussi le capital de
        depart et l'immobilier. Meme rigueur que la legende sous la courbe. */
     series: [
-      { key: 'contributed', label: 'Départ et versements', color: S1() },
+      { key: 'contributed', label: trad('Départ et versements'), color: S1() },
       { key: 'gains', label: 'Rendement', color: S2() },
     ],
     /*    La cible long terme ne vivait que dans une note en texte ; tracee, on voit
@@ -2480,27 +2466,27 @@ const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'CAD', 'JPY'];
    coté à plusieurs endroits : il est passé tel quel à la passerelle, donc
    ajouter une place ici suffit — rien à changer côté serveur. */
 const EXCHANGES = [
-  ['Par défaut', [
-    ['auto', 'Automatique (place de référence du titre)'],
+  [trad('Par défaut'), [
+    ['auto', trad('Automatique (place de référence du titre)')],
   ]],
-  ['Europe', [
-    ['.PA', 'Euronext Paris'], ['.AS', 'Amsterdam'], ['.BR', 'Bruxelles'], ['.LS', 'Lisbonne'],
-    ['.DE', 'Xetra'], ['.F', 'Francfort'], ['.MU', 'Munich'], ['.SG', 'Stuttgart'], ['.BE', 'Berlin'],
-    ['.MI', 'Milan'], ['.MC', 'Madrid'], ['.SW', 'SIX Suisse'], ['.VI', 'Vienne'],
-    ['.L', 'Londres (LSE)'], ['.IL', 'Londres (cotations en devises)'], ['.IR', 'Dublin'],
-    ['.ST', 'Stockholm'], ['.OL', 'Oslo'], ['.CO', 'Copenhague'], ['.HE', 'Helsinki'],
-    ['.WA', 'Varsovie'], ['.PR', 'Prague'], ['.AT', 'Athènes'], ['.IS', 'Istanbul'],
+  [trad('Europe'), [
+    ['.PA', 'Euronext Paris'], ['.AS', 'Amsterdam'], ['.BR', trad('Bruxelles')], ['.LS', trad('Lisbonne')],
+    ['.DE', 'Xetra'], ['.F', trad('Francfort')], ['.MU', 'Munich'], ['.SG', 'Stuttgart'], ['.BE', 'Berlin'],
+    ['.MI', 'Milan'], ['.MC', 'Madrid'], ['.SW', trad('SIX Suisse')], ['.VI', trad('Vienne')],
+    ['.L', trad('Londres (LSE)')], ['.IL', trad('Londres (cotations en devises)')], ['.IR', 'Dublin'],
+    ['.ST', 'Stockholm'], ['.OL', 'Oslo'], ['.CO', trad('Copenhague')], ['.HE', 'Helsinki'],
+    ['.WA', trad('Varsovie')], ['.PR', 'Prague'], ['.AT', trad('Athènes')], ['.IS', 'Istanbul'],
   ]],
-  ['Amériques', [
-    ['', 'États-Unis (NYSE / Nasdaq)'], ['.TO', 'Toronto'], ['.V', 'TSX Venture'],
+  [trad('Amériques'), [
+    ['', trad('États-Unis (NYSE / Nasdaq)')], ['.TO', 'Toronto'], ['.V', 'TSX Venture'],
     ['.NE', 'Cboe Canada'], ['.MX', 'Mexico'], ['.SA', 'São Paulo'],
   ]],
-  ['Asie · Pacifique', [
+  [trad('Asie · Pacifique'), [
     ['.T', 'Tokyo'], ['.HK', 'Hong Kong'], ['.SS', 'Shanghai'], ['.SZ', 'Shenzhen'],
-    ['.KS', 'Séoul (KOSPI)'], ['.TW', 'Taïwan'], ['.NS', 'Inde (NSE)'], ['.BO', 'Inde (BSE)'],
-    ['.SI', 'Singapour'], ['.AX', 'Australie'], ['.NZ', 'Nouvelle-Zélande'],
+    ['.KS', trad('Séoul (KOSPI)')], ['.TW', trad('Taïwan')], ['.NS', trad('Inde (NSE)')], ['.BO', trad('Inde (BSE)')],
+    ['.SI', trad('Singapour')], ['.AX', trad('Australie')], ['.NZ', trad('Nouvelle-Zélande')],
   ]],
-  ['Afrique · Moyen-Orient', [
+  [trad('Afrique · Moyen-Orient'), [
     ['.JO', 'Johannesburg'], ['.TA', 'Tel Aviv'],
   ]],
 ];
@@ -2654,10 +2640,10 @@ function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, 
    donc dans la zone cliquable. */
 function sortableTh(key, label, extraClass = '', explication = '', suffixe = '') {
   const on = posSort && posSort.key === key;
-  const sens = !on ? 'décroissant' : posSort.dir === 'desc' ? 'croissant' : 'aucun tri';
+  const sens = !on ? trad('décroissant') : posSort.dir === 'desc' ? trad('croissant') : trad('aucun tri');
   return `<th class="sortable ${on ? posSort.dir : ''} ${extraClass}">`
        + `<button type="button" class="th-tri" data-action="sort-positions" data-key="${key}"`
-       + ` title="Trier par ${esc(label)}, ordre ${sens}">${esc(label)}${suffixe}</button>`
+       + ` title="${trad('Trier par')} ${esc(trad(label))}, ${trad('ordre')} ${sens}">${esc(trad(label))}${suffixe}</button>`
        + (explication ? aide(explication) : '')
        + `</th>`;
 }
@@ -2727,12 +2713,12 @@ function viewPositions() {
     return `<tr>
       <td class="name sticky-col"><button type="button" class="mois-lien"
             data-action="open-position" data-i="${i}"
-            title="Ouvrir la fiche : quantité, prix de revient, ISIN, compte…"
+            title="${trad('Ouvrir la fiche : quantité, prix de revient, ISIN, compte…')}"
             >${esc(p.name || 'Sans nom')}<span class="sub">${
               esc([ASSET_CLASSES[assetClassDe(p)], ROLES[roleDe(p)],
                    ACC[p.account]?.short || ''].filter(Boolean).join(' · '))
             }</span></button></td>
-      <td class="muted">${p.qty != null && p.qty !== '' ? num(p.qty).toLocaleString('fr-FR') : ''}</td>
+      <td class="muted">${p.qty != null && p.qty !== '' ? num(p.qty).toLocaleString(locale()) : ''}</td>
       <td class="muted">${num(p.buyPrice) ? fmtCur(p.buyPrice, dev(p)) : ''}</td>
       <td class="muted">${num(p.price) ? fmtCur(p.price, dev(p)) : ''}</td>
       <td>${p.manual
@@ -2744,7 +2730,7 @@ function viewPositions() {
       <td class="${cls(pe)}">${fmtSigned(pe)}</td>
       <td class="${cls(pp)}">${arrow(pp)} ${fmtSignedPct(pp)}</td>
       <td class="muted">${fmtPct(stockBase ? v / stockBase * 100 : 0)}</td>
-      <td><button class="btn icon" data-action="del-position" data-i="${i}" title="Supprimer cette ligne">✕</button></td>
+      <td><button class="btn icon" data-action="del-position" data-i="${i}" title="${trad('Supprimer cette ligne')}">✕</button></td>
     </tr>`;
   }).join('');
 
@@ -2760,16 +2746,16 @@ function viewPositions() {
   if (!Store.state.positions.length) {
     return `
   <div class="card">
-    <div class="card-head"><h2>Aucun titre coté</h2>
-      <span class="hint">actions, ETF, obligations, crypto</span></div>
+    <div class="card-head"><h2>${trad('Aucun titre coté')}</h2>
+      <span class="hint">${trad('actions, ETF, obligations, crypto')}</span></div>
     <p class="empty" style="margin:0 0 12px">Cette page suit les placements dont le
       cours arrive tout seul, du marché. Tes placements non cotés, ton immobilier et
       tes liquidités se déclarent dans Actifs, où c'est toi qui en donnes la valeur :
       ils comptent dans ton patrimoine, ta répartition et ton autonomie exactement
       comme le reste.</p>
     <div class="row" style="gap:8px">
-      <button class="btn" data-action="goto" data-view="accounts" data-anchor="">Aller à Actifs</button>
-      <button class="btn ghost" data-action="ajouter-ligne">+ Un titre coté</button>
+      <button class="btn" data-action="goto" data-view="accounts" data-anchor="">${trad('Aller à Actifs')}</button>
+      <button class="btn ghost" data-action="ajouter-ligne">${trad('+ Un titre coté')}</button>
     </div>
   </div>`;
   }
@@ -2782,7 +2768,7 @@ function viewPositions() {
          et rien ne disait qu'on pouvait cliquer dessus pour relancer une
          récupération qui a échoué. L'icône tourne pendant l'appel. -->
     <button class="etat-cours" id="btnQuotes" type="button" data-action="refresh-quotes"
-            title="Récupérer les cours de bourse"><i class="pt"></i><span id="coursQuand">Cours</span><span
+            title="${trad('Récupérer les cours de bourse')}"><i class="pt"></i><span id="coursQuand">Cours</span><span
             class="etat-maj" aria-hidden="true">↻</span></button>
   </div>
 
@@ -2794,14 +2780,14 @@ function viewPositions() {
        seule s'affiche a la fois, ce qui garde le ruban court — vingt tuiles a
        la file feraient un marathon de pouce a 375 px. -->
   <div class="reperes-familles" id="reperesFamilles" role="tablist"
-       aria-label="Familles de repères" hidden></div>
+       aria-label="${trad('Familles de repères')}" hidden></div>
   <div class="reperes" id="reperes" aria-label="Marchés" hidden></div>
 
   ${(() => {
     const j = dayPerformance();
     if (!j.lignes.length) {
       return `<div class="card">
-        <div class="card-head"><h2>Aujourd'hui</h2></div>
+        <div class="card-head"><h2>${trad('Aujourd\'hui')}</h2></div>
         <p class="empty">Pas encore de clôture de la veille en mémoire.
           Actualise les cours pour que la performance du jour apparaisse.</p>
       </div>`;
@@ -2810,7 +2796,7 @@ function viewPositions() {
     return `
     <div class="card jour" data-anchor="jour">
       <div class="card-head">
-        <h2>Aujourd'hui</h2>
+        <h2>${trad('Aujourd\'hui')}</h2>
         <!-- L'anciennete des cours est desormais dite une fois, en haut de
              page ; la repeter ici donnait « cours de il y a 1 min ».
 
@@ -2829,9 +2815,9 @@ function viewPositions() {
    titre qui n'a pas cote ne dit rien, il ne dit pas zero.-->
       ${j.toutHorsSeance ? `
       <div class="jour-total">
-        <span class="jour-eur muted">hors séance</span>
-        <span class="jour-note">aucune de tes lignes n'a coté depuis minuit${
-          j.asOfMarche ? ` : le cours le plus récent date ${fmtCoursQuand(j.asOfMarche)}` : ''}</span>
+        <span class="jour-eur muted">${trad('hors séance')}</span>
+        <span class="jour-note">${trad('aucune de tes lignes n’a coté depuis minuit')}${
+          j.asOfMarche ? ` : ${trad('le cours le plus récent date')} ${fmtCoursQuand(j.asOfMarche)}` : ''}</span>
       </div>` : `
       <div class="jour-total ${positif ? 'up' : 'down'}">
         <span class="jour-eur">${fmtSigned(j.eur)}</span>
@@ -2988,7 +2974,7 @@ function viewPositions() {
               title="${esc(x.aide || `Voir le détail de ${x.label}`)}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
-          <span class="repart-nom">${esc(x.label)}</span>
+          <span class="repart-nom">${esc(trad(x.label))}</span>
           <b>${fmtEUR(x.value)}</b>
           <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
         </span>
@@ -3004,12 +2990,12 @@ function viewPositions() {
          leur pourcentage se lit sur cette même somme. Un total sous ses parts
          qu'on vient de lire n'apprend rien. -->
     <dl class="kv repart-pied">
-      <dt>Prix de revient des titres</dt>
+      <dt>${trad('Prix de revient des titres')}</dt>
         <dd><button type="button" class="mois-lien" data-action="apercu" data-apercu="investiTitres"
-                    title="Voir le prix de revient ligne par ligne">${fmtEUR(pnl.invested)}</button></dd>
-      <dt><b>Plus / moins-value latente</b></dt>
+                    title="${trad('Voir le prix de revient ligne par ligne')}">${fmtEUR(pnl.invested)}</button></dd>
+      <dt><b>${trad('Plus / moins-value latente')}</b></dt>
         <dd><button type="button" class="mois-lien ${cls(pnl.pnl)}" data-action="apercu" data-apercu="pnlLatent"
-                    title="Voir le détail par ligne"><b>${fmtSigned(pnl.pnl)}</b>
+                    title="${trad('Voir le détail par ligne')}"><b>${fmtSigned(pnl.pnl)}</b>
               <span class="muted">·</span> ${fmtSignedPct(pnl.pct)}</button></dd>
     </dl>
   </div>`;
@@ -3036,19 +3022,19 @@ function viewPositions() {
 
   <div class="card" data-anchor="titres">
     <div class="card-head">
-      <h2>Lignes de titres</h2>
+      <h2>${trad('Lignes de titres')}</h2>
       <!-- L'export vit dans Données, avec les dix autres feuilles et les
            sauvegardes : deux boutons d'export à deux endroits obligeaient à
            se demander lequel donne quoi. -->
       <div class="row">
         <button class="btn sm ghost" data-action="sell-position"
                 ${ps.length ? '' : 'disabled'}
-                title="Enregistrer une vente et sa plus-value">− Vendre</button>
-        <button class="btn sm" data-action="ajouter-ligne">+ Ajouter une ligne</button>
+                title="${trad('Enregistrer une vente et sa plus-value')}">− Vendre</button>
+        <button class="btn sm" data-action="ajouter-ligne">${trad('+ Ajouter une ligne')}</button>
       </div>
       <div class="row" style="margin:8px 0 0">
-        <div class="segmented" role="group" aria-label="Filtrer par rôle">
-          ${[['tous', 'Tous'], ['core', 'Core'], ['satellite', 'Satellite']].map(([v, l]) =>
+        <div class="segmented" role="group" aria-label="${trad('Filtrer par rôle')}">
+          ${[['tous', trad('Tous')], ['core', 'Core'], ['satellite', 'Satellite']].map(([v, l]) =>
             `<button type="button" data-action="filtrer-role" data-role="${v}"
                      class="${posRole === v ? 'on' : ''}" aria-pressed="${posRole === v}">${l}</button>`).join('')}
         </div>
@@ -3060,8 +3046,8 @@ function viewPositions() {
           const ids = [...new Set(Store.state.positions.map(p => p.account))];
           if (ids.length < 2) return '';
           return `<select data-action-change="filtrer-compte-titres" class="annee"
-                          title="Ne montrer que les lignes d’un compte">
-            <option value="tous" ${posCompte === 'tous' ? 'selected' : ''}>Tous les comptes</option>
+                          title="${trad('Ne montrer que les lignes d’un compte')}">
+            <option value="tous" ${posCompte === 'tous' ? 'selected' : ''}>${trad('Tous les comptes')}</option>
             ${ids.map(id => `<option value="${esc(id)}" ${posCompte === id ? 'selected' : ''}>${
               esc(ACC[id]?.label || ACC[id]?.short || id)}</option>`).join('')}
           </select>`;
@@ -3071,8 +3057,7 @@ function viewPositions() {
       </div>
     </div>
     <div class="row" style="margin:-4px 0 12px">
-      <span class="hint">Une ligne s’ouvre au doigt ou au clic : sa fiche porte la quantité,
-        le prix de revient et le reste.</span>
+      <span class="hint">${trad('Une ligne s’ouvre au doigt ou au clic : sa fiche porte la quantité, le prix de revient et le reste.')}</span>
     </div>
     <!-- Telephone : une ligne par titre, tout le reste dans la fiche. -->
     <div class="liste-mobile">
@@ -3084,7 +3069,7 @@ function viewPositions() {
           sous: `${ASSET_CLASSES[assetClassDe(p)]} · ${ROLES[roleDe(p)]} · ${ACC[p.account]?.short || ''}`,
           valeur: fmtEUR(v), second: fmtSignedPct(pp, 1), classeSecond: cls(pp),
         });
-      }).join('') || '<p class="empty">Aucune ligne.</p>'}
+      }).join('') || `<p class="empty">${trad('Aucune ligne.')}</p>`}
     </div>
     <div class="table-wrap large-seulement">
       <table class="editable">
@@ -3193,7 +3178,7 @@ function salesCard() {
   return `
   <div class="card" data-anchor="ventes">
     <div class="card-head">
-      <h2>Journal des ventes</h2>
+      <h2>${trad('Journal des ventes')}</h2>
       ${toutes.length ? `<span class="hint">${st.count} vente${st.count > 1 ? 's' : ''}${
         an === 'all' ? '' : ` en ${an}`} sur ${toutes.length}</span>` : ''}
       <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
@@ -3204,7 +3189,7 @@ function salesCard() {
            patrimoine. C'est le chemin pour un PEA cloture, sans avoir a
            recreer le compte, la ligne, vendre, puis archiver. -->
       <button class="btn sm ghost" data-action="declarer-vente"
-              title="Noter une vente d'avant l'application, pour mémoire : rien d'autre ne bouge">+ Vente passée</button>
+              title="${trad('Noter une vente d\'avant l\'application, pour mémoire : rien d\'autre ne bouge')}">${trad('+ Vente passée')}</button>
     </div>
     ${toutes.length && annees.length > 1
       ? `<div class="row" style="margin:0 0 12px">${yearControl('sales-year', annees, an)}</div>` : ''}
@@ -3215,7 +3200,7 @@ function salesCard() {
       ${tile('Produit des ventes', st.gross, null, 'var(--series-1)', `${st.count} vente${st.count > 1 ? 's' : ''}`, 'ventesRealisees')}
       ${tile('Prix de revient vendu', st.invested, null, 'var(--series-7)', 'Coût des titres cédés')}
       <div class="tile" style="--tile-color:var(--series-2)">
-        <span class="t-label">Ventes gagnantes</span>
+        <span class="t-label">${trad('Ventes gagnantes')}</span>
         <span class="t-value">${st.wins} / ${st.count}</span>
         <span class="t-meta">${st.count ? fmtPct(st.wins / st.count * 100, 0) : ''} de réussite</span>
       </div>
@@ -3234,7 +3219,7 @@ function salesCard() {
       <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Date</th><th>Ligne</th><th>Qté</th>
+          <th>Date</th><th>${trad('Ligne')}</th><th>${trad('Qté')}</th>
           <th>Prix vente <span class="u">dev.</span></th><th>Prix revient <span class="u">dev.</span></th>
           <th>Encaissé <span class="u">€</span></th><th>Résultat <span class="u">€</span></th>
           <th>%</th><th>Note</th><th></th>
@@ -3289,10 +3274,10 @@ function salesCard() {
    seances etendues gardent le soleil, en ambre : ca cote, mais hors de la
    seance principale. */
 const GLYPHES_SEANCE = {
-  open:  { icone: 'soleil', titre: 'Marché ouvert' },
+  open:  { icone: 'soleil', titre: trad('Marché ouvert') },
   pre:   { icone: 'soleil', titre: 'Pré-ouverture' },
-  post:  { icone: 'soleil', titre: 'Après clôture' },
-  close: { icone: 'lune',   titre: 'Marché fermé · dernier cours de clôture' },
+  post:  { icone: 'soleil', titre: trad('Après clôture') },
+  close: { icone: 'lune',   titre: trad('Marché fermé · dernier cours de clôture') },
 };
 function glypheSeance(etat) {
   const g = etat && GLYPHES_SEANCE[etat.cle];
@@ -3388,7 +3373,7 @@ async function mountReperes() {
   const utiles = lignes.filter(l => l.ok);
   if (!utiles.length) { box.hidden = true; return; }
   REPERES_AFFICHES = utiles;
-  const nb = (v, dec) => new Intl.NumberFormat('fr-FR',
+  const nb = (v, dec) => new Intl.NumberFormat(locale(),
     { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(v);
   box.innerHTML = utiles.map(l => `
     <button type="button" class="repere" data-action="apercu"
@@ -3403,7 +3388,7 @@ async function mountReperes() {
            quatre-vingt-dix pixels : la date exacte du cours n'y tient pas, elle
            est dans l'infobulle et dans la fiche que la tuile ouvre. -->
       <span class="rp-var ${l.pct == null ? 'muted' : cls(l.pct)}">${
-        l.pct == null ? 'hors séance' : fmtSignedPct(l.pct, 2)}</span>
+        l.pct == null ? trad('hors séance') : fmtSignedPct(l.pct, 2)}</span>
     </button>`).join('');
   box.hidden = false;
   /* La classe est retiree une fois l'animation finie : la laisser ferait
@@ -3477,7 +3462,7 @@ function fmtWhen(iso) {
   if (mins < 1) return "à l'instant";
   if (mins < 60) return `il y a ${mins} min`;
   if (mins < 1440) return `il y a ${Math.round(mins / 60)} h`;
-  return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  return d.toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
 }
 
 /* --- pastille d'etat des cours, dans la barre du haut ---
@@ -3554,8 +3539,8 @@ function majEtatCours(etat) {
   const ferme = !!j.toutHorsSeance;
   const partiel = !ferme && j.horsSeance > 0;
   if (partiel) { btn.classList.remove('frais'); btn.classList.add('tiede'); }
-  quand.textContent = ferme ? 'hors séance'
-                    : partiel ? `${j.horsSeance} hors séance`
+  quand.textContent = ferme ? trad('hors séance')
+                    : partiel ? `${j.horsSeance} ${trad('hors séance')}`
                     : marche ? fmtWhen(new Date(marche * 1000))
                     : last ? fmtWhen(last) : 'Cours';
   /* Les deux heures dans l'infobulle, parce que leur ecart est justement ce
@@ -3576,26 +3561,26 @@ function symbolSearchCard() {
   const on = Quotes.isOnline();
   return `
     <div class="card">
-      <div class="card-head"><h2>Ajouter une ligne</h2>
-        <span class="hint">Cherche, puis « ➕ Nouvelle ligne »</span></div>
+      <div class="card-head"><h2>${trad('Ajouter une ligne')}</h2>
+        <span class="hint">${trad('Cherche, puis « ➕ Nouvelle ligne »')}</span></div>
       <!-- Le recours, et pas l'inverse. Ce formulaire etait le chemin principal,
            offert par le bouton de l'en-tete du tableau, alors qu'il fait taper a
            la main ce que la recherche remplit seule. Il garde sa raison d'etre :
            un titre sans ISIN, ou cote nulle part, n'a pas d'autre porte. -->
       <p class="small muted" style="margin:0 0 12px">
-        Pas d'ISIN, ou un titre coté nulle part ?
-        <button class="lien-nu" data-action="add-position">Saisir la ligne à la main</button>
+        ${trad('Pas d’ISIN, ou un titre coté nulle part ?')}
+        <button class="lien-nu" data-action="add-position">${trad('Saisir la ligne à la main')}</button>
       </p>
       <details class="pli-reglages" id="pliAjout" ${outilsAjoutOuvert ? 'open' : ''}>
         <summary>
-          <span class="pli-valeurs">ISIN ou nom du titre, la fiche se remplit seule</span>
+          <span class="pli-valeurs">${trad('ISIN ou nom du titre, la fiche se remplit seule')}</span>
           <span class="pli-action">Chercher</span>
         </summary>
       <div class="barre-recherche" style="margin-top:12px">
-        <input id="symQuery" placeholder="ISIN ou nom, ex. IE000OJ5TQP4" style="text-align:left">
+        <input id="symQuery" placeholder="${trad('ISIN ou nom, ex. IE000OJ5TQP4')}" style="text-align:left">
         <button class="btn sm" id="symSearch" ${on === false ? 'disabled' : ''}>Chercher</button>
         <select data-path="meta.preferredExchange"
-                title="Place privilégiée quand un ISIN est coté sur plusieurs marchés">
+                title="${trad('Place privilégiée quand un ISIN est coté sur plusieurs marchés')}">
           ${(() => {
             const choisi = Store.state.meta.preferredExchange ?? '.PA';
             return EXCHANGES.map(([region, places]) => `<optgroup label="${esc(region)}">${
@@ -3609,10 +3594,8 @@ function symbolSearchCard() {
            pourquoi, et c'est une limite technique qui interesse le jour ou l'on
            se demande pourquoi le champ ISIN est reste vide. -->
       <p class="small muted" style="margin:8px 0 0">
-        <b>Colle plutôt l'ISIN de ton relevé</b> : la ligne se remplit alors
-        entièrement.${aide('Une recherche par nom donne le nom, le symbole, la devise '
-        + 'et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir '
-        + 'd’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout.')}
+        <b>${trad('Colle plutôt l\'ISIN de ton relevé')}</b> : la ligne se remplit alors
+        entièrement.${aide(trad("Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout."))}
       </p>
       <div id="symResults" class="small" style="margin-top:12px"></div>
       </details>
@@ -3692,25 +3675,25 @@ function mountSymbolSearch() {
             const cat = classeDuType(sel.dataset.type);
             const v = await askForm({
               titre: sel.dataset.nom || sel.dataset.symbol,
-              sous: 'Où ranger cette ligne ?',
+              sous: trad('Où ranger cette ligne ?'),
               ok: 'Créer la ligne',
               lie: { de: 'assetClass', vers: 'account', options: comptesPourListe,
                      vide: 'aucun compte ne peut porter cette classe' },
               champs: [
-                { cle: 'assetClass', label: 'Classe d’actif', type: 'liste',
+                { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
                   options: OPTIONS_CLASSE, valeur: cat,
                   aide: sel.dataset.type ? `déduite de « ${sel.dataset.type} »` : '' },
                 { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE,
-                  valeur: 'satellite', aide: 'coeur de portefeuille ou pari satellite' },
+                  valeur: 'satellite', aide: trad('coeur de portefeuille ou pari satellite') },
                 { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
-                  valeur: defaultHoldingAccount(), aide: 'limité aux comptes compatibles' },
+                  valeur: defaultHoldingAccount(), aide: trad('limité aux comptes compatibles') },
                 /* Proposee au jour, parce qu'on cree une ligne le jour ou l'on
                    achete — et changeable, parce qu'on la cree aussi en
                    installant l'application sur un portefeuille deja constitue.
                    Le champ est pose ici plutot que laisse a la fiche : deux
                    chiffres en dependent, et l'un d'eux se trompe le jour meme
                    si personne ne repond. */
-                { cle: 'dateAchat', label: 'Date d’achat', type: 'date', valeur: todayISO(),
+                { cle: 'dateAchat', label: trad('Date d’achat'), type: 'date', valeur: todayISO(),
                   aide: DATE_ACHAT_AIDE },
               ],
             });
@@ -3778,7 +3761,7 @@ function pochesPatrimoine() {
                     « À investir » est déjà le nom de cette poche ailleurs
                     dans la page — même mot, même argent. */
                  note: s.key === 'cash' && attente > 0.005
-                   ? `dont ${fmtEUR0(attente)} à investir` : '',
+                   ? `${trad('dont')} ${fmtEUR0(attente)} ${trad('à investir')}` : '',
                  value: num(t[s.key]), pct: t.brut ? num(t[s.key]) / t.brut * 100 : 0 }));
 }
 
@@ -3885,14 +3868,8 @@ function viewAllocation() {
    pas, il aurait suffi d'un montant plus long. (Aucun guillemet oblique ici :
    ce commentaire vit dans un litteral de gabarit, un backtick y fermerait la
    chaine.)-->
-  <p class="perimetre perimetre-tete">Ici, <b>tout est compté</b> :
-    ${fmtEUR0(t.brut)}, <span class="sans-veuve">non coté compris${aide(
-      'Trois bases sur cette page, et c’est normal : elles répondent à trois '
-      + 'questions. « Tes avoirs » est tout ce que tu possèdes. « Patrimoine net » '
-      + 'retire tes crédits. « Ce qui est placé » écarte les liquidités, parce '
-      + 'qu’une répartition par enveloppe ne dit rien de l’argent qui dort sur un '
-      + 'compte courant. La mention grise en tête de chaque carte donne la sienne, '
-      + 'avec son montant.')}.</span></p>
+  <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${trad('tout est compté')}</b> :
+    ${fmtEUR0(t.brut)}, <span class="sans-veuve">${trad('non coté compris')}${aide(trad("Trois bases sur cette page, et c’est normal : elles répondent à trois questions. « Tes avoirs » est tout ce que tu possèdes. « Patrimoine net » retire tes crédits. « Ce qui est placé » écarte les liquidités, parce qu’une répartition par enveloppe ne dit rien de l’argent qui dort sur un compte courant. La mention grise en tête de chaque carte donne la sienne, avec son montant."))}.</span></p>
 
   <div class="card repart">
     ${disponibilite.map(x => `
@@ -3901,18 +3878,18 @@ function viewAllocation() {
               title="Voir le détail de ${esc(x.label)}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
-          <span class="repart-nom">${esc(x.label)}</span>
+          <span class="repart-nom">${esc(trad(x.label))}</span>
           <b>${fmtEUR(x.value)}</b>
           <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
         </span>
         <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
       </button>`).join('')}
     <dl class="kv repart-pied">
-      <dt>${BASES.avoirs.nom}<span class="sub">la base des pourcentages ci-dessus</span></dt>
+      <dt>${BASES.avoirs.nom}<span class="sub">${trad('la base des pourcentages ci-dessus')}</span></dt>
         <dd>${fmtEUR(t.brut)}</dd>
-      ${t.dettes ? `<dt>Crédits en cours${aide('Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas.')}</dt>
+      ${t.dettes ? `<dt>Crédits en cours${aide(trad("Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas."))}</dt>
         <dd class="dette">−${fmtEUR(t.dettes)}</dd>
-        <dt><b>Patrimoine net</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>` : ''}
+        <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>` : ''}
     </dl>
   </div>
 
@@ -3924,24 +3901,24 @@ function viewAllocation() {
     <!-- Le format vient de « Core et satellites », qui l'avait seul : la base
          ET son montant. Une mention sans chiffre laissait encore chercher
          lequel des cinq totaux de la page servait de denominateur. -->
-    <div class="card-head"><h2>Allocation par actif</h2>
+    <div class="card-head"><h2>${trad('Allocation par actif')}</h2>
       <span class="hint">${mentionBase(BASES.net, t.net)}</span></div>
     <div class="chart" id="aAsset"></div>
   </div>
 
   <div class="grid g-2">
     <div class="card">
-      <div class="card-head"><h2>Répartition</h2>
+      <div class="card-head"><h2>${trad('Répartition')}</h2>
         <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
       <div class="chart" id="aMacro"></div>
       ${tbl(poches, BASES.avoirs.nom, t.brut)}
       ${t.dettes ? `<dl class="kv" style="margin-top:8px">
-        <dt>Crédits en cours</dt><dd class="dette">−${fmtEUR(t.dettes)}</dd>
-        <dt><b>Patrimoine net</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>
+        <dt>${trad('Crédits en cours')}</dt><dd class="dette">−${fmtEUR(t.dettes)}</dd>
+        <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>
       </dl>` : ''}
     </div>
     <div class="card">
-      <div class="card-head"><h2>Type de compte</h2>
+      <div class="card-head"><h2>${trad('Type de compte')}</h2>
         <span class="hint">${mentionBase(BASES.place, byType.reduce((s, i) => s + i.value, 0))}</span></div>
       <div class="chart" id="aType"></div>
       ${tbl(byType, BASES.place.nom, byType.reduce((s, i) => s + i.value, 0))}
@@ -3961,7 +3938,7 @@ function viewAllocation() {
        reviendront — les données du modèle sont intactes. -->
 
   <div class="card">
-    <div class="card-head"><h2>Comptes & enveloppes</h2>
+    <div class="card-head"><h2>${trad('Comptes & enveloppes')}</h2>
       <span class="hint">${mentionBase(BASES.place, t.invested)}</span></div>
     <div class="chart" id="aAcct"></div>
   </div>`;
@@ -3972,7 +3949,7 @@ function mountAllocation() {
   Charts.rankedBars($('#aAcct'), { items: allocationByAccount() });
   const t = nowTotals();
   Charts.donut($('#aMacro'), {
-    height: 200, centerLabel: 'Tes avoirs', centerValue: t.brut,
+    height: 200, centerLabel: trad('Tes avoirs'), centerValue: t.brut,
     items: pochesPatrimoine().map(p => ({ label: p.label, value: p.value, color: p.color })),
   });
   /* Même liste, même fonction de teinte que dans la vue : les pastilles du
@@ -4241,20 +4218,15 @@ function viewRebalance() {
        (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
        gabarit, un backtick y fermerait la chaine.) -->
   <p class="perimetre perimetre-tete">Ces cibles ne portent que sur
-    <b>tes comptes d’investissement</b> et leur trésorerie,
-    ${fmtEUR0(r.base)}${aide('PEA, compte-titres, assurance-vie, PER, portefeuille de '
-      + 'cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. '
-      + 'Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non '
-      + 'coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger '
-      + 'donnerait des pourcentages qu’aucune décision ne peut suivre. L’onglet '
-      + 'Patrimoine, lui, montre tout.')}.</p>
+    <b>${trad('tes comptes d’investissement')}</b> et leur trésorerie,
+    ${fmtEUR0(r.base)}${aide(trad("PEA, compte-titres, assurance-vie, PER, portefeuille de cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger donnerait des pourcentages qu’aucune décision ne peut suivre. L’onglet Patrimoine, lui, montre tout."))}.</p>
 
   <!-- Ce qu'il y a a faire, avant tout le reste. -->
   <div class="card plan">
-    <div class="card-head"><h2>Ce qu'il y a à faire${aide("Les mouvements qui ramènent chaque classe à sa cible. Quand tes pourcentages totalisent 100 %, ce qu’il faut vendre finance exactement ce qu’il faut acheter.")}</h2>
+    <div class="card-head"><h2>Ce qu'il y a à faire${aide(trad("Les mouvements qui ramènent chaque classe à sa cible. Quand tes pourcentages totalisent 100 %, ce qu’il faut vendre finance exactement ce qu’il faut acheter."))}</h2>
       <span class="hint">${mouvements.length ? `${mouvements.length} mouvement${mouvements.length > 1 ? 's' : ''}` : 'rien à faire'}</span></div>
     ${!mouvements.length
-      ? `<p class="empty">✓ Chaque classe est à sa cible. Rien à arbitrer.</p>`
+      ? `<p class="empty">${trad('✓ Chaque classe est à sa cible. Rien à arbitrer.')}</p>`
       : `
       <!-- La phrase de tete est partie. Elle disait « Vends 1 956 EUR et
            redeploie-les : 1 800 EUR en actions core, 156 EUR en metaux
@@ -4273,7 +4245,7 @@ function viewRebalance() {
           <ul>${listeMvt(alleger, -1)}</ul>
         </div>` : ''}
         ${renforcer.length ? `<div>
-          <h3>À renforcer</h3>
+          <h3>${trad('À renforcer')}</h3>
           <ul>${listeMvt(renforcer, 1)}</ul>
           <!-- Inutile de préciser « sans rien vendre » quand la seule ligne à
                réduire est déjà la trésorerie : il n'y a alors aucune vente dont
@@ -4353,10 +4325,10 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
       ${ligneReeq(r.cash, CLE_TRESORERIE)}` : ''}
     </ul>
     <button class="btn sm ghost" data-action="ajouter-classe-cible"
-            style="margin-top:12px">+ Suivre une classe</button>
+            style="margin-top:12px">${trad('+ Suivre une classe')}</button>
     <dl class="kv reeq-pied">
       <dt>${BASES.placeBourse.nom}</dt><dd>${fmtEUR(r.invested.value)} <span class="muted">· ${fmtPct(r.invested.pct, 1)}</span></dd>
-      <dt>${BASES.baseCibles.nom}<span class="sub">base des pourcentages ci-dessus</span></dt><dd>${fmtEUR(r.base)}</dd>
+      <dt>${BASES.baseCibles.nom}<span class="sub">${trad('base des pourcentages ci-dessus')}</span></dt><dd>${fmtEUR(r.base)}</dd>
       <!-- « Hors perimetre » nommait ces euros par ce qu'ils ne sont pas, et
            les laissait sans destination : on apprenait qu'un tiers du patrimoine
            echappait a cette page sans savoir ou le retrouver. La ligne dit
@@ -4373,7 +4345,7 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
   <!-- Etage 2 : pourquoi tu le detiens. Un sous-niveau du precedent, pas un
        concurrent : le pourcentage se lit sur l'investi. -->
   <div class="card">
-    <div class="card-head"><h2>${ROLES.core} et satellites${aide("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale.")}</h2>
+    <div class="card-head"><h2>${ROLES.core} et satellites${aide(trad("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale."))}</h2>
       <span class="hint">${mentionBase(BASES.baseCibles, rr.base)}</span></div>
     <!-- Ce paragraphe repetait mot pour mot la premiere phrase de la bulle du
          titre, deux centimetres plus bas. Il definissait deux mots de metier,
@@ -4447,10 +4419,7 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
          explique. -->
     ${rr.parNature.some(n => n.nature === 'Titre en direct') ? `
       <p class="hint" style="margin:12px 0 0">
-        Hachuré : titre en direct. Plein : fonds.${aide('La nature est déduite de '
-        + 'l’instrument et se corrige dans la fiche de chaque ligne. Elle n’entre pas '
-        + 'dans les cibles, qui portent sur la classe d’actif : sur le risque, pas sur '
-        + 'l’enveloppe.')}
+        Hachuré : titre en direct. Plein : fonds.${aide(trad("La nature est déduite de l’instrument et se corrige dans la fiche de chaque ligne. Elle n’entre pas dans les cibles, qui portent sur la classe d’actif : sur le risque, pas sur l’enveloppe."))}
       </p>` : ''}
   </div>`;
 }
@@ -4529,8 +4498,8 @@ function viewHistory() {
       <td class="${cls(dlt)}">${dlt ? fmtSigned(dlt) : ''}</td>
       ${poches.map(p => `<td>${g[p.key] ? fmtEUR0(g[p.key]) : ''}</td>`).join('')}
       ${cols.map(a => `<td><input type="number" step="any" data-path="monthly.${i}.v.${a.id}" value="${r.v[a.id] ?? ''}" placeholder=""></td>`).join('')}
-      <td style="min-width:260px"><input data-path="monthly.${i}.comment" value="${esc(r.comment || '')}" placeholder="Note du mois…" style="text-align:left"></td>
-      <td><button class="btn icon" data-action="del-month" data-i="${i}" title="Supprimer la ligne">✕</button></td>
+      <td style="min-width:260px"><input data-path="monthly.${i}.comment" value="${esc(r.comment || '')}" placeholder="${trad('Note du mois…')}" style="text-align:left"></td>
+      <td><button class="btn icon" data-action="del-month" data-i="${i}" title="${trad('Supprimer la ligne')}">✕</button></td>
     </tr>`;
   }).join('');
 
@@ -4582,7 +4551,7 @@ function viewHistory() {
     const d = apportsDetail(...bornes);
     return `
   <div class="card">
-    <div class="card-head"><h2>Entrées et sorties exceptionnelles</h2>
+    <div class="card-head"><h2>${trad('Entrées et sorties exceptionnelles')}</h2>
       <span class="hint">${liste.length
         ? `${liste.length} ligne${liste.length > 1 ? 's' : ''} · ${
             annee === 'all' ? 'toutes années' : esc(String(annee))} · ${fmtSigned(d.net)} net`
@@ -4611,8 +4580,8 @@ function viewHistory() {
            connu au moment ou l'on appuie, et le demander ensuite ferait repondre
            deux fois a la meme question. La fenetre de modification, elle, le
            propose — c'est le seul endroit ou l'on peut s'etre trompe. -->
-      <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">+ Rentrée</button>
-      <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">+ Dépense</button></div>
+      <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
+      <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button></div>
     ${!liste.length && !tout.length ? `
     <p class="small muted" style="margin:0">Rien pour l’instant. Une somme reçue ou dépensée
       une seule fois se note ici, avec sa date : le rythme d’accumulation sait alors que
@@ -4641,11 +4610,11 @@ function viewHistory() {
        apercu en fenetre aurait perdu, `APERCUS` ne rendant que de la lecture.
        Le drapeau survit au re-rendu, comme `evoDetailOuvert`. */
     : `<details class="data-view" id="journalApports" ${journalOuvert ? 'open' : ''}>
-      <summary>Voir le journal</summary>
+      <summary>${trad('Voir le journal')}</summary>
       <div class="mlist-groupe" style="margin-top:12px">
       ${liste.map(a => `
         <button type="button" class="mlist" data-action="editer-apport" data-i="${a.index}"
-                title="Modifier cette ligne">
+                title="${trad('Modifier cette ligne')}">
           <span class="ml-nom">${esc(a.libelle || (a.montant < 0 ? 'Dépense' : 'Rentrée'))}
             <span class="sub">${esc([fmtJourMois(a.date) || a.date || 'sans date',
               a.note || ''].filter(Boolean).join(' · '))}</span></span>
@@ -4661,14 +4630,7 @@ function viewHistory() {
     <dl class="kv" style="margin-top:12px">
       ${d.entrees ? `<dt>Entrées</dt><dd class="up">${fmtSigned(d.entrees)}</dd>` : ''}
       ${d.sorties ? `<dt>Sorties</dt><dd class="down">${fmtSigned(d.sorties)}</dd>` : ''}
-      <dt>Net${aide('La somme de tes entrées et de tes sorties exceptionnelles, toutes '
-        + 'dates confondues. Elle ne s’ajoute à aucun total de patrimoine : ces montants '
-        + 'sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en '
-        + 'mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis '
-        + 'de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. '
-        + 'Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle '
-        + 'gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert '
-        + 'à ton autonomie financière et à ta cible d’épargne de précaution.')}</dt>
+      <dt>Net${aide(trad("La somme de tes entrées et de tes sorties exceptionnelles, toutes dates confondues. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution."))}</dt>
         <dd class="${cls(d.net)}">${fmtSigned(d.net)}</dd>
     </dl>`}
   </div>`;
@@ -4681,14 +4643,14 @@ function viewHistory() {
            « net », il ne dit pas « brut » non plus : « du patrimoine » suffit a
            lever l'ambiguite qu'on lui reprochait, savoir de quoi ces euros
            sont le releve. -->
-      <h2>Relevé mensuel du patrimoine</h2>
+      <h2>${trad('Relevé mensuel du patrimoine')}</h2>
       ${yearControl('history-year', annees, annee)}
     </div>
     <div class="row" style="margin:-4px 0 12px">
       <span class="hint">${lignes.length} mois affiché${lignes.length > 1 ? 's' : ''}</span>
       <span class="spacer"></span>
-      <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto"> Comptes clôturés</label>
-      <button class="btn sm ghost" data-action="add-month">+ Ouvrir l’année suivante</button>
+      <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
+      <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
     </div>
     <!-- La liste sur tous les ecrans, et non plus seulement sur telephone.
 
@@ -4734,12 +4696,12 @@ function viewHistory() {
           titre: fmtMonth(r.date),
           sous: r.comment || '',
           marque: courant && rowIsEmpty(r)
-            ? `<span class="marque-attendu" title="Le relevé de ce mois n'est pas encore pris">⤒</span>` : '',
+            ? `<span class="marque-attendu" title="${trad('Le relevé de ce mois n\'est pas encore pris')}">⤒</span>` : '',
           valeur: total ? fmtEUR0(total) : '',
           second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
           barre,
         });
-      }).join('') || '<p class="empty">Aucun mois sur cette année.</p>'}
+      }).join('') || `<p class="empty">${trad('Aucun mois sur cette année.')}</p>`}
     </div>
     <!-- La classe est celle du graphique juste au-dessus, et non un nom
          invente : elle porte l'espacement, les pastilles de couleur et la
@@ -4752,14 +4714,14 @@ function viewHistory() {
     ${poches.length ? `<div class="legend">${legendeSeries(poches)}</div>` : ''}
 
     <details class="data-view" style="margin-top:12px">
-      <summary>Corriger mois par mois, compte par compte</summary>
+      <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
       <p class="hint" style="margin:12px 0 0">Le ⤒ d’une ligne y reprend tous les
         montants actuels d’un clic. La saisie case par case ne sert qu’à corriger
         un mois passé.</p>
     <div class="table-wrap" style="max-height:70vh; overflow-y:auto">
       <table class="editable">
         <thead><tr>
-          <th title="Reprendre les montants actuels dans la ligne">⤒</th>
+          <th title="${trad('Reprendre les montants actuels dans la ligne')}">⤒</th>
           <th class="sticky-col">Date</th><th>Total</th><th>Δ</th>
           ${poches.map(p => `<th>${esc(p.label)}</th>`).join('')}
           ${cols.map(a => `<th title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
@@ -4773,7 +4735,7 @@ function viewHistory() {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Notes de marché</h2>
+    <div class="card-head"><h2>${trad('Notes de marché')}</h2>
       <span class="hint">${annee === 'all' ? 'toutes années' : esc(annee)}</span></div>
     <ul class="small" style="line-height:1.75; margin:0; padding-left:18px; color:var(--text-secondary)">
       ${lignes.filter(({ r }) => r.comment).map(({ r }) =>
@@ -4842,7 +4804,7 @@ const MOBILISABLE_COURT = {
 };
 
 function badgeMobilisable(niveau) {
-  return `<span class="tag mob-${niveau}" title="${esc(MOBILISABLE_LABEL[niveau])}">${MOBILISABLE_COURT[niveau]}</span>`;
+  return `<span class="tag mob-${niveau}" title="${esc(trad(MOBILISABLE_LABEL[niveau]))}">${trad(MOBILISABLE_COURT[niveau])}</span>`;
 }
 
 /* Variation d'un compte depuis le dernier relevé qui le mentionne. */
@@ -4936,7 +4898,7 @@ function ligneCompte(c, avecEtab = true) {
         <span class="sub">${esc(sousTitreCompte(c, avecEtab))}</span></span>
       ${sparkCompte(c.id)}
       <span class="cpt-val">${fmtEUR(valeurCompte(c))}
-        ${v ? `<span class="sub ${cls(v.eur)}">${fmtSigned(v.eur)} depuis ${esc(v.depuis)}</span>`
+        ${v ? `<span class="sub ${cls(v.eur)}">${fmtSigned(v.eur)} ${trad('depuis')} ${esc(v.depuis)}</span>`
             : `<span class="sub">&nbsp;</span>`}</span>
       <span class="cpt-chev">›</span>
     </button>
@@ -5082,7 +5044,7 @@ function viewAccounts() {
         <button type="button" class="cpt-gplier" data-action="replier-groupe" data-cle="${esc(cle)}"
                 aria-expanded="${!replie}">
           <span class="cpt-pastille" aria-hidden="true"></span>
-          <span class="cpt-gnom">${esc(titre)}${sousTitre ? `<span class="sub">${esc(sousTitre)}</span>` : ''}</span>
+          <span class="cpt-gnom">${esc(trad(titre))}${sousTitre ? `<span class="sub">${esc(trad(sousTitre))}</span>` : ''}</span>
           <!-- Rien et non zero : un groupe peut n'avoir aucun total a donner.
                C'est le cas des comptes archives, sortis de tous les cumuls, ou
                un « 0,00 € » se lirait comme un solde.
@@ -5108,7 +5070,7 @@ function viewAccounts() {
      tout ce qui suit. */
   let sectionsAffichees = false;
   const titreSection = (t, sous) => `
-      <h3 class="cpt-section">${esc(t)}<span class="sub">${esc(sous)}</span></h3>`;
+      <h3 class="cpt-section">${esc(trad(t))}<span class="sub">${esc(trad(sous))}</span></h3>`;
 
   let corps = '';
   if (!COMPTES().length || (!ouverts.length && !filtre)) {
@@ -5163,15 +5125,15 @@ function viewAccounts() {
           <span class="cpt-val down">−${fmtEUR(credits)}</span>
         </div>
         <div class="plc-ligne">
-          <span class="cpt-nom"><b>Valeur nette</b></span>
+          <span class="cpt-nom"><b>${trad('Valeur nette')}</b></span>
           <span class="cpt-val"><b>${fmtEUR(totalE - credits)}</b></span>
         </div>` : '';
       const orphelin = !siens.length && doitEncore ? `
         <div class="note note-relance" style="margin:0">⚠ <span>
-          <b>Ce crédit ne finance plus rien.</b> Le compte qu'il accompagnait a été
+          <b>${trad('Ce crédit ne finance plus rien.')}</b> Le compte qu'il accompagnait a été
           supprimé, mais ${fmtEUR0(doitEncore)} continuent de se soustraire de ton
           patrimoine net. Ouvre la fiche pour le retirer.</span>
-          <button class="btn sm" data-action="fiche-etab" data-id="${esc(e.id)}">Ouvrir la fiche</button>
+          <button class="btn sm" data-action="fiche-etab" data-id="${esc(e.id)}">${trad('Ouvrir la fiche')}</button>
         </div>` : '';
       return groupe(`e-${e.id}`, e.nom,
         siens.length ? `${siens.length} ${motContenu(e.id, siens.length)}`
@@ -5239,14 +5201,11 @@ function viewAccounts() {
        Les lignes de credits et de net ne s'y ajoutent que s'il y a une dette :
        sans dette, « net » repeterait « avoirs ». -->
   <dl class="kv cpt-resume">
-    <dt>${BASES.avoirs.nom}${aide(
-      'La somme des comptes ouverts de cette page. Le même nombre que sur '
-      + 'l’accueil : si les deux diffèrent, c’est qu’un compte est archivé ou '
-      + 'qu’un montant vient d’être corrigé.')}</dt><dd>${fmtEUR(pat.brut)}</dd>
+    <dt>${BASES.avoirs.nom}${aide(trad("La somme des comptes ouverts de cette page. Le même nombre que sur l’accueil : si les deux diffèrent, c’est qu’un compte est archivé ou qu’un montant vient d’être corrigé."))}</dt><dd>${fmtEUR(pat.brut)}</dd>
     ${pat.dettes ? `
-    <dt>Crédits en cours${aide('Le capital qu’il te reste à rembourser. Les comptes archivés ne comptent pas.')}</dt>
+    <dt>Crédits en cours${aide(trad("Le capital qu’il te reste à rembourser. Les comptes archivés ne comptent pas."))}</dt>
       <dd class="dette">−${fmtEUR(pat.dettes)}</dd>
-    <dt><b>Patrimoine net</b></dt><dd><b>${fmtEUR(pat.net)}</b></dd>` : ''}
+    <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(pat.net)}</b></dd>` : ''}
   </dl>
 
   <!-- Trois mots sans ambiguite, la ou « Type de compte » et « Type de
@@ -5282,7 +5241,7 @@ function viewAccounts() {
   <div class="card" style="padding:12px 16px">
     <div class="row" style="gap:10px">
       <input id="chercheCompte" type="search" placeholder="Rechercher…" value="${esc(compteRecherche)}"
-             style="max-width:12em; text-align:left" aria-label="Rechercher un compte ou un placement">
+             style="max-width:12em; text-align:left" aria-label="${trad('Rechercher un compte ou un placement')}">
       <span class="spacer"></span>
       <!-- Replier les sept groupes un par un pour obtenir la vue de structure,
            personne ne le fait deux fois. Le choix est mémorisé : replié une
@@ -5290,8 +5249,8 @@ function viewAccounts() {
       ${groupesRendus.length > 1 ? `<button class="btn sm ghost" data-action="plier-tout"
         title="${groupesRendus.every(c => compteReplies.has(c))
           ? 'Rouvrir tous les groupes' : 'Ne garder que les totaux'}"
-        >${groupesRendus.every(c => compteReplies.has(c)) ? 'Tout déplier' : 'Tout replier'}</button>` : ''}
-      <button class="btn sm" data-action="ajouter-compte">+ Ajouter</button>
+        >${groupesRendus.every(c => compteReplies.has(c)) ? trad('Tout déplier') : trad('Tout replier')}</button>` : ''}
+      <button class="btn sm" data-action="ajouter-compte">${trad('+ Ajouter')}</button>
     </div>
   </div>
 
@@ -5376,7 +5335,7 @@ function espaceBien(c, idx, t) {
 
   return `
   <div class="card">
-    <div class="card-head"><h2>Le bien</h2>
+    <div class="card-head"><h2>${trad('Le bien')}</h2>
       <span class="hint">${biens.length > 1 ? `${biens.length} lots` : esc(t.label)}</span></div>
     ${biens.map(({ l, i }) => `
       <div class="modal-champs">
@@ -5384,22 +5343,22 @@ function espaceBien(c, idx, t) {
              et sur le contenant — et les deux pouvaient diverger : « studio »
              ici, « Studio Lyon 3e » là, sans que rien ne dise lequel comptait.
              Ce champ renomme les deux. -->
-        <div class="field"><label>Nom du bien</label>
+        <div class="field"><label>${trad('Nom du bien')}</label>
           <input data-action-change="renommer-bien" data-compte="${esc(c.id)}"
-                 value="${esc(l.libelle || '')}" placeholder="ex. Studio Lyon 3e"></div>
+                 value="${esc(l.libelle || '')}" placeholder="${trad('ex. Studio Lyon 3e')}"></div>
         <div class="grid g-2">
-          <div class="field"><label>Valeur estimée aujourd'hui (€)</label>
+          <div class="field"><label>${trad('Valeur estimée aujourd\'hui (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.valeur" value="${num(l.valeur)}"></div>
-          <div class="field"><label>Prix d'acquisition (€)${aide("Frais de notaire et travaux compris si tu veux que la plus-value affichée soit la vraie.")}</label>
+          <div class="field"><label>Prix d'acquisition (€)${aide(trad("Frais de notaire et travaux compris si tu veux que la plus-value affichée soit la vraie."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.prixDeRevient" value="${num(l.prixDeRevient) || ''}"></div>
         </div>
         <div class="grid g-2">
-          <div class="field"><label>Date d'acquisition</label>
+          <div class="field"><label>${trad('Date d\'acquisition')}</label>
             <input type="date" data-path="comptes.${idx}.lignes.${i}.dateAcquisition"
                    value="${esc(l.dateAcquisition || '')}"></div>
-          <div class="field"><label>Surface (m²)${aide("Elle donne le prix au mètre carré, le seul chiffre qui permette de confronter ton estimation aux annonces du quartier. Sans elle, « 150 000 € » ne se vérifie contre rien.")}</label>
+          <div class="field"><label>Surface (m²)${aide(trad("Elle donne le prix au mètre carré, le seul chiffre qui permette de confronter ton estimation aux annonces du quartier. Sans elle, « 150 000 € » ne se vérifie contre rien."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>
         </div>
@@ -5422,12 +5381,12 @@ function espaceBien(c, idx, t) {
       </dl>`;
     })()}
     <dl class="kv" style="margin-top:12px">
-      <dt>Valeur du bien</dt><dd><b>${fmtEUR(valeur)}</b></dd>
-      ${gain != null ? `<dt>Plus-value latente</dt>
+      <dt>${trad('Valeur du bien')}</dt><dd><b>${fmtEUR(valeur)}</b></dd>
+      ${gain != null ? `<dt>${trad('Plus-value latente')}</dt>
         <dd class="${cls(gain)}">${fmtSigned(gain)}
           <span class="muted">${fmtSignedPct((valeur / achat - 1) * 100, 1)}</span></dd>` : ''}
-      ${credit ? `<dt>Capital restant dû</dt><dd class="dette">−${fmtEUR(credit)}</dd>
-        <dt><b>Ce que tu possèdes</b>${aide("La valeur du bien moins ce qu'il reste à rembourser. C'est ce montant qui compte dans ton patrimoine net.")}</dt>
+      ${credit ? `<dt>${trad('Capital restant dû')}</dt><dd class="dette">−${fmtEUR(credit)}</dd>
+        <dt><b>${trad('Ce que tu possèdes')}</b>${aide(trad("La valeur du bien moins ce qu'il reste à rembourser. C'est ce montant qui compte dans ton patrimoine net."))}</dt>
         <dd><b>${fmtEUR(valeur - credit)}</b></dd>` : ''}
     </dl>
   </div>
@@ -5449,7 +5408,7 @@ function espaceBien(c, idx, t) {
     const rien = !cf.loyers && !cf.charges;
     return `
   <div class="card">
-    <div class="card-head"><h2>Ce que ce bien rapporte</h2>
+    <div class="card-head"><h2>${trad('Ce que ce bien rapporte')}</h2>
       <span class="hint">${rien ? 'loyer, charges, cash-flow'
         : `${fmtEUR0(cf.loyers)} de loyer par mois`}</span>
       <!-- Deux boutons qui font, et non un qui renvoie.
@@ -5460,9 +5419,9 @@ function espaceBien(c, idx, t) {
            puisqu'on part du bien. La fenetre generique reste, elle sert a
            rattacher un loyer deja saisi. -->
       <button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
-              title="Créer un loyer déjà rattaché à ce bien">+ Loyer</button>
+              title="${trad('Créer un loyer déjà rattaché à ce bien')}">+ Loyer</button>
       <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
-              title="Taxe foncière, copropriété, assurance PNO">+ Charge</button></div>
+              title="${trad('Taxe foncière, copropriété, assurance PNO')}">${trad('+ Charge')}</button></div>
     ${rien ? `
     <!-- Classe « empty » et non « small muted » : c'est un ecran vide, pas une
          note en bas de carte. La classe le dit, et la regle des 35 mots
@@ -5476,20 +5435,15 @@ function espaceBien(c, idx, t) {
       rendement se calculent alors tout seuls.</p>`
     : `
     <dl class="kv">
-      <dt>Loyer perçu</dt><dd class="up">+${fmtEUR(cf.loyers)} / mois</dd>
-      ${cf.charges ? `<dt>Charges rattachées${aide('Taxe foncière, copropriété, assurance '
-        + 'propriétaire non occupant : les charges fixes que tu as rattachées à ce bien, '
-        + 'ramenées au mois.')}</dt>
-        <dd class="dette">−${fmtEUR(cf.charges)} / mois</dd>` : ''}
-      ${cf.mensualite ? `<dt>Mensualité du crédit</dt>
-        <dd class="dette">−${fmtEUR(cf.mensualite)} / mois</dd>` : ''}
+      <dt>${trad('Loyer perçu')}</dt><dd class="up">+${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>
+      ${cf.charges ? `<dt>Charges rattachées${aide(trad("Taxe foncière, copropriété, assurance propriétaire non occupant : les charges fixes que tu as rattachées à ce bien, ramenées au mois."))}</dt>
+        <dd class="dette">−${fmtEUR(cf.charges)} ${trad('/ mois')}</dd>` : ''}
+      ${cf.mensualite ? `<dt>${trad('Mensualité du crédit')}</dt>
+        <dd class="dette">−${fmtEUR(cf.mensualite)} ${trad('/ mois')}</dd>` : ''}
       <!-- Negatif est normal les premieres annees d'un credit, et c'est justement
            ce qu'il faut savoir : la couleur le dit sans le juger. -->
-      <dt><b>Cash-flow</b>${aide('Ce qui reste sur ton compte en fin de mois, une fois le '
-        + 'crédit payé. Négatif les premières années d’un crédit, c’est fréquent et ce '
-        + 'n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte '
-        + 'pendant que ta trésorerie baisse. Les deux chiffres sont vrais.')}</dt>
-        <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} / mois</b></dd>
+      <dt><b>Cash-flow</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
+        <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
       <dt>Rendement brut${aide(`Loyer annuel rapporté ${cf.surAchat
         ? 'au prix d’acquisition' : 'à la valeur actuelle, faute de prix d’acquisition connu'}`
         + `, soit ${fmtEUR0(cf.base)}. C’est la convention du marché : un rendement calculé `
@@ -5497,13 +5451,10 @@ function espaceBien(c, idx, t) {
         + `prend de la valeur.`)}
         <span class="sub">sur ${cf.surAchat ? 'le prix payé' : 'la valeur actuelle'}, ${fmtEUR0(cf.base)}</span></dt>
         <dd>${fmtPct(cf.rendementBrut, 2)}</dd>
-      ${cf.charges ? `<dt>Rendement net de charges</dt>
+      ${cf.charges ? `<dt>${trad('Rendement net de charges')}</dt>
         <dd>${fmtPct(cf.rendementNet, 2)}</dd>` : ''}
       ${cf.rendementFondsPropres != null ? `
-      <dt>Sur tes fonds propres${aide('Le cash-flow annuel rapporté à ce que tu as '
-        + 'vraiment mis : le prix payé moins le capital qu’il te reste à rembourser. '
-        + 'C’est le seul chiffre qui réponde à « ce montage vaut-il mieux qu’un livret », '
-        + 'parce qu’il tient compte du levier du crédit.')}
+      <dt>Sur tes fonds propres${aide(trad("Le cash-flow annuel rapporté à ce que tu as vraiment mis : le prix payé moins le capital qu’il te reste à rembourser. C’est le seul chiffre qui réponde à « ce montage vaut-il mieux qu’un livret », parce qu’il tient compte du levier du crédit."))}
         <span class="sub">${fmtEUR0(cf.fondsPropres)} engagés</span></dt>
         <dd class="${cls(cf.rendementFondsPropres)}">${fmtSignedPct(cf.rendementFondsPropres, 1)}</dd>` : ''}
     </dl>`}
@@ -5512,7 +5463,7 @@ function espaceBien(c, idx, t) {
 
   <div class="card">
     <div class="card-head"><h2>Financement</h2>
-      <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">+ Crédit</button></div>
+      <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">${trad('+ Crédit')}</button></div>
     ${!dettes.length ? `
       <!-- Un état vide qui n'indique pas la sortie n'est qu'un constat : le
            bouton y est répété, parce que c'est ici qu'on se demande où il est. -->
@@ -5552,20 +5503,20 @@ function espaceBien(c, idx, t) {
         : `<p class="hint" style="margin:8px 0 0">Renseignez le capital emprunté au départ
              pour voir ce qui est déjà remboursé.</p>`}
         <div class="grid g-3" style="margin-top:12px">
-          <div class="field"><label>Capital emprunté (€)</label>
+          <div class="field"><label>${trad('Capital emprunté (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.initial" value="${initial || ''}"></div>
-          <div class="field"><label>Capital restant dû (€)</label>
+          <div class="field"><label>${trad('Capital restant dû (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.montant" value="${restant}"></div>
-          <div class="field"><label>Mensualité (€)</label>
+          <div class="field"><label>${trad('Mensualité (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.mensualite" value="${num(d.mensualite) || ''}"></div>
           <!-- Le taux est noté, pas exploité : aucune projection, aucun
                amortissement automatique. C'est une information qu'on veut
                retrouver sans ouvrir son contrat, et le capital restant dû
                reste ce que dit le relevé de la banque. -->
-          <div class="field"><label>Taux annuel (%)${aide("Noté pour mémoire, avec le reste du crédit. L'application n'en tire aucun calcul : ton capital restant dû est celui que tu saisis, jamais un montant projeté.")}</label>
+          <div class="field"><label>Taux annuel (%)${aide(trad("Noté pour mémoire, avec le reste du crédit. L'application n'en tire aucun calcul : ton capital restant dû est celui que tu saisis, jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.taux" value="${num(d.taux) || ''}"></div>
           <!-- Qui prête. Le contenant porte le nom du bien, « Appartement », pas
@@ -5575,7 +5526,7 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>Organisme</label>
             <input class="champ-large" style="text-align:left"
                    data-path="etabs.${idxEtab}.dettes.${i}.organisme"
-                   value="${esc(d.organisme || '')}" placeholder="ex. Crédit Agricole"></div>
+                   value="${esc(d.organisme || '')}" placeholder="${trad('ex. Crédit Agricole')}"></div>
         </div>
       </div>`;
     }).join('')}
@@ -5603,7 +5554,7 @@ function boutonEnregistrerFiche(retour = 'accounts') {
         <button class="btn ghost" data-action="annuler-fiche"
                 data-view="${esc(retour)}">Annuler</button>
         <button class="btn primary" data-action="enregistrer-fiche"
-                data-view="${esc(retour)}">Enregistrer et fermer</button>
+                data-view="${esc(retour)}">${trad('Enregistrer et fermer')}</button>
       </div>`;
 }
 
@@ -5649,8 +5600,8 @@ function retablirFiche() {
 
 function viewFicheCompte(id) {
   const c = compteById(id);
-  if (!c) return `<div class="card"><p class="empty">Ce compte n’existe plus.</p>
-    <button class="btn" data-action="goto" data-view="accounts" data-anchor="">Retour aux actifs</button></div>`;
+  if (!c) return `<div class="card"><p class="empty">${trad('Ce compte n’existe plus.')}</p>
+    <button class="btn" data-action="goto" data-view="accounts" data-anchor="">${trad('Retour aux actifs')}</button></div>`;
   const idx = Store.state.comptes.indexOf(c);
   const t = typeCompte(c.type);
   memoriserFiche(`compte:${c.id}`, c);
@@ -5717,7 +5668,7 @@ function viewFicheCompte(id) {
         return `<button type="button" class="btn sm ghost lien-etab"
                 data-action="fiche-etab" data-id="${esc(et.id)}"
                 style="--teinte:${teinteDominante(siens)}"
-                title="Voir l’établissement qui tient ce compte">
+                title="${trad('Voir l’établissement qui tient ce compte')}">
           <span class="cpt-pastille" aria-hidden="true"></span>${esc(et.nom)} ›</button>`;
       })()}
     </div>
@@ -5735,12 +5686,12 @@ function viewFicheCompte(id) {
   <div class="card">
     <div class="card-head"><h2>${BASES.liquidites.nom} sur ce compte</h2>
       <button class="btn sm ghost" data-action="scinder-cash" data-id="${esc(c.id)}"
-              title="Déclarer un second usage sur le même compte">Scinder</button>
+              title="${trad('Déclarer un second usage sur le même compte')}">Scinder</button>
     </div>
     ${(c.cash || []).length ? (c.cash || []).map((e, i) => `
       <div class="plc-ligne">
         <span class="cpt-nom">Liquidités</span>
-        <select data-path="comptes.${idx}.cash.${i}.affectation" class="annee" title="À quoi sert cet argent ?">
+        <select data-path="comptes.${idx}.cash.${i}.affectation" class="annee" title="${trad('À quoi sert cet argent ?')}">
           ${AFFECTATIONS.map(([v, l]) => `<option value="${v}" ${v === e.affectation ? 'selected' : ''}>${l}</option>`).join('')}
         </select>
         <!-- L'unite se dit a cote du champ. « Le champ liquidite, c'est precise
@@ -5759,7 +5710,7 @@ function viewFicheCompte(id) {
              champ ou saisir un montant, sur un compte qu'on ne peut pas
              supprimer : un cul-de-sac. Mettre a 0 est le geste. -->
         ${t.interne && (c.cash || []).length < 2 ? ''
-          : `<button class="btn icon" data-action="retirer-cash" data-id="${esc(c.id)}" data-i="${i}" title="Retirer cette part">✕</button>`}
+          : `<button class="btn icon" data-action="retirer-cash" data-id="${esc(c.id)}" data-i="${i}" title="${trad('Retirer cette part')}">✕</button>`}
       </div>`).join('')
     : `<p class="empty">${t.titres
         ? 'Aucune espèce en attente. « Scinder » déclare un montant à investir.'
@@ -5781,16 +5732,10 @@ function viewFicheCompte(id) {
          meme phrase autant de fois qu'il y a de placements. Le mot
          « Disponibilite » sert de titre de colonne, ce qui manquait aussi. -->
     <div class="card-head"><h2>${t.titres ? 'Lignes de titres' : 'Placements détenus'}</h2>
-      <span class="hint">Disponibilité${aide(
-        'Sous combien de temps chaque placement redevient de l’argent disponible. '
-        + 'Elle alimente la carte « Autonomie financière » de l’accueil. '
-        + '« Auto » suit la règle du type de compte : un PEA de moins de cinq ans '
-        + 'est bloqué, un compte-titres se vend en séance. La règle se trompe '
-        + 'parfois : un non coté peut se revendre sur un marché secondaire, '
-        + 'c’est pourquoi chaque ligne peut la contredire.')}</span>
-      ${t.titres ? `<a class="hint lien-vue" href="#/positions">Gérer dans Marchés →</a>`
+      <span class="hint">Disponibilité${aide(trad("Sous combien de temps chaque placement redevient de l’argent disponible. Elle alimente la carte « Autonomie financière » de l’accueil. « Auto » suit la règle du type de compte : un PEA de moins de cinq ans est bloqué, un compte-titres se vend en séance. La règle se trompe parfois : un non coté peut se revendre sur un marché secondaire, c’est pourquoi chaque ligne peut la contredire."))}</span>
+      ${t.titres ? `<a class="hint lien-vue" href="#/positions">${trad('Gérer dans Marchés')} →</a>`
         : `<button class="btn sm ghost" data-action="ajouter-placement" data-id="${esc(c.id)}"
-                   title="Ajouter un placement à ce compte">+ Placement</button>`}
+                   title="${trad('Ajouter un placement à ce compte')}">+ Placement</button>`}
     </div>
     ${lignes.length ? lignes.map(l => lignePlacement(l, c, true)).join('')
       : `<div class="empty">
@@ -5798,7 +5743,7 @@ function viewFicheCompte(id) {
             ? ' Les lignes se créent dans l’onglet Marchés, rattachées à ce compte.'
             : ' Un prêt participatif, une part de société, un projet : chacun sa ligne, avec son échéance.'}</p>
           ${t.titres ? '' : `<button class="btn sm" data-action="ajouter-placement" data-id="${esc(c.id)}"
-                   >+ Ajouter un placement</button>`}
+                   >${trad('+ Ajouter un placement')}</button>`}
         </div>`}
   </div>`}
 
@@ -5823,23 +5768,17 @@ function viewFicheCompte(id) {
     const valeur = valeurCompte(c);
     return `
   <div class="card">
-    <div class="card-head"><h2>Financement${aide('Ce que cet établissement te prête : une '
-      + 'marge de courtier, un prêt sur titres, une avance. Les placements achetés avec cet '
-      + 'argent restent comptés en entier dans tes avoirs, puisque tu les possèdes, et le '
-      + 'montant prêté se retranche de ton patrimoine net. Ne le note pas en liquidités '
-      + 'négatives sur le compte : il compterait deux fois, et aucun écran ne le dirait. '
-      + 'Le crédit appartient à l’établissement, pas à ce compte : s’il en tient plusieurs, '
-      + 'il n’est déduit qu’une fois du patrimoine.')}</h2>
+    <div class="card-head"><h2>Financement${aide(trad("Ce que cet établissement te prête : une marge de courtier, un prêt sur titres, une avance. Les placements achetés avec cet argent restent comptés en entier dans tes avoirs, puisque tu les possèdes, et le montant prêté se retranche de ton patrimoine net. Ne le note pas en liquidités négatives sur le compte : il compterait deux fois, et aucun écran ne le dirait. Le crédit appartient à l’établissement, pas à ce compte : s’il en tient plusieurs, il n’est déduit qu’une fois du patrimoine."))}</h2>
       <span class="hint">${dettes.length
         ? `chez ${esc(etab.nom)}, pour tous ses comptes`
         : 'marge, prêt sur titres, avance'}</span>
-      <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">+ Crédit</button></div>
+      <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">${trad('+ Crédit')}</button></div>
     ${!dettes.length ? `
     <p class="small muted" style="margin:0">Aucun crédit chez ${esc(etab.nom)}.
       Si ce courtier te prête, sur marge par exemple, déclare-le ici.</p>`
     : `<div class="mlist-groupe">${dettes.map(({ d, i }) => `
       <button type="button" class="mlist" data-action="editer-credit"
-              data-etab="${esc(etab.id)}" data-i="${i}" title="Modifier ce crédit">
+              data-etab="${esc(etab.id)}" data-i="${i}" title="${trad('Modifier ce crédit')}">
         <span class="ml-nom">${esc(d.libelle || 'Crédit')}
           <span class="sub">${esc([d.preteur, d.taux ? `${fmtNombre(num(d.taux))} % l’an` : '',
             d.mensualite ? `${fmtEUR0(num(d.mensualite))} par mois` : ''].filter(Boolean).join(' · ')
@@ -5850,20 +5789,14 @@ function viewFicheCompte(id) {
     <dl class="kv" style="margin-top:12px">
       <dt>Valeur du ${motCompte(t)}</dt><dd>${fmtEUR(valeur)}</dd>
       <dt>Crédits chez ${esc(etab.nom)}</dt><dd class="dette">−${fmtEUR(total)}</dd>
-      <dt><b>Ce que tu possèdes</b>${aide('La valeur du compte moins ce que tu dois '
-        + 'à cet établissement. C’est ce montant qui compte dans ton patrimoine net. '
-        + 'Si l’établissement tient plusieurs comptes, le crédit est déduit une seule '
-        + 'fois du patrimoine, pas une fois par compte.')}</dt>
+      <dt><b>${trad('Ce que tu possèdes')}</b>${aide(trad("La valeur du compte moins ce que tu dois à cet établissement. C’est ce montant qui compte dans ton patrimoine net. Si l’établissement tient plusieurs comptes, le crédit est déduit une seule fois du patrimoine, pas une fois par compte."))}</dt>
       <!-- Un solde negatif se peint comme une dette : devoir plus que ce que le
            compte porte est un etat reel, et il ne doit pas se lire comme un
            avoir. -->
       <dd class="${valeur - total < 0 ? 'dette' : ''}"><b>${fmtEUR(valeur - total)}</b></dd>
-      ${valeur - total > 0.005 ? `<dt>Effet de levier${aide('Ce que tu contrôles rapporté à ce qui est '
-        + 'vraiment à toi sur ce compte. À 150 %, une baisse de 10 % des titres coûte '
-        + '15 % de tes capitaux propres. Ce chiffre ne dit rien de la marge d’appel : '
-        + 'l’application ne connaît pas les règles de ton courtier.')}</dt>
+      ${valeur - total > 0.005 ? `<dt>Effet de levier${aide(trad("Ce que tu contrôles rapporté à ce qui est vraiment à toi sur ce compte. À 150 %, une baisse de 10 % des titres coûte 15 % de tes capitaux propres. Ce chiffre ne dit rien de la marge d’appel : l’application ne connaît pas les règles de ton courtier."))}</dt>
         <dd>${fmtPct(valeur / (valeur - total) * 100, 0)}
-          <span class="muted">de tes capitaux propres</span></dd>` : ''}
+          <span class="muted">${trad('de tes capitaux propres')}</span></dd>` : ''}
     </dl>
     <button class="btn sm ghost" data-action="fiche-etab" data-id="${esc(etab.id)}"
             style="margin-top:12px">Fiche ${esc(etab.nom)} ›</button>`}
@@ -5894,7 +5827,7 @@ function viewFicheCompte(id) {
              Bien de valeur ». Un champ vide se dit vide, il ne se remplit pas
              du voisin. -->
         <dt>Nom du ${motCompte(t)}</dt><dd>${c.libelle ? esc(c.libelle)
-          : `<span class="muted">non renseigné</span>`}</dd>
+          : `<span class="muted">${trad('non renseigné')}</span>`}</dd>
         <!-- Le type se change, ce qui n'etait pas le cas.
 
              La seule issue apres une faute de frappe etait de supprimer et
@@ -5932,17 +5865,10 @@ function viewFicheCompte(id) {
              sur un livret, savoir qu'on peut declarer un plafond fait partie de
              ce que la fiche doit dire. -->
         ${t.id === 'livret' ? `
-        <dt>Plafond de versement${aide(
-          'Facultatif. Une fois posé, la fiche dit ce qu’il reste à verser. '
-          + 'Les plafonds courants : 22 950 € pour un Livret A, 12 000 € pour un '
-          + 'LDDS, 10 000 € pour un LEP. Les intérêts peuvent faire dépasser le '
-          + 'plafond, c’est normal et la fiche l’annonce alors comme plein.')}</dt>
+        <dt>Plafond de versement${aide(trad("Facultatif. Une fois posé, la fiche dit ce qu’il reste à verser. Les plafonds courants : 22 950 € pour un Livret A, 12 000 € pour un LDDS, 10 000 € pour un LEP. Les intérêts peuvent faire dépasser le plafond, c’est normal et la fiche l’annonce alors comme plein."))}</dt>
         <dd>${num(c.plafond) ? fmtEUR(c.plafond) : '<span class="muted">non renseigné</span>'}</dd>` : ''}
         ${t.dateSensible ? `
-        <dt>Date d’ouverture${aide(
-          'Elle conditionne la disponibilité : un PEA se débloque à cinq ans, '
-          + 'une assurance-vie à huit, un PER à la retraite. C’est pour cela '
-          + 'qu’elle est demandée ici et pas sur les autres types de compte.')}</dt>
+        <dt>Date d’ouverture${aide(trad("Elle conditionne la disponibilité : un PEA se débloque à cinq ans, une assurance-vie à huit, un PER à la retraite. C’est pour cela qu’elle est demandée ici et pas sur les autres types de compte."))}</dt>
         <dd>${c.ouvertLe ? esc(fmtDate(c.ouvertLe))
               : '<span class="muted">à renseigner</span>'}</dd>`
         : c.ouvertLe ? `<dt>${motDateCompte(t)}</dt><dd>${esc(fmtDate(c.ouvertLe))}</dd>` : ''}
@@ -5951,10 +5877,10 @@ function viewFicheCompte(id) {
              clôture » vide inviterait à la remplir, ce qui reviendrait à
              déclarer une fermeture par un champ de date au lieu du bouton qui
              la fait. Un état se déclare, il ne se déduit pas d'une date. -->
-        ${c.statut === 'archive' ? `<dt>Date de clôture</dt>
+        ${c.statut === 'archive' ? `<dt>${trad('Date de clôture')}</dt>
         <dd>${c.clotureLe ? esc(fmtDate(c.clotureLe))
               : '<span class="muted">non renseignée</span>'}</dd>` : ''}
-        ${!t.interne && c.numero ? `<dt>Numéro de compte</dt><dd>${esc(c.numero)}</dd>` : ''}
+        ${!t.interne && c.numero ? `<dt>${trad('Numéro de compte')}</dt><dd>${esc(c.numero)}</dd>` : ''}
       </dl>
       <!-- Le depliant portait numero, notes et date d'ouverture. Les deux
            champs administratifs sont passes derriere « Modifier » avec le reste
@@ -5973,7 +5899,7 @@ function viewFicheCompte(id) {
         ${c.statut === 'archive'
           ? `<button class="btn sm" data-action="restaurer-compte" data-id="${esc(c.id)}">Restaurer</button>`
           : `<button class="btn sm ghost" data-action="archiver-compte" data-id="${esc(c.id)}">Archiver</button>`}
-        <button class="btn sm ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">Clôturer et supprimer</button>
+        <button class="btn sm ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">${trad('Clôturer et supprimer')}</button>
       </div>
       <p class="small muted" style="margin:12px 0 0">
         Archiver conserve l’historique et sort le compte de tous les totaux.
@@ -5988,8 +5914,8 @@ function viewFicheCompte(id) {
    ------------------------------------------------------------ */
 function viewFicheEtab(id) {
   const e = etabById(id);
-  if (!e) return `<div class="card"><p class="empty">Cet établissement n’existe plus.</p>
-    <button class="btn" data-action="goto" data-view="accounts" data-anchor="">Retour aux actifs</button></div>`;
+  if (!e) return `<div class="card"><p class="empty">${trad('Cet établissement n’existe plus.')}</p>
+    <button class="btn" data-action="goto" data-view="accounts" data-anchor="">${trad('Retour aux actifs')}</button></div>`;
   const idx = Store.state.etabs.indexOf(e);
   memoriserFiche(`etab:${e.id}`, e);
   const siens = COMPTES().filter(c => c.etabId === e.id && c.statut !== 'archive');
@@ -6008,12 +5934,7 @@ function viewFicheEtab(id) {
        titre, et le champ part derriere « Modifier ». -->
   <div class="card cpt-entete" style="--teinte:${teinteDominante(siens)}">
     <div>
-      <span class="hero-label">${esc(contenantDeLEtab(e.id).titre)}${aide(
-        'Ce n’est pas un réglage : il se déduit des comptes rattachés. Un contenant '
-        + 'qui ne porte que de l’immobilier est un bien, un qui ne porte que des '
-        + 'parts de société est une société ou une plateforme, et dès qu’il mélange, '
-        + '« banque ou courtier » redevient le terme le plus large. Pour le changer, '
-        + 'change ce qu’il contient.')}</span>
+      <span class="hero-label">${esc(contenantDeLEtab(e.id).titre)}${aide(trad("Ce n’est pas un réglage : il se déduit des comptes rattachés. Un contenant qui ne porte que de l’immobilier est un bien, un qui ne porte que des parts de société est une société ou une plateforme, et dès qu’il mélange, « banque ou courtier » redevient le terme le plus large. Pour le changer, change ce qu’il contient."))}</span>
       <!-- La meme pastille que dans la liste, et surtout la meme teinte : elle
            vient de teinteDominante(siens), la fonction qui colore deja le
            groupe. La recalculer autrement aurait donne deux couleurs pour un
@@ -6039,15 +5960,15 @@ function viewFicheEtab(id) {
               >+ ${majuscule(motContenu(e.id, 1))}</button></div>
     ${siens.length ? siens.map(c => ligneCompte(c, false)).join('')
       : `<div class="empty">
-          <p style="margin:0 0 12px">Aucun compte ici pour l’instant.</p>
+          <p style="margin:0 0 12px">${trad('Aucun compte ici pour l’instant.')}</p>
           <button class="btn sm" data-action="ajouter-compte" data-etab="${esc(e.id)}"
             >+ Ajouter un compte chez ${esc(e.nom)}</button>
         </div>`}
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Crédits en cours${aide('Un crédit pèse en négatif sur le patrimoine net : patrimoine net = total de tes avoirs moins tes crédits.')}</h2>
-      <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(e.id)}">+ Crédit</button></div>
+    <div class="card-head"><h2>Crédits en cours${aide(trad("Un crédit pèse en négatif sur le patrimoine net : patrimoine net = total de tes avoirs moins tes crédits."))}</h2>
+      <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(e.id)}">${trad('+ Crédit')}</button></div>
     ${(e.dettes || []).length ? e.dettes.map((d, i) => `
       <div class="plc-ligne">
         <input data-path="etabs.${idx}.dettes.${i}.libelle" value="${esc(d.libelle)}" style="text-align:left; max-width:14em">
@@ -6159,28 +6080,28 @@ function viewStrategy() {
 
   return `
   <div class="card">
-    <div class="card-head"><h2>Règle d'achat</h2></div>
+    <div class="card-head"><h2>${trad('Règle d\'achat')}</h2></div>
     <input data-path="strategy.rule" value="${esc(st.rule)}" style="text-align:left">
   </div>
 
   <div class="grid g-2-1">
     <div class="card">
-      <div class="card-head"><h2>Déploiement par seuil</h2>
-        <span class="hint">Réserve tactique de ${fmtEUR0(st.reserveMonthly)} / mois</span></div>
+      <div class="card-head"><h2>${trad('Déploiement par seuil')}</h2>
+        <span class="hint">Réserve tactique de ${fmtEUR0(st.reserveMonthly)} ${trad('/ mois')}</span></div>
       <table>
-        <thead><tr><th>Seuil</th><th>% de la réserve</th><th>À déployer</th><th>Cumul si tout déclenché</th></tr></thead>
+        <thead><tr><th>Seuil</th><th>${trad('% de la réserve')}</th><th>${trad('À déployer')}</th><th>${trad('Cumul si tout déclenché')}</th></tr></thead>
         <tbody>${thr}</tbody>
         <tfoot><tr><td>Total</td><td>${fmtPct(st.thresholds.reduce((s, t) => s + t.pct, 0), 0)}</td>
           <td>${fmtEUR0(cum)}</td><td></td></tr></tfoot>
       </table>
     </div>
     <div class="card">
-      <div class="card-head"><h2>Réserve tactique</h2></div>
-      <div class="field"><label>Épargne mensuelle (€)</label>
+      <div class="card-head"><h2>${trad('Réserve tactique')}</h2></div>
+      <div class="field"><label>${trad('Épargne mensuelle (€)')}</label>
         <input type="number" step="50" data-path="strategy.reserveBase" value="${st.reserveBase}"></div>
-      <div class="field" style="margin-top:12px"><label>Part réservée au tactique (%)</label>
+      <div class="field" style="margin-top:12px"><label>${trad('Part réservée au tactique (%)')}</label>
         <input type="number" step="5" data-path="strategy.reservePct" value="${st.reservePct}"></div>
-      <div class="field" style="margin-top:12px"><label>Réserve mensuelle (€)</label>
+      <div class="field" style="margin-top:12px"><label>${trad('Réserve mensuelle (€)')}</label>
         <input type="number" step="50" data-path="strategy.reserveMonthly" value="${st.reserveMonthly}"></div>
       <p class="small muted" style="margin:12px 0 0">
         ${fmtPct(st.reservePct, 0)} de ${fmtEUR0(st.reserveBase)} = ${fmtEUR0(st.reserveBase * st.reservePct / 100)}.
@@ -6189,8 +6110,8 @@ function viewStrategy() {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Modèles d'allocation</h2>
-      <div class="row"><span class="hint">Base de calcul</span>
+    <div class="card-head"><h2>${trad('Modèles d\'allocation')}</h2>
+      <div class="row"><span class="hint">${trad('Base de calcul')}</span>
         <input type="number" step="1000" data-path="meta.modelCapital" value="${capital}" style="max-width:130px"></div></div>
     <div class="grid g-2">
       ${st.models.map((m, mi) => `
@@ -6198,7 +6119,7 @@ function viewStrategy() {
           <h3 style="margin:0 0 4px;font-size:14px">Allocation ${mi + 1}, ${esc(m.name)}</h3>
           <p class="small muted" style="margin:0 0 12px">${esc(m.note || '')}</p>
           <table>
-            <thead><tr><th>Classe d'actif</th><th>%</th><th>Montant</th><th style="text-align:left">Véhicules</th></tr></thead>
+            <thead><tr><th>${trad('Classe d\'actif')}</th><th>%</th><th>Montant</th><th style="text-align:left">Véhicules</th></tr></thead>
             <tbody>${m.lines.map(l => `<tr>
               <td class="name">${esc(l.label)}</td>
               <td>${fmtPct(l.pct, 0)}</td>
@@ -6281,10 +6202,10 @@ function viewBudget(section = 'depenses') {
          l'accueil. -->
     <div class="hero card-cliquable">
       <button type="button" class="card-couvre" data-action="saisir-mois-courant"
-              aria-label="Saisir les dépenses du mois"
-              title="Saisir les dépenses du mois"></button>
+              aria-label="${trad('Saisir les dépenses du mois')}"
+              title="${trad('Saisir les dépenses du mois')}"></button>
       <div>
-        <div class="hero-label">${cur ? (cur.isCurrent ? 'Dépenses du mois en cours' : `Dernier mois renseigné · ${esc(cur.label)}`) : 'Dépenses'}</div>
+        <div class="hero-label">${cur ? (cur.isCurrent ? trad('Dépenses du mois en cours') : `${trad('Dernier mois renseigné')} · ${esc(cur.label)}`) : trad('Dépenses')}</div>
         <div class="hero-value">${cur ? fmtEUR0(cur.total) : ''}</div>
       </div>
       <div class="hero-deltas">
@@ -6309,11 +6230,11 @@ function viewBudget(section = 'depenses') {
         <button type="button" class="hero-delta hero-delta-reglable"
                 data-action="regler-objectif-depenses"
                 aria-label="Régler l’objectif de dépenses mensuel, ${fmtEUR0(f.target)}">
-          <span>Objectif mensuel</span>
+          <span>${trad('Objectif mensuel')}</span>
           <b>${fmtEUR0(f.target)}<span class="hero-delta-chev" aria-hidden="true">›</span></b>
         </button>
         <div class="hero-delta">
-          <span>Écart</span>
+          <span>${trad('Écart')}</span>
           <b class="${classeDepassement(cur ? cur.total : 0, f.target)}">${
             curDiff > 0 ? '▲' : '▼'} ${fmtSigned(curDiff)}</b>
         </div>
@@ -6324,11 +6245,11 @@ function viewBudget(section = 'depenses') {
    nommee par la carte elle-meme, l'objectif est deux lignes plus haut.-->
         ${cur && f.target > 0 ? `
         <div class="hero-delta">
-          <span>Budget consommé</span>
+          <span>${trad('Budget consommé')}</span>
           <b class="${classeDepassement(cur.total, f.target)}">${fmtPct(cur.total / f.target * 100, 0)}</b>
         </div>` : ''}
         <div class="hero-delta">
-          <span>Moyenne ${esc(year)}</span>
+          <span>${trad('Moyenne')} ${esc(year)}</span>
           <b>${fmtEUR0(stats.average)}</b>
         </div>
       </div>
@@ -6346,8 +6267,7 @@ function viewBudget(section = 'depenses') {
           .sort((a, b2) => b2.v - a.v);
         if (!parts.length) {
           return `<p class="small muted" style="margin:0">
-            Aucune dépense saisie${cur ? ` pour ${esc(cur.label)}` : ''}.
-            Touche cette carte pour les entrer.</p>`;
+            ${trad('Aucune dépense saisie')}${cur ? ` ${trad('pour')} ${esc(cur.label)}` : ''}. ${trad('Touche cette carte pour les entrer.')}</p>`;
         }
         const haut = parts[0].v;
         return `<div class="flow">
@@ -6379,7 +6299,7 @@ function viewBudget(section = 'depenses') {
          Son nom disait « salaire », alors que les sources qu'elle ouvre
          comptent aussi les loyers percus et les revenus d'un conjoint. -->
     <div class="card">
-      <div class="card-head"><h2>Où va ce que tu gagnes</h2><span class="hint">chaque mois</span></div>
+      <div class="card-head"><h2>${trad('Où va ce que tu gagnes')}</h2><span class="hint">${trad('chaque mois')}</span></div>
       <!-- Une barre empilee, et non quatre barres.
 
            Les deux cartes du haut de cet onglet se ressemblaient trop depuis
@@ -6401,14 +6321,14 @@ function viewBudget(section = 'depenses') {
       ${(() => {
         const parts = [
           ['Charges fixes', f.fixed, 'var(--series-2)', f.fixedPct, 'ancre'],
-          ['Objectif dépenses', f.target, 'var(--series-4)', f.targetPct, 'objectif'],
-          ['Reste à investir / épargner', f.investTarget, 'var(--series-1)', f.investTargetPct],
+          [trad('Objectif dépenses'), f.target, 'var(--series-4)', f.targetPct, 'objectif'],
+          [trad('Reste à investir / épargner'), f.investTarget, 'var(--series-1)', f.investTargetPct],
         ];
         /* Sans revenu declare, il n'y a pas de tout a decouper : la carte le dit
            et mene la ou on le declare, au lieu d'afficher une piste vide. */
         if (!f.income) return `
         <button type="button" class="btn sm" data-action="toggle-revenus"
-                style="margin:4px 0 0">Déclarer tes revenus</button>
+                style="margin:4px 0 0">${trad('Déclarer tes revenus')}</button>
         <p class="small muted" style="margin:12px 0 0">Sans revenu déclaré, cette carte
           n'a pas de total à partager.</p>`;
         /*    Le chevron n'est pas un ornement. Un grand montant ressemble a un titre,
@@ -6455,12 +6375,12 @@ function viewBudget(section = 'depenses') {
             if (ouvrable === 'ancre') {
               return `<button type="button" class="repart-haut flux-lien"
                               data-action="goto" data-view="budget-cadre" data-anchor="charges"
-                              title="Aller au détail des charges fixes">${corps}</button>`;
+                              title="${trad('Aller au détail des charges fixes')}">${corps}</button>`;
             }
             if (ouvrable === 'objectif') {
               return `<button type="button" class="repart-haut flux-lien"
                               data-action="regler-objectif-depenses"
-                              title="Modifier l’objectif de dépenses">${corps}</button>`;
+                              title="${trad('Modifier l’objectif de dépenses')}">${corps}</button>`;
             }
             return `<div class="repart-haut">${corps}</div>`;
           }).join('')}
@@ -6473,41 +6393,40 @@ function viewBudget(section = 'depenses') {
 
   ${cadre ? '' : `
   <div class="grid g-4 g-tuiles">
-    ${tile(`Dépenses ${year}`, stats.total, null, 'var(--series-2)',
-           `${stats.months} mois · hors charges fixes`, 'depensesAnnee')}
+    ${tile(`${trad('Dépenses')} ${year}`, stats.total, null, 'var(--series-2)',
+           `${stats.months} ${trad('mois · hors charges fixes')}`, 'depensesAnnee')}
     ${tile('Moyenne par mois', stats.average, null, 'var(--series-4)',
-           `sur ${stats.moisRetenus} mois clos, hors charges fixes`
-             + (stats.moisEnCoursExclu ? ' et hors mois en cours' : ''),
+           `${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, hors charges fixes')}`
+             + (stats.moisEnCoursExclu ? ' ' + trad('et hors mois en cours') : ''),
            'depensesCategories')}
     <!-- Chaque tuile ouvre SA liste : les deux partageaient une fiche melangee
          ou il fallait retrouver soi-meme les mois de sa couleur. -->
     <button type="button" class="tile tile-link" style="--tile-color:var(--good)"
             data-action="apercu" data-apercu="moisObjectif" data-arg="sous">
-      <span class="t-label">Mois sous objectif</span>
+      <span class="t-label">${trad('Mois sous objectif')}</span>
       <span class="t-value">${stats.under}</span>
-      <span class="t-meta">sur ${stats.moisRetenus} mois clos</span>
+      <span class="t-meta">${trad('sur')} ${stats.moisRetenus} ${trad('mois clos')}</span>
       <span class="t-go">⋯</span>
     </button>
     <button type="button" class="tile tile-link" style="--tile-color:var(--critical)"
             data-action="apercu" data-apercu="moisObjectif" data-arg="sur">
-      <span class="t-label">Mois dépassés</span>
+      <span class="t-label">${trad('Mois dépassés')}</span>
       <span class="t-value">${stats.over}</span>
-      <span class="t-meta">${stats.worst ? `pire : ${esc(stats.worst.label)} à ${fmtEUR0(stats.worst.total)}` : ''}</span>
+      <span class="t-meta">${stats.worst ? `${trad('pire :')} ${esc(stats.worst.label)} ${trad('à')} ${fmtEUR0(stats.worst.total)}` : ''}</span>
       <span class="t-go">⋯</span>
     </button>
   </div>
 
   <div class="card" data-anchor="detail-mensuel">
     <div class="card-head">
-      <h2>Détail mensuel</h2>
+      <h2>${trad('Détail mensuel')}</h2>
       ${yearControl('budget-year', years, year)}
     </div>
     <div class="row" style="margin:-4px 0 12px">
-      <span class="hint">${lignesDepenses.length} mois affiché${lignesDepenses.length > 1 ? 's' : ''}
-        · ${expenseCategories().length} catégories</span>
+      <span class="hint">${lignesDepenses.length} ${lignesDepenses.length > 1 ? trad('mois affichés') : trad('mois affiché')} · ${expenseCategories().length} ${trad('catégories')}</span>
       <span class="spacer"></span>
-      <button class="btn sm ghost" data-action="add-category">+ Ajouter une catégorie</button>
-      <button class="btn sm ghost" data-action="add-expense-month">+ Ouvrir l’année suivante</button>
+      <button class="btn sm ghost" data-action="add-category">${trad('+ Ajouter une catégorie')}</button>
+      <button class="btn sm ghost" data-action="add-expense-month">${trad('+ Ouvrir l’année suivante')}</button>
     </div>
     ${(() => {
       /* La relance se pose juste au-dessus du tableau qu'elle designe, et la
@@ -6534,7 +6453,7 @@ function viewBudget(section = 'depenses') {
           action: 'edit-expense-month', index: i,
           titre: fmtMonth(r.month),
           sous: r.note || '',
-          marque: att ? '<span class="marque-attendu" title="Le mois que la relance attend">⚠</span>' : '',
+          marque: att ? `<span class="marque-attendu" title="${trad('Le mois que la relance attend')}">⚠</span>` : '',
           valeur: tot ? fmtEUR0(tot) : '',
           second: tot ? fmtSigned(diff) : '', classeSecond: classeDepassement(tot, f.target),
         });
@@ -6551,15 +6470,15 @@ function viewBudget(section = 'depenses') {
           ${(() => {
             const th = (key, label, classe = '') => {
               const on = depSort && depSort.key === key;
-              const sens = !on ? 'décroissant' : depSort.dir === 'desc' ? 'croissant' : 'calendrier';
+              const sens = !on ? trad('décroissant') : depSort.dir === 'desc' ? trad('croissant') : trad('calendrier');
               return `<th class="sortable ${on ? depSort.dir : ''} ${classe}">`
                 + `<button type="button" class="th-tri" data-action="sort-depenses" data-key="${esc(key)}"`
-                + ` title="Trier par ${esc(label)}, ordre ${sens}">${esc(label)}</button></th>`;
+                + ` title="${trad('Trier par')} ${esc(trad(label))}, ${trad('ordre')} ${sens}">${esc(trad(label))}</button></th>`;
             };
-            return th('mois', 'Mois', 'sticky-col') + th('total', 'Total') + '<th>vs obj.</th>'
+            return th('mois', 'Mois', 'sticky-col') + th('total', 'Total') + `<th>${trad('vs obj.')}</th>`
               + expenseCategories().map(c => th(`cat:${c}`, c)).join('');
           })()}
-          <th>Note du mois</th><th></th>
+          <th>${trad('Note du mois')}</th><th></th>
         </tr></thead>
         <tbody>${(depSort ? (() => {
           /* On trie une copie de la vue indexee : `data-i` continue de viser
@@ -6621,7 +6540,7 @@ function viewBudget(section = 'depenses') {
     </div>
 
     <details class="data-view" style="margin-top:12px">
-      <summary>Renommer, retirer ou supprimer une catégorie</summary>
+      <summary>${trad('Renommer, retirer ou supprimer une catégorie')}</summary>
       <!-- Classe « table-serree » : ce tableau vit hors de tout conteneur
            defilant, il doit donc tenir dans sa carte. Sans mise en page fixe, la
            cellule des deux boutons imposait sa largeur et poussait l'ensemble a
@@ -6641,13 +6560,13 @@ function viewBudget(section = 'depenses') {
              sort la catégorie de la saisie du mois et ne touche à rien d'autre.
              La croix seule poussait à effacer un historique pour faire de la
              place à l'écran. -->
-        <thead><tr><th>Catégorie</th><th>Total saisi</th><th></th></tr></thead>
+        <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total saisi')}</th><th></th></tr></thead>
         <tbody>${expenseCategories().map(c => {
           const total = expenseCategoryTotal(c);
           const retiree = categorieRetiree(c);
           return `<tr${retiree ? ' class="cat-retiree"' : ''}>
             <td class="name"><input value="${esc(c)}" data-action-change="rename-category"
-                data-cat="${esc(c)}" title="Modifie le nom puis quitte le champ">
+                data-cat="${esc(c)}" title="${trad('Modifie le nom puis quitte le champ')}">
               ${retiree ? '<span class="tag">retirée</span>' : ''}</td>
             <td class="${total ? '' : 'muted'}">${total ? fmtEUR0(total) : ''}</td>
             <!-- Les deux gestes dans une seule cellule. En colonnes separees le
@@ -6663,9 +6582,9 @@ function viewBudget(section = 'depenses') {
                    les graphiques et les exports suivent d'eux-memes. -->
               <span class="large-seulement">
                 <button class="btn icon" data-action="monter-category" data-cat="${esc(c)}"
-                  title="Avancer cette colonne d’un cran">↑</button>
+                  title="${trad('Avancer cette colonne d’un cran')}">↑</button>
                 <button class="btn icon" data-action="descendre-category" data-cat="${esc(c)}"
-                  title="Reculer cette colonne d’un cran">↓</button>
+                  title="${trad('Reculer cette colonne d’un cran')}">↓</button>
               </span>
               <button class="btn sm ghost" data-action="${retiree ? 'reprendre' : 'retirer'}-category"
                 data-cat="${esc(c)}"
@@ -6673,17 +6592,13 @@ function viewBudget(section = 'depenses') {
                                  : 'La sortir de la saisie du mois, sans toucher aux montants passés'}"
                 >${retiree ? 'Reprendre' : 'Retirer'}</button>
               <button class="btn icon" data-action="del-category" data-cat="${esc(c)}"
-                title="Supprimer cette colonne et tous ses montants">✕</button>
+                title="${trad('Supprimer cette colonne et tous ses montants')}">✕</button>
             </td>
           </tr>`;
         }).join('')}</tbody>
       </table>
       <p class="hint" style="margin-top:8px">
-        <b>Retirer</b> garde l'historique, <b>Supprimer</b> l'efface.${aide(
-        'Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la '
-        + 'saisie du mois sans toucher aux montants passés : c’est le geste pour un poste '
-        + 'dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce '
-        + 'qu’elle contient. Ctrl+Z annule dans les deux cas.')}
+        <b>Retirer</b> garde l'historique, <b>Supprimer</b> l'efface.${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
     </details>
   </div>
@@ -6695,7 +6610,7 @@ function viewBudget(section = 'depenses') {
          editables pour une meme valeur sur un meme ecran, c'est le doublon que
          ce projet passe son temps a supprimer. -->
     <div class="card-head">
-      <h2>Dépenses mensuelles</h2>
+      <h2>${trad('Dépenses mensuelles')}</h2>
       <span class="hint">objectif ${fmtEUR0(b.monthlyTarget)}</span>
       ${yearControl('budget-year', years, year)}
     </div>
@@ -6704,21 +6619,19 @@ function viewBudget(section = 'depenses') {
          l'objectif, pas contre les autres mois, et « est-ce que je dépense
          plus que d'habitude ? » n'avait plus de reponse sur cette carte. -->
     <div class="goal-foot" style="margin-top:12px">
-      <span>Moyenne ${esc(year)}
-        <b>${fmtEUR0(stats.average)} / mois</b>${stats.moisEnCoursExclu
-          ? `<span class="sub">sur ${stats.moisRetenus} mois clos, le mois en cours est écarté</span>` : ''}</span>
+      <span>${trad('Moyenne')} ${esc(year)}
+        <b>${fmtEUR0(stats.average)} ${trad('/ mois')}</b>${stats.moisEnCoursExclu
+          ? `<span class="sub">${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, le mois en cours est écarté')}</span>` : ''}</span>
       <span class="${classeDepassement(stats.average, f.target)}">${
         stats.average ? `${fmtSigned(stats.average - f.target)} vs objectif` : ''}</span>
     </div>
     <p class="small muted" style="margin:12px 0 0">
-      Vert sous l'objectif, orange au-dessus, rouge à partir de
-      ${fmtPct(SEUIL_DEPASSEMENT_GRAVE * 100, 0)} de dépassement. Survole une barre
-      pour la note du mois.
+      ${trad('Vert sous l’objectif, orange au-dessus, rouge à partir de')} ${fmtPct(SEUIL_DEPASSEMENT_GRAVE * 100, 0)} ${trad('de dépassement. Survole une barre pour la note du mois.')}
     </p>
     <details class="data-view">
-      <summary>Voir les données</summary>
+      <summary>${trad('Voir les données')}</summary>
       <table>
-        <thead><tr><th>Mois</th><th>Dépensé</th><th>vs objectif</th><th style="text-align:left">Note</th></tr></thead>
+        <thead><tr><th>${trad('Mois')}</th><th>${trad('Dépensé')}</th><th>${trad('vs objectif')}</th><th style="text-align:left">Note</th></tr></thead>
         <tbody>${(year === 'all' ? expenseSeries() : expenseSeries(year)).map(r => `<tr>
           <td class="name">${esc(r.label)}</td>
           <td>${r.total ? fmtEUR0(r.total) : ''}</td>
@@ -6733,19 +6646,19 @@ function viewBudget(section = 'depenses') {
          la même variable, mais aller le chercher trois cartes plus haut pour
          changer l'année d'un tableau qu'on a sous les yeux n'a pas de sens. -->
     <div class="card">
-      <div class="card-head"><h2>Par catégorie</h2>
+      <div class="card-head"><h2>${trad('Par catégorie')}</h2>
         <div class="row">
-          <span class="hint">${fmtEUR0(stats.total)} au total</span>
+          <span class="hint">${fmtEUR0(stats.total)} ${trad('au total')}</span>
           ${yearControl('budget-year', years, year)}
         </div>
       </div>
       <div class="chart" id="bCats"></div>
     </div>
     <div class="card">
-      <div class="card-head"><h2>Moyenne par mois</h2>
+      <div class="card-head"><h2>${trad('Moyenne par mois')}</h2>
         ${yearControl('budget-year', years, year)}</div>
       <table>
-        <thead><tr><th>Catégorie</th><th>/ mois</th><th>%</th></tr></thead>
+        <thead><tr><th>${trad('Catégorie')}</th><th>${trad('/ mois')}</th><th>%</th></tr></thead>
         <tbody>${cats.map(c => `<tr>
           <td class="name">${esc(c.label)}</td>
           <td>${fmtEUR0(c.average)}</td>
@@ -6769,7 +6682,7 @@ function viewBudget(section = 'depenses') {
          ouvre en montrait 12, la treizieme etant a zero. Un intitule dit
          exactement ce qu'il compte, et deux ecrans qui comptent la meme chose
          doivent donner le meme nombre. -->
-    <div class="card-head"><h2>Ce qui sort chaque mois</h2>
+    <div class="card-head"><h2>${trad('Ce qui sort chaque mois')}</h2>
       ${(() => {
         const n = b.fixedCharges.filter(c => chargeMensuelle(c) > 0).length;
         return `<span class="hint">${n} poste${n > 1 ? 's' : ''}</span>`;
@@ -6799,17 +6712,12 @@ function viewBudget(section = 'depenses') {
         </div>
         <div class="ct-cote">
           <div class="ct-petit">
-            <span class="muted">Sur douze mois${aide('Le m\u00eame total, vu \u00e0 l\u2019ann\u00e9e. '
-              + 'Un abonnement de 30 \u20ac par mois co\u00fbte 360 \u20ac par an : c\u2019est \u00e0 cette '
-              + '\u00e9chelle qu\u2019on d\u00e9cide de le garder ou non.')}</span>
+            <span class="muted">Sur douze mois${aide(trad("Le même total, vu à l’année. Un abonnement de 30 € par mois coûte 360 € par an : c’est à cette échelle qu’on décide de le garder ou non."))}</span>
             <b>${fmtEUR0(f.fixed * 12)}</b>
           </div>
           ${st.partage ? `
           <div class="ct-petit">
-            <span class="muted">Vraiment à ta charge${aide('Ce que tu paies une fois '
-              + 'retirée la part de qui partage avec toi. Le budget, lui, retient les '
-              + 'charges enti\u00e8res : c\u2019est bien toi qui les paies, et ce qu\u2019on te '
-              + 'reverse entre de son c\u00f4t\u00e9 dans tes revenus.')}</span>
+            <span class="muted">Vraiment à ta charge${aide(trad("Ce que tu paies une fois retirée la part de qui partage avec toi. Le budget, lui, retient les charges entières : c’est bien toi qui les paies, et ce qu’on te reverse entre de son côté dans tes revenus."))}</span>
             <b>${fmtEUR0(st.mine)}</b>
           </div>` : ''}
         </div>
@@ -6858,11 +6766,11 @@ function viewBudget(section = 'depenses') {
        identique. -->
   <div class="grid budget-charges">
     <div class="card" data-anchor="charges">
-      <div class="card-head"><h2>Charges fixes</h2>
+      <div class="card-head"><h2>${trad('Charges fixes')}</h2>
         <div class="row">
-          <span class="hint">${fmtEUR(f.fixed)} / mois · ${fmtPct(f.fixedPct, 1)} des revenus</span>
+          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} des revenus</span>
           <button class="btn sm ghost" data-action="add-contributor">+ Personne</button>
-          <button class="btn sm ghost" data-action="add-charge">+ Ligne</button>
+          <button class="btn sm ghost" data-action="add-charge">${trad('+ Ligne')}</button>
         </div>
       </div>
       ${(() => {
@@ -6893,12 +6801,12 @@ function viewBudget(section = 'depenses') {
                 ? `rembourse « ${cr.libelle} », dont ${fmtEUR0(cr.capital)} de capital`
                 : `rembourse « ${cr.libelle} »`;
             })()].filter(Boolean).join(' · '),
-          valeur: `${fmtEUR(chargeMensuelle(c))} / mois`,
+          valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
           second: gens.length ? `${fmtEUR(myShareMensuelle(c))} à ma charge` : '',
         })).join('')}
         <dl class="kv repart-pied">
-          <dt>Total / mois</dt><dd>${fmtEUR(st.total)}</dd>
-          ${gens.length ? `<dt><b>À ma charge</b></dt><dd><b>${fmtEUR(st.mine)}</b></dd>` : ''}
+          <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
+          ${gens.length ? `<dt><b>${trad('À ma charge')}</b></dt><dd><b>${fmtEUR(st.mine)}</b></dd>` : ''}
         </dl>
         <!-- Les personnes qui partagent, et le moyen de les retirer.
              Le ✕ ne vivait que dans l'en-tete du tableau, donc sur grand ecran
@@ -6909,7 +6817,7 @@ function viewBudget(section = 'depenses') {
           ${st.parPersonne.map(p => `
             <span class="contrib-jeton">
               <b>${esc(p.name)}</b>
-              <span class="muted">${fmtEUR(p.total)} / mois</span>
+              <span class="muted">${fmtEUR(p.total)} ${trad('/ mois')}</span>
               <button class="btn icon xs" data-action="del-contributor" data-id="${esc(p.id)}"
                       title="Retirer ${esc(p.name)} des charges partagées"
                       aria-label="Retirer ${esc(p.name)}">✕</button>
@@ -6920,13 +6828,13 @@ function viewBudget(section = 'depenses') {
         <table class="editable">
           <thead><tr>
             <th class="sticky-col">Poste</th><th>Montant</th><th>Facturé</th>
-            <th title="Ce que la ligne pèse chaque mois, quelle que soit sa périodicité">€ / mois</th>
-            <th>% charges</th>
+            <th title="${trad('Ce que la ligne pèse chaque mois, quelle que soit sa périodicité')}">${trad('€ / mois')}</th>
+            <th>${trad('% charges')}</th>
             ${gens.map(p => `<th title="Ce que ${esc(p.name)} prend en charge, sur la même période que le montant">
               Part de ${esc(p.name)}
               <button class="btn icon xs" data-action="del-contributor" data-id="${esc(p.id)}"
                       title="Retirer ${esc(p.name)}">✕</button></th>`).join('')}
-            <th title="Ce qui sort réellement de ton compte, ramené au mois">À ma charge</th>
+            <th title="${trad('Ce qui sort réellement de ton compte, ramené au mois')}">${trad('À ma charge')}</th>
             <th>Organisme</th><th></th>
           </tr></thead>
           <!--               Ce que la fenetre sait faire et que les cases ne savaient pas : le
@@ -6979,20 +6887,20 @@ function viewBudget(section = 'depenses') {
 
     <div class="grid" style="gap:16px; align-content:start">
       <div class="card">
-        <div class="card-head"><h2>Épargne mensuelle</h2><span class="hint">théorique vs réelle</span></div>
+        <div class="card-head"><h2>${trad('Épargne mensuelle')}</h2><span class="hint">${trad('théorique vs réelle')}</span></div>
         <dl class="kv">
-          <dt>Revenus fixes</dt><dd>${fmtEUR0(rec.income)}</dd>
-          <dt>− Charges fixes</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
+          <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
+          <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
           <dt>− Dépenses (moy. ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
-          <dt><b>= Épargne théorique</b>${aide("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est une prévision tirée de tes saisies, pas un montant constaté sur un compte.")}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>
-          <dt>Taux d'épargne${aide('Part de tes revenus que cette épargne théorique représente. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne.')}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
-          <dt>Objectif d'investissement${aide("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent.")}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
+          <dt><b>${trad('= Épargne théorique')}</b>${aide(trad("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est une prévision tirée de tes saisies, pas un montant constaté sur un compte."))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>
+          <dt>Taux d'épargne${aide(trad("Part de tes revenus que cette épargne théorique représente. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+          <dt>Objectif d'investissement${aide(trad("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent."))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
         </dl>
         ${rec.realPerMonth != null ? `
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
           <dl class="kv">
-            <dt>Croissance réelle du patrimoine${aide("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif.")}</dt><dd>${fmtEUR0(rec.realPerMonth)} / mois</dd>
-            <dt>Écart avec la théorie${aide("Différence entre ce que ton patrimoine a réellement gagné et ce que ton budget prévoyait. Un écart positif vient souvent des marchés ou d'un apport supplémentaire : ce n'est pas une erreur de budget.")}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
+            <dt>Croissance réelle du patrimoine${aide(trad("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif."))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
+            <dt>Écart avec la théorie${aide(trad("Différence entre ce que ton patrimoine a réellement gagné et ce que ton budget prévoyait. Un écart positif vient souvent des marchés ou d'un apport supplémentaire : ce n'est pas une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
           </dl>
           <p class="small muted" style="margin:12px 0 0">
             Mesuré sur les ${rec.monthsSpan} derniers mois clos. Le mois en cours est
@@ -7080,50 +6988,41 @@ function viewData() {
   return `
   <div class="card">
     <div class="card-head">
-      <h2>Contrôles de cohérence</h2>
+      <h2>${trad('Contrôles de cohérence')}</h2>
       <!-- Le decompte suit les familles du modele : il en nommait trois sur
            quatre, et les saisies en attente ne se comptaient nulle part. -->
       <span class="hint">${checks.length
         ? FAMILLES_NOTIF.map(([cle, nom]) => [nom, checks.filter(c => c.sujet === cle).length])
             .filter(([, n]) => n).map(([nom, n]) => `${n} ${nom.toLowerCase()}`).join(' · ')
-        : 'Tout est cohérent'}</span>
+        : trad('Tout est cohérent')}</span>
     </div>
     ${checks.length ? `<ul class="checks">${checks.map(c => `
       <li class="chk chk-${c.level}">
         <span class="chk-ic">${ICONE_NOTIF[c.level] || '•'}</span>
         <div><b>${esc(c.title)}</b><br><span class="muted">${escMontant(c.detail)}</span></div>
-        <a href="#/${c.view}" class="btn ghost sm">Voir</a>
+        <a href="#/${c.view}" class="btn ghost sm">${trad('Voir')}</a>
       </li>`).join('')}</ul>`
-      : `<p class="empty">✓ Aucune incohérence détectée.</p>`}
+      : `<p class="empty">${trad('✓ Aucune incohérence détectée.')}</p>`}
   </div>
 
   <div class="note">
-    🔒 <span><b>Données personnelles.</b> Ce tableau de bord contient des informations
-    financières qui te concernent directement : au sens du RGPD, ce sont des
-    <b>données à caractère personnel</b>, et tu en es responsable.
+    🔒 <span><b>${trad('Données personnelles.')}</b> ${trad('Ce tableau de bord contient des informations financières qui te concernent directement : au sens du RGPD, ce sont des <b>données à caractère personnel</b>, et tu en es responsable.')}
     ${CloudSync.isAvailable()
-      ? `Elles sont enregistrées <b>chez Cloudflare</b> (stockage KV, Europe), en plus
-         de ce navigateur. Elles n'y sont <b>pas chiffrées de bout en bout</b> :
-         techniquement, Cloudflare peut y accéder. L'accès est protégé par ton mot de
-         passe, change-le s'il a pu fuiter, cela déconnecte aussitôt tous les appareils.
-         Pour tout retirer : supprime l'espace KV et le projet Pages.`
-      : `Elles restent <b>uniquement dans le navigateur de cette machine</b>, rien
-         n'est envoyé sur un serveur.`}
-    Un export JSON ou Excel sort de ce cadre : évite de le déposer sur un service tiers
-    non maîtrisé ou de l'envoyer par e-mail non chiffré, et efface ceux dont tu n'as
-    plus besoin.</span>
+      ? trad('Elles sont enregistrées <b>chez Cloudflare</b> (stockage KV, Europe), en plus de ce navigateur. Elles n’y sont <b>pas chiffrées de bout en bout</b> : techniquement, Cloudflare peut y accéder. L’accès est protégé par ton mot de passe, change-le s’il a pu fuiter, cela déconnecte aussitôt tous les appareils. Pour tout retirer : supprime l’espace KV et le projet Pages.')
+      : trad('Elles restent <b>uniquement dans le navigateur de cette machine</b>, rien n’est envoyé sur un serveur.')}
+    ${trad('Un export JSON ou Excel sort de ce cadre : évite de le déposer sur un service tiers non maîtrisé ou de l’envoyer par e-mail non chiffré, et efface ceux dont tu n’as plus besoin.')}</span>
   </div>
 
   <div class="grid g-2">
     <div class="card">
-      <div class="card-head"><h2>Exporter</h2><span class="hint">Toutes tes données</span></div>
+      <div class="card-head"><h2>Exporter</h2><span class="hint">${trad('Toutes tes données')}</span></div>
       <div class="row">
-        <button class="btn ghost" data-action="export-xlsx-all">⤓ Classeur Excel</button>
-        <button class="btn" data-action="export-json">⤓ Sauvegarde JSON</button>
+        <button class="btn ghost" data-action="export-xlsx-all">${trad('⤓ Classeur Excel')}</button>
+        <button class="btn" data-action="export-json">${trad('⤓ Sauvegarde JSON')}</button>
       </div>
       <dl class="kv" style="margin-top:12px">
-        <dt><b>JSON</b>, sauvegarde</dt><dd class="up">réimportable ✓</dd>
-        <dt><b>Excel</b>, lecture</dt><dd class="muted">non réimportable</dd>
+        <dt><b>JSON</b>, sauvegarde</dt><dd class="up">${trad('réimportable ✓')}</dd>
+        <dt><b>Excel</b>, lecture</dt><dd class="muted">${trad('non réimportable')}</dd>
       </dl>
       <!-- Soixante-dix mots sous deux lignes de tableau qui disaient deja
            l'essentiel : « réimportable » contre « non réimportable ». Le
@@ -7131,25 +7030,19 @@ function viewData() {
            ne l'a pas encore ouvert. La phrase garde la decision, la bulle garde
            le detail. -->
       <p class="small muted" style="margin:12px 0 0">
-        Le <b>JSON</b> pour restaurer, l'<b>Excel</b> pour lire ailleurs.${aide(
-        'Le JSON restitue ton tableau de bord à l’identique : c’est celui à garder pour '
-        + 'restaurer ou changer de machine. L’Excel est une photo pour lire et retravailler '
-        + 'ailleurs : une feuille par thème, montants au format €, pourcentages calculables. '
-        + 'Le découpage d’une catégorie de dépenses y a sa propre feuille, une ligne par '
-        + 'montant. Il ne contient pas tous les réglages, il ne peut donc pas être rechargé ici.')}
+        ${trad('Le <b>JSON</b> pour restaurer, l’<b>Excel</b> pour lire ailleurs.')}${aide(trad("Le JSON restitue ton tableau de bord à l’identique : c’est celui à garder pour restaurer ou changer de machine. L’Excel est une photo pour lire et retravailler ailleurs : une feuille par thème, montants au format €, pourcentages calculables. Le découpage d’une catégorie de dépenses y a sa propre feuille, une ligne par montant. Il ne contient pas tous les réglages, il ne peut donc pas être rechargé ici."))}
       </p>
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Importer</h2><span class="hint">Fichier JSON uniquement</span></div>
+      <div class="card-head"><h2>Importer</h2><span class="hint">${trad('Fichier JSON uniquement')}</span></div>
       <input type="file" id="importFile" accept="application/json,.json">
       <p class="small muted" style="margin:12px 0 0">
-        <b>Fichier JSON uniquement</b>, celui produit par « Sauvegarde JSON ». L'import écrase
-        l'état enregistré ; une confirmation est demandée. Exporte d'abord si tu as un doute.
+        <b>${trad('Fichier JSON uniquement')}</b>${trad(', celui produit par « Sauvegarde JSON ». L’import écrase l’état enregistré ; une confirmation est demandée. Exporte d’abord si tu as un doute.')}
       </p>
       <div class="row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--grid)">
-        <button class="btn ghost sm" data-action="start-blank">↻ Repartir de zéro</button>
-        <span class="hint">Pour qu'une autre personne parte de ses propres chiffres</span>
+        <button class="btn ghost sm" data-action="start-blank">${trad('↻ Repartir de zéro')}</button>
+        <span class="hint">${trad('Pour qu\'une autre personne parte de ses propres chiffres')}</span>
       </div>
       <!-- La demonstration se charge d'ici, a cote de la remise a zero : ce sont
            les deux gestes qui changent tout l'etat d'un coup. Celui-ci est le
@@ -7158,8 +7051,8 @@ function viewData() {
         ${modeDemo()
           ? `<button class="btn sm" data-action="quitter-demo">← Revenir à mes données</button>
              <span class="hint">La démonstration reste disponible</span>`
-          : `<button class="btn ghost sm" data-action="charger-demo">▷ Voir la démonstration</button>
-             <span class="hint">Des chiffres fictifs, sans toucher aux vôtres</span>`}
+          : `<button class="btn ghost sm" data-action="charger-demo">▷ ${trad('Voir la démonstration')}</button>
+             <span class="hint">${trad('Des chiffres fictifs, sans toucher aux vôtres')}</span>`}
       </div>
     </div>
   </div>
@@ -7171,24 +7064,24 @@ function viewData() {
     return `
     <div class="card">
       <div class="card-head">
-        <h2>Synchronisation en ligne</h2>
-        <span class="hint">${u ? `connecté en tant que <b>${esc(u)}</b>` : 'Cloudflare KV'}</span>
+        <h2>${trad('Synchronisation en ligne')}</h2>
+        <span class="hint">${u ? `${trad('connecté en tant que')} <b>${esc(u)}</b>` : 'Cloudflare KV'}</span>
       </div>
       <dl class="kv">
-        <dt>État</dt><dd class="up">✓ active</dd>
-        <dt>Dernier envoi</dt><dd>${s.lastPush ? fmtWhen(s.lastPush) : ''}</dd>
+        <dt>${trad('État')}</dt><dd class="up">✓ ${trad('active')}</dd>
+        <dt>${trad('Dernier envoi')}</dt><dd>${s.lastPush ? fmtWhen(s.lastPush) : ''}</dd>
         ${s.error ? `<dt>Erreur</dt><dd class="down">${esc(s.error)}</dd>` : ''}
       </dl>
       ${s.conflict ? `<div class="note" style="margin-top:12px">⚠ <span>
         <b>Conflit.</b> La version en ligne
-        (${new Date(s.conflict.remoteSavedAt).toLocaleString('fr-FR')}) est plus récente
+        (${new Date(s.conflict.remoteSavedAt).toLocaleString(locale())}) est plus récente
         que celle de cet appareil. Choisis laquelle garder.</span></div>
         <div class="row" style="margin-top:12px">
-          <button class="btn sm" data-action="cloud-pull">↓ Prendre la version en ligne</button>
-          <button class="btn sm ghost" data-action="cloud-force">↑ Imposer celle-ci</button>
+          <button class="btn sm" data-action="cloud-pull">${trad('↓ Prendre la version en ligne')}</button>
+          <button class="btn sm ghost" data-action="cloud-force">${trad('↑ Imposer celle-ci')}</button>
         </div>` : `
         <div class="row" style="margin-top:12px">
-          <button class="btn sm ghost" data-action="cloud-push">↻ Synchroniser maintenant</button>
+          <button class="btn sm ghost" data-action="cloud-push">${trad('↻ Synchroniser maintenant')}</button>
         </div>`}
       <p class="small muted" style="margin:12px 0 0">
         La synchronisation est <b>automatique</b> : tout est envoyé quelques secondes
@@ -7207,27 +7100,24 @@ function viewData() {
        s'il reste quelque chose a annuler. -->
   <div class="card">
     <div class="card-head">
-      <h2>Revenir en arrière</h2>
+      <h2>${trad('Revenir en arrière')}</h2>
       <span class="hint">${Store.undoCount()
-        ? `${Store.undoCount()} modification${Store.undoCount() > 1 ? 's' : ''} annulable${
-            Store.undoCount() > 1 ? 's' : ''}`
-        : 'rien à annuler pour l’instant'}</span>
+        ? `${Store.undoCount()} ${Store.undoCount() > 1 ? trad('modifications annulables') : trad('modification annulable')}`
+        : trad('rien à annuler pour l’instant')}</span>
     </div>
     <button class="btn pleine" data-action="undo" ${Store.undoCount() ? '' : 'disabled'}
-      >↶ Annuler la dernière modification</button>
+      >${trad('↶ Annuler la dernière modification')}</button>
     <p class="small muted" style="margin:12px 0 0">
-      Défait le dernier changement enregistré, quel qu’il soit : un relevé écrasé,
-      un montant corrigé, une ligne supprimée. Au clavier, Ctrl+Z fait la même chose.
-      Pour remonter plus loin qu’un geste, prends une sauvegarde ci-dessous.
+      ${trad('Défait le dernier changement enregistré, quel qu’il soit : un relevé écrasé, un montant corrigé, une ligne supprimée. Au clavier, Ctrl+Z fait la même chose. Pour remonter plus loin qu’un geste, prends une sauvegarde ci-dessous.')}
     </p>
   </div>
 
   <div class="card">
     <div class="card-head">
-      <h2>Sauvegardes automatiques</h2>
+      <h2>${trad('Sauvegardes automatiques')}</h2>
       <div class="row">
-        <span class="hint">${backups.length} / ${BACKUP_LIMIT} conservées dans ce navigateur</span>
-        <button class="btn sm ghost" data-action="make-backup">+ Sauvegarder maintenant</button>
+        <span class="hint">${backups.length} / ${BACKUP_LIMIT} ${trad('conservées dans ce navigateur')}</span>
+        <button class="btn sm ghost" data-action="make-backup">${trad('+ Sauvegarder maintenant')}</button>
       </div>
     </div>
     ${backups.length ? `
@@ -7242,7 +7132,7 @@ function viewData() {
         <tbody>${backups.map((b, i) => {
           const t = (b.data.positions || []).length;
           return `<tr>
-            <td class="name">${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+            <td class="name">${new Date(b.at).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' })}
               <span class="sub">${fmtWhen(b.at)}</span></td>
             <td class="muted">${esc(b.reason)}</td>
             <td>${t} positions</td>
@@ -7254,34 +7144,29 @@ function viewData() {
       <div class="liste-mobile">
         ${backups.map((b, i) => ligneListe({
           action: 'restore-backup', index: i,
-          titre: new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }),
+          titre: new Date(b.at).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }),
           /* Motif, anciennete et taille sur une seule ligne de sous-titre : ce
              sont trois precisions sur la meme sauvegarde, pas trois grandeurs a
              comparer entre elles. */
           sous: `${b.reason} · ${fmtWhen(b.at)} · ${(JSON.stringify(b.data).length / 1024).toFixed(0)} Ko`,
           valeur: `${(b.data.positions || []).length} positions`,
-          second: 'Restaurer',
+          second: trad('Restaurer'),
         })).join('')}
       </div>
       <p class="small muted" style="margin:12px 0 0">
-        Une sauvegarde est prise automatiquement au premier chargement de la journée,
-        et avant toute réinitialisation ou restauration. Restaurer crée d'abord une
-        sauvegarde de l'état actuel, rien n'est jamais perdu d'un seul clic.
+        ${trad('Une sauvegarde est prise automatiquement au premier chargement de la journée, et avant toute réinitialisation ou restauration. Restaurer crée d’abord une sauvegarde de l’état actuel, rien n’est jamais perdu d’un seul clic.')}
       </p>`
-      : `<p class="empty">Aucune sauvegarde pour l'instant.</p>`}
+      : `<p class="empty">${trad('Aucune sauvegarde pour l\'instant.')}</p>`}
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>État</h2></div>
+    <div class="card-head"><h2>${trad('État')}</h2></div>
     <dl class="kv">
       <dt>Positions</dt><dd>${Store.state.positions.length}</dd>
-      <dt>Lignes d'historique</dt><dd>${Store.state.monthly.length}</dd>
-      <dt>Comptes suivis</dt><dd>${ACCOUNTS.length}</dd>
-      <dt>Taille du stockage</dt><dd>${(JSON.stringify(Store.state).length / 1024).toFixed(1)} Ko</dd>
-      <dt>Version${aide('La version du code que tu es en train d’exécuter, lue sur la balise '
-        + 'du script. Si elle ne change pas après un déploiement, c’est que le navigateur '
-        + 'ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple '
-        + 'rechargement ne suffit pas toujours.')}</dt>
+      <dt>${trad('Lignes d\'historique')}</dt><dd>${Store.state.monthly.length}</dd>
+      <dt>${trad('Comptes suivis')}</dt><dd>${ACCOUNTS.length}</dd>
+      <dt>${trad('Taille du stockage')}</dt><dd>${(JSON.stringify(Store.state).length / 1024).toFixed(1)} Ko</dd>
+      <dt>${trad('Version')}${aide(trad("La version du code que tu es en train d’exécuter, lue sur la balise du script. Si elle ne change pas après un déploiement, c’est que le navigateur ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple rechargement ne suffit pas toujours."))}</dt>
         <dd style="font-family:var(--font-nb)">${esc(VERSION_APP)}</dd>
     </dl>
   </div>`;
@@ -7710,31 +7595,31 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
       valeur: l ? num(l.valeur) : '', exemple: '0',
       aide: estime ? 'ce que tu en tirerais en le vendant aujourd’hui'
                    : 'ce que la ligne vaut, capital et intérêts courus compris' },
-    { cle: 'prixDeRevient', label: 'Montant investi (€)', type: 'nombre',
+    { cle: 'prixDeRevient', label: trad('Montant investi (€)'), type: 'nombre',
       valeur: l ? (num(l.prixDeRevient) || '') : '', exemple: '0',
-      aide: 'facultatif, il donne la plus-value' },
+      aide: trad('facultatif, il donne la plus-value') },
     /* « Date d'entree » et non « date d'achat » : ce libelle-la est reserve aux
        lignes de marche, ou il porte une aide commune sur le rendement par an et
        l'effet du jour, textes qui ne veulent rien dire pour une moto. */
-    { cle: 'dateAcquisition', label: 'Date d’entrée', type: 'date',
+    { cle: 'dateAcquisition', label: trad('Date d’entrée'), type: 'date',
       valeur: l ? (l.dateAcquisition || '') : todayISO() },
     /* La date de l'estimation, pour les seules classes dont la valeur est une
        appreciation. Un pret non cote vaut son nominal, une SCPI a un prix de
        part publie : ni l'un ni l'autre ne se « revoit ». Une Rolex, si. */
-    ...(estime ? [{ cle: 'estimeLe', label: 'Estimée le', type: 'date',
+    ...(estime ? [{ cle: 'estimeLe', label: trad('Estimée le'), type: 'date',
       valeur: l ? (l.estimeLe || '') : todayISO(),
-      aide: 'la cloche te rappellera de la revoir dans un an' }] : []),
+      aide: trad('la cloche te rappellera de la revoir dans un an') }] : []),
     ...(echeancier ? [
-      { cle: 'taux', label: 'Taux annoncé (%)', type: 'nombre',
+      { cle: 'taux', label: trad('Taux annoncé (%)'), type: 'nombre',
         valeur: l ? (num(l.taux) || '') : '', exemple: '0',
-        aide: 'facultatif, celui du contrat' },
+        aide: trad('facultatif, celui du contrat') },
       { cle: 'echeance', label: 'Échéance', type: 'date',
         valeur: l ? (l.echeance || '') : '',
-        aide: 'la date de remboursement prévue' },
-      { cle: 'statut', label: 'Où en est-il ?', type: 'liste',
+        aide: trad('la date de remboursement prévue') },
+      { cle: 'statut', label: trad('Où en est-il ?'), type: 'liste',
         options: Object.entries(STATUTS_LIGNE),
         valeur: l ? statutLigne(l) : 'encours',
-        aide: 'à déclarer : une échéance dépassée ne veut pas dire en retard' },
+        aide: trad('à déclarer : une échéance dépassée ne veut pas dire en retard') },
     ] : []),
   ];
 }
@@ -7814,17 +7699,17 @@ const ACTIONS = {
    n'ecrit rien d'autre : ni cash, ni position, ni patrimoine.*/
   async 'declarer-vente'() {
     const v = await askForm({
-      titre: 'Déclarer une vente passée',
-      sous: 'Pour mémoire : rien d’autre ne bouge, ni cash ni patrimoine',
+      titre: trad('Déclarer une vente passée'),
+      sous: trad('Pour mémoire : rien d’autre ne bouge, ni cash ni patrimoine'),
       ok: 'Ajouter au journal',
       champs: [
-        { cle: 'name', label: 'Titre vendu', type: 'texte', requis: true,
+        { cle: 'name', label: trad('Titre vendu'), type: 'texte', requis: true,
           max: NOM_LIGNE_MAX, exemple: 'ex. Total, vendu sur l’ancien PEA' },
-        { cle: 'date', label: 'Date de la vente', type: 'date',
-          aide: 'même approximative : elle range la vente dans son année' },
-        { cle: 'gross', label: 'Montant encaissé (€)', type: 'nombre', exemple: '0' },
-        { cle: 'realised', label: 'Plus ou moins-value réalisée (€)', type: 'nombre', exemple: '0',
-          aide: 'négative si la vente a perdu : le prix de revient s’en déduit' },
+        { cle: 'date', label: trad('Date de la vente'), type: 'date',
+          aide: trad('même approximative : elle range la vente dans son année') },
+        { cle: 'gross', label: trad('Montant encaissé (€)'), type: 'nombre', exemple: '0' },
+        { cle: 'realised', label: trad('Plus ou moins-value réalisée (€)'), type: 'nombre', exemple: '0',
+          aide: trad('négative si la vente a perdu : le prix de revient s’en déduit') },
         { cle: 'note', label: 'Note', type: 'texte', exemple: 'facultatif' },
       ],
     });
@@ -7855,8 +7740,8 @@ const ACTIONS = {
        proposes. Les deux champs sont lies, la liste se refait a chaque
        changement. */
     const v = await askForm({
-      titre: 'Nouvelle ligne de titres',
-      sous: 'L’ISIN suffit : le symbole et le cours se remplissent à la prochaine actualisation',
+      titre: trad('Nouvelle ligne de titres'),
+      sous: trad('L’ISIN suffit : le symbole et le cours se remplissent à la prochaine actualisation'),
       lie: { de: 'assetClass', vers: 'account', options: comptesPourListe,
              vide: 'aucun compte ne peut porter cette classe' },
       champs: [
@@ -7864,21 +7749,21 @@ const ACTIONS = {
           exemple: 'ex. MSCI World', aide: `${NOM_LIGNE_MAX} caractères au plus : ce nom se lit `
             + `dans une colonne de tableau. Le nom officiel du titre reste sur sa fiche` },
         { cle: 'isin', label: 'ISIN', type: 'texte', exemple: 'ex. IE000OJ5TQP4',
-          aide: 'douze caractères, laisse vide si tu saisis le cours à la main' },
-        { cle: 'assetClass', label: 'Classe d’actif', type: 'liste', options: OPTIONS_CLASSE, valeur: 'actions' },
+          aide: trad('douze caractères, laisse vide si tu saisis le cours à la main') },
+        { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste', options: OPTIONS_CLASSE, valeur: 'actions' },
         { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE, valeur: 'satellite',
-          aide: 'coeur de portefeuille ou pari satellite' },
+          aide: trad('coeur de portefeuille ou pari satellite') },
         /* `nomCompte()` rend un champ de renommage, pas un libelle : dans une
            liste deroulante il s'afficherait comme du HTML brut. */
         { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe('ETF'),
-          valeur: defaultHoldingAccount(), aide: 'limité aux comptes compatibles' },
+          valeur: defaultHoldingAccount(), aide: trad('limité aux comptes compatibles') },
         { cle: 'qty', label: 'Quantité', type: 'nombre', exemple: '0' },
-        { cle: 'buyPrice', label: 'Prix de revient unitaire', type: 'nombre', exemple: '0' },
+        { cle: 'buyPrice', label: trad('Prix de revient unitaire'), type: 'nombre', exemple: '0' },
         { cle: 'currency', label: 'Devise', type: 'liste', options: CURRENCIES.map(c => [c, c]), valeur: 'EUR' },
-        { cle: 'dateAchat', label: 'Date d’achat', type: 'date', valeur: todayISO(),
+        { cle: 'dateAchat', label: trad('Date d’achat'), type: 'date', valeur: todayISO(),
           aide: DATE_ACHAT_AIDE },
-        { cle: 'manual', label: 'Valeur saisie à la main', type: 'case',
-          aide: 'coche si aucun cours ne peut être récupéré' },
+        { cle: 'manual', label: trad('Valeur saisie à la main'), type: 'case',
+          aide: trad('coche si aucun cours ne peut être récupéré') },
       ],
     });
     if (!v) return;
@@ -8036,14 +7921,14 @@ const ACTIONS = {
     const premiere = libres[0][0];
     const gardee = cibles.ciblesRetirees && cibles.ciblesRetirees[premiere];
     const v = await askForm({
-      titre: 'Suivre une classe',
+      titre: trad('Suivre une classe'),
       sous: `Tes cibles totalisent ${somme} %. Une somme de 100 % rend les montants cibles exacts.`,
       ok: 'Suivre',
       champs: [
-        { cle: 'classe', label: 'Classe d’actif', type: 'liste', options: libres, valeur: premiere },
+        { cle: 'classe', label: trad('Classe d’actif'), type: 'liste', options: libres, valeur: premiere },
         { cle: 'cible', label: 'Cible', type: 'nombre',
           valeur: gardee !== undefined ? sommeCibleDe(gardee) : 0,
-          aide: 'en % du portefeuille, modifiable ensuite dans la liste' },
+          aide: trad('en % du portefeuille, modifiable ensuite dans la liste') },
       ],
     });
     if (!v) return;
@@ -8220,7 +8105,7 @@ const ACTIONS = {
     const mot = contenantDeLEtab(e.id);
     const siens = COMPTES().filter(c => c.etabId === e.id && c.statut !== 'archive');
     const v = await askForm({
-      titre: 'Modifier l’établissement', sous: e.nom, ok: 'Enregistrer',
+      titre: trad('Modifier l’établissement'), sous: e.nom, ok: 'Enregistrer',
       champs: [
         { cle: 'nom', label: 'Nom', type: 'texte', requis: true,
           valeur: e.nom, exemple: 'ex. ta banque en ligne' },
@@ -8240,6 +8125,16 @@ const ACTIONS = {
     });
     if (!v) return;
     e.nom = v.nom.trim();
+    /* Cas miroir du champ « Nom du bien » : le contenant d'un bien detenu en
+       direct et ce bien ne designent qu'une chose, ils ne doivent porter qu'un
+       nom. Renommer l'etablissement renomme donc aussi la ligne et le compte,
+       sinon la carte de la liste des actifs et son contenu divergent. */
+    const tous = COMPTES().filter(x => x.etabId === e.id);
+    if (tous.length === 1 && estDetenuEnDirect(typeCompte(tous[0].type))
+        && (tous[0].lignes || []).length === 1 && !(tous[0].cash || []).length) {
+      tous[0].lignes[0].libelle = e.nom;
+      if (tous[0].libelle) tous[0].libelle = e.nom;
+    }
     /* Une note vide efface la cle plutot que d'ecrire une chaine vide : c'est ce
        que fait `setPath` pour la saisie directe, et deux regimes d'effacement sur
        le meme champ finiraient par se contredire. */
@@ -8275,9 +8170,10 @@ const ACTIONS = {
         valeur: valeur('libelle', c.libelle || ''), exemple: t.label }];
 
       if (!t.interne) champs.push({ cle: 'type', label: `Type de ${motCompte(t)}`, type: 'liste',
-        options: TYPES_COMPTE.filter(x => !x.interne).map(x => [x.id, x.label]),
+        options: [...typesCompteChoix().map(x => [x.id, x.label]),
+                  ['__nouveau', trad('+ Autre type…')]],
         valeur: valeur('type', c.type),
-        aide: 'il commande la poche du patrimoine et la disponibilité' });
+        aide: trad('il commande la poche du patrimoine et la disponibilité') });
 
       /* Le rattachement, modifiable apres coup.
 
@@ -8298,11 +8194,11 @@ const ACTIONS = {
         champs.push({ cle: 'etab', label: `${mot.titre}`, type: 'liste',
           options: [...compatibles.map(e => [e.id, e.nom]), ['__nouveau', `+ ${mot.nouveau}…`]],
           valeur: valeur('etab', c.etabId || compatibles[0]?.id || '__nouveau'),
-          aide: 'un crédit se pose sur ce niveau : deux biens rattachés au même '
+          aide: trad('un crédit se pose sur ce niveau : deux biens rattachés au même ')
               + 'le partagent' });
       }
 
-      if (t.id === 'livret') champs.push({ cle: 'plafond', label: 'Plafond de versement (€)',
+      if (t.id === 'livret') champs.push({ cle: 'plafond', label: trad('Plafond de versement (€)'),
         type: 'nombre', valeur: valeur('plafond', num(c.plafond) || ''), exemple: 'ex. 22950',
         aide: 'facultatif' });
 
@@ -8310,7 +8206,7 @@ const ACTIONS = {
         { cle: 'ouvertLe', label: motDateCompte(typeCompte(c.type)), type: 'date',
           valeur: valeur('ouvertLe', c.ouvertLe || ''),
           aide: t.dateSensible ? 'elle commande la disponibilité de ce compte' : 'facultatif' },
-        { cle: 'numero', label: 'Numéro de compte', type: 'texte',
+        { cle: 'numero', label: trad('Numéro de compte'), type: 'texte',
           valeur: valeur('numero', c.numero || ''), aide: 'facultatif' });
 
       /* La date de cloture ne se corrige que sur un compte deja archive. Elle
@@ -8319,13 +8215,22 @@ const ACTIONS = {
          n'existe. L'offrir sur un compte ouvert ferait de ce formulaire une
          seconde facon de cloturer, muette et sans confirmation. */
       if (c.statut === 'archive') champs.push(
-        { cle: 'clotureLe', label: 'Date de clôture', type: 'date',
+        { cle: 'clotureLe', label: trad('Date de clôture'), type: 'date',
           valeur: valeur('clotureLe', c.clotureLe || ''),
-          aide: 'facultative, elle situe le compte dans le temps' });
+          aide: trad('facultative, elle situe le compte dans le temps') });
 
       const v = await askForm({ titre: `Modifier le ${motCompte(typeCompte(c.type))}`, sous: nomCompteV2(c),
                                 champs, ok: 'Enregistrer' });
       if (!v) return;
+
+      /* Le type libre suit le motif du contenant, juste en dessous : l'option
+         « + Autre… » se regle a la validation, et un renoncement ne doit rien
+         avoir change. */
+      if (v.type === '__nouveau') {
+        const id = await demanderTypePerso();
+        if (!id) { saisi = v; continue; }
+        v.type = id;
+      }
 
       if (v.type && v.type !== c.type) {
         const verdict = changementDeTypePossible(c, v.type);
@@ -8377,6 +8282,15 @@ const ACTIONS = {
           && (c.lignes || []).length === 1 && !(c.cash || []).length
           && String(v.libelle || '').trim()) {
         c.lignes[0].libelle = String(v.libelle).trim();
+        /* Le contenant est le troisieme exemplaire du meme nom : un bien
+           detenu en direct EST son contenant, et la carte de la liste des
+           actifs affiche `etab.nom`. Meme regle que le champ « Nom du bien » :
+           seulement quand l'etablissement n'a que ce compte — un parking
+           rattache au meme contenant garde son nom propre. */
+        const etab = etabById(c.etabId);
+        if (etab && COMPTES().filter(x => x.etabId === etab.id).length === 1) {
+          etab.nom = String(v.libelle).trim();
+        }
       }
       if (v.type) c.type = v.type;
       if ('plafond' in v) pose('plafond', num(v.plafond) || 0);
@@ -8460,16 +8374,21 @@ const ACTIONS = {
        contenant. Demander « banque ou courtier » avant de savoir qu'il
        s'agit d'une maison n'avait pas de sens. */
     const e1 = await askForm({
-      titre: 'Qu’ajoutes-tu ?',
+      titre: trad('Qu’ajoutes-tu ?'),
       sous: `Étape 1 sur ${etapes}${etabImpose ? `, chez ${etabById(etabImpose).nom}`
         : ', cela détermine les placements possibles'}`,
       ok: 'Continuer',
       /* Les especes sont hors liste : il en existe deja un, pour tout le monde.
          En creer un second partagerait le meme argent en deux endroits. */
       champs: [{ cle: 'type', label: 'Type', type: 'liste',
-        options: TYPES_COMPTE.filter(t => !t.interne).map(t => [t.id, t.label]), valeur: 'courant' }],
+        options: [...typesCompteChoix().map(t => [t.id, t.label]),
+                  ['__nouveau', trad('+ Autre type…')]], valeur: 'courant' }],
     });
     if (!e1) return;
+    if (e1.type === '__nouveau') {
+      e1.type = await demanderTypePerso();
+      if (!e1.type) return;
+    }
     const t = typeCompte(e1.type);
     const mot = contenantDuType(t.id);
 
@@ -8511,7 +8430,7 @@ const ACTIONS = {
          d'office jetterait un nom qu'il a fallu taper. Mais il porte desormais la
          raison de sa presence. */
       const e2 = await askForm({
-        titre: mot.titre, sous: 'Étape 2 sur 3',
+        titre: mot.titre, sous: trad('Étape 2 sur 3'),
         ok: 'Continuer',
         champs: [{ cle: 'etab', label: mot.question, type: 'liste', aide: mot.aide,
           options: [...proposables.map(e => [e.id,
@@ -8559,9 +8478,9 @@ const ACTIONS = {
            et la ligne retombait sur le libelle du type : deux montres et un
            tableau s'affichaient tous les trois « Bien de valeur ». Signale dans
            le meme echange : « il faut pouvoir mettre un nom sur le bien ». */
-        ...(t.sansEtab ? [{ cle: 'nom', label: 'Nom du bien', type: 'texte', requis: true,
+        ...(t.sansEtab ? [{ cle: 'nom', label: trad('Nom du bien'), type: 'texte', requis: true,
           max: NOM_LIGNE_MAX, exemple: 'ex. Rolex Submariner',
-          aide: 'une montre, une voiture, un tableau : ce nom s’affichera partout' }] : []),
+          aide: trad('une montre, une voiture, un tableau : ce nom s’affichera partout') }] : []),
         /* « Valeur estimée » et non « valeur actuelle » pour un bien de valeur.
 
            La demande vaut pour le bien de valeur, mais l'immobilier est logé à
@@ -8573,8 +8492,8 @@ const ACTIONS = {
           type: 'nombre', exemple: '0',
           aide: estDetenuEnDirect(t) ? 'ce que tu en tirerais en le vendant aujourd’hui'
               : 'ce que cela vaut aujourd’hui' },
-        { cle: 'revient', label: 'Montant investi (€)', type: 'nombre', exemple: '0',
-          aide: 'prix d’acquisition, frais compris' },
+        { cle: 'revient', label: trad('Montant investi (€)'), type: 'nombre', exemple: '0',
+          aide: trad('prix d’acquisition, frais compris') },
         { cle: 'ouvertLe', label: motDateCompte(t), type: 'date' },
         /* La date de l'estimation, distincte de celle de l'achat.
 
@@ -8585,8 +8504,8 @@ const ACTIONS = {
            credit, et meme regle : c'est le geste de quelqu'un qui a regarde,
            jamais une supposition. Pre-remplie au jour de la saisie, parce qu'on
            saisit ce qu'on vient d'estimer. */
-        { cle: 'estimeLe', label: 'Estimée le', type: 'date', valeur: todayISO(),
-          aide: 'la cloche te rappellera de la revoir dans un an' },
+        { cle: 'estimeLe', label: trad('Estimée le'), type: 'date', valeur: todayISO(),
+          aide: trad('la cloche te rappellera de la revoir dans un an') },
         /* Le credit se saisit ici, pas plus tard : un bien finance a credit
            sans sa dette affiche un patrimoine net faux des la creation.
 
@@ -8594,22 +8513,22 @@ const ACTIONS = {
            bien de valeur n'en a aucun. Offrir le champ demanderait d'en inventer
            un pour le porter, ce que ce parcours vient justement d'eviter. */
         ...(t.sansEtab ? [] : [
-        { cle: 'credit', label: 'Capital restant dû (€)', type: 'nombre', exemple: '0',
-          aide: 'laisse 0 si c’est payé, sinon la dette se déduit du patrimoine net' },
+        { cle: 'credit', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
+          aide: trad('laisse 0 si c’est payé, sinon la dette se déduit du patrimoine net') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
           suggestions: valeursConnues('preteur'),
-          aide: 'la banque qui prête, si ce n’est pas toi' },
+          aide: trad('la banque qui prête, si ce n’est pas toi') },
         /* La mensualite et le taux, ici aussi.
 
            Deux champs de plus et la case, les memes que la fenetre du credit. Le
            taux n'est pas un ornement : c'est lui qui permet de dire quelle part de
            la mensualite rembourse vraiment, et de projeter le solde. */
-        { cle: 'mensualite', label: 'Mensualité (€)', type: 'nombre', exemple: '0',
-          aide: 'facultatif, mais c’est elle qui entre dans ton budget' },
-        { cle: 'taux', label: 'Taux annuel (%)', type: 'nombre', exemple: '0',
-          aide: 'facultatif, il sert à suivre le capital qui reste' },
-        { cle: 'charge', label: 'Ajouter une charge mensuelle fixe', type: 'case', valeur: true,
-          aide: 'seulement si tu renseignes une mensualité : elle entrera dans ton '
+        { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0',
+          aide: trad('facultatif, mais c’est elle qui entre dans ton budget') },
+        { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
+          aide: trad('facultatif, il sert à suivre le capital qui reste') },
+        { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
+          aide: trad('seulement si tu renseignes une mensualité : elle entrera dans ton ')
               + 'budget sous ce nom' },
         ]),
       ] : [
@@ -8623,17 +8542,17 @@ const ACTIONS = {
            Seuls les comptes tenus par une banque le demandent. Pour un bien ou
            une part de societe, l'etape 2 a deja nomme la chose elle-meme, et
            redemander ici ferait deux champs pour une seule valeur. */
-        { cle: 'libelle', label: 'Nom du compte', type: 'texte',
+        { cle: 'libelle', label: trad('Nom du compte'), type: 'texte',
           valeur: `${t.label} ${nomContenant()}`.trim(),
-          aide: 'c’est lui qui distingue deux comptes du même type' },
-        { cle: 'montant', label: 'Montant (€)', type: 'nombre', exemple: '0' },
-        { cle: 'usage', label: 'À quoi sert cet argent ?', type: 'liste',
+          aide: trad('c’est lui qui distingue deux comptes du même type') },
+        { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', exemple: '0' },
+        { cle: 'usage', label: trad('À quoi sert cet argent ?'), type: 'liste',
           options: AFFECTATIONS, valeur: t.defaut,
-          aide: 'pré-rempli selon le type de compte, modifiable librement' },
-        { cle: 'scinder', label: 'Scinder : déclarer un second usage', type: 'case',
-          aide: 'deux usages sur le même compte, sans le dupliquer' },
-        ...(t.dateSensible ? [{ cle: 'ouvertLe', label: 'Date d’ouverture', type: 'date',
-          aide: 'elle conditionne la disponibilité, cinq ans pour un PEA' }] : []),
+          aide: trad('pré-rempli selon le type de compte, modifiable librement') },
+        { cle: 'scinder', label: trad('Scinder : déclarer un second usage'), type: 'case',
+          aide: trad('deux usages sur le même compte, sans le dupliquer') },
+        ...(t.dateSensible ? [{ cle: 'ouvertLe', label: trad('Date d’ouverture'), type: 'date',
+          aide: trad('elle conditionne la disponibilité, cinq ans pour un PEA') }] : []),
       ],
     });
     if (!e3) return;
@@ -8677,11 +8596,11 @@ const ACTIONS = {
       cash.push({ montant: num(e3.montant), affectation: e3.usage });
       if (e3.scinder) {
         const e4 = await askForm({
-          titre: 'Seconde part', sous: 'Le même compte, un autre usage',
+          titre: trad('Seconde part'), sous: trad('Le même compte, un autre usage'),
           ok: 'Ajouter cette part',
           champs: [
-            { cle: 'montant', label: 'Montant (€)', type: 'nombre', exemple: '0' },
-            { cle: 'usage', label: 'À quoi sert cet argent ?', type: 'liste',
+            { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', exemple: '0' },
+            { cle: 'usage', label: trad('À quoi sert cet argent ?'), type: 'liste',
               options: AFFECTATIONS.filter(([v]) => v !== e3.usage),
               valeur: AFFECTATIONS.find(([v]) => v !== e3.usage)[0] },
           ],
@@ -8735,11 +8654,11 @@ const ACTIONS = {
     if (!c) return;
     const v = await askForm({
       titre: `Archiver « ${nomCompteV2(c)} » ?`,
-      sous: 'Il sort de tous les totaux et garde son historique. Restaurable à tout moment.',
+      sous: trad('Il sort de tous les totaux et garde son historique. Restaurable à tout moment.'),
       ok: 'Archiver',
       champs: [
-        { cle: 'clotureLe', label: 'Date de clôture', type: 'date', valeur: todayISO(),
-          aide: 'facultative. C’est elle qui situe le compte dans le temps : une '
+        { cle: 'clotureLe', label: trad('Date de clôture'), type: 'date', valeur: todayISO(),
+          aide: trad('facultative. C’est elle qui situe le compte dans le temps : une ')
               + 'vente passée sur un PEA clôturé se relit autrement quand on sait '
               + 'quand il a fermé' },
       ],
@@ -8938,8 +8857,8 @@ const ACTIONS = {
       sous: `${CLASSES_ACTIFS[l.classe] || l.classe} · ${nomCompteV2(c)}`,
       ok: 'Enregistrer',
       champs: [...champsPlacement(l.classe, l, typeCompte(c.type).prete, typeCompte(c.type)),
-        { cle: 'supprimer', label: 'Retirer ce placement', type: 'case',
-          aide: 'La ligne disparaît en validant, et son montant quitte ton patrimoine. '
+        { cle: 'supprimer', label: trad('Retirer ce placement'), type: 'case',
+          aide: trad('La ligne disparaît en validant, et son montant quitte ton patrimoine. ')
               + 'Réversible avec Ctrl+Z' }],
     });
     if (!v) return;
@@ -8964,18 +8883,18 @@ const ACTIONS = {
     if (!c) return;
     const v = await askForm({
       titre: `Loyer de ${nomCompteV2(c)}`,
-      sous: 'Le montant net perçu chaque mois, charges déduites si tu les paies',
+      sous: trad('Le montant net perçu chaque mois, charges déduites si tu les paies'),
       ok: 'Ajouter',
       champs: [
         { cle: 'label', label: 'Source', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
           valeur: `Loyer ${nomCompteV2(c)}`, exemple: 'ex. Loyer studio Lyon' },
-        { cle: 'amount', label: 'Montant mensuel (€)', type: 'nombre', exemple: '0' },
+        { cle: 'amount', label: trad('Montant mensuel (€)'), type: 'nombre', exemple: '0' },
       ],
     });
     if (!v) return;
     Store.state.budget.income.push({ label: v.label, amount: num(v.amount), bienId: c.id });
     Store.save(); render();
-    toast(`« ${v.label} » · ${fmtEUR0(num(v.amount))} / mois`);
+    toast(`« ${v.label} » · ${fmtEUR0(num(v.amount))} ${trad('/ mois')}`);
   },
 
   /* Une charge du bien, meme raisonnement. La periode reste offerte : une taxe
@@ -8986,7 +8905,7 @@ const ACTIONS = {
     if (!c) return;
     const v = await askForm({
       titre: `Charge de ${nomCompteV2(c)}`,
-      sous: 'Le montant se saisit tel qu’il est facturé, le budget ramène au mois',
+      sous: trad('Le montant se saisit tel qu’il est facturé, le budget ramène au mois'),
       ok: 'Ajouter',
       champs: [
         { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
@@ -9003,7 +8922,7 @@ const ACTIONS = {
       provider: v.provider || '', shares: {}, creditId: null, bienId: c.id,
     });
     Store.save(); render();
-    toast(`« ${v.label} » · ${fmtEUR(chargeMensuelle({ amount: num(v.amount), period: v.period }))} / mois`);
+    toast(`« ${v.label} » · ${fmtEUR(chargeMensuelle({ amount: num(v.amount), period: v.period }))} ${trad('/ mois')}`);
   },
 
   async 'ajouter-credit'(btn) {
@@ -9011,23 +8930,23 @@ const ACTIONS = {
     if (!e) return;
     const v = await askForm({
       titre: `Crédit chez ${e.nom}`,
-      sous: 'Il pèse en négatif sur le patrimoine net',
+      sous: trad('Il pèse en négatif sur le patrimoine net'),
       ok: 'Ajouter',
       champs: [
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, exemple: 'ex. Prêt immobilier' },
-        { cle: 'montant', label: 'Capital restant dû (€)', type: 'nombre', exemple: '0' },
+        { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0' },
         /* Le capital emprunté ne se déduit pas du restant dû, et c'est lui qui
            permet de dire ce qui est déjà remboursé. Facultatif : un vieux prêt
            dont on a oublié le montant initial reste utilisable. */
-        { cle: 'initial', label: 'Capital emprunté au départ (€)', type: 'nombre', exemple: '0',
-          aide: 'facultatif, sert à mesurer ce qui est déjà remboursé' },
-        { cle: 'mensualite', label: 'Mensualité (€)', type: 'nombre', exemple: '0', aide: 'facultatif' },
-        { cle: 'taux', label: 'Taux annuel (%)', type: 'nombre', exemple: '0',
-          aide: 'facultatif, noté pour mémoire' },
+        { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre', exemple: '0',
+          aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
+        { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: 'facultatif' },
+        { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
+          aide: trad('facultatif, noté pour mémoire') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
           suggestions: valeursConnues('preteur') },
-        { cle: 'charge', label: 'Ajouter une charge mensuelle fixe', type: 'case', valeur: true,
-          aide: 'seulement si tu renseignes une mensualité : elle entrera dans ton '
+        { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
+          aide: trad('seulement si tu renseignes une mensualité : elle entrera dans ton ')
               + 'budget sous ce nom, et suivra le capital restant dû' },
       ],
     });
@@ -9047,7 +8966,7 @@ const ACTIONS = {
     const posee = v.charge && creerChargeDuCredit(e.dettes[e.dettes.length - 1]);
     if (posee) { Store.save(); render(); }
     toast(posee
-      ? `Crédit « ${v.libelle} » ajouté, et sa charge de ${fmtEUR0(num(v.mensualite))} / mois`
+      ? `Crédit « ${v.libelle} » ajouté, et sa charge de ${fmtEUR0(num(v.mensualite))} ${trad('/ mois')}`
       : `Crédit « ${v.libelle} » ajouté`);
   },
 
@@ -9089,7 +9008,7 @@ const ACTIONS = {
            renegociation ou un differe le rendent caduc, et l'application ne peut
            pas le savoir. Elle propose un chiffre a recopier si rien n'a change,
            et c'est le detenteur qui tranche. */
-        { cle: 'montant', label: 'Capital restant dû (€)', type: 'nombre', valeur: num(d.montant),
+        { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', valeur: num(d.montant),
           aide: (() => {
             const pr = projectionCredit(d);
             if (pr.projete == null || pr.ecart < 1) {
@@ -9099,21 +9018,21 @@ const ACTIONS = {
               + `mois : à recopier si tu n’as rien remboursé par avance`;
           })() },
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, valeur: d.libelle || '' },
-        { cle: 'initial', label: 'Capital emprunté au départ (€)', type: 'nombre',
-          valeur: num(d.initial) || '', aide: 'facultatif, sert à mesurer ce qui est déjà remboursé' },
-        ...(lien ? [] : [{ cle: 'mensualite', label: 'Mensualité (€)', type: 'nombre',
+        { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre',
+          valeur: num(d.initial) || '', aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
+        ...(lien ? [] : [{ cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre',
           valeur: num(d.mensualite) || '',
-          aide: 'facultatif. Mieux : rattache-le à une charge fixe, le montant '
+          aide: trad('facultatif. Mieux : rattache-le à une charge fixe, le montant ')
               + 'ne sera alors saisi qu’une fois' }]),
-        { cle: 'taux', label: 'Taux annuel (%)', type: 'nombre',
-          valeur: num(d.taux) || '', aide: 'facultatif, noté pour mémoire' },
+        { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre',
+          valeur: num(d.taux) || '', aide: trad('facultatif, noté pour mémoire') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', valeur: d.preteur || '',
           exemple: 'ex. Crédit Agricole', suggestions: valeursConnues('preteur') },
         /* Pas de case quand une charge rembourse deja : il n'y a rien a creer, et
            la fenetre le dit deja dans son sous-titre. */
-        ...(lien ? [] : [{ cle: 'charge', label: 'Ajouter une charge mensuelle fixe',
+        ...(lien ? [] : [{ cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'),
           type: 'case', valeur: true,
-          aide: 'seulement si une mensualité est renseignée : elle entrera dans ton '
+          aide: trad('seulement si une mensualité est renseignée : elle entrera dans ton ')
               + 'budget sous ce nom, et suivra le capital restant dû' }]),
       ],
     });
@@ -9141,7 +9060,7 @@ const ACTIONS = {
       : `${d.libelle} enregistré`);
     if (v.charge && creerChargeDuCredit(d)) {
       Store.save(); render();
-      toast(`« ${d.libelle} » ajoutée aux charges fixes · ${fmtEUR0(fixedTotal())} / mois`);
+      toast(`« ${d.libelle} » ajoutée aux charges fixes · ${fmtEUR0(fixedTotal())} ${trad('/ mois')}`);
     }
   },
   async 'retirer-credit'(btn) {
@@ -9297,11 +9216,11 @@ const ACTIONS = {
   async 'regler-objectif-depenses'() {
     const actuel = num(Store.state.budget.monthlyTarget);
     const r = await askForm({
-      titre: 'Objectif de dépenses',
-      sous: 'Ce que tu ne veux pas dépasser sur un mois',
-      champs: [{ cle: 'montant', label: 'Objectif de dépenses mensuel (€)',
+      titre: trad('Objectif de dépenses'),
+      sous: trad('Ce que tu ne veux pas dépasser sur un mois'),
+      champs: [{ cle: 'montant', label: trad('Objectif de dépenses mensuel (€)'),
                  type: 'nombre', valeur: actuel || '', exemple: '1000',
-                 aide: 'À l’euro. Laisse vide pour ne pas te fixer d’objectif.' }],
+                 aide: trad('À l’euro. Laisse vide pour ne pas te fixer d’objectif.') }],
       ok: 'Enregistrer',
     });
     if (!r) return;
@@ -9470,7 +9389,7 @@ const ACTIONS = {
         ? 'De l’argent parti une fois : une voiture, des travaux, un voyage'
         : 'De l’argent reçu une fois : héritage, prime, vente d’un bien',
       champs: [
-        { cle: 'libelle', label: 'De quoi s’agit-il ?', type: 'texte', requis: true,
+        { cle: 'libelle', label: trad('De quoi s’agit-il ?'), type: 'texte', requis: true,
           exemple: sortie ? 'ex. Voiture' : 'ex. Succession' },
         { cle: 'montant', label: sortie ? 'Montant dépensé (€)' : 'Montant reçu (€)',
           type: 'nombre', exemple: '0' },
@@ -9499,19 +9418,19 @@ const ACTIONS = {
     const etaitSortie = num(a.montant) < 0;
     const v = await askForm({
       titre: a.libelle || (etaitSortie ? 'Dépense exceptionnelle' : 'Rentrée exceptionnelle'),
-      sous: 'Ces montants ne bougent aucun solde : ils disent d’où vient l’argent, ou où il est parti',
+      sous: trad('Ces montants ne bougent aucun solde : ils disent d’où vient l’argent, ou où il est parti'),
       ok: 'Enregistrer',
       champs: [
-        { cle: 'libelle', label: 'De quoi s’agit-il ?', type: 'texte', requis: true,
+        { cle: 'libelle', label: trad('De quoi s’agit-il ?'), type: 'texte', requis: true,
           valeur: a.libelle || '' },
         { cle: 'sens', label: 'Nature', type: 'liste',
           options: [['entree', 'Rentrée, de l’argent reçu'], ['sortie', 'Dépense, de l’argent parti']],
           valeur: etaitSortie ? 'sortie' : 'entree' },
-        { cle: 'montant', label: 'Montant (€)', type: 'nombre', valeur: Math.abs(num(a.montant)) },
+        { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', valeur: Math.abs(num(a.montant)) },
         { cle: 'date', label: 'Date', type: 'date', valeur: a.date || '' },
         { cle: 'note', label: 'Note', type: 'texte', valeur: a.note || '' },
-        { cle: 'supprimer', label: 'Supprimer cette ligne', type: 'case',
-          aide: 'La ligne disparaît en validant. Réversible avec Ctrl+Z' },
+        { cle: 'supprimer', label: trad('Supprimer cette ligne'), type: 'case',
+          aide: trad('La ligne disparaît en validant. Réversible avec Ctrl+Z') },
       ],
     });
     if (!v) return;
@@ -9540,8 +9459,8 @@ const ACTIONS = {
     for (;;) {
       const gens = contributors();
       const v = await askForm({
-        titre: 'Nouvelle charge fixe',
-        sous: 'Le montant se saisit tel qu’il est facturé, le budget ramène au mois',
+        titre: trad('Nouvelle charge fixe'),
+        sous: trad('Le montant se saisit tel qu’il est facturé, le budget ramène au mois'),
         encore: 'Enregistrer et en ajouter une autre',
         champs: [
           { cle: 'label', label: 'Poste', type: 'texte', requis: true, exemple: 'ex. Assurance habitation' },
@@ -9550,14 +9469,14 @@ const ACTIONS = {
           { cle: 'provider', label: 'Organisme', type: 'texte', exemple: 'ex. MAIF',
             suggestions: valeursConnues('organisme') },
           ...(creditsEnCours().lignes.length ? [{ cle: 'creditId', type: 'liste',
-            label: 'Rembourse un crédit ?', options: creditsRattachables(), valeur: '',
-            aide: 'la mensualité servira alors à suivre le capital restant dû' }] : []),
+            label: trad('Rembourse un crédit ?'), options: creditsRattachables(), valeur: '',
+            aide: trad('la mensualité servira alors à suivre le capital restant dû') }] : []),
           ...(comptesBiens().length ? [{ cle: 'bienId', type: 'liste',
-            label: 'Charge d’un bien immobilier ?', options: optionsBiens(), valeur: '',
-            aide: 'taxe foncière, copropriété, assurance PNO : elle entrera dans le '
+            label: trad('Charge d’un bien immobilier ?'), options: optionsBiens(), valeur: '',
+            aide: trad('taxe foncière, copropriété, assurance PNO : elle entrera dans le ')
                 + 'cash-flow du bien' }] : []),
           ...gens.map(p => ({ cle: `part_${p.id}`, label: `Part de ${p.name}`, type: 'nombre',
-                              aide: 'sur la même période que le montant' })),
+                              aide: trad('sur la même période que le montant') })),
         ],
       });
       if (!v) return;
@@ -9568,7 +9487,7 @@ const ACTIONS = {
         creditId: v.creditId || null, bienId: v.bienId || null,
       });
       Store.save(); render();
-      toast(`« ${v.label} » ajoutée · ${fmtEUR(chargeMensuelle({ amount: v.amount, period: v.period }))} / mois`);
+      toast(`« ${v.label} » ajoutée · ${fmtEUR(chargeMensuelle({ amount: v.amount, period: v.period }))} ${trad('/ mois')}`);
       if (!v.__encore) return;
     }
   },
@@ -9600,19 +9519,19 @@ const ACTIONS = {
         { cle: 'provider', label: 'Organisme', type: 'texte', valeur: c.provider || '',
           suggestions: valeursConnues('organisme') },
         ...(creditsEnCours().lignes.length || c.creditId ? [{ cle: 'creditId', type: 'liste',
-          label: 'Rembourse un crédit ?', options: creditsRattachables(c.creditId),
+          label: trad('Rembourse un crédit ?'), options: creditsRattachables(c.creditId),
           valeur: c.creditId || '',
-          aide: 'la mensualité servira alors à suivre le capital restant dû' }] : []),
+          aide: trad('la mensualité servira alors à suivre le capital restant dû') }] : []),
         ...(comptesBiens().length || c.bienId ? [{ cle: 'bienId', type: 'liste',
-          label: 'Charge d’un bien immobilier ?', options: optionsBiens(),
+          label: trad('Charge d’un bien immobilier ?'), options: optionsBiens(),
           valeur: c.bienId || '',
-          aide: 'taxe foncière, copropriété, assurance PNO : elle entrera dans le '
+          aide: trad('taxe foncière, copropriété, assurance PNO : elle entrera dans le ')
               + 'cash-flow du bien' }] : []),
         ...gens.map(p => ({ cle: `part_${p.id}`, label: `Part de ${p.name}`, type: 'nombre',
                             valeur: shareOf(c, p.id) || '',
-                            aide: 'sur la même période que le montant' })),
-        { cle: 'supprimer', label: 'Supprimer cette charge', type: 'case',
-          aide: 'La ligne disparaît en validant. Réversible avec Ctrl+Z' },
+                            aide: trad('sur la même période que le montant') })),
+        { cle: 'supprimer', label: trad('Supprimer cette charge'), type: 'case',
+          aide: trad('La ligne disparaît en validant. Réversible avec Ctrl+Z') },
       ],
     });
     if (!v) return;
@@ -9629,17 +9548,17 @@ const ACTIONS = {
     c.shares = c.shares || {};
     for (const p of gens) c.shares[p.id] = num(v[`part_${p.id}`]) || 0;
     Store.save(); render();
-    toast(`« ${c.label} » · ${fmtEUR(chargeMensuelle(c))} / mois`);
+    toast(`« ${c.label} » · ${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`);
   },
 
   async 'add-income'() {
     const v = await askForm({
-      titre: 'Nouvelle source de revenu',
-      sous: 'Montant net perçu chaque mois',
+      titre: trad('Nouvelle source de revenu'),
+      sous: trad('Montant net perçu chaque mois'),
       champs: [
         { cle: 'label', label: 'Source', type: 'texte', requis: true, exemple: 'ex. Salaire',
           suggestions: valeursConnues('source') },
-        { cle: 'amount', label: 'Montant mensuel (€)', type: 'nombre', exemple: '0' },
+        { cle: 'amount', label: trad('Montant mensuel (€)'), type: 'nombre', exemple: '0' },
       ],
     });
     /* La fenetre de saisie a pris la place de celle des revenus : on y
@@ -9773,8 +9692,8 @@ const ACTIONS = {
       if (!data) { toast('Rien en ligne'); return; }
       const at = data.meta?.savedAt;
       if (!await askConfirm(`Recharger les données depuis le cloud ?\n\n`
-        + `En ligne : ${at ? new Date(at).toLocaleString('fr-FR') : 'inconnue'}\n`
-        + `Ici      : ${new Date(Store.state.meta.savedAt || Date.now()).toLocaleString('fr-FR')}\n\n`
+        + `En ligne : ${at ? new Date(at).toLocaleString(locale()) : 'inconnue'}\n`
+        + `Ici      : ${new Date(Store.state.meta.savedAt || Date.now()).toLocaleString(locale())}\n\n`
         + `L'état actuel sera sauvegardé avant remplacement.`)) return;
       Store.addBackup('avant rechargement cloud');
       Store.state = data; Store.migrate(); Store.save();
@@ -9788,7 +9707,7 @@ const ACTIONS = {
   async 'restore-backup'(btn) {
     const i = +btn.dataset.i, b = Store.backups()[i];
     if (!b) return;
-    if (!await askConfirm(`Restaurer la sauvegarde du ${new Date(b.at).toLocaleString('fr-FR')} ?\n\n`
+    if (!await askConfirm(`Restaurer la sauvegarde du ${new Date(b.at).toLocaleString(locale())} ?\n\n`
       + `L'état actuel sera d'abord sauvegardé, tu pourras donc revenir en arrière.`)) return;
     Store.restoreBackup(i);
     render(); toast('Sauvegarde restaurée');
@@ -10043,10 +9962,10 @@ function fenetreRevenus() {
           <div class="field rev-nom">
             <label>Source</label>
             <input data-path="budget.income.${i}.label" value="${esc(r.label)}"
-                   placeholder="ex. Salaire, loyer perçu">
+                   placeholder="${trad('ex. Salaire, loyer perçu')}">
           </div>
           <button class="btn icon rev-suppr" data-action="del-income" data-i="${i}"
-                  title="Supprimer cette source">✕</button>
+                  title="${trad('Supprimer cette source')}">✕</button>
         </div>
         <div class="rev-champs">
           <div class="field">
@@ -10061,7 +9980,7 @@ function fenetreRevenus() {
             </select>
           </div>
           ${biens.length ? `<div class="field">
-            <label>Bien rattaché</label>
+            <label>${trad('Bien rattaché')}</label>
             <select data-path="budget.income.${i}.bienId" class="annee">
               <option value="">aucun</option>
               ${biens.map(c => `<option value="${esc(c.id)}" ${c.id === r.bienId ? 'selected' : ''}
@@ -10070,20 +9989,20 @@ function fenetreRevenus() {
           </div>` : ''}
         </div>
         <div class="rev-pied">
-          <label class="rev-estime" title="Un revenu variable déclaré en moyenne : les écrans qui s’en servent le diront">
+          <label class="rev-estime" title="${trad('Un revenu variable déclaré en moyenne : les écrans qui s’en servent le diront')}">
             <input type="checkbox" data-action-change="revenu-estime" data-i="${i}"
-                   ${r.estime ? 'checked' : ''}> montant estimé</label>
+                   ${r.estime ? 'checked' : ''}>${trad(' montant estimé')}</label>
           <span class="spacer"></span>
           <span class="muted">${chargePeriode(r) !== 'mois'
-            ? `soit ${fmtEUR0(revenuMensuel(r))} / mois · ` : ''}${
+            ? `soit ${fmtEUR0(revenuMensuel(r))} ${trad('/ mois')} · ` : ''}${
             fmtPct(total ? revenuMensuel(r) / total * 100 : 0, 1)} du total</span>
         </div>
       </div>`).join('')}</div>
     <div class="rev-total">
-      <span>Total</span><b>${fmtEUR(total)} / mois</b>
+      <span>Total</span><b>${fmtEUR(total)} ${trad('/ mois')}</b>
     </div>
     <div class="row" style="margin-top:12px">
-      <button class="btn sm ghost" data-action="add-income">+ Ajouter une source de revenu</button>
+      <button class="btn sm ghost" data-action="add-income">${trad('+ Ajouter une source de revenu')}</button>
     </div>`;
   $('#modalFoot').innerHTML = `<button class="btn" id="revClose" type="button">Fermer</button>`;
   montrerModal(m);
@@ -10154,6 +10073,31 @@ function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX)
    drapeau evite la collision avec un champ, dont les cles remplissent le meme
    objet.
    ------------------------------------------------------------ */
+/* Le type libre, demande par les deux formulaires de compte : celui de la
+   fiche et l'assistant d'ajout. Une seule fenetre — deux copies auraient fini
+   par poser deux questions differentes. Rend l'identifiant, existant ou cree,
+   ou null si on renonce : rien n'a alors bouge, creerTypePerso n'ayant pas
+   ete appelee. */
+async function demanderTypePerso() {
+  const r = await askForm({
+    titre: trad('Nouveau type de compte'),
+    sous: trad('Il rejoint la liste, pour ce compte et les suivants'),
+    ok: 'Créer',
+    champs: [
+      { cle: 'nom', label: trad('Nom du nouveau type'), type: 'texte',
+        exemple: trad('ex. Plan d’épargne logement') },
+      { cle: 'poche', label: trad('Poche de patrimoine'), type: 'liste', valeur: 'bourse',
+        options: [['cash', trad('Cash de vie')], ['bourse', trad('Bourse')],
+                  ['pe', trad('Non coté')]],
+        aide: trad('elle commande les regroupements d’écran et la disponibilité') },
+    ],
+  });
+  if (!r || !String(r.nom || '').trim()) return null;
+  const id = creerTypePerso(r.nom, r.poche);
+  Store.save();
+  return id;
+}
+
 function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore = '' }) {
   return new Promise(resolve => {
     const m = $('#modal');
@@ -10195,7 +10139,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       const dl = (c.suggestions || []).length ? `dl_${c.cle}` : '';
       const saisie = c.type === 'liste'
         ? `<select id="${id}">${(c.options || []).map(([v, l]) =>
-            `<option value="${esc(String(v))}" ${String(v) === String(c.valeur ?? '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
+            `<option value="${esc(String(v))}" ${String(v) === String(c.valeur ?? '') ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}</select>`
         : `<input id="${id}" type="${c.type === 'nombre' ? 'number' : c.type === 'date' ? 'date' : 'text'}"
               ${c.type === 'nombre' ? 'step="any" inputmode="decimal"' : 'autocomplete="off"'}
               ${dl ? `list="${dl}"` : ''}
@@ -10204,7 +10148,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
            ${dl ? `<datalist id="${dl}">${c.suggestions.map(s =>
               `<option value="${esc(s)}"></option>`).join('')}</datalist>` : ''}`;
       return `<div class="field">
-        <label for="${id}">${esc(c.label)}${c.aide ? `<span class="sub">${esc(c.aide)}</span>` : ''}</label>
+        <label for="${id}">${esc(trad(c.label))}${c.aide ? `<span class="sub">${esc(trad(c.aide))}</span>` : ''}</label>
         ${saisie}
       </div>`;
     };
@@ -10326,7 +10270,7 @@ function askChoice(titre, message, options, valeur) {
         <div class="field">
           <select id="chxVal" size="1">
             ${options.map(([v, l]) =>
-              `<option value="${esc(String(v))}" ${String(v) === String(valeur) ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+              `<option value="${esc(String(v))}" ${String(v) === String(valeur) ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}
           </select>
         </div>
       </div>`;
@@ -10409,27 +10353,27 @@ function askSale(indexInitial) {
         <div class="field"><label>Ligne</label>
           <select id="vePos">${ps.map((p, i) =>
             `<option value="${i}" ${i === (indexInitial ?? 0) ? 'selected' : ''}>${esc(p.name)}, ${num(p.qty)} × ${fmtCur(num(p.price), p.currency)}</option>`).join('')}</select></div>
-        <div class="field"><label>Nombre d'actions vendues</label>
+        <div class="field"><label>${trad('Nombre d\'actions vendues')}</label>
           <input type="number" step="any" id="veQty" autocomplete="off">
           <span class="hint" id="veDispo"></span></div>
-        <div class="field"><label>Prix de vente unitaire</label>
+        <div class="field"><label>${trad('Prix de vente unitaire')}</label>
           <input type="number" step="any" id="vePrice" autocomplete="off">
           <span class="hint" id="veDev"></span></div>
-        <div class="field" id="veFxWrap" hidden><label>Taux de change à la vente</label>
+        <div class="field" id="veFxWrap" hidden><label>${trad('Taux de change à la vente')}</label>
           <input type="number" step="any" id="veFx" autocomplete="off">
-          <span class="hint">1 unité de devise = ce montant en euros</span></div>
+          <span class="hint">${trad('1 unité de devise = ce montant en euros')}</span></div>
         <div class="field"><label>Date</label>
           <input type="date" id="veDate" value="${todayISO()}"></div>
-        <div class="field"><label>Le produit va sur</label>
+        <div class="field"><label>${trad('Le produit va sur')}</label>
           <select id="veCash"></select>
-          <span class="hint">Sans ça, ton patrimoine baisserait du montant vendu</span></div>
+          <span class="hint">${trad('Sans ça, ton patrimoine baisserait du montant vendu')}</span></div>
         <div class="field"><label>Note</label>
-          <input id="veNote" placeholder="Pourquoi cette vente ?" autocomplete="off"></div>
+          <input id="veNote" placeholder="${trad('Pourquoi cette vente ?')}" autocomplete="off"></div>
       </div>
       <div id="veApercu" style="margin-top:4px"></div>`;
     $('#modalFoot').innerHTML =
       `<button class="btn ghost" id="veCancel" type="button">Annuler</button>
-       <button class="btn" id="veOk" type="button">Enregistrer la vente</button>`;
+       <button class="btn" id="veOk" type="button">${trad('Enregistrer la vente')}</button>`;
     montrerModal(m);
 
     const sel = $('#vePos'), qte = $('#veQty'), prix = $('#vePrice'), fx = $('#veFx');
@@ -10613,11 +10557,7 @@ function askPosition(index) {
           ? `<span style="font-family:var(--font-nb)">${esc(p.isin)}</span>`
           : (assetClassDe(p) === 'crypto' || p.manual
              ? '<span class="muted">sans objet</span>'
-             : `<span class="muted">à copier depuis ton courtier${aide(
-                 'Aucune source gratuite ne donne l’ISIN à partir d’un symbole : '
-                 + 'Yahoo ne le publie pas, et OpenFIGI ne fait que le chemin '
-                 + 'inverse. Ton relevé de courtier le porte, et le bouton '
-                 + '« Vérifier » plus bas confirme qu’il désigne le bon titre.')}</span>`))}
+             : `<span class="muted">à copier depuis ton courtier${aide(trad("Aucune source gratuite ne donne l’ISIN à partir d’un symbole : Yahoo ne le publie pas, et OpenFIGI ne fait que le chemin inverse. Ton relevé de courtier le porte, et le bouton « Vérifier » plus bas confirme qu’il désigne le bon titre."))}</span>`))}
         ${ligne('Pays d’émission', pays
           ? `${esc(pays)} <span class="muted">${esc(String(p.isin).slice(0, 2))}</span>`
           : (assetClassDe(p) === 'crypto' || p.manual
@@ -10641,10 +10581,10 @@ function askPosition(index) {
           ? (p.longName === p.name
              ? '<span class="muted">identique au nom de la ligne</span>'
              : `${esc(p.longName)} <button type="button" class="btn xs ghost" id="posNomOfficiel"
-                  title="Recopier ce nom dans le nom de la ligne">Utiliser</button>`)
+                  title="${trad('Recopier ce nom dans le nom de la ligne')}">Utiliser</button>`)
           : '<span class="muted">arrive avec le cours</span>')}
         ${ligne('Émetteur', emetteur
-          ? `${esc(emetteur)} <span class="muted">d’après le nom du fonds</span>`
+          ? `${esc(emetteur)} <span class="muted">${trad('d’après le nom du fonds')}</span>`
           : '<span class="muted">se déduit du nom d’un fonds</span>')}
       </dl>
 
@@ -10670,7 +10610,7 @@ function askPosition(index) {
              date d'avant minuit, et de quand exactement : c'est la seule chose
              que l'application sache vraiment de la journee. -->
         ${jour && !jour.depuisAchat ? ligne("Aujourd'hui", jour.horsSeance
-            ? `<span class="muted">hors séance</span>`
+            ? `<span class="muted">${trad('hors séance')}</span>`
               + (num(p.quoteTime) ? ` <span class="muted">cours ${esc(fmtCoursQuand(p.quoteTime))}</span>` : '')
             : `<span class="${cls(jour.eur)}">${fmtSignedPct(jour.pct, 2)}</span>`
               + ` <span class="muted">${fmtSigned(jour.eur)}</span>`) : ''}
@@ -10710,18 +10650,14 @@ function askPosition(index) {
         ${jour && num(jour.prev) ? ligne('Clôture de la veille', fmtCur(jour.prev, dev)) : ''}
         ${num(p.dayLow) && num(p.dayHigh)
           ? ligne('Séance', `${fmtCur(p.dayLow, dev)} <span class="muted">à</span> ${fmtCur(p.dayHigh, dev)}`) : ''}
-        ${num(p.volume) ? ligne('Volume du jour', num(p.volume).toLocaleString('fr-FR') + ' titres') : ''}
+        ${num(p.volume) ? ligne('Volume du jour', num(p.volume).toLocaleString(locale()) + ' titres') : ''}
         <!-- Elle ne disait pas sur quoi elle porte, et la meme ligne s'affiche
              a 3,12 % ici pour 3,6 % en « Poids » sur l'accueil. Les deux sont
              justes : ce ne sont pas les memes bases, et ce n'est pas un defaut
              tant que chacune l'annonce. Celle-ci compte la tresorerie du
              courtier, comme les cibles ; « Poids » ne compte que ce qui cote,
              parce qu'il sert a dire si un mouvement du jour pese. -->
-        ${ligne(`Part du portefeuille${aide('Sur tes comptes d’investissement, titres et trésorerie qui y '
-            + 'attend d’être placée : la même base que tes cibles de répartition. La colonne '
-            + '« Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert '
-            + 'à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour '
-            + 'une même ligne, et tous les deux justes.')}`,
+        ${ligne(`Part du portefeuille${aide(trad("Sur tes comptes d’investissement, titres et trésorerie qui y attend d’être placée : la même base que tes cibles de répartition. La colonne « Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour une même ligne, et tous les deux justes."))}`,
             fmtPct(stockTotals().balance ? posValue(p) / stockTotals().balance * 100 : 0))}
       </dl>
 
@@ -10733,13 +10669,13 @@ function askPosition(index) {
            passerelle saura interroger la repartition sectorielle d'un ETF,
            c'est elle qui remplira ce champ, pas un menu. -->
       <dl class="kv" style="margin-top:12px">
-        <dt>Classement<span class="sub">déduit automatiquement</span></dt>
+        <dt>Classement<span class="sub">${trad('déduit automatiquement')}</span></dt>
         <dd>${esc(ZONES[zoneDe(p)])} <span class="muted">·</span> ${esc(SECTEURS[secteurDe(p)])}</dd>
       </dl>
 
       ${r ? `<div class="an52">
         <div class="an52-tete">
-          <span>Sur un an</span>
+          <span>${trad('Sur un an')}</span>
           <span class="muted">${fmtCur(r.bas, dev)}, ${fmtCur(r.haut, dev)}</span>
         </div>
         <div class="an52-piste"><i style="left:${r.pct.toFixed(1)}%"></i></div>
@@ -10763,13 +10699,13 @@ function askPosition(index) {
             ${accountsWhere(a => a.holdings).map(a =>
               `<option value="${a.id}" ${a.id === p.account ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
           </select></div>
-        <div class="field"><label>Classe d’actif</label>
+        <div class="field"><label>${trad('Classe d’actif')}</label>
           <select data-path="positions.${index}.assetClass">
             ${OPTIONS_CLASSE.map(([v, l]) => `<option value="${v}" ${v === assetClassDe(p) ? 'selected' : ''}>${esc(l)}</option>`).join('')}
           </select></div>
         <div class="field"><label>Date d’achat${aide(DATE_ACHAT_AIDE)}</label>
           <input type="date" data-path="positions.${index}.dateAchat" value="${esc(p.dateAchat || '')}"></div>
-        <div class="field"><label>Nature${aide("Un fonds répartit le risque sur des centaines de lignes, un titre en direct le concentre sur une société. La classe d'actif ne le dit pas (un MSCI World et une action Meta sont tous deux des actions), et c'est pourtant ce qui distingue un socle d'un pari. Déduit de l'instrument, corrigeable ici.")}</label>
+        <div class="field"><label>Nature${aide(trad("Un fonds répartit le risque sur des centaines de lignes, un titre en direct le concentre sur une société. La classe d'actif ne le dit pas (un MSCI World et une action Meta sont tous deux des actions), et c'est pourtant ce qui distingue un socle d'un pari. Déduit de l'instrument, corrigeable ici."))}</label>
           <select data-path="positions.${index}.nature">
             <option value="" ${!p.nature ? 'selected' : ''}>Auto, ${esc(NATURES[natureDe({ ...p, nature: '' })])}</option>
             ${Object.entries(NATURES).map(([v, l]) =>
@@ -10788,11 +10724,7 @@ function askPosition(index) {
         <!-- La valeur calculee ou saisie. Cette bascule n'existait que dans le
              tableau de quinze colonnes, sous la forme d'une case a cocher
              « man. » : en cachant ce tableau, elle devenait inatteignable. -->
-        <div class="field"><label>Valeur${aide(
-          'Par défaut, la valeur d’une ligne est quantité × cours, et le cours se '
-          + 'rafraîchit tout seul. « Saisie à la main » sert aux lignes qu’aucune '
-          + 'place ne cote : une part de société, un contrat, un actif que tu '
-          + 'valorises toi-même. Le cours cesse alors d’être interrogé.')}</label>
+        <div class="field"><label>Valeur${aide(trad("Par défaut, la valeur d’une ligne est quantité × cours, et le cours se rafraîchit tout seul. « Saisie à la main » sert aux lignes qu’aucune place ne cote : une part de société, un contrat, un actif que tu valorises toi-même. Le cours cesse alors d’être interrogé."))}</label>
           <select data-path="positions.${index}.manual" data-type="bool">
             <option value="false" ${p.manual ? '' : 'selected'}>Calculée, quantité × cours</option>
             <option value="true" ${p.manual ? 'selected' : ''}>Saisie à la main</option>
@@ -10810,14 +10742,14 @@ function askPosition(index) {
         <div class="field"><label>ISIN
             <button type="button" class="btn xs ghost" id="posIsinVerif"
                     style="margin-left:8px"
-                    title="Vérifier la clé de contrôle, puis à quel titre ce code correspond">Vérifier</button></label>
+                    title="${trad('Vérifier la clé de contrôle, puis à quel titre ce code correspond')}">Vérifier</button></label>
           <input data-path="positions.${index}.isin" value="${esc(p.isin || '')}"
                  maxlength="12" style="text-transform:uppercase">
           <p class="hint" id="posIsinAvis" style="margin:8px 0 0"></p></div>
         <div class="field"><label>Symbole${(p.isin || '').trim() ? `
             <button type="button" class="btn xs ghost" data-action="resolve-row" data-i="${index}"
                     style="margin-left:8px"
-                    title="Remplacer le symbole par celui que désigne l'ISIN">↻ Depuis l'ISIN</button>` : ''}</label>
+                    title="${trad('Remplacer le symbole par celui que désigne l\'ISIN')}">${trad('↻ Depuis l\'ISIN')}</button>` : ''}</label>
           <!-- Un symbole boursier depasse rarement six caracteres et jamais
                douze : le declarer borne la saisie, et la largeur du champ
                s'en deduit sans qu'on ait a l'habiller. -->
@@ -10838,7 +10770,7 @@ function askPosition(index) {
            journal, supprimer efface l'existence de la ligne. Se tromper de
            bouton coûte une plus-value qui n'apparaîtra jamais nulle part. -->
       <div class="fiche-danger">
-        <button type="button" class="btn ghost danger" id="posDelete">Supprimer cette ligne</button>
+        <button type="button" class="btn ghost danger" id="posDelete">${trad('Supprimer cette ligne')}</button>
         <p class="hint">Elle quitte le portefeuille sans passer par une vente : rien
           n’est encaissé, et aucune plus-value n’entre au journal. Pour solder en
           encaissant, c’est « Vendre ».</p>
@@ -11013,11 +10945,11 @@ function askBuy(index) {
       sous: `Position actuelle : ${num(p.qty)} × ${fmtCur(p.buyPrice, dev)} de prix de revient`,
       ok: 'Acheter',
       champs: [
-        { cle: 'qty', label: 'Quantité achetée', type: 'nombre', requis: true, exemple: '0' },
+        { cle: 'qty', label: trad('Quantité achetée'), type: 'nombre', requis: true, exemple: '0' },
         { cle: 'price', label: `Prix unitaire (${dev})`, type: 'nombre',
-          valeur: num(p.price) || '', aide: 'pré-rempli avec le dernier cours' },
+          valeur: num(p.price) || '', aide: trad('pré-rempli avec le dernier cours') },
         ...(comptesCash.length ? [{
-          cle: 'cash', label: 'Payé depuis', type: 'liste',
+          cle: 'cash', label: trad('Payé depuis'), type: 'liste',
           options: [...comptesCash.map(c => [c.id, [nomCompteV2(c), nomEtabDe(c)].filter(Boolean).join(' · ')]),
                     ['', 'Aucun compte, ne pas toucher aux espèces']],
           valeur: cashParDefaut?.id || '',
@@ -11085,7 +11017,7 @@ function askExpenseMonth(index) {
             <label class="dep-lab">
               <span>${esc(c)}</span>
               <button type="button" class="dep-n" data-plier="${esc(c)}" hidden
-                      title="Voir le détail des montants"></button>
+                      title="${trad('Voir le détail des montants')}"></button>
               <span class="spacer"></span>
               <button type="button" class="dep-plus" data-ajout-cat="${esc(c)}"
                       title="Ajouter un montant détaillé à ${esc(c)}"
@@ -11101,19 +11033,19 @@ function askExpenseMonth(index) {
            relisant le tableau. Elle rejoint la grille aussitôt, prête à
            recevoir son montant. -->
       <div class="row" style="margin-top:12px">
-        <button class="btn sm ghost" id="depNouvelleCat" type="button">+ Nouvelle catégorie</button>
+        <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
       </div>
       <!-- L'aide annoncait « le nom de la categorie ouvre le detail » : c'est
            la pastille qui l'ouvre, le nom est une etiquette et ne fait que
            donner le focus au champ. Elle dit maintenant ce qui repond. -->
       <p class="hint" style="margin:12px 0 0">
         Plusieurs dépenses dans une catégorie : tape-les additionnées,
-        <b>100+50+70</b>. La pastille <b>1 montant</b> ouvre le détail, où
+        <b>100+50+70</b>. La pastille <b>${trad('1 montant')}</b> ouvre le détail, où
         chaque montant se renomme.
       </p>
       <div class="field" style="margin-top:12px">
-        <label>Note du mois</label>
-        <input id="depNote" value="${esc(r.note || '')}" placeholder="Ce qui explique ce mois-là…">
+        <label>${trad('Note du mois')}</label>
+        <input id="depNote" value="${esc(r.note || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
       </div>`;
     /* « Voir les autres mois » mène au tableau du détail mensuel : la fenêtre
        ne montre qu'un mois, et comparer est le geste d'après. Elle enregistre
@@ -11127,7 +11059,7 @@ function askExpenseMonth(index) {
        bouton qui n'enregistre plus en fermant, il ne designait plus rien de
        distinct de Fermer. */
     $('#modalFoot').innerHTML =
-      `<button class="btn ghost sm" id="depAutres" type="button">Voir les autres mois</button>
+      `<button class="btn ghost sm" id="depAutres" type="button">${trad('Voir les autres mois')}</button>
        <span class="spacer"></span>
        <button class="btn" id="depOk" type="button">Enregistrer</button>
        <button class="btn ghost" id="depFermer" type="button">Fermer</button>`;
@@ -11186,7 +11118,7 @@ function askExpenseMonth(index) {
       const champLibelle = (l, i) => `
         <input class="dep-dl-lib" data-d="${esc(cat)}" data-i="${i}" data-k="libelle"
                maxlength="${NOM_DETAIL_MAX}"
-               value="${esc(l.libelle || '')}" placeholder="Nommer ce montant…" autocomplete="off">`;
+               value="${esc(l.libelle || '')}" placeholder="${trad('Nommer ce montant…')}" autocomplete="off">`;
       panneau.innerHTML = `
         ${lignes.map((l, i) => `
           <div class="dep-dl">
@@ -11194,10 +11126,10 @@ function askExpenseMonth(index) {
             <input class="dep-dl-mt" type="text" inputmode="decimal" data-d="${esc(cat)}" data-i="${i}"
                    data-k="montant" value="${l.montant}" autocomplete="off">
             <button type="button" class="btn icon xs" data-suppr="${esc(cat)}" data-i="${i}"
-                    title="Retirer ce montant">✕</button>
+                    title="${trad('Retirer ce montant')}">✕</button>
           </div>`).join('')}
         <div class="dep-dl-pied">
-          <button type="button" class="btn sm ghost" data-ajout="${esc(cat)}">+ Ajouter un montant</button>
+          <button type="button" class="btn sm ghost" data-ajout="${esc(cat)}">${trad('+ Ajouter un montant')}</button>
           <button type="button" class="btn sm ghost" data-replier="${esc(cat)}">Replier</button>
           <span class="spacer"></span>
           <b>${fmtEUR0(lignes.reduce((s, l) => s + num(l.montant), 0))}</b>
@@ -11515,7 +11447,7 @@ function askMonthlySnapshot(index) {
       <button class="btn pleine" id="relPhoto" type="button"
               >⤒ Reprendre les montants actuels, ${fmtEUR0(photo)}</button>
       <p class="hint" style="margin:6px 0 14px; text-align:center">Remplir tous les champs
-        automatiquement${aide("Chaque champ ci-dessous reçoit la valeur actuelle du compte correspondant. Rien n’est enregistré avant que tu ne cliques sur « Enregistrer » : tu peux corriger ce qu’il a écrit, ou renoncer.")}</p>` : ''}
+        automatiquement${aide(trad("Chaque champ ci-dessous reçoit la valeur actuelle du compte correspondant. Rien n’est enregistré avant que tu ne cliques sur « Enregistrer » : tu peux corriger ce qu’il a écrit, ou renoncer."))}</p>` : ''}
       ${revolu ? '' : `
       <p class="avert">Ce mois n’a pas encore eu lieu. Il n’y a pas de montants à en
         reprendre, et ce que tu saisirais ici serait lu comme un relevé passé.</p>`}
@@ -11543,13 +11475,13 @@ function askMonthlySnapshot(index) {
            La photo du jour le note déjà ; sans ce champ, un mois rempli à la
            main resterait sans dette et sa part nette ne monterait jamais. -->
       <div class="field" style="margin-top:12px">
-        <label>Crédits en cours ce mois-là (€)${aide("Le total du capital restant dû à cette date. Il ne se soustrait pas des champs ci-dessus (ceux-ci portent la valeur brute de chaque compte), mais il fait monter la part nette de tes biens, mois après mois, à mesure que tu rembourses.")}</label>
+        <label>Crédits en cours ce mois-là (€)${aide(trad("Le total du capital restant dû à cette date. Il ne se soustrait pas des champs ci-dessus (ceux-ci portent la valeur brute de chaque compte), mais il fait monter la part nette de tes biens, mois après mois, à mesure que tu rembourses."))}</label>
         <input type="number" step="any" inputmode="decimal" id="relDettes"
                class="champ-large" value="${num(r.dettes) || ''}" placeholder="0">
       </div>
       <div class="field" style="margin-top:12px">
-        <label>Commentaire du mois</label>
-        <input id="relNote" value="${esc(r.comment || '')}" placeholder="Ce qui explique ce mois-là…">
+        <label>${trad('Commentaire du mois')}</label>
+        <input id="relNote" value="${esc(r.comment || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
       </div>`;
     /*    Le meme pied que la fenetre jumelle des depenses, et c'est le point. «
    Certaines cartes il faut enregistrer puis fermer. La regle vaut pour la
@@ -11576,7 +11508,7 @@ function askMonthlySnapshot(index) {
       $('#relTotal').innerHTML = `
         <span class="dep-somme">${fmtEUR0(t)}</span>
         ${d ? `<span class="dep-ecart ${cls(d)}">
-          ${d > 0 ? '▲' : '▼'} ${fmtSigned(d)} depuis ${esc(fmtMonth(avant.date))}</span>` : ''}
+          ${d > 0 ? '▲' : '▼'} ${fmtSigned(d)} ${trad('depuis')} ${esc(fmtMonth(avant.date))}</span>` : ''}
         ${dettes ? `<span class="dep-ecart muted" style="flex-basis:100%">
           net de crédits : <b>${fmtEUR0(t - dettes)}</b></span>` : ''}`;
     };
@@ -11679,195 +11611,6 @@ function askMonthlySnapshot(index) {
   });
 }
 
-function askAccount(existant) {
-  const edition = !!existant;
-  return new Promise(resolve => {
-    const m = $('#modal');
-    apercuOuvert = null;
-    $('#modalTitle').textContent = edition ? `Modifier « ${existant.label} »` : 'Ajouter un compte';
-    $('#modalSub').textContent = edition
-      ? 'Les montants déjà saisis ne bougent pas'
-      : 'Le type détermine dans quelle poche il compte';
-    $('#modalBody').innerHTML = `
-      <div class="modal-champs">
-        <div class="field"><label>Nom du compte</label>
-          <input id="acLabel" placeholder="ex. PEA Fortuneo" autocomplete="off"
-                 value="${edition ? esc(existant.label) : ''}"></div>
-        <div class="field"><label>Établissement</label>
-          <input id="acBroker" placeholder="ex. Fortuneo" autocomplete="off"
-                 value="${edition ? esc(existant.broker || '') : ''}"></div>
-        <div class="field"><label>Type</label>
-          <select id="acType">
-            ${accountTypes().map(t => `<option value="${esc(t.id)}"
-              ${edition && t.id === existant.type ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
-            <option value="__new">➕ Nouveau type…</option>
-          </select></div>
-        <div class="field" id="acNewWrap" hidden>
-          <label>Nom du nouveau type</label>
-          <input id="acNewType" placeholder="ex. Assurance-vie" autocomplete="off">
-          <label style="margin-top:8px">Poche de patrimoine</label>
-          <select id="acGroup">
-            <option value="cash">Cash de vie</option>
-            <option value="bourse" selected>Bourse</option>
-            <option value="pe">Non coté</option>
-          </select>
-          <span class="hint">Où ce type pèsera dans la répartition, c'est autre chose
-            que son contenu, réglé juste en dessous.</span></div>
-        <div class="field"><label>Ce que ce compte suit</label>
-          <select id="acRole">
-            <option value="holdings">Des titres, actions, ETF, fonds cotés</option>
-            <option value="vie">Du cash de vie, dépensable au quotidien</option>
-            <option value="cash">Du cash à investir, posé chez un courtier</option>
-            <option value="plain" selected>Une valeur globale, non coté, épargne, immobilier</option>
-            <option value="margin">Un encours de levier, compté en négatif</option>
-          </select>
-          <span class="hint" id="acRoleAide"></span></div>
-        <div class="field" id="acAvecCashWrap" hidden>
-          <label class="row" style="gap:8px; font-weight:550">
-            <input type="checkbox" id="acAvecCash" style="width:auto">
-            Ce compte reçoit du cash à investir
-          </label>
-          <span class="hint">Les liquidités posées à côté des titres, en attente
-            d'un achat. Comptées dans la poche Bourse et rattachées à ce compte.</span>
-
-          <label class="row" style="gap:8px; font-weight:550; margin-top:10px">
-            <input type="checkbox" id="acAvecVie" style="width:auto">
-            Ce compte reçoit du cash de vie
-          </label>
-          <span class="hint">L'argent que tu dépenses au quotidien, chez le même
-            établissement : un courtier qui sert aussi de banque, par exemple.
-            Il apparaîtra sous « Banques », dans la poche Cash de vie.</span>
-
-          <span class="hint" id="acAvecQuoi" style="margin-top:8px"></span></div>
-        <div class="field"><label>Liquidité</label>
-          <select id="acLiq">
-            <option value="liquid">Liquide, mobilisable rapidement</option>
-            <option value="illiquid">Illiquide, non mobilisable</option>
-          </select></div>
-        <div class="field"><label>Date d'ouverture</label>
-          <input type="date" id="acOpened" value="${todayISO()}"></div>
-      </div>`;
-    $('#modalFoot').innerHTML =
-      `<button class="btn ghost" id="acCancel" type="button">Annuler</button>
-       <button class="btn" id="acOk" type="button">${edition ? 'Enregistrer' : 'Ajouter'}</button>`;
-    montrerModal(m);
-    focusChamp($('#acLabel'));
-
-    const typeSel = $('#acType'), roleSel = $('#acRole');
-
-    /* Le rôle par défaut suit la poche du type choisi : un compte-titres
-       porte des lignes, un compte bancaire un montant saisi. */
-    const majRole = () => {
-      const g = typeSel.value === '__new' ? $('#acGroup').value : accountType(typeSel.value).group;
-      roleSel.value = g === 'bourse' ? 'holdings' : 'plain';
-      majAide();
-    };
-    const AIDES = {
-      holdings: () => 'Chaque ligne y est détaillée, et son cours suivi automatiquement.',
-      plain: () => 'Une seule valeur, que tu mets à jour toi-même chaque mois.',
-      margin: () => 'Retranché du portefeuille, et tenu hors des cibles de rééquilibrage.',
-      /* La distinction que le mot « cash » seul ne fait pas : de l'argent
-         chez un courtier peut être du cash de vie — un compte bancaire ouvert
-         chez lui n'est pas de la poudre sèche. */
-      vie: () => 'Compté dans le cash de vie, disponible tout de suite pour tes '
-               + 'dépenses. C’est le cas d’un compte courant ou d’un livret, '
-               + 'même ouvert chez un courtier.',
-      /* Le rattachement se fait par établissement + type identiques. C'est la
-         règle la moins devinable du formulaire : on nomme donc le compte qui
-         recevra ce cash, ou on prévient qu'il n'y en a aucun. */
-      cash: () => {
-        const etab = $('#acBroker').value.trim();
-        const typeId = typeSel.value === '__new' ? null : typeSel.value;
-        const titres = typeId
-          ? accountsWhere(a => a.holdings && a.broker === etab && a.type === typeId)
-          : [];
-        if (titres.length) {
-          return `Rattaché à « ${titres[0].label} », même établissement et même type. `
-               + `Son cash s'affichera sur cette fiche, et une vente l'y créditera.`;
-        }
-        return etab
-          ? `Aucun compte-titres « ${etab} » de ce type pour l'instant : ce cash restera seul `
-            + `tant que tu n'en auras pas créé un avec le même établissement et le même type.`
-          : `Renseigne l'établissement : ce cash se rattache au compte-titres qui a le même `
-            + `établissement et le même type.`;
-      },
-    };
-    const majAide = () => {
-      $('#acRoleAide').textContent = (AIDES[roleSel.value] || (() => ''))();
-      // la case n'a de sens que pour un compte qui porte des titres
-      $('#acAvecCashWrap').hidden = roleSel.value !== 'holdings' || edition;
-      /* « Cash de vie » impose la poche : sans ça on pourrait déclarer du cash
-         dépensable sur un type CTO, et il compterait comme investi. */
-      if (roleSel.value === 'vie') {
-        const banque = accountTypes().find(t => t.group === 'cash');
-        if (banque && typeSel.value !== '__new' && accountType(typeSel.value).group !== 'cash') {
-          typeSel.value = banque.id;
-          $('#acNewWrap').hidden = true;
-        }
-      }
-    };
-    typeSel.onchange = () => {
-      $('#acNewWrap').hidden = typeSel.value !== '__new';
-      majRole();
-    };
-    $('#acGroup').onchange = majRole;
-    $('#acBroker').oninput = majAide;   // l'aide nomme le compte rattaché
-    roleSel.onchange = majAide;
-
-    /* On annonce ce qui va réellement être créé : cocher une case ajoute une
-       entrée, et mieux vaut le voir avant de valider qu'après. */
-    const majRecap = () => {
-      const nom = $('#acLabel').value.trim() || 'ce compte';
-      const noms = [nom];
-      if ($('#acAvecCash').checked) noms.push(`Cash ${nom}`);
-      if ($('#acAvecVie').checked) noms.push(`Cash de vie ${$('#acBroker').value.trim() || nom}`);
-      $('#acAvecQuoi').textContent = noms.length > 1
-        ? `${noms.length} entrées seront créées : ${noms.join(', ')}.`
-        : '';
-    };
-    for (const id of ['#acAvecCash', '#acAvecVie']) $(id).onchange = majRecap;
-    $('#acLabel').addEventListener('input', majRecap);
-    $('#acBroker').addEventListener('input', majRecap);
-
-    majRole();
-
-    /* En modification, on repart du rôle et de la liquidité en place plutôt
-       que du défaut déduit du type. */
-    if (edition) {
-      /* Un compte sans rôle dans la poche cash, c'est du cash de vie : on
-         le présente ainsi plutôt qu'en « valeur globale », qui serait exact
-         mais moins parlant. */
-      roleSel.value = existant.holdings ? 'holdings'
-        : existant.role ? existant.role
-        : (existant.group === 'cash' ? 'vie' : 'plain');
-      $('#acLiq').value = Store.state.accountInfo[existant.id]?.liquidity || 'liquid';
-      $('#acOpened').value = Store.state.accountInfo[existant.id]?.opened || '';
-      majAide();
-    }
-
-    const fermer = v => {
-      masquerModal(m);      $('#modalClose').onclick = null;
-      resolve(v);
-    };
-    $('#acCancel').onclick = () => fermer(null);
-    $('#modalClose').onclick = () => fermer(null);
-    $('#acOk').onclick = () => {
-      const label = $('#acLabel').value.trim();
-      if (!label) { $('#acLabel').focus(); toast('Donne un nom au compte'); return; }
-      const nouveau = typeSel.value === '__new' ? $('#acNewType').value.trim() : '';
-      if (typeSel.value === '__new' && !nouveau) { $('#acNewType').focus(); toast('Nomme le nouveau type'); return; }
-      fermer({
-        label, broker: $('#acBroker').value.trim(),
-        type: typeSel.value, nouveauType: nouveau, group: $('#acGroup').value,
-        role: $('#acRole').value,
-        avecCash: !$('#acAvecCashWrap').hidden && $('#acAvecCash').checked,
-        avecVie: !$('#acAvecCashWrap').hidden && $('#acAvecVie').checked,
-        liquidity: $('#acLiq').value, opened: $('#acOpened').value,
-      });
-    };
-  });
-}
-
 /* =============================================================
    FENÊTRE D'APERÇU
    Un clic sur une tuile montre le détail sans quitter la page ;
@@ -11916,7 +11659,7 @@ const APERCUS = {
                        data-path="comptes.${x.ic}.cash.${x.j}.montant" value="${num(x.e.montant)}">
               </div>`).join('')}
           </details>`).join(''),
-        vue: 'accounts', ancre: '', cta: 'Ouvrir Actifs',
+        vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
       };
     }
     /* Un bien immobilier ne se resume pas a sa valeur du jour : ce qu'il a
@@ -11965,11 +11708,11 @@ const APERCUS = {
             </div>
             <dl class="kv">
               ${gain != null ? `
-                <dt>Prix d'acquisition</dt><dd>${fmtEUR0(b.l.prixDeRevient)}</dd>
-                <dt>Plus-value latente</dt>
+                <dt>${trad('Prix d\'acquisition')}</dt><dd>${fmtEUR0(b.l.prixDeRevient)}</dd>
+                <dt>${trad('Plus-value latente')}</dt>
                   <dd class="${cls(gain)}">${fmtSigned(gain)} <span class="muted">${fmtSignedPct(pct, 1)}</span></dd>`
-                : `<dt>Prix d'acquisition</dt><dd class="muted">non renseigné</dd>`}
-              ${b.l.dateAcquisition ? `<dt>Acquis le</dt><dd>${fmtDate(b.l.dateAcquisition)}</dd>` : ''}
+                : `<dt>${trad('Prix d\'acquisition')}</dt><dd class="muted">${trad('non renseigné')}</dd>`}
+              ${b.l.dateAcquisition ? `<dt>${trad('Acquis le')}</dt><dd>${fmtDate(b.l.dateAcquisition)}</dd>` : ''}
               <dt>Disponibilité</dt><dd>${esc(MOBILISABLE_LABEL[mobiliteLigne(b.l, b.c)])}</dd>
             </dl>
             ${b.dettes.length ? `
@@ -11977,14 +11720,14 @@ const APERCUS = {
                 ${b.dettes.map(({ d, i }) => `
                   <div class="liq-ligne">
                     <span class="cpt-nom">${esc(d.libelle)}
-                      <span class="sub">capital restant dû, à baisser après chaque mensualité</span></span>
+                      <span class="sub">${trad('capital restant dû, à baisser après chaque mensualité')}</span></span>
                     <input type="number" step="any" class="champ-inline"
                            data-path="etabs.${b.idxEtab}.dettes.${i}.montant" value="${num(d.montant)}"
                            aria-label="Capital restant dû, ${esc(d.libelle)}">
                   </div>`).join('')}
                 <dl class="kv">
-                  <dt>Crédits en cours</dt><dd class="dette" data-live="credit-${k}">−${fmtEUR(b.credits)}</dd>
-                  <dt><b>Ce que tu possèdes</b></dt>
+                  <dt>${trad('Crédits en cours')}</dt><dd class="dette" data-live="credit-${k}">−${fmtEUR(b.credits)}</dd>
+                  <dt><b>${trad('Ce que tu possèdes')}</b></dt>
                     <dd><b data-live="net-${k}">${fmtEUR(b.l.valeur - b.credits)}</b></dd>
                 </dl>
               </div>` : ''}
@@ -11995,10 +11738,10 @@ const APERCUS = {
             <button class="btn sm ghost" data-action="aller-fiche"
                     data-route="#/compte/${encodeURIComponent(b.c.id)}"
                     aria-label="Ouvrir la fiche de ${esc(b.l.libelle || nomCompteV2(b.c))}"
-                    >Ouvrir la fiche →</button>
+                    >${trad('Ouvrir la fiche →')}</button>
           </div>`;
-        }).join('') || '<p class="empty">Aucun bien immobilier.</p>',
-        vue: 'accounts', ancre: '', cta: 'Ouvrir Actifs',
+        }).join('') || `<p class="empty">${trad('Aucun bien immobilier.')}</p>`,
+        vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
       };
     }
 
@@ -12103,7 +11846,7 @@ const APERCUS = {
             lignes.length ? 'Modifiable directement ici' : 'Aucun compte ne la porte pour l’instant'}`
         : 'Modifiable directement, ces montants se saisissent à la main',
       total: lignes.reduce((s, l) => s + l.valeur, 0), lignes,
-      vue: 'accounts', ancre: '', cta: 'Ouvrir Actifs',
+      vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
     };
   },
 
@@ -12143,9 +11886,9 @@ const APERCUS = {
       total: g.total,
       totalNote: sansCible ? 'ton patrimoine aujourd’hui' : `sur ${fmtEUR0(g.obj)}`,
       lignes: sansCible ? [] : [
-        { label: 'Il te manque', meta: `d'ici fin ${an}`, valeur: Math.max(0, -g.remaining) },
-        { label: 'Rythme nécessaire', meta: `${pj.monthsLeft} mois restants`, valeur: pj.needed },
-        { label: 'Ton rythme observé', meta: 'moyenne mensuelle', valeur: pj.paceRate },
+        { label: trad('Il te manque'), meta: `d'ici fin ${an}`, valeur: Math.max(0, -g.remaining) },
+        { label: trad('Rythme nécessaire'), meta: `${pj.monthsLeft} mois restants`, valeur: pj.needed },
+        { label: trad('Ton rythme observé'), meta: trad('moyenne mensuelle'), valeur: pj.paceRate },
         { label: `Fin ${an} à ce rythme`, meta: pj.onTrackPace ? 'objectif atteint' : 'sous l\'objectif', valeur: pj.atPace },
       ],
       champs: [
@@ -12155,13 +11898,13 @@ const APERCUS = {
            choisit pour un objectif de patrimoine, et sur telephone il fallait
            traverser tout ca pour atteindre les seules utiles, les premieres.
            Un objectif plus lointain se pose en avancant. */
-        { label: 'Objectif à fin…', path: 'meta.objectiveYear',
+        { label: trad('Objectif à fin…'), path: 'meta.objectiveYear',
           options: Array.from({ length: 31 }, (_, i) => {
             const y = anCourante + i;
             return [y, `fin ${y}${i ? `, dans ${i} an${i > 1 ? 's' : ''}` : ', cette année'}`];
           }) },
       ],
-      vue: 'history', ancre: '', cta: 'Voir les relevés',
+      vue: 'history', ancre: '', cta: trad('Voir les relevés'),
     };
   },
 
@@ -12188,12 +11931,12 @@ const APERCUS = {
       titre: `Projection à ${projHorizon} ans`,
       sous: `au ${fmtDate(date.toISOString().slice(0, 10))}, même période de l'année qu'aujourd'hui`,
       total: j.total,
-      totalNote: `dont ${fmtEUR0(j.gains)} de rendement`,
+      totalNote: `${trad('dont')} ${fmtEUR0(j.gains)} ${trad('de rendement')}`,
       lignes: [
-        { label: 'Ce que tu as déjà', meta: "aujourd'hui, hors immobilier", valeur: base },
+        { label: trad('Ce que tu as déjà'), meta: "aujourd'hui, hors immobilier", valeur: base },
         ...(plat ? [{ label: plat > 0 ? 'Ton immobilier net' : 'Tes crédits',
                       meta: A_PLAT, valeur: plat }] : []),
-        { label: 'Ce que tu verses',
+        { label: trad('Ce que tu verses'),
           meta: `${fmtEUR0(s.monthly)} × ${projHorizon * 12} mois`, valeur: verses },
         /* « Rendement des autres actifs » nommait une poche qui n'existe plus
            depuis que le non cote et les liquidites ont chacun le leur : ce
@@ -12202,17 +11945,17 @@ const APERCUS = {
            « Ce que le rendement ajoute » est celui du marche seul — le dire
            evite de le lire comme un rendement moyen du patrimoine. */
         ...(num(s.rateAutres) ? [
-          { label: 'Rendement des actifs de marché',
+          { label: trad('Rendement des actifs de marché'),
             meta: `${fmtPct(s.rate, 1)} par an`, valeur: num(j.gainsMarche) },
-          { label: 'Rendement du non coté',
+          { label: trad('Rendement du non coté'),
             meta: `${fmtPct(s.rateAutres, 1)} par an`, valeur: num(j.gainsAutres) },
         ] : [
-          { label: 'Ce que le rendement ajoute',
+          { label: trad('Ce que le rendement ajoute'),
             meta: `${fmtPct(s.rate, 1)} par an sur tes actifs de marché`, valeur: j.gains },
         ]),
-        { label: 'Après inflation', meta: `${fmtPct(s.inflation, 1)} par an retirée, en euros d'aujourd'hui`, valeur: j.real },
+        { label: trad('Après inflation'), meta: `${fmtPct(s.inflation, 1)} par an retirée, en euros d'aujourd'hui`, valeur: j.real },
       ],
-      vue: 'objective', ancre: '', cta: 'Voir la trajectoire',
+      vue: 'objective', ancre: '', cta: trad('Voir la trajectoire'),
     };
   },
 
@@ -12228,16 +11971,16 @@ const APERCUS = {
     return {
       titre: 'Bourse', sous: `${Store.state.positions.length} lignes de titres et liquidités`,
       total: nowByGroup().bourse, lignes: lignes.sort((a, b) => b.valeur - a.valeur),
-      vue: 'positions', ancre: 'jour', cta: 'Voir les marchés',
+      vue: 'positions', ancre: 'jour', cta: trad('Voir les marchés'),
     };
   },
 
   /* --- Allocation ------------------------------------------------------ */
   patrimoineTotal: () => ({
-    titre: 'Patrimoine total', sous: 'Toutes poches confondues',
+    titre: trad('Patrimoine total'), sous: trad('Toutes poches confondues'),
     total: nowTotals().total,
     lignes: allocationByAsset().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
-    vue: 'accounts', ancre: '', cta: 'Voir les avoirs',
+    vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
   }),
   /* La base qui capitalise, ouverte par « Ce que tu as deja ». Cette barre
      affichait 30 000 EUR et ouvrait « Patrimoine total », qui en montrait
@@ -12261,17 +12004,17 @@ const APERCUS = {
     const tauxM = `${fmtPct(s.rate)} par an`;
     const tauxNC = num(s.rateAutres) ? `${fmtPct(s.rateAutres)} par an` : A_PLAT;
     return {
-      titre: 'Ce que tu as déjà',
-      sous: 'La base de la projection' + (num(t.immo) ? ', ton immobilier à part' : ''),
+      titre: trad('Ce que tu as déjà'),
+      sous: trad('La base de la projection') + (num(t.immo) ? ', ton immobilier à part' : ''),
       total: q.marche + q.autres,
       totalNote: 'chaque ligne porte le taux qui lui est appliqué',
       lignes: [
-        { label: 'Actifs de marché', meta: tauxM, valeur: num(t.bourse) },
+        { label: trad('Actifs de marché'), meta: tauxM, valeur: num(t.bourse) },
         { label: 'Cryptomonnaies', meta: tauxM, valeur: num(t.crypto) },
-        { label: 'Non coté', meta: tauxNC, valeur: q.nonCote },
+        { label: trad('Non coté'), meta: tauxNC, valeur: q.nonCote },
         { label: 'Liquidités', meta: A_PLAT, valeur: q.liquidites },
       ].filter(l => Math.abs(l.valeur) > 0.005),
-      vue: 'accounts', ancre: '', cta: 'Voir les avoirs',
+      vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
   },
 
@@ -12294,7 +12037,7 @@ const APERCUS = {
            aurait ete exactement le defaut qu'on repare. */
         if (!['immobilier', 'bienValeur'].includes(l.classe || 'immobilier')
             || !num(l.valeur)) continue;
-        lignes.push({ label: l.libelle || c.libelle, meta: 'valeur estimée',
+        lignes.push({ label: l.libelle || c.libelle, meta: trad('valeur estimée'),
                       valeur: num(l.valeur) });
       }
     }
@@ -12312,19 +12055,19 @@ const APERCUS = {
       titre: !aUnBien ? 'Tes crédits'
            : aImmo && aBiens ? 'Ton immobilier et tes biens, nets'
            : aBiens ? 'Tes biens de valeur, nets' : 'Ton immobilier net',
-      sous: 'Ce que la projection porte à plat',
+      sous: trad('Ce que la projection porte à plat'),
       total: plat,
       totalNote: 'Aucun rendement ne lui est appliqué',
       lignes,
-      vue: 'accounts', ancre: '', cta: 'Voir les avoirs',
+      vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
   },
   investiTotal: () => ({
-    titre: BASES.place.nom, sous: 'Tout sauf le cash de vie',
+    titre: BASES.place.nom, sous: trad('Tout sauf le cash de vie'),
     total: nowTotals().invested,
     totalNote: `${fmtPct(nowTotals().total ? nowTotals().invested / nowTotals().total * 100 : 0)} du patrimoine`,
     lignes: allocationByAccount().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
-    vue: 'accounts', ancre: '', cta: 'Voir les avoirs',
+    vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
   }),
 
   /* --- Rééquilibrage --------------------------------------------------- */
@@ -12335,17 +12078,17 @@ const APERCUS = {
   portefeuilleBoursier: () => {
     const r = rebalanceRows();
     return {
-      titre: 'Comptes d’investissement', sous: 'Base de calcul du rééquilibrage',
+      titre: trad('Comptes d’investissement'), sous: trad('Base de calcul du rééquilibrage'),
       total: r.base,
       lignes: lignesAvecTresorerie(r).map(c => ({
         label: c.label, meta: `${fmtPct(c.pct, 1)} · cible ${fmtPct(c.targetPct, 0)}`, valeur: c.value })),
-      vue: 'rebalance', ancre: '', cta: 'Voir les cibles',
+      vue: 'rebalance', ancre: '', cta: trad('Voir les cibles'),
     };
   },
   ecartCible: () => {
     const r = rebalanceRows();
     return {
-      titre: 'Écarts à la cible', sous: 'Ce qu’il faudrait déployer (+) ou alléger (−)',
+      titre: trad('Écarts à la cible'), sous: trad('Ce qu’il faudrait déployer (+) ou alléger (−)'),
       total: r.base, totalNote: 'comptes d’investissement',
       lignes: lignesAvecTresorerie(r).map(c => ({
         label: c.label, meta: `${fmtEUR0(c.value)} pour ${fmtEUR0(c.targetVal)} visés`, valeur: c.delta })),
@@ -12362,20 +12105,20 @@ const APERCUS = {
       total: st.total, totalNote: `${fmtEUR0(st.average)} par mois en moyenne`,
       lignes: expenseSeries(an).filter(r => r.total).reverse()
         .map(r => ({ label: r.label, meta: r.note ? String(r.note).slice(0, 60) : '', valeur: r.total })),
-      vue: 'budget', ancre: '', cta: 'Voir le détail',
+      vue: 'budget', ancre: '', cta: trad('Voir le détail'),
     };
   },
   depensesCategories: () => {
     const an = budgetAnnee();
     const st = expenseYearStats(an);
     return {
-      titre: 'Moyenne mensuelle', sous: `objectif ${fmtEUR0(budgetFrame().target)} par mois`,
+      titre: trad('Moyenne mensuelle'), sous: `objectif ${fmtEUR0(budgetFrame().target)} par mois`,
       total: st.average,
       totalNote: st.average > budgetFrame().target
         ? `${fmtEUR0(st.average - budgetFrame().target)} au-dessus de l’objectif`
         : `${fmtEUR0(budgetFrame().target - st.average)} sous l’objectif`,
       lignes: expenseByCategory(an).map(c => ({ label: c.label, meta: fmtPct(c.pct, 1), valeur: c.average })),
-      vue: 'budget', ancre: '', cta: 'Voir le détail',
+      vue: 'budget', ancre: '', cta: trad('Voir le détail'),
     };
   },
 
@@ -12402,7 +12145,7 @@ const APERCUS = {
       .sort((a, x) => x.v - a.v);
     const total = postes.reduce((s, x) => s + x.v, 0);
     return {
-      titre: 'Ce qui sort chaque mois',
+      titre: trad('Ce qui sort chaque mois'),
       sous: `${postes.length} poste${postes.length > 1 ? 's' : ''} · ${fmtEUR0(total * 12)} sur douze mois`,
       total,
       totalNote: `${fmtPct(budgetFrame().fixedPct, 1)} de tes revenus`,
@@ -12434,7 +12177,7 @@ const APERCUS = {
           ce qu’elle coûte sur douze mois. Les parts se rapportent aux
           ${fmtEUR0(total)} qui sortent chaque mois.</p>`
         : '<p class="empty" style="margin:0">Aucune charge fixe déclarée.</p>',
-      vue: 'budget', ancre: 'charges', cta: 'Modifier les charges',
+      vue: 'budget', ancre: 'charges', cta: trad('Modifier les charges'),
     };
   },
 
@@ -12442,12 +12185,12 @@ const APERCUS = {
   ventesRealisees: () => {
     const st = salesStats(salesRange);
     return {
-      titre: 'Ventes réalisées', sous: rangeLabel(salesRange),
+      titre: trad('Ventes réalisées'), sous: rangeLabel(salesRange),
       total: st.gross, totalNote: `${fmtSigned(st.realised)} de plus-value`,
       lignes: st.sales.map(v => ({
         label: v.name, meta: `${fmtDate(v.date)} · ${num(v.qty)} × ${fmtCur(v.price, v.currency)}`,
         valeur: v.realised })),
-      vue: 'performance', ancre: 'ventes', cta: 'Voir le journal',
+      vue: 'performance', ancre: 'ventes', cta: trad('Voir le journal'),
     };
   },
 
@@ -12455,13 +12198,13 @@ const APERCUS = {
   perfLatente: () => {
     const lat = latentPnl();
     return {
-      titre: 'Plus-value latente', sous: `${lat.winners} lignes en gain sur ${lat.count}`,
+      titre: trad('Plus-value latente'), sous: `${lat.winners} lignes en gain sur ${lat.count}`,
       total: lat.pnl, totalNote: `${fmtSignedPct(lat.pct)} sur ${fmtEUR0(lat.invested)} investis`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
         .sort((a, b) => b.valeur - a.valeur),
-      vue: 'positions', ancre: 'titres', cta: 'Voir les lignes',
+      vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
     };
   },
   perfRealisee: () => {
@@ -12471,19 +12214,19 @@ const APERCUS = {
       sous: st.count ? `${st.wins} ventes gagnantes sur ${st.count}` : 'aucune vente sur la période',
       total: st.realised, totalNote: `${fmtEUR0(st.gross)} encaissés`,
       lignes: st.sales.map(v => ({ label: v.name, meta: fmtDate(v.date), valeur: v.realised })),
-      vue: 'performance', ancre: 'ventes', cta: 'Voir le journal',
+      vue: 'performance', ancre: 'ventes', cta: trad('Voir le journal'),
     };
   },
   perfTotale: () => {
     const lat = latentPnl(), tout = salesStats('all');
     return {
-      titre: 'Résultat total', sous: 'Latent et encaissé depuis le début',
+      titre: trad('Résultat total'), sous: trad('Latent et encaissé depuis le début'),
       total: lat.pnl + tout.realised,
       lignes: [
-        { label: 'Plus-value latente', meta: `${lat.count} lignes détenues`, valeur: lat.pnl },
-        { label: 'Plus-value encaissée', meta: `${tout.count} ventes`, valeur: tout.realised },
+        { label: trad('Plus-value latente'), meta: `${lat.count} lignes détenues`, valeur: lat.pnl },
+        { label: trad('Plus-value encaissée'), meta: `${tout.count} ventes`, valeur: tout.realised },
       ],
-      vue: 'performance', ancre: '', cta: 'Rester ici',
+      vue: 'performance', ancre: '', cta: trad('Rester ici'),
     };
   },
 
@@ -12516,7 +12259,7 @@ const APERCUS = {
                     : `${fmtEUR0(r.total - cible)} au-dessus`,
                r.note || ''].filter(Boolean).join(' · '),
         valeur: r.total })),
-      vue: 'budget', ancre: '', cta: 'Voir le détail',
+      vue: 'budget', ancre: '', cta: trad('Voir le détail'),
     };
   },
 
@@ -12535,7 +12278,7 @@ const APERCUS = {
     const l = REPERES_AFFICHES.find(x => x.symbole === sym);
     if (!l) return null;
     const dec = l.prix < 10 ? 4 : 2;
-    const nb = v => new Intl.NumberFormat('fr-FR',
+    const nb = v => new Intl.NumberFormat(locale(),
       { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(v);
     /*       Le prefixe « ^ » designe un indice chez Yahoo, pour toutes les places :
        il ne se confond avec aucun ticker d'action ou d'ETF. On se garde de lire
@@ -12570,9 +12313,10 @@ const APERCUS = {
          et qui n'apprend rien a qui vient de cliquer sur « CAC 40 ». Il dit
          desormais ce que la chose EST — un indice, une matiere premiere, une
          parite — et garde le symbole en second, pour qui le cherche. */
-      /* Un indice se nomme, il ne s'identifie pas : le symbole reste sur ce
-         qui se cote et s'achete, ou il sert a retrouver la ligne chez un
-         courtier. */
+      /* Un indice se nomme, il ne s'identifie pas : « ^IXIC » derriere
+         « Indice boursier » n'apprend rien a qui vient de cliquer sur
+         « Nasdaq ». Le symbole reste pour ce qui se cote et s'achete, ou
+         il sert a retrouver la ligne chez un courtier. */
       sous: estIndice ? 'Indice boursier' : l.symbole,
       totalTexte: `${nb(l.prix)}${unite}`,
       totalNote: m ? m.label : '',
@@ -12581,16 +12325,16 @@ const APERCUS = {
              dit alors de quand date le cours, ce que la tuile n'a pas la place
              d'ecrire. Le delta se tait avec le pourcentage, il porte le meme
              mensonge en euros. -->
-        <dt>Variation du jour</dt>
+        <dt>${trad('Variation du jour')}</dt>
           <dd class="${l.pct == null ? 'muted' : cls(l.pct)}">${l.pct == null
-            ? `hors séance${l.quoteTime ? ` · cours ${esc(fmtCoursQuand(l.quoteTime))}` : ''}`
+            ? `${trad('hors séance')}${l.quoteTime ? ` · ${trad('cours')} ${esc(fmtCoursQuand(l.quoteTime))}` : ''}`
             : `${fmtSignedPct(l.pct, 2)} · ${delta >= 0 ? '+' : '−'}${nb(Math.abs(delta))}${unite}`}</dd>
-        <dt>Clôture précédente</dt><dd>${nb(l.veille)}${unite}</dd>
+        <dt>${trad('Clôture précédente')}</dt><dd>${nb(l.veille)}${unite}</dd>
         ${m ? `<dt>Séance</dt><dd>${glypheSeance(m)} ${esc(m.label)}</dd>` : ''}
         ${ponts.map(([t, v, note]) => `
           <dt>${esc(t)}<span class="sub">${esc(note)}</span></dt><dd><b>${fmtEUR(v)}</b></dd>`).join('')}
       </dl>`,
-      vue: 'positions', ancre: '', cta: 'Voir les marchés',
+      vue: 'positions', ancre: '', cta: trad('Voir les marchés'),
     };
   },
 
@@ -12598,39 +12342,39 @@ const APERCUS = {
   portefeuille: () => {
     const pnl = portfolioPnl();
     return {
-      titre: 'Valeur du portefeuille', sous: `${Store.state.positions.length} lignes de titres`,
+      titre: trad('Valeur du portefeuille'), sous: `${Store.state.positions.length} lignes de titres`,
       total: pnl.value, totalNote: `${fmtSignedPct(pnl.pct)} sur le prix de revient`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${num(p.qty)} × ${fmtCur(p.price, p.currency)}`,
                      valeur: posValue(p), perf: posPerfPct(p) }))
         .sort((a, b) => b.valeur - a.valeur),
-      vue: 'positions', ancre: 'titres', cta: 'Voir les lignes',
+      vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
     };
   },
 
   investiTitres: () => ({
-    titre: 'Montant investi', sous: 'Ce que tes lignes t’ont coûté',
+    titre: trad('Montant investi'), sous: trad('Ce que tes lignes t’ont coûté'),
     total: portfolioPnl().invested,
     totalNote: `pour ${fmtEUR0(portfolioPnl().value)} de valeur actuelle`,
     lignes: Store.state.positions
       .map(p => ({ label: p.name, meta: `${num(p.qty)} × ${fmtCur(p.buyPrice, p.currency)} à l’achat`,
                    valeur: posInvested(p) }))
       .sort((a, b) => b.valeur - a.valeur),
-    vue: 'positions', ancre: 'titres', cta: 'Voir les lignes',
+    vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
   }),
 
   pnlLatent: () => {
     const pnl = portfolioPnl();
     const j = dayPerformance();
     return {
-      titre: 'Plus / moins-value latente',
+      titre: trad('Plus / moins-value latente'),
       sous: `${fmtSignedPct(pnl.pct)} · ${j.lignes.length ? `${fmtSigned(j.eur)} aujourd’hui` : 'pas de cours du jour'}`,
       total: pnl.pnl, totalNote: `sur ${fmtEUR0(pnl.invested)} investis`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
         .sort((a, b) => b.valeur - a.valeur),
-      vue: 'performance', ancre: '', cta: 'Voir la performance',
+      vue: 'performance', ancre: '', cta: trad('Voir la performance'),
     };
   },
 
@@ -12651,7 +12395,7 @@ const APERCUS = {
     const cr = creditsEnCours();
     const etabs = ETABS();
     return {
-      titre: 'Crédits en cours',
+      titre: trad('Crédits en cours'),
       sous: cr.lignes.length
         ? `${cr.lignes.length} crédit${cr.lignes.length > 1 ? 's' : ''} · modifiable ici même`
         : 'aucun crédit',
@@ -12689,7 +12433,7 @@ const APERCUS = {
   jourTitres: () => {
     const j = dayPerformance();
     return {
-      titre: 'Aujourd’hui',
+      titre: trad('Aujourd’hui'),
       /* L'heure fait partie du chiffre : un ecart du jour a 11 h et le meme a la
          cloture ne disent pas la meme chose, et l'un des deux va encore bouger.
 
@@ -12717,14 +12461,14 @@ const APERCUS = {
                                            : 'pas coté aujourd’hui') : ''].filter(Boolean).join(' · '),
         valeur: l.eur, perf: l.pct,
       })),
-      vue: 'positions', ancre: 'jour', cta: 'Voir la séance',
+      vue: 'positions', ancre: 'jour', cta: trad('Voir la séance'),
     };
   },
 
   /* Les montants sont modifiables ici : c'est la question qu'on se pose en
      ouvrant cette tuile — combien me reste-t-il à placer, et où. */
   cashInvestir: () => ({
-    titre: BASES.cashPlacer.nom, sous: 'Liquidités posées chez tes courtiers',
+    titre: BASES.cashPlacer.nom, sous: trad('Liquidités posées chez tes courtiers'),
     total: stockTotals().cashToInvest,
     totalNote: `${fmtPct(stockTotals().balance ? stockTotals().cashToInvest / stockTotals().balance * 100 : 0)} du portefeuille`,
     lignes: entreesInvestir().map(({ compte, idxCompte, idxCash }) => ({
@@ -12732,7 +12476,7 @@ const APERCUS = {
       meta: [nomEtabDe(compte), typeCompte(compte.type).label].filter(Boolean).join(' · '),
       champ: `comptes.${idxCompte}.cash.${idxCash}.montant`,
     })),
-    vue: 'accounts', ancre: '', cta: 'Voir les comptes',
+    vue: 'accounts', ancre: '', cta: trad('Voir les comptes'),
   }),
 
   /* Les lignes suivent la CLASSE du total, pas le groupe d'ecran : le groupe
@@ -12742,24 +12486,24 @@ const APERCUS = {
      est celle de ses lignes non cotees seulement, et la somme des parts
      refait le total. */
   pe: () => ({
-    titre: 'Placements non cotés',
-    sous: 'Pas mobilisables à court terme',
+    titre: trad('Placements non cotés'),
+    sous: trad('Pas mobilisables à court terme'),
     total: nowByGroup().pe,
     lignes: comptesOuverts()
       .map(c => ({ label: nomCompteV2(c), meta: nomEtabDe(c),
                    valeur: lignesDe(c).filter(l => l.classe === 'nonCote')
                      .reduce((s, l) => s + l.valeur, 0) }))
       .filter(r => r.valeur > 0.005),
-    vue: 'accounts', ancre: '', cta: 'Ouvrir Actifs',
+    vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
   }),
 
   investi: () => ({
     titre: BASES.place.nom,
-    sous: 'Réparti par enveloppe',
+    sous: trad('Réparti par enveloppe'),
     total: nowTotals().invested,
     lignes: allocationByAccount().filter(r => r.value)
       .map(r => ({ label: r.label, meta: fmtPct(r.pct, 1), valeur: r.value })),
-    vue: 'allocation', ancre: 'actifs', cta: 'Voir l\'allocation',
+    vue: 'allocation', ancre: 'actifs', cta: trad('Voir l\'allocation'),
   }),
 };
 
@@ -12897,7 +12641,7 @@ function ficheDeBarre(d) {
     total: d.total,
     totalNote: `${fmtPct(base ? d.total / base * 100 : 0, 1)} ${BASES.baseCibles.de}`,
     lignes,
-    vue: 'positions', ancre: '', cta: 'Ouvrir Marchés',
+    vue: 'positions', ancre: '', cta: trad('Ouvrir Marchés'),
   };
 }
 
@@ -13232,13 +12976,13 @@ function rendNotifs() {
   if (!panneau) return;
   panneau.innerHTML = `
     <div class="notif-tete">
-      <b>À faire</b>
+      <b>${trad('À faire')}</b>
       <span>${n.length ? `${n.length} point${n.length > 1 ? 's' : ''}` : 'rien à signaler'}</span>
       <!--    L'engrenage mene aux reglages : c'est la, devant la liste, qu'on se dit «
    je ne veux plus de celle-la ».-->
       <button type="button" class="btn icon xs notif-reglages"
               data-action="goto" data-view="notifications" data-anchor=""
-              title="Réglages des notifications" aria-label="Réglages des notifications">
+              title="${trad('Réglages des notifications')}" aria-label="${trad('Réglages des notifications')}">
         <!-- Trois points, apres deux engrenages et une cle dessines en grand
              pour les juger : un cercle a huit rayons detaches fait un soleil, un
              cercle epais en pointille aussi — ses dents ne touchent pas le
@@ -13266,10 +13010,10 @@ function rendNotifs() {
              pas en contenir un second. La ligne mene la ou ca se regle, la croix
              dit « ne me le dis plus ». -->
         <button type="button" class="btn icon xs notif-x" data-action="masquer-notif"
-                data-cle="${esc(x.cle)}" title="Ne plus signaler"
+                data-cle="${esc(x.cle)}" title="${trad('Ne plus signaler')}"
                 aria-label="Ne plus signaler : ${esc(x.title)}">✕</button>
       </div>`).join('')
-    : `<p class="notif-vide">✓ Rien à signaler.</p>`}
+    : `<p class="notif-vide">${trad('✓ Rien à signaler.')}</p>`}
     <!-- Le bord libre du panneau, et le geste qui le referme : il descend de sa
          cloche, il remonte par la. Un chevron seul, pleine largeur, parce que la
          zone touchee doit etre facile a viser au pouce — et parce que rien
@@ -13406,7 +13150,7 @@ function renderSidebar() {
   const netTiroir = $('#navNetWorth');
   if (netTiroir) netTiroir.innerHTML = montant;
   const el = $('#sbDelta');
-  const deltaHtml = d.ytd ? `${arrow(d.ytd.eur)} ${fmtSigned(d.ytd.eur)} depuis janvier` : '';
+  const deltaHtml = d.ytd ? `${arrow(d.ytd.eur)} ${fmtSigned(d.ytd.eur)} ${trad('depuis janvier')}` : '';
   const deltaCls = 'sb-delta ' + (d.ytd ? cls(d.ytd.eur) : '');
   el.innerHTML = deltaHtml;
   el.className = deltaCls;
@@ -14545,7 +14289,7 @@ function bindGlobal() {
   /* Langue et thème depuis la vue Préférences. */
   document.addEventListener('change', e => {
     const lang = e.target.closest('[data-action-change="set-lang"]');
-    if (lang) { setLang(lang.value); translateStatic(); render(); return; }
+    if (lang) { setLang(lang.value); location.reload(); return; }
     const theme = e.target.closest('[data-action-change="set-theme"]');
     if (theme) { applyTheme(theme.value); render(); }
   });
@@ -14601,7 +14345,7 @@ function showFileModeBanner() {
   el.className = 'file-banner';
   el.innerHTML = `
     <span>📄</span>
-    <div><b>Mode fichier.</b> Les cours de bourse ne peuvent pas être récupérés, et
+    <div><b>${trad('Mode fichier.')}</b> Les cours de bourse ne peuvent pas être récupérés, et
       tes données sont enregistrées <b>séparément</b> de celles du mode serveur.
       Pour n'avoir qu'un seul jeu de données, lance plutôt
       <code>python serve.py</code>.</div>
@@ -14707,8 +14451,8 @@ function applyField(f) {
         `Deux versions différentes de tes données\n\n`
         + `Cet appareil a des modifications qui n'ont jamais été envoyées, et une `
         + `version plus récente existe en ligne.\n\n`
-        + `En ligne : ${new Date(cloud.at).toLocaleString('fr-FR')}\n`
-        + `Ici : ${cloud.localAt ? new Date(cloud.localAt).toLocaleString('fr-FR') : 'inconnue'}\n\n`
+        + `En ligne : ${new Date(cloud.at).toLocaleString(locale())}\n`
+        + `Ici : ${cloud.localAt ? new Date(cloud.localAt).toLocaleString(locale()) : 'inconnue'}\n\n`
         + `Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)`,
         { danger: false, ok: 'Charger celle en ligne' });
       if (ok) { Store.addBackup('avant chargement cloud'); Store.state = cloud.data; Store.migrate(); Store.save(); }

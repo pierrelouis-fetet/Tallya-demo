@@ -4125,7 +4125,7 @@ td .empty, th .empty { background: none; border: none; }
 
   /* Nom a gauche et menu a droite ne tiennent pas cote a cote : le menu porte
      les noms de toutes les lignes du portefeuille, et il reste au libelle une
-     colonne ou un nom de fonds un peu long se coupe net, sans
+     colonne ou « GraniteShares 2x Long NVDA Daily ETF » se coupe net, sans
      ellipse, en courant sous le menu. Deux colonnes serrees valent moins
      qu'une ligne empilee : le nom prend toute la largeur, le menu se pose
      dessous et devient une vraie cible pour le pouce. C'est le motif que le

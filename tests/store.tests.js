@@ -35,6 +35,21 @@ function auJour(iso, faire) {
   try { faire(); } finally { window.todayISO = vrai0; }
 }
 
+/* Jouer un controle dans une langue choisie, masque leve.
+
+   Meme `finally` que ci-dessus, et pour une raison plus grave : cette page
+   partage son origine avec l'application, donc son `localStorage`. La langue
+   qu'on deplace ici est la vraie, celle du detenteur — un echec au milieu
+   laisserait son application en anglais. Le masque suit la meme regle : un
+   montant masque rend un oeil barre, sur lequel aucun format ne se lit. */
+function enLangue(code, faire) {
+  const lang0 = currentLang();
+  const masque0 = masqueActif();
+  setLang(code);
+  setMasque(false);
+  try { faire(); } finally { setLang(lang0); setMasque(masque0); }
+}
+
 /* ------------------------------------------------------------------
    1. Les totaux ne mentent pas
    ------------------------------------------------------------------ */
@@ -2740,7 +2755,9 @@ suite('Pièges de source', () => {
        Le contrôle compte le titre dans le source : s'il réapparaît deux fois,
        quelqu'un a recollé le bloc au lieu d'appeler carteEvolution(). */
     vrai(source, 'app.js doit être lisible pour ce contrôle');
-    const titres = source.match(/<h2>Évolution du patrimoine<\/h2>/g) || [];
+    /* Le titre passe par `trad()` depuis qu'il se traduit : le controle suit la
+       phrase, qui est justement la clef du dictionnaire, et non le balisage. */
+    const titres = source.match(/trad\('Évolution du patrimoine'\)/g) || [];
     eq(titres.length, 1,
       'la carte d’évolution doit être écrite une fois et appelée deux : ' + titres.length + ' exemplaires');
     /* Et la fonction doit bien servir aux deux vues, sinon un seul exemplaire
@@ -3557,7 +3574,7 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
 
   const avecCours = (quandISO, prix, veille) => Fixture.poser(e => {
     e.positions = [{
-      id: 'p_x', name: 'ETF Monde', isin: '', symbol: 'ETFM.PA', currency: 'EUR',
+      id: 'p_x', name: 'ETF Monde', isin: '', symbol: 'EWLD.PA', currency: 'EUR',
       qty: 100, buyPrice: 5, price: prix, fx: 1, fxBuy: 1, account: 'c_pea',
       manual: false, assetClass: 'actions', role: 'core',
       prevClose: veille, quoteTime: quandISO ? secondes(quandISO) : null,
@@ -4525,10 +4542,13 @@ suite('Le texte affiché porte ses accents', () => {
     .replace(/^[ \t]*\/\/.*$/gm, ' ');
 
   /* Le texte de chaque appel `aide(…)` du fichier, guillemets simples, doubles
-     ou gabarit. Les `${…}` sortent : ce sont des identifiants, pas de la prose. */
+     ou gabarit. Les `${…}` sortent : ce sont des identifiants, pas de la prose.
+     Les bulles passent par `aide(trad("…"))` depuis que l'application se
+     traduit : l'enveloppe est admise, et le contrôle vaut alors pour la clef
+     française, qui est ce que le lecteur français lit. */
   function textesAide(src) {
     const out = [];
-    const re = /aide\(\s*(['"`])([\s\S]*?)\1\s*\)/g;
+    const re = /aide\(\s*(?:trad\(\s*)?(['"`])([\s\S]*?)\1/g;
     let m;
     while ((m = re.exec(sansCommentaires(src)))) out.push(m[2].replace(/\$\{[^}]*\}/g, ' '));
     return out;
@@ -4606,7 +4626,7 @@ suite('Les balises de version ne mentent pas', () => {
 
     /* Et elle s'affiche. Une constante juste que personne ne montre ne repond a
        aucune des deux demi-heures perdues. */
-    vrai(/<dt>Version\$\{aide\(/.test(src) && /esc\(VERSION_APP\)/.test(src),
+    vrai(/<dt>\$\{trad\('Version'\)\}\$\{aide\(/.test(src) && /esc\(VERSION_APP\)/.test(src),
       'la carte « État » doit la montrer');
 
     /* Enfin, elle vaut quelque chose ici meme : ce test tourne dans une page qui
@@ -7740,7 +7760,9 @@ suite('Une ligne sans nom se supprime quand même', () => {
        et ce test vérifie que la convention de nom tient : une case qui
        s'appellerait autrement serait muette pour askForm. */
     const src = lireSource('assets/app.js');
-    const cases = src.match(/\{ cle: 'supprimer', label: '[^']*', type: 'case'/g) || [];
+    /* Le libelle passe par `trad()` depuis qu'il se traduit : c'est la clef
+       `supprimer` que ce controle surveille, pas la langue du libelle. */
+    const cases = src.match(/\{ cle: 'supprimer', label: (?:trad\()?'[^']*'\)?, type: 'case'/g) || [];
     vrai(cases.length >= 3,
       `les fenêtres qui suppriment par une case doivent toutes employer cette clé `
       + `(${cases.length} trouvée·s)`);
@@ -8087,7 +8109,9 @@ suite('Un compte archivé reste consultable et daté', () => {
     const src = lireSource('assets/app.js');
     const fiche = src.match(/function viewFicheCompte\(id\) \{[\s\S]*?\n\}/);
     vrai(fiche, 'la fiche d’un compte doit être trouvable');
-    vrai(/c\.statut === 'archive' \? `<dt>Date de clôture<\/dt>/.test(fiche[0]),
+    /* La phrase passe par trad() depuis qu'elle se traduit : le controle suit
+       la garde `statut === 'archive'`, pas la langue du libelle. */
+    vrai(/c\.statut === 'archive' \? `<dt>\$\{trad\('Date de clôture'\)\}<\/dt>/.test(fiche[0]),
       'la fiche ne montre la date que sur un compte archivé');
 
     const form = src.match(/async 'modifier-compte'\(btn\)[\s\S]*?\n  \},/);
@@ -8455,8 +8479,12 @@ suite('Le mode masqué n’imprime pas ses balises', () => {
     const src = lireSource('assets/app.js');
     vrai(/\$\{esc\(cur\.note\)\}/.test(src),
       'le commentaire d’un mois est une saisie : il reste échappé');
-    vrai(/\$\{esc\(x\.note\)\}/.test(src),
-      'la note d’un palier d’autonomie est de la prose : elle aussi');
+    /* La note passe par trad() depuis qu'elle se traduit, mais esc() reste la
+       derniere barriere : la traduction se fait DANS l'echappement, jamais
+       apres lui. L'ordre inverse laisserait passer le balisage d'une entree
+       anglaise. */
+    vrai(/\$\{esc\(trad\(x\.note\)\)\}/.test(src),
+      'la note d’un palier d’autonomie est de la prose : elle aussi, et esc() reste dehors');
   });
 
   test('escMontant ne laisse passer que ce que nous produisons', () => {
@@ -9957,6 +9985,31 @@ suite('Un bien change de contenant, et garde un seul nom', () => {
        `modifier-compte` ouvre une fenetre et ne se rejoue pas ici. */
     vrai(!/c\.lignes\.forEach\(l => l\.libelle/.test(handler),
       'aucun renommage en masse');
+
+    /* Le nom d'un bien detenu en direct vit en trois exemplaires : compte,
+       ligne, contenant. La carte de la liste des actifs affiche `etab.nom` :
+       sans ce troisieme renommage, elle gardait l'ancien nom au-dessus d'une
+       ligne qui portait le nouveau. */
+    vrai(/etab\.nom = String\(v\.libelle\)\.trim\(\);/.test(handler),
+      'le contenant prend aussi le nom du bien');
+    vrai(/COMPTES\(\)\.filter\(x => x\.etabId === etab\.id\)\.length === 1/.test(handler),
+      'seulement quand l’établissement n’a que ce compte : un parking '
+      + 'rattaché au même contenant garde son nom propre');
+  });
+
+  test('renommer le contenant d’un bien renomme le bien', () => {
+    /* Cas miroir : « Modifier l'etablissement » ne touchait que `e.nom`, meme
+       quand le contenant est un bien — la carte disait « Credit immobilier »
+       au-dessus d'une ligne « Appartement ». */
+    const src = lireSource('assets/app.js');
+    const debut = src.indexOf("async 'modifier-etab'");
+    const handler = src.slice(debut, src.indexOf("async 'modifier-compte'"));
+    vrai(/tous\.length === 1 && estDetenuEnDirect\(typeCompte\(tous\[0\]\.type\)\)/
+      .test(handler), 'sous garde : un seul compte, détenu en direct');
+    vrai(/&& !\(tous\[0\]\.cash \|\| \[\]\)\.length/.test(handler),
+      'et jamais sur un compte qui porte aussi des espèces');
+    vrai(/tous\[0\]\.lignes\[0\]\.libelle = e\.nom;/.test(handler),
+      'la ligne prend le nom du contenant');
   });
 });
 
@@ -9999,9 +10052,9 @@ suite('La pastille des cours ne certifie que ce qu’elle sait', () => {
 
     vrai(/const partiel = !ferme && j\.horsSeance > 0;/.test(bloc),
       'l’état intermédiaire existe');
-    vrai(/ferme \? 'hors séance'/.test(bloc),
+    vrai(/ferme \? trad\('hors séance'\)/.test(bloc),
       'tout fermé se dit « hors séance »');
-    vrai(/partiel \? `\$\{j\.horsSeance\} hors séance`/.test(bloc),
+    vrai(/partiel \? `\$\{j\.horsSeance\} \$\{trad\('hors séance'\)\}`/.test(bloc),
       'à moitié ouvert, le compte de ce qui n’a pas bougé');
     /* La pastille ne peut pas rester verte quand une part du portefeuille date
        de la veille : le point est le seul signal qu'on lit sans s'arreter. */
@@ -10011,7 +10064,7 @@ suite('La pastille des cours ne certifie que ce qu’elle sait', () => {
     /* L'ordre des trois branches est l'invariant : « hors seance » doit passer
        avant « partiel », sinon un portefeuille entierement ferme afficherait le
        compte de ses lignes au lieu de sa raison. */
-    const posFerme = bloc.indexOf("ferme ? 'hors séance'");
+    const posFerme = bloc.indexOf("ferme ? trad('hors séance')");
     const posPartiel = bloc.indexOf('partiel ? `${j.horsSeance}');
     const posAge = bloc.indexOf('marche ? fmtWhen(new Date(marche * 1000))');
     vrai(posFerme > 0 && posPartiel > posFerme && posAge > posPartiel,
@@ -10534,7 +10587,7 @@ suite('Détail mensuel : tri des lignes, ordre des colonnes', () => {
     const mobile = carte.slice(carte.indexOf('liste-mobile'), carte.indexOf('table-wrap'));
     vrai(/lignesDepenses\.map/.test(mobile) && !/depSort/.test(mobile),
       'la liste de téléphone ignore le tri');
-    vrai(/<th>vs obj\.<\/th>/.test(carte), '« vs obj. » reste une en-tête muette');
+    vrai(/<th>\$\{trad\('vs obj\.'\)\}<\/th>/.test(carte), '« vs obj. » reste une en-tête muette');
   });
 });
 
@@ -10556,8 +10609,11 @@ suite('Enregistrer : une règle, deux familles', () => {
   test('le relevé mensuel rejoint la famille de sa jumelle', () => {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    /* La borne haute etait « function askAccount », une fenetre morte que
+       rien n'appelait : elle est partie, la fenetre d'apercu la remplace
+       comme frontiere. */
     const bloc = src.slice(src.indexOf('function askMonthlySnapshot'),
-                           src.indexOf('function askAccount'));
+                           src.indexOf('const APERCUS'));
     vrai(/id="relOk"[^>]*>Enregistrer</.test(bloc) && /id="relFermer"[^>]*>Fermer</.test(bloc),
       'le pied porte Enregistrer et Fermer, comme la fenêtre des dépenses');
     vrai(!/relCancel/.test(bloc),
@@ -10733,5 +10789,211 @@ suite('Un indice ne se compte pas en euros', () => {
     for (const i of indices) {
       vrai(i.startsWith('^'), `${i} doit se reconnaître au préfixe`);
     }
+  });
+});
+
+suite('La langue gouverne les formats, pas seulement les mots', () => {
+
+  test('un montant suit les séparateurs de sa langue', () => {
+    enLangue('fr', () => {
+      const s = fmtEUR(1234.56);
+      vrai(/1\D?234,56/.test(s),
+        `le français groupe les milliers et décime à la virgule, obtenu « ${s} »`);
+    });
+    enLangue('en', () => {
+      const s = fmtEUR(1234.56);
+      vrai(s.includes('1,234.56'),
+        `l’anglais groupe à la virgule et décime au point, obtenu « ${s} »`);
+    });
+  });
+
+  test('le signe pourcent se colle en anglais et s’espace en français', () => {
+    /* L'espace avant un signe est une regle typographique francaise, pas une
+       decoration : l'anglais qui la garderait aurait l'air traduit a moitie. */
+    enLangue('fr', () => eq(fmtPct(12.5), '12,50 %', 'le français espace son signe'));
+    enLangue('en', () => eq(fmtPct(12.5), '12.50%', 'l’anglais le colle'));
+  });
+
+  test('une date anglaise ne peut pas se lire à l’envers', () => {
+    /* Le seul controle de cette suite qui protege un chiffre et non un style.
+       « 03/04/2026 » vaut le 3 avril a Londres et le 4 mars a New York : une
+       date numerique change de sens selon le lecteur, ce qu'aucune traduction
+       n'a le droit de faire. Le mois en lettres retire la question. */
+    enLangue('en', () => {
+      const s = fmtDate('2026-04-03');
+      eq(s, '3 Apr 2026', 'le mois s’écrit en lettres');
+      vrai(!/\d+\/\d+/.test(s), `aucune date numérique en anglais, obtenu « ${s} »`);
+    });
+    enLangue('fr', () => eq(fmtDate('2026-04-03'), '03/04/2026', 'le français garde son format'));
+  });
+
+  test('le mois court et la clôture d’année se traduisent', () => {
+    enLangue('en', () => {
+      eq(fmtMonth('2026-04-01'), 'Apr 26', 'le mois court');
+      eq(fmtMonth('2025-12-31'), 'End 2025', 'la ligne de clôture');
+    });
+    enLangue('fr', () => {
+      eq(fmtMonth('2026-04-01'), 'avr. 26', 'le mois court');
+      eq(fmtMonth('2025-12-31'), 'Fin 2025', 'la ligne de clôture');
+    });
+  });
+
+  test('l’heure d’un cours porte la préposition de sa langue', () => {
+    /* `fmtCoursQuand` rend sa preposition avec elle, ses trois branches n'ayant
+       pas la meme. Traduire le seul dictionnaire aurait donc laisse « price de
+       11:05 » : c'est la fonction qui doit savoir. */
+    auJour('2026-08-09', () => {
+      const jour = Math.floor(new Date('2026-08-09T11:05:00').getTime() / 1000);
+      enLangue('fr', () => {
+        const s = fmtCoursQuand(jour);
+        vrai(s.startsWith('de '), `obtenu « ${s} »`);
+      });
+      /* « from », la meme preposition sur les trois branches : elle se lit
+         aussi bien apres « price » qu'apres « the most recent price is »,
+         la ou « at » rendait la seconde phrase bancale. */
+      enLangue('en', () => {
+        const s = fmtCoursQuand(jour);
+        vrai(s.startsWith('from '), `obtenu « ${s} »`);
+        vrai(!/\bde\b|\bdu\b|hier/.test(s), `aucune préposition française, obtenu « ${s} »`);
+      });
+      const veille = Math.floor(new Date('2026-08-08T22:00:00').getTime() / 1000);
+      enLangue('en', () => {
+        const s = fmtCoursQuand(veille);
+        vrai(s.startsWith('from yesterday at '), `la veille se dit en anglais, obtenu « ${s} »`);
+      });
+    });
+  });
+
+  test('aucun fichier ne fige une locale hors du dictionnaire', () => {
+    /* Le defaut que ce projet corrige sans arret, applique aux formats : la
+       locale etait recopiee a seize endroits, et traduire l'application aurait
+       demande de ne pas en oublier un seul. Une seule source, `locale()`, et ce
+       controle se derive de la source plutot que d'une liste a tenir. */
+    for (const f of ['assets/app.js', 'assets/store.js', 'assets/charts.js',
+                     'assets/quotes.js', 'assets/cloudsync.js']) {
+      const src = lireSource(f);
+      vrai(src, `${f} doit être lisible pour ce contrôle`);
+      const figees = [...src.matchAll(/['"][a-z]{2}-[A-Z]{2}['"]/g)].map(m => m[0]);
+      eq(figees.join(', '), '',
+        `${f} fige une locale : elle doit passer par locale()`);
+    }
+  });
+});
+
+suite('Un type de compte peut naître à la main', () => {
+
+  test('créé, il se retrouve et porte la forme de sa poche', () => {
+    /* La forme vient de la poche et non du nom : c'est elle qui commande
+       calculs et regroupements. Un type « cash » doit compter comme du cash. */
+    Fixture.poser();
+    const id = creerTypePerso('Plan épargne logement', 'cash');
+    eq(id, 't_plan-epargne-logement', 'l’identifiant se dérive du nom, accents à plat');
+    const t = typeCompte(id);
+    eq(t.label, 'Plan épargne logement', 'le nom est celui qu’on a tapé');
+    eq(t.groupe, 'cash', 'la poche demandée');
+    eq(t.defaut, 'courant', 'l’affectation par défaut de sa poche');
+    vrai(t.classes.includes('liquidites'), 'et ses classes suivent');
+  });
+
+  test('le même nom ne crée pas un double, quelle que soit sa casse', () => {
+    /* Deux types du même nom seraient deux poches pour un seul fait — la
+       faute que ce projet corrige sans arrêt, offerte ici à l'utilisateur. */
+    Fixture.poser();
+    const a = creerTypePerso('Compte à terme', 'cash');
+    const b = creerTypePerso('compte à terme', 'bourse');
+    eq(b, a, 'le second appel rend le premier identifiant, poche comprise');
+    eq(typesPerso().length, 1, 'et rien n’a été dédoublé');
+  });
+
+  test('un nom déjà dans la table est repris, jamais recréé', () => {
+    Fixture.poser();
+    eq(creerTypePerso('PEA', 'bourse'), 'pea', 'le PEA de la table répond');
+    eq(typesPerso().length, 0, 'aucun double en face d’un type existant');
+  });
+
+  test('deux noms qui donnent le même identifiant se suffixent', () => {
+    Fixture.poser();
+    const a = creerTypePerso('Girardin !', 'pe');
+    const b = creerTypePerso('Girardin ?', 'pe');
+    eq(a, 't_girardin', 'le premier prend le nom nu');
+    eq(b, 't_girardin-2', 'le second se suffixe au lieu d’écraser');
+    vrai(typeCompte(a).label !== typeCompte(b).label, 'et chacun garde son nom');
+  });
+
+  test('une poche inconnue retombe sur le non coté, un nom vide ne crée rien', () => {
+    Fixture.poser();
+    eq(typeCompte(creerTypePerso('Truc exotique', 'zzz')).groupe, 'pe',
+      'la poche du repli est celle du fallback de typeCompte');
+    eq(creerTypePerso('   ', 'cash'), null, 'un nom vide est refusé');
+    eq(typesPerso().length, 1, 'et il n’a rien laissé derrière lui');
+  });
+
+  test('les deux formulaires listent les types depuis la même source', () => {
+    /* Une liste se dérive, elle ne se recopie pas : le type créé dans une
+       fenêtre doit exister dans l'autre. Les deux passent par
+       typesCompteChoix(), et chacune offre le type libre. */
+    const src = lireSource('assets/app.js');
+    const appels = src.match(/typesCompteChoix\(\)\.map/g) || [];
+    eq(appels.length, 2, 'la fiche et l’assistant, personne d’autre à la main');
+    const libres = src.match(/\['__nouveau', trad\('\+ Autre type…'\)\]/g) || [];
+    eq(libres.length, 2, 'et le type libre s’offre dans les deux');
+    vrai(!/TYPES_COMPTE\.filter\([^)]*\)\.map\(\w+ => \[\w+\.id, \w+\.label\]\)/.test(src),
+      'plus aucune liste de types recopiée depuis la table');
+  });
+
+  test('la migration pose typesPerso, et la rejouer ne change rien', () => {
+    const s1 = Fixture.poser(); s1.typesPerso = undefined;
+    Store.state.typesPerso = Store.state.typesPerso || [];
+    vrai(Array.isArray(Store.state.typesPerso), 'le champ existe après migration');
+    const avant = JSON.stringify(Store.state.typesPerso);
+    Store.state.typesPerso = Store.state.typesPerso || [];
+    eq(JSON.stringify(Store.state.typesPerso), avant, 'idempotente');
+  });
+});
+
+suite('La traduction des écrans ne peut pas heurter les totaux', () => {
+
+  test('t() ne reçoit que des clés pointées, jamais une phrase', () => {
+    /* `t` est une variable locale dans une trentaine de portées d'app.js, où
+       elle porte les totaux : `t.brut`, `t.net`, `t.label`. Ecrire
+       `t('Liquidités')` a cote de `num(t.bourse)` appelle l'objet des totaux
+       comme une fonction, et c'est la portee qui decide laquelle gagne. Le
+       defaut ne se voit pas a la relecture, il ne se voit qu'a l'execution du
+       seul ecran concerne. `trad()` porte donc la traduction des phrases, et
+       ce controle interdit l'autre forme plutot que de compter sur l'attention. */
+    for (const f of ['assets/app.js', 'assets/charts.js']) {
+      const src = lireSource(f);
+      vrai(src, `${f} doit être lisible pour ce contrôle`);
+      const fautes = [...src.matchAll(/[^\w.]t\('([^']*)'/g)]
+        .map(m => m[1]).filter(c => !/^[\w.]+$/.test(c));
+      eq(fautes.join(' | '), '',
+        `${f} passe une phrase à t() : utiliser trad(), t() est masquée par les totaux`);
+    }
+  });
+
+  test('trad() rend le français quand le dictionnaire ignore la phrase', () => {
+    /* C'est ce repli qui permet de traduire écran par écran : une phrase
+       enveloppée mais pas encore traduite reste juste, dans les deux langues. */
+    const inedite = 'Phrase que le dictionnaire ne connaît pas';
+    enLangue('fr', () => eq(trad(inedite), inedite, 'le français rend la phrase telle quelle'));
+    enLangue('en', () => eq(trad(inedite), inedite, 'l’anglais retombe dessus au lieu d’une clé nue'));
+    enLangue('en', () => eq(trad('Liquidités'), 'Cash', 'et traduit ce qu’il connaît'));
+  });
+});
+
+suite('Le dictionnaire anglais ne laisse pas de trou', () => {
+
+  test('chaque clé française a sa traduction', () => {
+    const manquantes = Object.keys(FR).filter(c => !I18N.en[c]);
+    eq(manquantes.join(', '), '', 'ces clés n’ont pas d’anglais');
+  });
+
+  test('aucune phrase ne reste en français sous couvert de traduction', () => {
+    /* Un mot identique dans les deux langues est normal — « Budget »,
+       « Performance », « Allocation ». Une phrase entiere identique est une
+       traduction qu'on a cru faire. */
+    const copiees = Object.keys(FR).filter(c =>
+      I18N.en[c] === FR[c] && String(FR[c]).trim().split(/\s+/).length > 2);
+    eq(copiees.join(', '), '', 'ces phrases sont restées en français');
   });
 });

@@ -87,10 +87,10 @@ const AFFECTATIONS = [
   /*    « Cash à investir » et non « À investir » : les quatre poches se lisent
    cote a cote sur trois ecrans, et un intitule sans substantif ne se
    comparait pas aux trois autres.*/
-  ['courant',    'Cash disponible'],
-  ['precaution', 'Épargne de précaution'],
-  ['projet',     'Projet prévu'],
-  ['investir',   'Cash à investir'],
+  ['courant',    trad('Cash disponible')],
+  ['precaution', trad('Épargne de précaution')],
+  ['projet',     trad('Projet prévu')],
+  ['investir',   trad('Cash à investir')],
 ];
 const AFFECTATION_LABEL = Object.fromEntries(AFFECTATIONS);
 
@@ -122,25 +122,25 @@ const AFFECTATION_LABEL = Object.fromEntries(AFFECTATIONS);
    Les noms des poches viennent d'AFFECTATIONS : une seule source, un seul
    endroit a modifier. */
 const BASES = {
-  avoirs:      { nom: 'Tes avoirs',         de: 'de tes avoirs' },          // brut
+  avoirs:      { nom: trad('Tes avoirs'),         de: trad('de tes avoirs') },          // brut
   /* « Patrimoine net » et non « Ton patrimoine net » : c'est deja le mot du
      bandeau lateral et des pieds de liste. Un nom qui existe se reprend, il ne
      se reinvente pas. */
-  net:         { nom: 'Patrimoine net',     de: 'de ton patrimoine net' },   // brut - dettes
-  place:       { nom: 'Placé',              de: 'de ce qui est placé' },    // nowTotals().invested
-  placeBourse: { nom: 'Placé en bourse',    de: 'de ce qui est placé en bourse' },
-  baseCibles:  { nom: 'Base de tes cibles', de: 'de la base de tes cibles' },
-  liquidites:  { nom: 'Liquidités',         de: 'de tes liquidités' },      // les quatre poches
-  cashDispo:   { nom: AFFECTATION_LABEL.courant,    de: 'du cash disponible' },
-  precaution:  { nom: AFFECTATION_LABEL.precaution, de: 'de l’épargne de précaution' },
-  projet:      { nom: AFFECTATION_LABEL.projet,     de: 'du cash de projet' },
-  cashPlacer:  { nom: AFFECTATION_LABEL.investir,   de: 'du cash à investir' },
+  net:         { nom: trad('Patrimoine net'),     de: trad('de ton patrimoine net') },   // brut - dettes
+  place:       { nom: trad('Placé'),              de: trad('de ce qui est placé') },    // nowTotals().invested
+  placeBourse: { nom: trad('Placé en bourse'),    de: trad('de ce qui est placé en bourse') },
+  baseCibles:  { nom: trad('Base de tes cibles'), de: trad('de la base de tes cibles') },
+  liquidites:  { nom: trad('Liquidités'),         de: trad('de tes liquidités') },      // les quatre poches
+  cashDispo:   { nom: AFFECTATION_LABEL.courant,    de: trad('du cash disponible') },
+  precaution:  { nom: AFFECTATION_LABEL.precaution, de: trad('de l’épargne de précaution') },
+  projet:      { nom: AFFECTATION_LABEL.projet,     de: trad('du cash de projet') },
+  cashPlacer:  { nom: AFFECTATION_LABEL.investir,   de: trad('du cash à investir') },
 };
 
 /* La mention grise a droite d'un titre de bloc : « en % de tes avoirs ·
    36 098 EUR ». Le format vient de « Core et satellites », qui l'avait seul ;
    il est desormais celui de tous les blocs a pourcentages. */
-const mentionBase = (base, montant) => `en % ${base.de} · ${fmtEUR0(montant)}`;
+const mentionBase = (base, montant) => `${trad('en %')} ${base.de} · ${fmtEUR0(montant)}`;
 
 /* Les quatre poches de liquidites, dans l'ordre d'AFFECTATIONS, avec leur
    montant. Une seule fonction pour les trois ecrans qui les affichent, et la
@@ -151,15 +151,15 @@ function pochesLiquidites() {
 }
 
 const CLASSES_ACTIFS = {
-  liquidites:  'Liquidités',
+  liquidites:  trad('Liquidités'),
   /*    « Actifs de marché » : la classe porte plus que des actions — ETF, ETC or,
    options — et le terme reste juste meme quand la crypto a sa propre tuile a
    cote.*/
-  actions:     'Actifs de marché',
-  obligations: 'Obligations',
-  crypto:      'Cryptomonnaies',
-  nonCote:     'Placements non cotés',
-  immobilier:  'Immobilier',
+  actions:     trad('Actifs de marché'),
+  obligations: trad('Obligations'),
+  crypto:      trad('Cryptomonnaies'),
+  nonCote:     trad('Placements non cotés'),
+  immobilier:  trad('Immobilier'),
   /* Une montre, une voiture, un tableau, un instrument. Ce qu'on possede et qui
      vaut, sans etre un placement financier.
 
@@ -247,7 +247,51 @@ const TYPES_COMPTE = [
 
 function typeCompte(id) {
   return TYPES_COMPTE.find(t => t.id === id)
+      || typesPerso().find(t => t.id === id)
       || { id, label: id || 'Autre', classes: ['nonCote'], defaut: 'investir', groupe: 'pe' };
+}
+
+/* Un type que la table ne connait pas : cree par son detenteur, il vit dans
+   l'etat et non dans TYPES_COMPTE — la table dit le modele, `typesPerso` dit
+   ce qu'un patrimoine particulier a eu besoin d'ajouter. Sa forme se derive
+   de la poche, parce que c'est elle qui commande calculs et regroupements ;
+   le nom ne fait que nommer. */
+function typesPerso() { return Store.state?.typesPerso || []; }
+
+const FORME_POCHE = {
+  cash:   { classes: ['liquidites'], defaut: 'courant' },
+  bourse: { classes: ['liquidites', 'actions', 'obligations'], defaut: 'investir', titres: true },
+  pe:     { classes: ['nonCote'], defaut: 'investir' },
+};
+
+/* Les deux formulaires de compte listent la meme chose : la table moins les
+   types internes, plus les types du detenteur. Une seule source, sinon le
+   type cree dans une fenetre disparaissait de l'autre. */
+function typesCompteChoix() {
+  return [...TYPES_COMPTE.filter(t => !t.interne), ...typesPerso()];
+}
+
+/* Rend l'identifiant du type, existant ou cree. Un nom deja porte est repris
+   au lieu d'etre dedouble : deux types « Plan épargne logement » seraient deux
+   poches pour le meme fait. Le prefixe `t_` garantit qu'un identifiant cree
+   ici n'entrera jamais en collision avec un type que la table ajouterait
+   plus tard. Pas de Store.save() : l'ecriture appartient a l'appelant,
+   comme partout — c'est aussi ce qui rend cette fonction testable. */
+function creerTypePerso(label, groupe) {
+  const nom = String(label || '').trim();
+  if (!nom) return null;
+  const poche = FORME_POCHE[groupe] ? groupe : 'pe';
+  const deja = [...TYPES_COMPTE, ...typesPerso()]
+    .find(t => t.label.toLowerCase() === nom.toLowerCase());
+  if (deja) return deja.id;
+  const slug = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'type';
+  const pris = x => TYPES_COMPTE.some(t => t.id === x) || typesPerso().some(t => t.id === x);
+  let id = 't_' + slug, n = 2;
+  while (pris(id)) id = 't_' + slug + '-' + (n++);
+  Store.state.typesPerso = Store.state.typesPerso || [];
+  Store.state.typesPerso.push({ id, label: nom, groupe: poche, ...FORME_POCHE[poche] });
+  return id;
 }
 
 /* Un bien se possede, il ne s'ouvre pas.
@@ -387,15 +431,15 @@ const nomLignePlacement = (l, compte) =>
    investi, `role` dit pourquoi. On peut desormais avoir des obligations en
    coeur, une action en satellite, ou de l'or dans les deux. */
 const ASSET_CLASSES = {
-  actions:        'Actions',
-  obligations:    'Obligations',
+  actions:        trad('Actions'),
+  obligations:    trad('Obligations'),
   /* Une fonciere, un REIT, un ETF immobilier : cote, vendable en seance, mais
      dont le risque est l'immobilier et non les actions. Tout cela tombait dans
      « Actions », et 20 % de foncieres se lisaient comme 20 % d'actions de plus.
      La classe n'a rien a voir avec la ligne « Immobilier » de l'accueil, qui
      porte des biens en direct : celle-la se vend en quelques mois, celle-ci en
      une seance. Meme sous-jacent, deux liquidites. */
-  immobilierCote: 'Immobilier coté',
+  immobilierCote: trad('Immobilier coté'),
   /* Une ligne qui contient plusieurs classes a la fois : un fonds patrimonial
      d'assurance-vie, un ETF 60/40, un fonds a horizon. Il fallait la classer en
      actions ou en obligations, les deux fausses. Le declarer multi-actifs est
@@ -407,10 +451,10 @@ const ASSET_CLASSES = {
      dit l'emballage, quand la classe dit le contenu. Un ETF monde est un fonds
      de classe actions — les deux champs repondent a deux questions, et un
      libelle ne doit pas emprunter le vocabulaire de l'autre axe. */
-  diversifie:     'Multi-actifs',
-  metaux:         'Métaux précieux',
+  diversifie:     trad('Multi-actifs'),
+  metaux:         trad('Métaux précieux'),
   crypto:         'Crypto',
-  monetaire:      'Monétaire',
+  monetaire:      trad('Monétaire'),
 };
 /* Pas de « non coté » ici, et c'est volontaire.
    `assetClass` qualifie une ligne de marché — une ligne cotée, par
@@ -1023,22 +1067,22 @@ const masque = devise => `${OEIL_MASQUE} ${symboleDevise(devise)}`;
 const masqueTexte = devise => '••• ' + symboleDevise(devise);
 
 const fmtEUR = (v, dec = 2) => montantsMasques ? masque('EUR')
-  : new Intl.NumberFormat('fr-FR', {
+  : new Intl.NumberFormat(locale(), {
       style: 'currency', currency: 'EUR', minimumFractionDigits: dec, maximumFractionDigits: dec,
     }).format(num(v));
 
 const fmtEUR0 = v => fmtEUR(v, 0);
 
-/* Un nombre de mois, a la francaise. `toFixed(1)` ecrivait « 0.8 mois » au
-   milieu d'une interface qui met des virgules partout ailleurs. */
-const fmtMois = v => new Intl.NumberFormat('fr-FR',
+/* Un nombre de mois suit les separateurs de la langue. `toFixed(1)` ecrivait
+   « 0.8 mois » au milieu d'une interface qui met des virgules partout. */
+const fmtMois = v => new Intl.NumberFormat(locale(),
   { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(num(v));
 const fmtEUR0Texte = v => montantsMasques ? masqueTexte('EUR') : fmtEUR0(v);
 
 /* Un prix unitaire est libellé dans la devise de cotation, pas en euros.
    L'afficher avec un « € » revient à mentir sur le montant. */
 const fmtCur = (v, devise = 'EUR', dec = 2) => montantsMasques ? masque(devise)
-  : new Intl.NumberFormat('fr-FR', {
+  : new Intl.NumberFormat(locale(), {
       style: 'currency', currency: devise || 'EUR',
       minimumFractionDigits: dec, maximumFractionDigits: dec,
     }).format(num(v));
@@ -1049,26 +1093,38 @@ function fmtCurEur(v, devise, taux) {
   return `${fmtCur(v, devise)} <span class="muted">≈ ${fmtEUR(num(v) * (num(taux) || 1))}</span>`;
 }
 
-const fmtPct = (v, dec = 2) => new Intl.NumberFormat('fr-FR', {
+/* L'espace devant le signe est une regle typographique francaise. L'anglais
+   le colle au nombre : « 12.50% ». */
+const fmtPct = (v, dec = 2) => new Intl.NumberFormat(locale(), {
   minimumFractionDigits: dec, maximumFractionDigits: dec,
-}).format(num(v)) + ' %';
+}).format(num(v)) + (enAnglais() ? '%' : ' %');
 
-/* Un nombre sans unité, aux séparateurs français : « 1 250 » et non « 1250 »
-   ni « 1,250 ». Les décimales ne s'affichent que si elles existent — une
-   surface de 42 m² ne s'écrit pas « 42,00 ». */
-const fmtNombre = v => num(v).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+/* Un nombre sans unite, aux separateurs de la langue : « 1 250 » en francais,
+   « 1,250 » en anglais, jamais « 1250 ». Les decimales ne s'affichent que si
+   elles existent, une surface de 42 m2 ne s'ecrivant pas « 42,00 ». */
+const fmtNombre = v => num(v).toLocaleString(locale(), { maximumFractionDigits: 2 });
 const fmtSigned = v => (v >= 0 ? '+' : '−') + fmtEUR(Math.abs(v), 0);
 const fmtSignedPct = (v, dec = 2) => (v >= 0 ? '+' : '−') + fmtPct(Math.abs(v), dec);
 
-const MONTHS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const MOIS_COURTS = {
+  fr: ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'],
+  en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+};
+const moisCourts = () => MOIS_COURTS[currentLang()] || MOIS_COURTS.fr;
+
 function fmtMonth(iso) {
   const [y, m, d] = iso.split('-').map(Number);
-  if (d > 20) return `Fin ${y}`;               // ligne de clôture
-  return `${MONTHS[m - 1]} ${String(y).slice(2)}`;
+  if (d > 20) return enAnglais() ? `End ${y}` : `Fin ${y}`;   // ligne de cloture
+  return `${moisCourts()[m - 1]} ${String(y).slice(2)}`;
 }
+
+/* Aucune date numerique en anglais : « 03/04/2026 » se lit 3 avril a Londres
+   et 4 mars a New York. Le mois en lettres retire la question, et le lecteur
+   n'a pas a savoir quelle variante d'anglais il regarde. */
 function fmtDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
+  if (enAnglais()) return `${Number(d)} ${moisCourts()[Number(m) - 1]} ${y}`;
   return `${d}/${m}/${y}`;
 }
 /* « 11 août » : la date d'un rappel repoussé, dite comme on la dit a voix
@@ -1076,7 +1132,7 @@ function fmtDate(iso) {
 function fmtJourMois(iso) {
   if (!iso) return '';
   const [, m, d] = iso.split('-').map(Number);
-  return `${d} ${MONTHS[m - 1] || ''}`.trim();
+  return `${d} ${moisCourts()[m - 1] || ''}`.trim();
 }
 
 /* Quand ce cours a-t-il ete imprime par la place ? En secondes, comme
@@ -1097,17 +1153,17 @@ function fmtCoursQuand(secondes) {
   const t = num(secondes);
   if (!t) return '';
   const d = new Date(t * 1000);
-  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const heure = d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
   const jour = isoLocal(d);
-  if (jour === todayISO()) return `de ${heure}`;
+  if (jour === todayISO()) return enAnglais() ? `from ${heure}` : `de ${heure}`;
   /* La veille se derive de `todayISO()` et non de `new Date()` : c'est le seul
      repere que le harnais peut deplacer, et « hier » doit suivre le jour
      suppose, sans quoi un test joue a une date et lit une phrase calee sur une
      autre. Midi, pour ne pas glisser d'un jour au changement d'heure. */
   const veille = new Date(todayISO() + 'T12:00:00');
   veille.setDate(veille.getDate() - 1);
-  if (jour === isoLocal(veille)) return `d’hier à ${heure}`;
-  return `du ${fmtJourMois(jour)} à ${heure}`;
+  if (jour === isoLocal(veille)) return enAnglais() ? `from yesterday at ${heure}` : `d’hier à ${heure}`;
+  return enAnglais() ? `from ${fmtJourMois(jour)} at ${heure}` : `du ${fmtJourMois(jour)} à ${heure}`;
 }
 
 /* La clé de contrôle attendue pour un ISIN, calculée sur ses onze premiers
@@ -1291,6 +1347,7 @@ const Store = {
     ensureCalendarMonths(s.budget.expenses, 'month', 'note');
     s.accountTypes = s.accountTypes || structuredClone(SEED.accountTypes);
     s.accounts = s.accounts || structuredClone(SEED.accounts);
+    s.typesPerso = s.typesPerso || [];
 
     /* Des types d'enveloppe pour tout ce qu'un patrimoine francais peut
        porter, meme sans compte dessus aujourd'hui : la vue Avoirs ne montre
@@ -2034,10 +2091,10 @@ function historyYears() {
    sixieme bouton ne laissait que 3 px de marge. */
 const HISTORY_RANGES = [
   { id: 'ytd', label: 'YTD' },
-  { id: '1y',  label: '1 an' },
-  { id: '3y',  label: '3 ans' },
-  { id: '5y',  label: '5 ans' },
-  { id: 'all', label: 'Tout' },
+  { id: '1y',  label: trad('1 an') },
+  { id: '3y',  label: trad('3 ans') },
+  { id: '5y',  label: trad('5 ans') },
+  { id: 'all', label: trad('Tout') },
 ];
 
 /* Libellé lisible d'une plage. Les identifiants ne vivent qu'en memoire, mais
@@ -2048,7 +2105,7 @@ function rangeLabel(id) {
   if (fixe) return fixe.label;
   if (id === 'ytd') return 'YTD';
   const m = String(id || '').match(/^(\d+)y$/);
-  return m ? (m[1] === '1' ? '1 an' : `${m[1]} ans`) : 'Tout';
+  return m ? (m[1] === '1' ? trad('1 an') : `${m[1]} ${trad('ans')}`) : trad('Tout');
 }
 
 /* `ecarts` : la serie porte des variations et non des valeurs.
@@ -3951,17 +4008,17 @@ function runway() {
      note doit dire laquelle des deux etapes retarde. */
   /*     Conditionnel, parce qu'une note qui parle de projets a quelqu'un qui n'en a
      pas est du bruit. */
-  const contenants = 'comptes courants, livrets, espèces';
+  const contenants = trad('comptes courants, livrets, espèces');
   const tiers = [
-    { label: 'Disponible tout de suite', value: immediate,
-      note: p.projet > 0.005 ? `${contenants} ; projets compris` : contenants },
-    { label: 'En quelques jours', value: differe,
-      note: 'liquidités chez un courtier ; un titre se vend en séance, le virement prend 2 à 3 jours' },
-    { label: 'En quelques mois', value: lent, note: 'immobilier, non coté, à vendre avec décote si pressé' },
+    { label: trad('Disponible tout de suite'), value: immediate,
+      note: p.projet > 0.005 ? `${contenants}${trad(' ; projets compris')}` : contenants },
+    { label: trad('En quelques jours'), value: differe,
+      note: trad('liquidités chez un courtier ; un titre se vend en séance, le virement prend 2 à 3 jours') },
+    { label: trad('En quelques mois'), value: lent, note: trad('immobilier, non coté, à vendre avec décote si pressé') },
     /* Hors cumul : un PER ne prolonge aucune autonomie. Il reste affiché,
        c'est du patrimoine, mais l'ajouter aux mois tenus serait un mensonge —
        cet argent n'arrivera pas, quoi qu'il se passe demain. */
-    { label: 'Inaccessible', value: bloque, note: 'bloqué jusqu’à son échéance', horsCumul: true },
+    { label: trad('Inaccessible'), value: bloque, note: trad('bloqué jusqu’à son échéance'), horsCumul: true },
   ];
   let cum = 0;
   for (const t of tiers) {
@@ -4292,9 +4349,6 @@ const VENTES_NOMMEES_MAX = 24;
 const ventesSeNomment = (range, count) =>
   pasDesVentes(range) === 'mois' && count <= VENTES_NOMMEES_MAX;
 
-const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
-                     'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-
 function ventesParPeriode(ventes, pas) {
   const cle = date => {
     const an = String(date).slice(0, 4), mois = Number(String(date).slice(5, 7));
@@ -4309,7 +4363,7 @@ function ventesParPeriode(ventes, pas) {
       return { id: `${an}-T${t}`, label: `T${t} ${an.slice(2)}` };
     }
     return { id: `${an}-${String(mois).padStart(2, '0')}`,
-             label: `${MOIS_COURTS[mois - 1] || ''} ${an.slice(2)}` };
+             label: `${moisCourts()[mois - 1] || ''} ${an.slice(2)}` };
   };
   const paquets = new Map();
   for (const v of ventes) {
@@ -4694,12 +4748,12 @@ const RANG_NOTIF = { action: 0, error: 1, warn: 2, info: 3 };
    defaut — une famille qu'on n'a jamais vue ne peut pas avoir ete refusee, et
    celles-ci sont neuves. */
 const FAMILLES_NOTIF = [
-  ['saisies',   'Saisies en attente',    'Le relevé du mois, les dépenses du mois clos'],
-  ['cours',     'Cours de bourse',       'Prix périmés, ligne sans identifiant ou sans cours'],
-  ['credits',   'Crédits',               'Capital restant dû à vérifier, mensualité hors budget'],
-  ['echeances', 'Échéances du non coté', 'Remboursement attendu, retard, défaut'],
-  ['budget',    'Budget',                'Objectif intenable, épargne de précaution'],
-  ['coherence', 'Cohérence des données', 'Un chiffre faux, ou impossible'],
+  ['saisies',   trad('Saisies en attente'),    trad('Le relevé du mois, les dépenses du mois clos')],
+  ['cours',     trad('Cours de bourse'),       trad('Prix périmés, ligne sans identifiant ou sans cours')],
+  ['credits',   trad('Crédits'),               trad('Capital restant dû à vérifier, mensualité hors budget')],
+  ['echeances', trad('Échéances du non coté'), trad('Remboursement attendu, retard, défaut')],
+  ['budget',    'Budget',                trad('Objectif intenable, épargne de précaution')],
+  ['coherence', trad('Cohérence des données'), trad('Un chiffre faux, ou impossible')],
   //['warn', 'Avertissements', 'Un chiffre qui mérite un coup d\u2019oeil'],
 ];
 
@@ -4981,8 +5035,8 @@ function healthChecks() {
      pire qu'une consigne vague. */
   const relEnAttente = currentMonthPending();
   if (relEnAttente.missing) {
-    add('action', `Relevé de ${relEnAttente.label} à enregistrer`,
-      'Le bouton ⤒ de sa ligne y reprend tous les montants actuels', 'history');
+    add('action', `${trad('Relevé de')} ${relEnAttente.label} ${trad('à enregistrer')}`,
+      trad('Le bouton ⤒ de sa ligne y reprend tous les montants actuels'), 'history');
   }
 
   sujet = 'budget';
@@ -4995,7 +5049,7 @@ function healthChecks() {
   const depEnAttente = depensesEnAttente();
   if (depEnAttente.missing)
     add('action', `Dépenses de ${depEnAttente.label} à saisir`,
-      'Le mois est clos, ce qu’il a coûté reste à enregistrer', 'budget');
+      trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
 
   const f = budgetFrame();
   if (f.available < f.target)
@@ -5013,8 +5067,8 @@ function healthChecks() {
        jour où ce cash a rejoint les liquidités.
        Et `toFixed(1)` écrivait « 0.7 mois », seul point décimal d'une
        application qui met des virgules partout ailleurs. */
-    add('warn', `Épargne de précaution : ${fmtNombre(Math.round(rw.immediateMonths * 10) / 10)} mois`,
-      `Disponible tout de suite ${fmtEUR0(rw.immediate)} pour ${fmtEUR0(rw.burn)} de coût mensuel, la règle courante est 3 à 6 mois`, 'overview');
+    add('warn', `${trad('Épargne de précaution')} : ${fmtNombre(Math.round(rw.immediateMonths * 10) / 10)} ${trad('mois')}`,
+      `${trad('Disponible tout de suite')} ${fmtEUR0(rw.immediate)} ${trad('pour')} ${fmtEUR0(rw.burn)} ${trad('de coût mensuel, la règle courante est 3 à 6 mois')}`, 'overview');
 
   return out;
 }
