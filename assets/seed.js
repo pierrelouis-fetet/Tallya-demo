@@ -60,9 +60,15 @@ const SEED_ACCOUNTS = [
      ainsi que le modèle exprime une dette : à la migration, il devient un
      crédit de son établissement. Il porte donc le même établissement que
      l'appartement, sans quoi la fiche du bien ne trouverait pas son prêt et
-     annoncerait 150 000 € comme si tout était acquis. */
-  { id: 'appart',     label: 'Flat',            short: 'Flat', group: 'pe',     broker: 'Mortgage lender', type: 'immo' },
-  { id: 'pretAppart', label: 'Mortgage',        short: 'Loan',        group: 'bourse', broker: 'Mortgage lender', type: 'levier', role: 'margin' },
+     annoncerait 150 000 € comme si tout était acquis.
+
+     Cet établissement s'appelle « Flat » et non « Mortgage lender ». Un bien
+     détenu en direct EST son contenant : le groupe porte le nom de la chose,
+     et le prêt s'y range comme une dette. Nommer le contenant d'après le
+     prêteur mettait l'appartement dans le crédit, alors que c'est le crédit
+     qui est sur l'appartement. Le prêteur, lui, se lit sur le crédit. */
+  { id: 'appart',     label: 'Flat',            short: 'Flat', group: 'pe',     broker: 'Flat', type: 'immo' },
+  { id: 'pretAppart', label: 'Mortgage',        short: 'Loan',        group: 'bourse', broker: 'Flat', type: 'levier', role: 'margin' },
 ];
 
 /* Lignes mensuelles : { date: 'YYYY-MM-DD', v: { accountId: montant }, comment,

@@ -5142,7 +5142,7 @@ function viewAccounts() {
          reellement une fois la dette deduite. */
       const dette = credits ? `
         <div class="plc-ligne">
-          <span class="cpt-nom">Crédits en cours
+          <span class="cpt-nom">${trad('Crédits en cours')}
             <span class="sub">${esc((e.dettes || []).map(x => x.libelle).join(', '))}</span></span>
           <span class="cpt-val down">−${fmtEUR(credits)}</span>
         </div>
@@ -5171,7 +5171,15 @@ function viewAccounts() {
        la somme de ses parts sans que rien ne le dise. */
     const enDirect = ETABS().filter(estEtabDeBiens).map(groupeEtab).join('')
       + (sansContenant.length
-        ? groupe('e-sans', trad('Chez toi'), trad('ni banque ni courtier'),
+        /* Le titre dit ce qui unit ces lignes, le sous-titre ce qu'on y trouve.
+           Il a d'abord dit « Hors etablissement », une absence sous un
+           sous-titre qui disait deja laquelle ; puis « Chez toi », qui affirme
+           un lieu que l'application ne connait pas — une voiture n'est pas chez
+           toi, une montre peut dormir dans un coffre en banque. Ce qui est vrai
+           de toutes ces lignes, et d'elles seules, c'est que personne ne les
+           tient pour toi. La paire s'inverse donc : l'absence monte en titre,
+           parce qu'elle est le seul fait commun, et le contenu descend. */
+        ? groupe('e-sans', trad('Sans intermédiaire'), trad('espèces et objets de valeur'),
             sansContenant.map(c => ligneCompte(c, false)).join(''),
             sansContenant.reduce((s, c) => s + valeurCompte(c), 0), '',
             teinteDominante(sansContenant))
@@ -7733,7 +7741,7 @@ const ACTIONS = {
         { cle: 'gross', label: trad('Montant encaissé (€)'), type: 'nombre', exemple: '0' },
         { cle: 'realised', label: trad('Plus ou moins-value réalisée (€)'), type: 'nombre', exemple: '0',
           aide: trad('négative si la vente a perdu : le prix de revient s’en déduit') },
-        { cle: 'note', label: 'Note', type: 'texte', exemple: 'facultatif' },
+        { cle: 'note', label: 'Note', type: 'texte', exemple: trad('facultatif') },
       ],
     });
     if (!v) return;
@@ -8143,7 +8151,7 @@ const ACTIONS = {
             : 'aucun compte rattaché pour l’instant, donc le terme le plus large' },
         { cle: 'notes', label: 'Notes', type: 'texte', valeur: e.notes || '',
           exemple: 'ex. le numéro du conseiller, la date du prochain point',
-          aide: 'facultatif' },
+          aide: trad('facultatif') },
       ],
     });
     if (!v) return;
@@ -8214,23 +8222,25 @@ const ACTIONS = {
         const compatibles = ETABS().filter(e => e.id === c.etabId
           || !COMPTES().some(x => x.etabId === e.id)
           || contenantDeLEtab(e.id).titre === mot.titre);
-        champs.push({ cle: 'etab', label: `${mot.titre}`, type: 'liste',
+        champs.push({ cle: 'etab', label: trad(mot.titre), type: 'liste',
           options: [...compatibles.map(e => [e.id, e.nom]), ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
           valeur: valeur('etab', c.etabId || compatibles[0]?.id || '__nouveau'),
-          aide: trad('un crédit se pose sur ce niveau : deux biens rattachés au même ')
-              + 'le partagent' });
+          /* La phrase tient en une clef : coupee en deux, la seconde moitie
+             restait francaise derriere une premiere traduite, et la bulle
+             disait « two assets attached to the same le partagent ». */
+          aide: trad('un crédit se pose sur ce niveau : deux biens rattachés au même le partagent') });
       }
 
       if (t.id === 'livret') champs.push({ cle: 'plafond', label: trad('Plafond de versement (€)'),
         type: 'nombre', valeur: valeur('plafond', num(c.plafond) || ''), exemple: 'ex. 22950',
-        aide: 'facultatif' });
+        aide: trad('facultatif') });
 
       if (!t.interne) champs.push(
         { cle: 'ouvertLe', label: motDateCompte(typeCompte(c.type)), type: 'date',
           valeur: valeur('ouvertLe', c.ouvertLe || ''),
           aide: t.dateSensible ? 'elle commande la disponibilité de ce compte' : 'facultatif' },
         { cle: 'numero', label: trad('Numéro de compte'), type: 'texte',
-          valeur: valeur('numero', c.numero || ''), aide: 'facultatif' });
+          valeur: valeur('numero', c.numero || ''), aide: trad('facultatif') });
 
       /* La date de cloture ne se corrige que sur un compte deja archive. Elle
          se pose au moment ou l'on archive ; ce champ sert a la retoucher quand
@@ -8998,7 +9008,7 @@ const ACTIONS = {
            dont on a oublié le montant initial reste utilisable. */
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
-        { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: 'facultatif' },
+        { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: trad('facultatif') },
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, noté pour mémoire') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
@@ -9454,7 +9464,7 @@ const ACTIONS = {
         { cle: 'date', label: 'Date', type: 'date', valeur: todayISO(),
           aide: sortie ? 'elle situe la dépense dans ton historique'
                        : 'elle situe la rentrée dans ton historique' },
-        { cle: 'note', label: 'Note', type: 'texte', exemple: 'facultatif' },
+        { cle: 'note', label: 'Note', type: 'texte', exemple: trad('facultatif') },
       ],
     });
     if (!v) return;

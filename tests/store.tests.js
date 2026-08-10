@@ -9731,10 +9731,14 @@ suite('La page Actifs range ce qu’on tient chez un tiers et ce qu’on tient s
        laquelle. */
     vrai(!/'Hors établissement'/.test(src),
       'plus de groupe nommé par ce qui lui manque');
-    /* Les deux mots passent par trad() depuis le chantier des deux langues :
-       la clef reste la phrase francaise, que ce controle compare. */
-    vrai(/trad\('Chez toi'\), trad\('ni banque ni courtier'\)/.test(src),
-      'il se nomme par ce qu’il est');
+    /* Le titre porte le seul fait commun a ces lignes — personne ne les tient
+       pour toi — et le sous-titre ce qu'on y trouve. « Chez toi » affirmait un
+       lieu que l'application ne connait pas : une voiture n'est pas chez toi,
+       une montre peut dormir dans un coffre en banque. */
+    vrai(/trad\('Sans intermédiaire'\), trad\('espèces et objets de valeur'\)/.test(src),
+      'il se nomme par ce qui est vrai de toutes ses lignes');
+    vrai(!/'Chez toi'/.test(src),
+      'et jamais par un lieu que rien dans les données ne dit');
   });
 
   test('la page reste la somme de ses parts, quelle que soit la section', () => {
@@ -9989,7 +9993,7 @@ suite('Un bien change de contenant, et garde un seul nom', () => {
     const handler = src.slice(debut, src.indexOf("async 'ajouter-compte'"));
     vrai(handler.length > 500, 'et être trouvable en entier');
 
-    vrai(/cle: 'etab', label: `\$\{mot\.titre\}`/.test(handler),
+    vrai(/cle: 'etab', label: trad\(mot\.titre\)/.test(handler),
       'la fenêtre propose le rattachement');
     /* Le mot du contenant se traduit a l'affichage : la clef reste la phrase
        francaise que porte CONTENANTS, l'option compose le « + … » autour. */
