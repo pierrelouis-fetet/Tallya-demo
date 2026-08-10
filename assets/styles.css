@@ -606,7 +606,10 @@ body {
    parcours. CSS ne sait pas dire « jusqu'au titre suivant » : `~` porte sur
    tous les frères, donc « Pilotage » aurait vu Comptes, trois lignes plus
    bas, et se serait cru encore utile. */
-@media (max-width: 767px) {
+/* Les doublons du tiroir disparaissent partout ou la barre du bas les porte
+   deja : meme seuil qu'elle, sinon le tiroir montre six entrees dont quatre
+   sont a un doigt en dessous. */
+@media (max-width: 900px) {
   #nav a.dans-barre, #nav .nav-groupe.sans-suite { display: none; }
 }
 
@@ -999,6 +1002,17 @@ table .field :is(input, select) { max-width: none; }
   color: var(--text-primary);
 }
 .card-head .hint { font-size: 12px; color: var(--muted); }
+
+/* Le second etage d'une carte : le meme sujet vu de plus pres.
+
+   Plus discret que le titre de la carte, et volontairement : ce n'est pas une
+   nouvelle question, c'est la meme posee au detail. La base annoncee en tete
+   vaut donc pour lui aussi, et c'est tout l'interet d'un seul cadre. */
+.sous-titre-carte {
+  margin: 22px 0 10px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary);
+  border-top: 1px solid var(--grid); padding-top: 16px;
+}
 
 /* L'etablissement sous le nom court d'une colonne de releve. Sur sa propre
    ligne : cote a cote, les deux mots doubleraient la largeur d'une colonne
@@ -2551,14 +2565,26 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .grid > div > table.repart-total td:not(:first-child) { white-space: nowrap; }
 
 /* Panneau Liquidités : un menu déroulant par usage, comptes modifiables. */
-.liq-groupe { border-bottom: 1px solid var(--border); }
-.liq-groupe summary {
-  display: flex; align-items: center; gap: 10px; cursor: pointer;
-  padding: 11px 0; font-weight: 650; list-style: none;
+/* Le sous-titre d'un panneau peut porter une commande de lecture a son bout.
+   Elle ne prend pas de ligne a elle : dans une fenetre qui defile, une rangee
+   pour un seul petit bouton pousse le contenu vers le bas sans rien apporter. */
+.modal-sub.avec-action {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.liq-groupe summary::-webkit-details-marker { display: none; }
-.liq-groupe summary b { margin-left: auto; font-variant-numeric: tabular-nums; }
-.liq-groupe[open] summary .cpt-chev { transform: rotate(180deg); }
+.modal-sub.avec-action > .btn { margin-left: auto; }
+.liq-groupe { border-bottom: 1px solid var(--border); }
+/* Le sommaire est un bouton et non plus un `<summary>` : `<details>` ne
+   s'anime pas, et le pli en grille exige un conteneur qu'on pilote a la
+   classe. Il en garde l'allure exacte. */
+.liq-sommaire {
+  width: 100%; background: none; border: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 0; font-weight: 650;
+}
+.liq-sommaire[aria-expanded="true"] .cpt-chev { transform: rotate(180deg); }
+.liq-corps { overflow: hidden; min-height: 0; }
+.liq-sommaire b { margin-left: auto; font-variant-numeric: tabular-nums; }
 .liq-groupe .cpt-chev { transition: transform .15s; }
 .liq-ligne {
   display: flex; align-items: center; gap: 10px;
@@ -3117,6 +3143,9 @@ select.annee {
 .rp-nom { font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .rp-prix { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* L'unite se lit avec le prix sans le concurrencer : c'est le nombre qu'on
+   compare d'une tuile a l'autre, l'unite ne fait que le qualifier. */
+.rp-unite { font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
 .rp-var { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .jour-lignes { display: flex; flex-direction: column; gap: 2px; }
@@ -4171,10 +4200,16 @@ td .empty, th .empty { background: none; border: none; }
    Le panneau ancre sa liste en bas pour la même raison — les entrées
    naissent au-dessus du bouton, pas à l'autre bout de l'écran.
 
-   Au-dessus de 768 px, rien ne change : le burger reprend sa place dans
-   la barre du haut, et au-delà de 900 px la barre latérale revient.
+   Le seuil est celui de la barre latérale, 900 px, et pas un autre.
+
+   Il valait 767 px, alors que la latérale ne redevient une colonne qu'à
+   900 px : entre les deux — l'iPad en portrait, précisément — la barre du
+   haut existait sans que ses boutons soient habillés, et la barre du bas
+   ne s'affichait pas du tout. La navigation ne tenait plus qu'au bouton de
+   profil. Une mise en page et le mobilier qui la sert doivent basculer au
+   même seuil, sinon il existe une largeur où l'un attend l'autre.
    ============================================================= */
-@media (max-width: 767px) {
+@media (max-width: 900px) {
 
   /* Le logo ouvre les réglages : un chevron le dit, sinon rien ne l'annonce —
      un logo se lit « accueil », pas « menu ». Il tourne à l'ouverture, comme

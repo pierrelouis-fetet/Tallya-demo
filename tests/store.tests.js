@@ -135,6 +135,18 @@ suite('Les totaux égalent la somme de leurs parts', () => {
     const somme = allocationByAsset().reduce((s, x) => s + x.value, 0);
     pres(somme, nowTotals().total, 'allocationByAsset()');
     pres(somme, Fixture.BRUT - Fixture.DETTE, 'soit le net');
+
+    /* Sans la ligne des credits, la meme liste se totalise aux avoirs, et ses
+       parts font 100 % de cette base-la. C'est ce que demande la carte de
+       repartition, dont le camembert compte deja en brut : deux granularites
+       d'un meme axe ne peuvent pas s'annoncer sous deux bases differentes. */
+    const brut = allocationByAsset({ credits: false });
+    pres(brut.reduce((s, x) => s + x.value, 0), Fixture.BRUT,
+      'sans les crédits, la somme fait les avoirs');
+    pres(brut.reduce((s, x) => s + x.pct, 0), 100,
+      'et les parts se rapportent bien à cette base');
+    vrai(!brut.some(x => x.value < 0),
+      'plus aucune part négative : un crédit n’est pas un endroit où l’argent est');
   });
 
   test('le portefeuille de titres refait son total', () => {
@@ -2699,6 +2711,21 @@ suite('Pièges de source', () => {
       'et c’est le fond de la page qui rend cette jupe inutile : sans lui, la '
       + 'bande découverte par un décalage de la fenêtre visible virerait au noir');
 
+    /* Le seuil de la barre du bas est celui de la barre laterale, et rien
+       d'autre. Il a valu 767 px quand la laterale ne redevient une colonne qu'a
+       900 : entre les deux — l'iPad en portrait — l'ecran n'avait ni menu en bas
+       ni menu a gauche, et la navigation ne tenait qu'au bouton de profil. Une
+       mise en page et le mobilier qui la sert basculent au meme seuil. */
+    const posBarre = css.lastIndexOf('.tabbar {');
+    let seuil = null;
+    for (const m of css.matchAll(/@media \(max-width:\s*(\d+)px\)/g)) {
+      if (m.index < posBarre) seuil = m[1]; else break;
+    }
+    vrai(seuil, 'la barre du bas doit vivre sous une requête média de largeur');
+    eq(seuil, '900',
+      'la barre du bas s’affiche jusqu’au seuil où la barre latérale revient, '
+      + '900 px : sinon il existe une largeur sans aucun menu');
+
     /* Aucune entree de menu ne doit mener a un ecran qu'une autre atteint deja.
        Les vues devenues sous-onglets — performance, rebalance, settings,
        objective — ont toutes quitte ce menu quand elles ont ete absorbees : deux
@@ -2745,26 +2772,28 @@ suite('Pièges de source', () => {
   });
 
   test('la carte d’évolution n’existe qu’en un seul exemplaire', () => {
-    /* Elle s'affiche sur deux écrans, la vue d'ensemble et les relevés. Tant
-       qu'elle était écrite deux fois, elle a divergé en silence : l'accueil
-       passait par pointsEvolution() et savait faire net, les relevés
-       appelaient historySeries() et traçaient toujours le brut, sous le même
-       titre. Deux cartes de même nom montrant deux chiffres, c'est la règle
-       du projet qui casse, et la cause était un balisage recopié.
+    /* Elle a d'abord ete ecrite deux fois, pour deux ecrans, et elle a diverge
+       en silence : l'accueil passait par pointsEvolution() et savait faire net,
+       les releves appelaient historySeries() et tracaient toujours le brut,
+       sous le meme titre. Deux cartes de meme nom montrant deux chiffres.
 
-       Le contrôle compte le titre dans le source : s'il réapparaît deux fois,
-       quelqu'un a recollé le bloc au lieu d'appeler carteEvolution(). */
+       Elle n'est plus affichee qu'a un seul endroit, l'accueil : sur les
+       releves elle redisait cet accueil ET le tableau juste en dessous, qui
+       donne les memes montants mois par mois avec leur ecart. Cette page sert a
+       saisir. Le controle garde ce qui reste vrai : le balisage vit dans une
+       fonction, jamais recopie, pour que la deuxieme vue qui en voudra une
+       reprenne celle-ci. */
     vrai(source, 'app.js doit être lisible pour ce contrôle');
     /* Le titre passe par `trad()` depuis qu'il se traduit : le controle suit la
        phrase, qui est justement la clef du dictionnaire, et non le balisage. */
     const titres = source.match(/trad\('Évolution du patrimoine'\)/g) || [];
     eq(titres.length, 1,
       'la carte d’évolution doit être écrite une fois et appelée deux : ' + titres.length + ' exemplaires');
-    /* Et la fonction doit bien servir aux deux vues, sinon un seul exemplaire
-       ne prouve rien : il pourrait n'etre affiche qu'a un endroit. */
+    /* Sa definition et son appel : le balisage ne doit jamais etre recopie
+       dans une vue, meme s'il n'y en a plus qu'une a l'afficher. */
     const appels = source.match(/carteEvolution\(/g) || [];
-    vrai(appels.length >= 3,
-      'carteEvolution doit être définie une fois et appelée par les deux vues');
+    vrai(appels.length >= 2,
+      'carteEvolution doit être définie une fois et appelée, jamais recopiée');
   });
 
   test('l’onglet « Charges fixes » ne porte pas de pastille', () => {
@@ -9960,7 +9989,9 @@ suite('Un bien change de contenant, et garde un seul nom', () => {
 
     vrai(/cle: 'etab', label: `\$\{mot\.titre\}`/.test(handler),
       'la fenêtre propose le rattachement');
-    vrai(/'__nouveau', `\+ \$\{mot\.nouveau\}…`/.test(handler),
+    /* Le mot du contenant se traduit a l'affichage : la clef reste la phrase
+       francaise que porte CONTENANTS, l'option compose le « + … » autour. */
+    vrai(/'__nouveau', `\+ \$\{trad\(mot\.nouveau\)\}…`/.test(handler),
       'et « nouveau », qui est justement le geste qui sépare');
     /* Les especes et les comptes internes n'ont pas de contenant a choisir. */
     vrai(/if \(!t\.interne && !t\.sansEtab\) \{/.test(handler),
@@ -10007,6 +10038,59 @@ suite('Un bien change de contenant, et garde un seul nom', () => {
     vrai(/COMPTES\(\)\.filter\(x => x\.etabId === etab\.id\)\.length === 1/.test(handler),
       'seulement quand l’établissement n’a que ce compte : un parking '
       + 'rattaché au même contenant garde son nom propre');
+  });
+
+  test('aucun montant masqué ne se pose dans un attribut', () => {
+    /* Le masque est une balise SVG qui porte son propre `aria-label="montant
+       masqué"`. Injectee dans un attribut, son guillemet ferme l'attribut hote
+       et la fin de la balise se deverse en texte : la carte des depenses
+       affichait un `€">` nu a cote de l'objectif mensuel.
+
+       `fmtEUR0Texte` existe pour ca — il rend « ••• € », sans balise. La regle
+       vaut pour tout attribut, pas seulement celui qui a casse. */
+    const src = lireSource('assets/app.js');
+    const fautifs = [];
+    for (const m of src.matchAll(/(title|aria-label|placeholder|data-aide)="[^"\n]*/g)) {
+      if (/\$\{[^}]*\bfmt(EUR|Cur|Signed)\b(?!\w*Texte)/.test(m[0])) {
+        fautifs.push(src.slice(0, m.index).split('\n').length + ' : ' + m[0].slice(0, 60));
+      }
+    }
+    eq(fautifs.length, 0,
+      'un montant masquable dans un attribut : passer par fmtEUR0Texte — ' + fautifs.join(' | '));
+
+    /* Et le masque doit bien porter le guillemet qui rend le piege reel :
+       si un jour il n'en portait plus, ce controle protegerait un fantome. */
+    vrai(/aria-label="montant masqué"/.test(lireSource('assets/store.js')),
+      'le masque porte un attribut, c’est ce qui interdit de l’imbriquer');
+  });
+
+  test('les usages de liquidités se plient comme les groupes de comptes', () => {
+    /* Un `<details>` ne s'anime pas et n'offre aucune prise pour un geste
+       collectif. Le panneau reprend donc le pli en grille de la page Actifs et
+       son bouton « Tout replier », qui bascule dans les deux sens. */
+    const src = lireSource('assets/app.js');
+    const debut = src.indexOf("if (classe === 'liquidites')");
+    const bloc = src.slice(debut, src.indexOf("if (classe === 'immobilier')", debut));
+    vrai(bloc.length > 500, 'le panneau des liquidités doit être trouvable');
+    vrai(!/<details class="liq-groupe"/.test(bloc),
+      'plus de <details> : il ne s’anime pas');
+    vrai(/<div class="cpt-pli ouvert"><div class="liq-corps">/.test(bloc),
+      'le pli animé est celui des groupes de comptes, pas une seconde mécanique');
+    vrai(/data-action="liq-plier-tout"/.test(bloc) && /data-action="liq-plier"/.test(bloc),
+      'un geste par groupe, et un pour les mener tous');
+    /* Le bouton collectif vit sur la ligne du sous-titre, deja a moitie vide :
+       une rangee a lui pousserait le contenu vers le bas dans une fenetre qui
+       defile. Il sort donc de `html` et passe par `sousAction`. */
+    vrai(/sousAction:/.test(bloc) && !/liq-barre/.test(bloc),
+      'et il ne prend pas une ligne à lui : il se pose au bout du sous-titre');
+
+    /* Le geste collectif ne passe pas par render() : le panneau porte des
+       champs de saisie, et le reconstruire perdrait la frappe en cours. */
+    const acts = src.slice(src.indexOf("'liq-plier'(btn)"), src.indexOf("'ajouter-compte'"));
+    vrai(!/render\(\)/.test(acts),
+      'aucun rendu global : il emporterait le focus et la saisie en cours');
+    vrai(/majBoutonLiqTout/.test(acts),
+      'et le libellé du bouton suit l’état après chaque geste, seul ou collectif');
   });
 
   test('renommer le contenant d’un bien renomme le bien', () => {
@@ -10781,10 +10865,14 @@ suite('Un indice ne se compte pas en euros', () => {
        oublierait le sixieme. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    vrai(/const estIndice = String\(l\.symbole \|\| ''\)\.startsWith\('\^'\)/.test(src),
+    /* L'unite vit dans `uniteRepere()`, employee par la tuile du ruban comme
+       par la fiche : le controle porte sur elle, pas sur une copie. */
+    vrai(/String\(l\?\.symbole \|\| ''\)\.startsWith\('\^'\)/.test(src),
       'un repère sait dire s’il est un indice, et il le dérive du symbole');
-    vrai(/estIndice \? ' pts'/.test(src),
-      'un indice s’affiche en points, jamais dans une devise');
+    vrai(/const uniteRepere = l => String\(l\?\.symbole \|\| ''\)\.startsWith\('\^'\) \? ` \$\{trad\('pts'\)\}`/
+      .test(src), 'un indice s’affiche en points, jamais dans une devise');
+    vrai(/<span class="rp-unite">\$\{esc\(uniteRepere\(l\)\)\}<\/span>/.test(src),
+      'et la tuile du ruban porte la même unité que la fiche qu’elle ouvre');
     vrai(!/const unite = l\.devise === 'USD'/.test(src),
       'plus aucun chemin ne colle une devise sans se demander ce qu’il chiffre');
 

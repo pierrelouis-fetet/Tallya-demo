@@ -520,17 +520,25 @@ const Charts = (() => {
           node.style.cursor = 'pointer';
           node.addEventListener('click', () => opts.onPick(items[+node.dataset.i], +node.dataset.i));
         }
-        node.addEventListener('mouseenter', () => {
+        const montrer = () => {
           const it = items[+node.dataset.i];
           tip.hidden = false;
           tip.innerHTML = `<div class="tt-head">${esc(it.label)}</div>
-            <div class="tt-row">${esc(opts.valueLabel || 'Montant')}<b>${fmtEUR(it.value)}</b></div>
-            ${it.average != null ? `<div class="tt-row">Par mois<b>${fmtEUR(it.average)}</b></div>` : ''}
-            <div class="tt-row">Part<b>${fmtPct(it.pct ?? 0)}</b></div>`;
+            <div class="tt-row">${esc(opts.valueLabel || trad('Montant'))}<b>${fmtEUR(it.value)}</b></div>
+            ${it.average != null ? `<div class="tt-row">${trad('Par mois')}<b>${fmtEUR(it.average)}</b></div>` : ''}
+            <div class="tt-row">${trad('Part')}<b>${fmtPct(it.pct ?? 0)}</b></div>`;
           tip.style.left = Math.max(4, W - tip.offsetWidth - 8) + 'px';
           tip.style.top = (+node.dataset.i * rowH - 6) + 'px';
-        });
+        };
+        node.addEventListener('mouseenter', montrer);
         node.addEventListener('mouseleave', () => { tip.hidden = true; });
+        /* Au doigt, `mouseenter` n'arrive qu'apres coup, et parfois pas du tout :
+           un appui maintenu ne montrait donc rien, ou rien avant de relacher.
+           `pointerdown` ouvre la bulle des que le doigt se pose, ce qui est
+           precisement le geste qu'on fait pour la demander. */
+        node.addEventListener('pointerdown', ev => {
+          if (ev.pointerType === 'touch') montrer();
+        });
         /* Au doigt, aucun `mouseleave` ne suit l'appui : l'infobulle restait
            collee. Lever le doigt la referme, apres un instant de repit pour
            laisser lire le chiffre. Toucher ailleurs referme aussi, par

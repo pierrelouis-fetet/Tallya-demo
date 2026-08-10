@@ -1065,9 +1065,15 @@ const OEIL_MASQUE = '<svg class="oeil-masque" viewBox="0 0 24 24" role="img"'
   + '<line x1="4.5" y1="19.5" x2="19.5" y2="4.5"/></svg>';
 const masque = devise => `${OEIL_MASQUE} ${symboleDevise(devise)}`;
 
-/* Le meme masque en texte pur. Dans un <text> SVG, etiquettes d'axe,
-   valeurs posees sur les barres, une balise ne s'affiche pas : elle
-   s'imprimerait telle quelle. Les points y restent. */
+/* Le meme masque en texte pur. Deux endroits l'exigent, et pour la meme
+   raison : une balise n'y est pas du balisage.
+
+   Dans un `<text>` SVG — etiquettes d'axe, valeurs posees sur les barres —
+   elle s'imprimerait telle quelle. Dans un ATTRIBUT — `title`, `aria-label` —
+   c'est pire : le masque porte lui-meme un `aria-label="montant masqué"`, dont
+   le guillemet ferme l'attribut hote, et la fin de la balise se deverse en
+   texte visible dans la page. C'est ce qui affichait un `€">` nu a cote de
+   l'objectif mensuel. Tout montant pose dans un attribut passe donc par ici. */
 const masqueTexte = devise => '••• ' + symboleDevise(devise);
 
 const fmtEUR = (v, dec = 2) => montantsMasques ? masque('EUR')
@@ -2445,7 +2451,16 @@ const libelleAlloc = p => {
   return ac === 'actions' ? `${cl} · ${ROLES[roleDe(p)]}` : cl;
 };
 
-function allocationByAsset() {
+/* `credits` : la ligne negative du capital restant du, et avec elle la base.
+
+   Avec, la liste se totalise au patrimoine net — c'est ce que veulent l'accueil,
+   l'export et la fiche. Sans, elle se totalise aux avoirs, et c'est ce que veut
+   la carte de repartition, dont le camembert compte deja en brut : deux
+   granularites d'un meme axe sous une seule base, plutot que deux cartes qui
+   affichent le meme montant sous deux noms tant qu'aucun credit n'existe.
+   La base suit le drapeau au lieu d'etre choisie par l'appelant : c'est le seul
+   moyen que la somme des parts fasse toujours le total annonce. */
+function allocationByAsset({ credits = true } = {}) {
   /* Chaque ligne porte la couleur de sa classe. Huit barres du même bleu ne
      forment qu'un classement ; avec la teinte de la classe, on reconnaît d'un
      coup ce qui est action, métal ou liquidité — et c'est la même couleur que
@@ -2482,9 +2497,9 @@ function allocationByAsset() {
       add(c.alloc || l.libelle, num(l.valeur), CLASSE_COULEURS[l.classe] || CLASSE_COULEURS.nonCote);
     }
   }
-  if (dettesTotal()) add('Crédits en cours', -dettesTotal(), 'var(--critical)');
+  if (credits && dettesTotal()) add(trad('Crédits en cours'), -dettesTotal(), 'var(--critical)');
 
-  const total = nowTotals().total;
+  const total = credits ? nowTotals().total : nowTotals().brut;
   return [...map.entries()]
     .map(([label, value]) => ({ label, value, couleur: teintes.get(label),
                                 pct: total ? value / total * 100 : 0 }))

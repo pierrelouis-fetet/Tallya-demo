@@ -1624,7 +1624,7 @@ function viewPerformance() {
   <div class="grid g-1-2">
     <div class="card">
       <div class="card-head"><h2>${trad('Latente, ligne par ligne')}</h2>
-        <span class="hint">${lat.count} ligne${lat.count > 1 ? 's' : ''}</span></div>
+        <span class="hint">${lat.count} ${lat.count > 1 ? trad('lignes') : trad('ligne')}</span></div>
       <div class="chart" id="perfLatente"></div>
       <dl class="kv" style="margin-top:12px">
         <dt>${trad('Valeur du portefeuille')}</dt><dd>${fmtEUR(lat.value)}</dd>
@@ -3051,8 +3051,8 @@ function viewPositions() {
               esc(ACC[id]?.label || ACC[id]?.short || id)}</option>`).join('')}
           </select>`;
         })()}
-        <span class="hint">${ps.length} ligne${ps.length > 1 ? 's' : ''}${
-          masquees ? ` · ${masquees} masquée${masquees > 1 ? 's' : ''}` : ''}</span>
+        <span class="hint">${ps.length} ${ps.length > 1 ? trad('lignes') : trad('ligne')}${
+          masquees ? ` · ${masquees} ${masquees > 1 ? trad('masquées') : trad('masquée')}` : ''}</span>
       </div>
     </div>
     <div class="row" style="margin:-4px 0 12px">
@@ -3295,6 +3295,20 @@ function glypheSeance(etat) {
    fiche lit donc ce que la barre vient de recevoir plutot que de refetch. */
 let REPERES_AFFICHES = [];
 
+/* L'unite d'un repere : des points pour un indice, sinon sa devise.
+
+   Le prefixe « ^ » designe un indice chez Yahoo, pour toutes les places : il ne
+   se confond avec aucun ticker d'action ou d'ETF. On se garde de lire la devise
+   plutot que de tenir une liste des cinq indices du ruban, qui oublierait le
+   sixieme.
+
+   La fonction vit ici parce que deux surfaces l'emploient, la tuile du ruban et
+   la fiche qu'elle ouvre : un nombre nu se lisait « 1,08 » sans dire de quoi, et
+   deux calculs separes auraient fini par donner deux unites pour un meme cours. */
+const uniteRepere = l => String(l?.symbole || '').startsWith('^') ? ` ${trad('pts')}`
+  : l?.devise === 'USD' ? ' $' : l?.devise === 'EUR' ? ' €'
+  : l?.devise ? ` ${l.devise}` : '';
+
 /* La famille affichee, gardee d'un rendu a l'autre. En memoire et non dans
    l'etat : c'est un reglage d'affichage, pas une donnee de patrimoine, et
    l'ecrire ferait une sauvegarde a chaque coup d'oeil sur les metaux. */
@@ -3382,7 +3396,7 @@ async function mountReperes() {
         <span class="rp-nom">${esc(l.nom)}</span>
         ${glypheSeance(marketStatus(l))}
       </span>
-      <span class="rp-prix">${nb(l.prix, l.prix < 10 ? 4 : 0)}</span>
+      <span class="rp-prix">${nb(l.prix, l.prix < 10 ? 4 : 0)}<span class="rp-unite">${esc(uniteRepere(l))}</span></span>
       <!-- « hors séance » plutôt qu'un pourcentage de la veille. La tuile fait
            quatre-vingt-dix pixels : la date exacte du cours n'y tient pas, elle
            est dans l'infobulle et dans la fiche que la tuile ouvre. -->
@@ -3698,7 +3712,7 @@ function mountSymbolSearch() {
             });
             sel.value = '';                       // la liste redevient neutre
             if (!v) return;
-            if (!v.account) { toast('Ouvre d’abord un compte qui accepte cette catégorie'); return; }
+            if (!v.account) { toast(trad('Ouvre d’abord un compte qui accepte cette catégorie')); return; }
             Store.state.positions.push({
               id: 'p' + Date.now(), name: '', isin: '', symbol: '', currency: 'EUR',
               /* `fxBuy: null` et non 1 : la devise n'est pas encore choisie, donc
@@ -3717,7 +3731,7 @@ function mountSymbolSearch() {
           if (sel.dataset.isin) p.isin = sel.dataset.isin;
           if (sel.dataset.nom && (!p.name || p.name === 'Nouvelle ligne')) p.name = sel.dataset.nom;
           Store.save();
-          toast(`${p.name || p.symbol} ajouté`);
+          toast(`${p.name || p.symbol} ${trad('ajouté')}`);
           render();
 
           // complète devise, cours et taux de change
@@ -3776,7 +3790,9 @@ const teinterParRang = items =>
 function viewAllocation() {
   const t = nowTotals();
   const poches = pochesPatrimoine();
-  const byAsset = allocationByAsset();
+  /* Sans la ligne des credits : la carte compte en brut, comme son camembert.
+     Le pied les porte, une fois, pour donner le net. */
+  const byAsset = allocationByAsset({ credits: false });
   const byAcct = allocationByAccount();
   const byType = teinterParRang(byAccountType());
 
@@ -3786,7 +3802,7 @@ function viewAllocation() {
      sans jamais se désigner l'un l'autre. */
   const tbl = (items, totalLabel, total) => `
     <table>
-      <thead><tr><th>Ligne</th><th>Montant</th><th>%</th></tr></thead>
+      <thead><tr><th>${trad('Ligne')}</th><th>${trad('Montant')}</th><th>%</th></tr></thead>
       <!-- escMontant et non esc : cette note porte un montant, « dont 1 856 € à
            investir », et un montant masqué est une balise SVG. Échappée comme du
            texte, elle s'imprimait en clair — la ligne « Liquidités » d'Allocation
@@ -3892,36 +3908,43 @@ function viewAllocation() {
     </dl>
   </div>
 
-  <!-- Chaque carte de pourcentage dit sa base : la meme ligne vaut 2,85 % du
-       brut sur Répartition et 3,2 % du net ici, les deux sont justes, et sans
-       la mention le lecteur croit a une erreur — c'est arrive, diagnostic
-       consigne dans ETAT.md. La regle : un pourcentage dit sur quoi il porte. -->
+  <!-- Deux cartes, deux questions, deux bases. Et une seule base par carte.
+
+       Il y en avait quatre. « Allocation par actif » comptait en net, « Répartition »
+       en brut : le meme axe, deux granularites, et surtout le meme montant sous
+       deux noms differents tant qu'aucun credit n'existe — ce qui se lit comme une
+       incoherence alors que les deux etaient justes. Le jour ou un credit parait,
+       elles divergent sans que rien n'explique pourquoi. « Type de compte » et
+       « Comptes » etaient la meme paire sur l'axe du contenant, avec deja la meme
+       base.
+
+       Une carte porte donc un axe, du gros grain au detail, sous une base unique
+       annoncee une fois. Les credits redescendent au pied, la ou ils ne
+       concurrencent plus les parts qu'ils ne composent pas. -->
   <div class="card" data-anchor="actifs">
-    <!-- Le format vient de « Core et satellites », qui l'avait seul : la base
-         ET son montant. Une mention sans chiffre laissait encore chercher
-         lequel des cinq totaux de la page servait de denominateur. -->
-    <div class="card-head"><h2>${trad('Allocation par actif')}</h2>
-      <span class="hint">${mentionBase(BASES.net, t.net)}</span></div>
+    <div class="card-head"><h2>${trad('Dans quoi c’est réparti')}</h2>
+      <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
+    <div class="chart" id="aMacro"></div>
+    ${tbl(poches, BASES.avoirs.nom, t.brut)}
+    <!-- Le detail sous le gros grain, sans separateur de carte : c'est la meme
+         question posee de plus pres, et la barre la plus longue du bas est une
+         part de la plus grosse tranche du haut. -->
+    <h3 class="sous-titre-carte">${trad('Ligne par ligne')}</h3>
     <div class="chart" id="aAsset"></div>
+    ${t.dettes ? `<dl class="kv" style="margin-top:8px">
+      <dt>${trad('Crédits en cours')}${aide(trad("Ils ne figurent pas dans les parts ci-dessus : une répartition dit où est ton argent, et un crédit n’est pas un endroit. Il se retire du total, ici, pour donner le patrimoine net."))}</dt>
+        <dd class="dette">−${fmtEUR(t.dettes)}</dd>
+      <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>
+    </dl>` : ''}
   </div>
 
-  <div class="grid g-2">
-    <div class="card">
-      <div class="card-head"><h2>${trad('Répartition')}</h2>
-        <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
-      <div class="chart" id="aMacro"></div>
-      ${tbl(poches, BASES.avoirs.nom, t.brut)}
-      ${t.dettes ? `<dl class="kv" style="margin-top:8px">
-        <dt>${trad('Crédits en cours')}</dt><dd class="dette">−${fmtEUR(t.dettes)}</dd>
-        <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>
-      </dl>` : ''}
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>${trad('Type de compte')}</h2>
-        <span class="hint">${mentionBase(BASES.place, byType.reduce((s, i) => s + i.value, 0))}</span></div>
-      <div class="chart" id="aType"></div>
-      ${tbl(byType, BASES.place.nom, byType.reduce((s, i) => s + i.value, 0))}
-    </div>
+  <div class="card">
+    <div class="card-head"><h2>${trad('Où c’est placé')}</h2>
+      <span class="hint">${mentionBase(BASES.place, t.invested)}</span></div>
+    <div class="chart" id="aType"></div>
+    ${tbl(byType, BASES.place.nom, byType.reduce((s, i) => s + i.value, 0))}
+    <h3 class="sous-titre-carte">${trad('Compte par compte')}</h3>
+    <div class="chart" id="aAcct"></div>
   </div>
 
   <!-- « Zone géographique » et « Secteur » vivaient ici. Ils agrégeaient des
@@ -3934,17 +3957,11 @@ function viewAllocation() {
        Le classement reste affiché sur la fiche de chaque ligne, où il est
        juste : « Amérique du Nord » pour un S&P 500 ne trompe personne. Le jour
        où on saura lire la composition réelle d'un fonds, ces cartes
-       reviendront — les données du modèle sont intactes. -->
-
-  <div class="card">
-    <div class="card-head"><h2>${trad('Comptes & enveloppes')}</h2>
-      <span class="hint">${mentionBase(BASES.place, t.invested)}</span></div>
-    <div class="chart" id="aAcct"></div>
-  </div>`;
+       reviendront — les données du modèle sont intactes. -->`;
 }
 
 function mountAllocation() {
-  Charts.rankedBars($('#aAsset'), { items: allocationByAsset() });
+  Charts.rankedBars($('#aAsset'), { items: allocationByAsset({ credits: false }) });
   Charts.rankedBars($('#aAcct'), { items: allocationByAccount() });
   const t = nowTotals();
   Charts.donut($('#aMacro'), {
@@ -4277,14 +4294,14 @@ function viewRebalance() {
          detail — composition du perimetre, montants dehors, traitement du non
          cote — descend dans l'infobulle du titre, qui existait deja : c'est la
          qu'on va chercher une precision, pas en haut d'une carte. -->
-    <div class="card-head"><h2>Allocation par classe${aide(`L’allocation stratégique : quelle part du portefeuille dans chaque classe d’actif. C’est la première décision, celle qui pèse le plus sur le résultat. Modifie une cible dans le champ, la jauge et le plan suivent.
+    <div class="card-head"><h2>${trad('Allocation par classe')}${aide(`${trad('L’allocation stratégique : quelle part du portefeuille dans chaque classe d’actif. C’est la première décision, celle qui pèse le plus sur le résultat. Modifie une cible dans le champ, la jauge et le plan suivent.')}
 
-Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-vie, PER, portefeuille crypto), avec leurs lignes et leur trésorerie à investir. ${
+${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-vie, PER, portefeuille crypto), avec leurs lignes et leur trésorerie à investir.')} ${
       per.montantDehors > 0
-        ? `${fmtEUR0(per.montantDehors)} restent dehors, soit ${dehorsDetail
-             .map(([, phrase, v]) => `${fmtEUR0(v)} ${phrase}`).join(', ')}.${
-           per.nonCote > 0 ? ` Le non coté se suit en lignes de compte et non en lignes de marché : il se lit dans l’onglet ${SOUS_ONGLETS.allocation[0][1]}.` : ''}`
-        : `Tout ton patrimoine y est.`}`)}</h2>
+        ? `${fmtEUR0(per.montantDehors)} ${trad('restent dehors, soit')} ${dehorsDetail
+             .map(([, phrase, v]) => `${fmtEUR0(v)} ${trad(phrase)}`).join(', ')}.${
+           per.nonCote > 0 ? ` ${trad('Le non coté se suit en lignes de compte et non en lignes de marché : il se lit dans l’onglet')} ${SOUS_ONGLETS.allocation[0][1]}.` : ''}`
+        : trad('Tout ton patrimoine y est.')}`)}</h2>
       <span class="hint">${mentionBase(BASES.baseCibles, r.base)}</span></div>
     <!-- La phrase de perimetre est partie en tete de page : elle repondait ici a
          une question qu'on se posait deux cartes plus haut. -->
@@ -4344,7 +4361,7 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
   <!-- Etage 2 : pourquoi tu le detiens. Un sous-niveau du precedent, pas un
        concurrent : le pourcentage se lit sur l'investi. -->
   <div class="card">
-    <div class="card-head"><h2>${ROLES.core} et satellites${aide(trad("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale."))}</h2>
+    <div class="card-head"><h2>${ROLES.core} ${trad('et satellites')}${aide(trad("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale."))}</h2>
       <span class="hint">${mentionBase(BASES.baseCibles, rr.base)}</span></div>
     <!-- Ce paragraphe repetait mot pour mot la premiere phrase de la bulle du
          titre, deux centimetres plus bas. Il definissait deux mots de metier,
@@ -4383,7 +4400,7 @@ Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-v
             const empile = parts.map(p =>
               `<i class="${p.nature === 'fonds' ? '' : 'raye'}"
                   style="width:${(x.value ? p.value / x.value * 100 : 0).toFixed(2)}%;--c:${p.couleur}"
-                  title="${esc(p.label)} · ${fmtEUR0(p.value)}"></i>`).join('');
+                  title="${esc(p.label)} · ${fmtEUR0Texte(p.value)}"></i>`).join('');
             const dedans = empile
               ? `<span class="role-part" style="width:${Math.max(1.5, x.pct).toFixed(2)}%">${empile}</span>`
               : '<i class="vide"></i>';
@@ -4489,8 +4506,8 @@ function viewHistory() {
                 title="${aVenir
                   ? `${esc(fmtMonth(r.date))} n’a pas encore eu lieu`
                   : attendSaPhoto
-                  ? `Enregistrer le relevé de ${esc(fmtMonth(r.date))} : reprend tous les montants actuels`
-                  : 'Reprendre tous les montants actuels dans cette ligne'}">⤒</button>
+                  ? `${trad('Enregistrer le relevé de')} ${esc(fmtMonth(r.date))} : ${trad('reprend tous les montants actuels')}`
+                  : trad('Reprendre tous les montants actuels dans cette ligne')}">⤒</button>
       </td>
       <td class="name sticky-col"><input type="date" data-path="monthly.${i}.date" value="${r.date}" style="min-width:130px"></td>
       <td><b>${total ? fmtEUR0(total) : ''}</b></td>
@@ -4522,13 +4539,17 @@ function viewHistory() {
         `<button class="btn sm" data-action="go-snapshot">${trad('Aller à la ligne')}</button>`)}</div>`;
   })()}
 
-  ${carteEvolution()}
+  <!-- La courbe d'evolution vivait ici, identique a celle de l'accueil : meme
+       titre, meme graphique, memes commandes. Elle y etait redondante deux fois
+       plutot qu'une — l'accueil la porte, et le tableau des releves, juste en
+       dessous, donne les memes montants mois par mois avec leur ecart. Cette
+       page sert a saisir ; on relit ailleurs. -->
 
   <!-- Le journal des rentrees exceptionnelles.
 
        Ici, dans les releves, parce que c'est la page des evenements du passe : un
-       apport explique une marche de la courbe, et c'est cette page qui montre les
-       marches. Il en faut la memoire, pas une prevision.
+       apport explique une marche du patrimoine, et c'est cette page qui garde le
+       mois ou elle s'est produite. Il en faut la memoire, pas une prevision.
 
        Ce que ce journal change ailleurs : « Rythme d'accumulation » peut enfin
        dire « dont tant d'apports exterieurs », et l'export du classeur a sa
@@ -5225,7 +5246,7 @@ function viewAccounts() {
        deux. « Type », en face, nomme le regroupement par nature de compte,
        du meme mot que la fenetre qui regle ce type. -->
   ${barreCommutateur([
-    ['banque', 'Comptes et supports'], ['type', 'Type'],
+    ['banque', 'Comptes et avoirs'], ['type', 'Type'],
   ], compteVue, 'compte-vue', 'vue')}
 
   <div class="card" style="padding:12px 16px">
@@ -5674,7 +5695,7 @@ function viewFicheCompte(id) {
        enveloppes qui peuvent en porter, ou celles qui en portent déjà. -->
   ${!t.classes.includes('liquidites') && !(c.cash || []).length ? '' : `
   <div class="card">
-    <div class="card-head"><h2>${BASES.liquidites.nom} sur ce compte</h2>
+    <div class="card-head"><h2>${BASES.liquidites.nom} ${trad('sur ce compte')}</h2>
       <button class="btn sm ghost" data-action="scinder-cash" data-id="${esc(c.id)}"
               title="${trad('Déclarer un second usage sur le même compte')}">Scinder</button>
     </div>
@@ -5704,7 +5725,7 @@ function viewFicheCompte(id) {
       </div>`).join('')
     : `<p class="empty">${t.titres
         ? 'Aucune espèce en attente. « Scinder » déclare un montant à investir.'
-        : 'Pas d’argent déclaré sur ce compte. « Scinder » ajoute une première part.'}</p>`}
+        : trad('Pas d’argent déclaré sur ce compte. « Scinder » ajoute une première part.')}</p>`}
   </div>`}
 
   <!-- Un bien a déjà sa carte au-dessus : la répéter en « placement détenu »
@@ -5924,7 +5945,12 @@ function viewFicheEtab(id) {
        titre, et le champ part derriere « Modifier ». -->
   <div class="card cpt-entete" style="--teinte:${teinteDominante(siens)}">
     <div>
-      <span class="hero-label">${esc(contenantDeLEtab(e.id).titre)}${aide(trad("Ce n’est pas un réglage : il se déduit des comptes rattachés. Un contenant qui ne porte que de l’immobilier est un bien, un qui ne porte que des parts de société est une société ou une plateforme, et dès qu’il mélange, « banque ou courtier » redevient le terme le plus large. Pour le changer, change ce qu’il contient."))}</span>
+      <!-- Pas de bulle d'aide ici : ce mot se lit comme une etiquette de
+           categorie, il ne pose aucune question. L'explication de sa derivation
+           reste dans la fenetre « Modifier », a cote du champ en lecture qui la
+           porte : c'est la seule ou quelqu'un peut se demander pourquoi il ne
+           se regle pas. -->
+      <span class="hero-label">${esc(trad(contenantDeLEtab(e.id).titre))}</span>
       <!-- La meme pastille que dans la liste, et surtout la meme teinte : elle
            vient de teinteDominante(siens), la fonction qui colore deja le
            groupe. La recalculer autrement aurait donne deux couleurs pour un
@@ -6219,7 +6245,7 @@ function viewBudget(section = 'depenses') {
              convention a apprendre. -->
         <button type="button" class="hero-delta hero-delta-reglable"
                 data-action="regler-objectif-depenses"
-                aria-label="Régler l’objectif de dépenses mensuel, ${fmtEUR0(f.target)}">
+                aria-label="${trad('Régler l’objectif de dépenses mensuel,')} ${fmtEUR0Texte(f.target)}">
           <span>${trad('Objectif mensuel')}</span>
           <b>${fmtEUR0(f.target)}<span class="hero-delta-chev" aria-hidden="true">›</span></b>
         </button>
@@ -6601,7 +6627,7 @@ function viewBudget(section = 'depenses') {
          ce projet passe son temps a supprimer. -->
     <div class="card-head">
       <h2>${trad('Dépenses mensuelles')}</h2>
-      <span class="hint">objectif ${fmtEUR0(b.monthlyTarget)}</span>
+      <span class="hint">${trad('objectif')} ${fmtEUR0(b.monthlyTarget)}</span>
       ${yearControl('budget-year', years, year)}
     </div>
     <div class="chart" id="bChart"></div>
@@ -6631,31 +6657,38 @@ function viewBudget(section = 'depenses') {
     </details>
   </div>
 
-  <div class="grid g-2-1">
-    <!-- Chaque carte porte son sélecteur d'année : elles répondent toutes à
-         la même variable, mais aller le chercher trois cartes plus haut pour
-         changer l'année d'un tableau qu'on a sous les yeux n'a pas de sens. -->
-    <div class="card">
-      <div class="card-head"><h2>${trad('Par catégorie')}</h2>
-        <div class="row">
-          <span class="hint">${fmtEUR0(stats.total)} ${trad('au total')}</span>
-          ${yearControl('budget-year', years, year)}
-        </div>
+  <!-- Une carte, un axe. « Par catégorie » et « Moyenne par mois » etaient les
+       memes categories vues deux fois cote a cote : un graphique donnant le
+       total de l'annee, un tableau donnant la moyenne mensuelle. Deux cartes
+       pour un seul axe, et il fallait comparer deux listes pour rapprocher les
+       deux chiffres d'une meme categorie.
+
+       Le tableau descend sous le graphique et porte les deux colonnes. Il se
+       replie, comme celui des depenses mensuelles juste au-dessus : c'est
+       l'idiome de cette page pour les donnees qu'on verifie sans les regarder
+       tout le temps. -->
+  <div class="card">
+    <div class="card-head"><h2>${trad('Par catégorie')}</h2>
+      <div class="row">
+        <span class="hint">${fmtEUR0(stats.total)} ${trad('au total')}</span>
+        ${yearControl('budget-year', years, year)}
       </div>
-      <div class="chart" id="bCats"></div>
     </div>
-    <div class="card">
-      <div class="card-head"><h2>${trad('Moyenne par mois')}</h2>
-        ${yearControl('budget-year', years, year)}</div>
+    <div class="chart" id="bCats"></div>
+    <details class="data-view">
+      <summary>${trad('Voir les données')}</summary>
       <table>
-        <thead><tr><th>${trad('Catégorie')}</th><th>${trad('/ mois')}</th><th>%</th></tr></thead>
+        <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total')}</th>
+          <th>${trad('/ mois')}</th><th>%</th></tr></thead>
         <tbody>${cats.map(c => `<tr>
-          <td class="name">${esc(c.label)}</td>
+          <td class="name">${esc(trad(c.label))}</td>
+          <td>${fmtEUR0(c.value)}</td>
           <td>${fmtEUR0(c.average)}</td>
           <td class="muted">${fmtPct(c.pct, 1)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td>Total</td><td>${fmtEUR0(stats.average)}</td><td></td></tr></tfoot>
+        <tfoot><tr><td>${trad('Total')}</td><td>${fmtEUR0(stats.total)}</td>
+          <td>${fmtEUR0(stats.average)}</td><td></td></tr></tfoot>
       </table>
-    </div>
+    </details>
   </div>`}
 
   ${!cadre ? '' : `
@@ -6675,7 +6708,7 @@ function viewBudget(section = 'depenses') {
     <div class="card-head"><h2>${trad('Ce qui sort chaque mois')}</h2>
       ${(() => {
         const n = b.fixedCharges.filter(c => chargeMensuelle(c) > 0).length;
-        return `<span class="hint">${n} poste${n > 1 ? 's' : ''}</span>`;
+        return `<span class="hint">${n} ${n > 1 ? trad('postes') : trad('poste')}</span>`;
       })()}</div>
     ${(() => {
       const st = sharedTotals();
@@ -6684,9 +6717,9 @@ function viewBudget(section = 'depenses') {
         .filter(x => x.v > 0)
         .sort((a, x) => x.v - a.v);
       if (!postes.length) return `
-      <p class="empty" style="margin:0">Aucune charge fixe déclarée. Ajoute tes loyers,
-        assurances et abonnements ci-dessous : ce sont eux qui décident de ce qu'il te
-        reste à vivre chaque mois.</p>`;
+      <p class="empty" style="margin:0">${trad('Aucune charge fixe déclarée. Ajoute tes loyers, '
+        + 'assurances et abonnements ci-dessous : ce sont eux qui décident de ce qu’il te '
+        + 'reste à vivre chaque mois.')}</p>`;
       /* `haut` ne sert plus aux barres, qui valent desormais la part. Il reste
          la parce que le total, lui, doit venir des postes affiches et non de
          `f.fixed` : les deux sont egaux aujourd'hui, et le jour ou ils
@@ -6702,12 +6735,12 @@ function viewBudget(section = 'depenses') {
         </div>
         <div class="ct-cote">
           <div class="ct-petit">
-            <span class="muted">Sur douze mois${aide(trad("Le même total, vu à l’année. Un abonnement de 30 € par mois coûte 360 € par an : c’est à cette échelle qu’on décide de le garder ou non."))}</span>
+            <span class="muted">${trad('Sur douze mois')}${aide(trad("Le même total, vu à l’année. Un abonnement de 30 € par mois coûte 360 € par an : c’est à cette échelle qu’on décide de le garder ou non."))}</span>
             <b>${fmtEUR0(f.fixed * 12)}</b>
           </div>
           ${st.partage ? `
           <div class="ct-petit">
-            <span class="muted">Vraiment à ta charge${aide(trad("Ce que tu paies une fois retirée la part de qui partage avec toi. Le budget, lui, retient les charges entières : c’est bien toi qui les paies, et ce qu’on te reverse entre de son côté dans tes revenus."))}</span>
+            <span class="muted">${trad('Vraiment à ta charge')}${aide(trad("Ce que tu paies une fois retirée la part de qui partage avec toi. Le budget, lui, retient les charges entières : c’est bien toi qui les paies, et ce qu’on te reverse entre de son côté dans tes revenus."))}</span>
             <b>${fmtEUR0(st.mine)}</b>
           </div>` : ''}
         </div>
@@ -6726,7 +6759,7 @@ function viewBudget(section = 'depenses') {
            part. -->
       <button type="button" class="flow-lien" style="margin-top:12px"
               data-action="apercu" data-apercu="chargesFixes"
-              title="Voir les ${postes.length} postes avec leur part">
+              title="${trad('Voir les')} ${postes.length} ${trad('postes avec leur part')}">
         <div class="flow">
           ${montre.map(x => `
             <div class="flow-row">
@@ -6738,9 +6771,9 @@ function viewBudget(section = 'depenses') {
             </div>`).join('')}
         </div>
         <p class="small muted" style="margin:12px 0 0">${postes.length > montre.length
-          ? `et ${postes.length - montre.length} autre${postes.length - montre.length > 1 ? 's' : ''} poste${
-              postes.length - montre.length > 1 ? 's' : ''} : voir les ${postes.length}, avec leur part ›`
-          : 'Voir la part de chaque poste ›'}</p>
+          ? `${trad('et')} ${postes.length - montre.length} ${postes.length - montre.length > 1
+              ? trad('autres postes') : trad('autre poste')} : ${trad('voir les.minuscule', 'voir les')} ${postes.length}${trad(', avec leur part ›')}`
+          : trad('Voir la part de chaque poste ›')}</p>
       </button>`;
     })()}
   </div>
@@ -6758,8 +6791,8 @@ function viewBudget(section = 'depenses') {
     <div class="card" data-anchor="charges">
       <div class="card-head"><h2>${trad('Charges fixes')}</h2>
         <div class="row">
-          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} des revenus</span>
-          <button class="btn sm ghost" data-action="add-contributor">+ Personne</button>
+          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} ${trad('des revenus')}</span>
+          <button class="btn sm ghost" data-action="add-contributor">+ ${trad('Personne')}</button>
           <button class="btn sm ghost" data-action="add-charge">${trad('+ Ligne')}</button>
         </div>
       </div>
@@ -6782,17 +6815,17 @@ function viewBudget(section = 'depenses') {
              autre : sa part de capital rejoint le patrimoine. La ligne le dit,
              sinon on la lit comme un abonnement de plus. */
           sous: [c.provider || '', chargePeriode(c) === 'mois' ? ''
-            : `facturée ${CHARGE_PERIODE_LABEL[chargePeriode(c)]}`,
+            : `${trad('facturée')} ${CHARGE_PERIODE_LABEL[chargePeriode(c)]}`,
             (() => {
               if (!c.creditId) return '';
               const cr = creditsEnCours().lignes.find(x => x.id === c.creditId);
               if (!cr) return '';
               return cr.capital != null
-                ? `rembourse « ${cr.libelle} », dont ${fmtEUR0(cr.capital)} de capital`
-                : `rembourse « ${cr.libelle} »`;
+                ? `${trad('rembourse')} « ${cr.libelle} », ${trad('dont')} ${fmtEUR0(cr.capital)} ${trad('de capital')}`
+                : `${trad('rembourse')} « ${cr.libelle} »`;
             })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
-          second: gens.length ? `${fmtEUR(myShareMensuelle(c))} à ma charge` : '',
+          second: gens.length ? `${fmtEUR(myShareMensuelle(c))} ${trad('à ma charge')}` : '',
         })).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
@@ -6869,8 +6902,8 @@ function viewBudget(section = 'depenses') {
            chiffre faux vaut moins que pas de chiffre : la note se contente
            desormais de dire la regle, qui est vraie sans rien apparier. -->
       ${gens.length ? `<p class="hint" style="margin:12px 0 0">
-        Ces parts sont indicatives : les charges retenues sont les charges fixes
-        totales. La part de quelqu'un doit être ajoutée dans tes revenus.
+        ${trad('Ces parts sont indicatives : les charges retenues sont les charges fixes '
+        + 'totales. La part de quelqu’un doit être ajoutée dans tes revenus.')}
       </p>` : ''}`;
       })()}
     </div>
@@ -6881,21 +6914,21 @@ function viewBudget(section = 'depenses') {
         <dl class="kv">
           <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
           <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
-          <dt>− Dépenses (moy. ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
+          <dt>− ${trad('Dépenses (moy.')} ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
           <dt><b>${trad('= Épargne théorique')}</b>${aide(trad("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est une prévision tirée de tes saisies, pas un montant constaté sur un compte."))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>
           <dt>${trad('Taux d’épargne')}${aide(trad("Part de tes revenus que cette épargne théorique représente. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
-          <dt>Objectif d'investissement${aide(trad("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent."))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
+          <dt>${trad('Objectif d’investissement')}${aide(trad("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent."))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
         </dl>
         ${rec.realPerMonth != null ? `
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
           <dl class="kv">
-            <dt>Croissance réelle du patrimoine${aide(trad("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif."))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
-            <dt>Écart avec la théorie${aide(trad("Différence entre ce que ton patrimoine a réellement gagné et ce que ton budget prévoyait. Un écart positif vient souvent des marchés ou d'un apport supplémentaire : ce n'est pas une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
+            <dt>${trad('Croissance réelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif."))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
+            <dt>${trad('Écart avec la théorie')}${aide(trad("Différence entre ce que ton patrimoine a réellement gagné et ce que ton budget prévoyait. Un écart positif vient souvent des marchés ou d'un apport supplémentaire : ce n'est pas une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
           </dl>
           <p class="small muted" style="margin:12px 0 0">
-            Mesuré sur les ${rec.monthsSpan} derniers mois clos. Le mois en cours est
-            écarté, il est incomplet. L'écart vient des performances de marché et des
-            apports supplémentaires : ce n'est pas une erreur de budget.
+            ${trad('Mesuré sur les')} ${rec.monthsSpan} ${trad('derniers mois clos. Le mois en cours est '
+            + 'écarté, il est incomplet. L’écart vient des performances de marché et des '
+            + 'apports supplémentaires : ce n’est pas une erreur de budget.')}
           </p>` : ''}
       </div>
 
@@ -7176,7 +7209,7 @@ function mountData() {
       f.value = '';
       return;
     }
-    if (!await askConfirm(`Importer « ${file.name} » ?\n\nCela remplacera toutes les données actuellement enregistrées dans ce navigateur.`)) {
+    if (!await askConfirm(`${trad('Importer')} « ${file.name} » ?\n\n${trad('Cela remplacera toutes les données actuellement enregistrées dans ce navigateur.')}`)) {
       f.value = ''; return;
     }
     try {
@@ -7186,7 +7219,7 @@ function mountData() {
       Store.migrate();
       Store.save();
       render();
-      toast('Import réussi');
+      toast(trad('Import réussi'));
     } catch (e) {
       alert('Import impossible : ' + e.message);
     }
@@ -7545,7 +7578,7 @@ function makeDeleter(listKey, what, nameOf) {
     if (!await askConfirm(`Supprimer ${what}${nom ? ` « ${nom} »` : ', qui n’a pas de nom'} ?\n\n`
       + `Cette action est réversible avec Ctrl+Z, et une sauvegarde du jour existe dans l'onglet Données.`)) return;
     list.splice(i, 1);
-    Store.save(); render(); toast('Ligne supprimée');
+    Store.save(); render(); toast(trad('Ligne supprimée'));
   };
 }
 
@@ -7656,7 +7689,7 @@ const ACTIONS = {
       Store.addBackup('avant retrait d’une vente déclarée');
       annulerVente(i);
       Store.save(); render();
-      toast('Vente retirée du journal');
+      toast(trad('Vente retirée du journal'));
       return;
     }
     const ou = v.cashAccount ? ACC[v.cashAccount]?.short || compteById(v.cashAccount)
@@ -7672,17 +7705,17 @@ const ACTIONS = {
     annulerVente(i);
     refreshAccounts();
     Store.save(); render();
-    toast(`Vente annulée, ${num(v.qty)} titres rendus`);
+    toast(`${trad('Vente annulée,')} ${num(v.qty)} ${trad('titres rendus')}`);
   },
   async 'sell-position'() {
     const v = await askSale();
     if (!v) return;
     Store.addBackup('avant vente');
     const a = sellPosition(v);
-    if (!a) { toast('Vente impossible'); return; }
+    if (!a) { toast(trad('Vente impossible')); return; }
     Store.save(); render();
     const ou = v.cashAccount ? ` · encaissé sur ${ACC[v.cashAccount]?.short || 'le cash'}` : '';
-    toast(`${a.realised >= 0 ? 'Plus-value' : 'Moins-value'} de ${fmtSigned(a.realised)}${ou}`);
+    toast(`${a.realised >= 0 ? trad('Plus-value') : trad('Moins-value')} ${trad('de')} ${fmtSigned(a.realised)}${ou}`);
   },
   /*    La vente d'avant l'application. Elle entre au journal telle qu'on s'en
    souvient — l'encaisse et le resultat, le prix de revient s'en derive — et
@@ -7706,7 +7739,7 @@ const ACTIONS = {
     if (!v) return;
     declarerVente(v);
     Store.save(); render();
-    toast(`« ${v.name} » ajoutée au journal · ${fmtSigned(num(v.realised))}`);
+    toast(`« ${v.name} » ${trad('ajoutée au journal')} · ${fmtSigned(num(v.realised))}`);
   },
   /* Ajouter une ligne : un seul chemin, et c'est la recherche.
 
@@ -7757,9 +7790,9 @@ const ACTIONS = {
       ],
     });
     if (!v) return;
-    if (!v.account) { toast('Ouvre d’abord un compte qui accepte cette catégorie'); return; }
+    if (!v.account) { toast(trad('Ouvre d’abord un compte qui accepte cette catégorie')); return; }
     const isin = v.isin.toUpperCase();
-    if (isin && !isinIsValid(isin)) toast('ISIN accepté, mais sa clé de contrôle est incorrecte');
+    if (isin && !isinIsValid(isin)) toast(trad('ISIN accepté, mais sa clé de contrôle est incorrecte'));
     Store.state.positions.push({
       id: 'p' + Date.now(), name: v.name, isin, symbol: '', currency: v.currency,
       qty: v.qty, buyPrice: v.buyPrice, price: 0, fx: 1,
@@ -7767,14 +7800,14 @@ const ACTIONS = {
       dateAchat: v.dateAchat || '',
     });
     Store.save(); render();
-    toast(`« ${v.name} » ajoutée`);
+    toast(`« ${v.name} » ${trad('ajoutée')}`);
   },
   async 'del-position'(btn) {
     const i = +btn.dataset.i;
     const p = Store.state.positions[i];
-    if (!await askConfirm(`Supprimer la position « ${p.name} » ?\n\nRéversible avec Ctrl+Z. Une sauvegarde du jour existe dans l'onglet Données.`)) return;
+    if (!await askConfirm(`${trad('Supprimer la position')} « ${p.name} » ?\n\n${trad('Réversible avec Ctrl+Z. Une sauvegarde du jour existe dans l’onglet Données.')}`)) return;
     Store.state.positions.splice(i, 1);
-    Store.save(); render(); toast('Position supprimée');
+    Store.save(); render(); toast(trad('Position supprimée'));
   },
   /* Depuis une tuile : on change de vue, on descend à la bonne carte,
      et on la fait clignoter une fois pour qu'on la repère. */
@@ -7789,7 +7822,7 @@ const ACTIONS = {
       const garder = await askConfirm('Modifications non enregistrées\n'
         + 'Ce panneau porte des montants qui ne sont pas encore dans tes données.',
         { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
-      if (garder) { appliquerDiffere(); Store.save(); render(); toast('Montants enregistrés'); }
+      if (garder) { appliquerDiffere(); Store.save(); render(); toast(trad('Montants enregistrés')); }
     }
     closeApercu();
   },
@@ -7809,7 +7842,7 @@ const ACTIONS = {
     Store.save();
     render();
     if (apercuOuvert) openApercu(apercuOuvert, apercuArg);
-    toast('Montants enregistrés');
+    toast(trad('Montants enregistrés'));
   },
   'notifications'() { retourHaptique(); basculeNotifs(); },
   /* Revenir d'où l'on vient, sauf si l'on vient de nulle part : un signet ouvert
@@ -7847,7 +7880,7 @@ const ACTIONS = {
       ...(Store.state.meta.notifsReglages || {}), [cle]: actif };
     Store.save(); render();
     retourHaptique();
-    toast(`${actif ? 'Activé' : 'Éteint'} : ${
+    toast(`${actif ? trad('Activé') : trad('Éteint')} : ${
       (FAMILLES_NOTIF.find(f => f[0] === cle) || [, cle])[1].toLowerCase()}`);
   },
   /* Depuis un panneau : la fiche s'ouvre a la place, la fenetre se ferme. */
@@ -7872,7 +7905,7 @@ const ACTIONS = {
     if (tg[cle] !== null && typeof tg[cle] === 'object') return;
     tg[cle] = partageDeCible(tg[cle], stockTotals().parClasseRole?.[cle]);
     Store.save(); render();
-    toast(`${ASSET_CLASSES[cle]} · ${ROLES.core} ${tg[cle].core} % et ${ROLES.satellite.toLowerCase()} ${tg[cle].satellite} %`);
+    toast(`${ASSET_CLASSES[cle]} · ${ROLES.core} ${tg[cle].core} % ${trad('et')} ${ROLES.satellite.toLowerCase()} ${tg[cle].satellite} %`);
   },
 
   /* Revenir a une seule cible : la somme des deux, pour que le total des cibles
@@ -7884,7 +7917,7 @@ const ACTIONS = {
     if (v === null || typeof v !== 'object') return;
     tg[cle] = Object.values(v).reduce((s, x) => s + num(x), 0);
     Store.save(); render();
-    toast(`${ASSET_CLASSES[cle]} · une seule cible, ${tg[cle]} %`);
+    toast(`${ASSET_CLASSES[cle]} · ${trad('une seule cible,')} ${tg[cle]} %`);
   },
 
   /* « Suivre une classe » propose aussi les classes qu'on a sorties.
@@ -7904,7 +7937,7 @@ const ACTIONS = {
     const libres = Object.entries(ASSET_CLASSES)
       .filter(([k]) => !visibles.includes(k))
       .map(([k, label]) => [k, sorties.includes(k) ? `${label} (sortie, à remettre)` : label]);
-    if (!libres.length) { toast('Toutes les classes sont déjà suivies'); return; }
+    if (!libres.length) { toast(trad('Toutes les classes sont déjà suivies')); return; }
     const somme = sommeCibles();
     /* La cible mise de cote au retrait est proposee par defaut : celui qui
        remet une classe veut presque toujours retrouver ce qu'il avait. */
@@ -7931,7 +7964,7 @@ const ACTIONS = {
     }
     tg[v.classe] = Math.max(0, Math.min(100, num(v.cible)));
     Store.save(); render();
-    toast(`${ASSET_CLASSES[v.classe]} · cible ${tg[v.classe]} %`);
+    toast(`${ASSET_CLASSES[v.classe]} · ${trad('cible')} ${tg[v.classe]} %`);
   },
   /* Sortir une classe du reequilibrage. Son encours quitte la base — sinon les
      pourcentages ne totaliseraient plus 100 % sans explication.
@@ -7956,7 +7989,7 @@ const ACTIONS = {
     if (tresorerie) tg.cashToInvest = 0;
     else if (tg.classes) tg.classes[k] = 0;
     Store.save(); render();
-    toast(`${nomDeLaCible(k)} sortie du rééquilibrage, sa cible est gardée`);
+    toast(`${nomDeLaCible(k)} ${trad('sortie du rééquilibrage, sa cible est gardée')}`);
   },
   'reintegrer-classe'(btn) {
     const k = btn.dataset.cle;
@@ -7970,7 +8003,7 @@ const ACTIONS = {
       delete tg.ciblesRetirees[k];
     }
     Store.save(); render();
-    toast(`${nomDeLaCible(k)} de retour${gardee !== undefined && gardee !== null
+    toast(`${nomDeLaCible(k)} ${trad('de retour')}${gardee !== undefined && gardee !== null
       ? `, cible ${sommeCibleDe(gardee)} %` : ''}`);
   },
   'filtrer-role'(btn) { posRole = btn.dataset.role; render(); },
@@ -8060,7 +8093,7 @@ const ACTIONS = {
     Store.migrate();
     Store.save();
     render();
-    toast('Tableau de bord vierge, à toi de le remplir');
+    toast(trad('Tableau de bord vierge, à toi de le remplir'));
   },
 
   /* --- espace Comptes ------------------------------------------------- */
@@ -8081,7 +8114,7 @@ const ACTIONS = {
     const avant = typeCompte(c.type).label;
     c.type = cible;
     Store.save(); render();
-    toast(`${nomCompteV2(c)} : ${avant} devient ${typeCompte(cible).label}`);
+    toast(`${nomCompteV2(c)} : ${avant} ${trad('devient')} ${trad(typeCompte(cible).label)}`);
   },
 
   /* Le nom d'un etablissement, et la note qu'on lui attache.
@@ -8102,7 +8135,7 @@ const ACTIONS = {
         /* En lecture, et nomme comme tel : c'est une consequence, pas un choix.
            Le libelle porte le compte qui le determine, sinon « deduit des comptes
            rattaches » obligerait a aller les compter ailleurs. */
-        { cle: 'type', label: 'Type', type: 'texte', valeur: mot.titre, lecture: true,
+        { cle: 'type', label: 'Type', type: 'texte', valeur: trad(mot.titre), lecture: true,
           aide: siens.length
             ? `déduit de ${siens.length === 1 ? 'son compte' : `ses ${siens.length} comptes`} `
               + `: ${siens.map(c => typeCompte(c.type).label).join(', ')}. `
@@ -8130,7 +8163,7 @@ const ACTIONS = {
        le meme champ finiraient par se contredire. */
     if (v.notes.trim()) e.notes = v.notes.trim(); else delete e.notes;
     Store.save(); render();
-    toast(`${e.nom} enregistré`);
+    toast(`${e.nom} ${trad('enregistré')}`);
   },
 
   /* L'identite d'un compte : nom, type, plafond, date d'ouverture, numero.
@@ -8182,7 +8215,7 @@ const ACTIONS = {
           || !COMPTES().some(x => x.etabId === e.id)
           || contenantDeLEtab(e.id).titre === mot.titre);
         champs.push({ cle: 'etab', label: `${mot.titre}`, type: 'liste',
-          options: [...compatibles.map(e => [e.id, e.nom]), ['__nouveau', `+ ${mot.nouveau}…`]],
+          options: [...compatibles.map(e => [e.id, e.nom]), ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
           valeur: valeur('etab', c.etabId || compatibles[0]?.id || '__nouveau'),
           aide: trad('un crédit se pose sur ce niveau : deux biens rattachés au même ')
               + 'le partagent' });
@@ -8242,8 +8275,8 @@ const ACTIONS = {
         let cible = v.etab;
         if (cible === '__nouveau') {
           const mot = contenantDuType(c.type);
-          const nom = await askText(mot.nouveau,
-            'Son nom, tel qu’il s’affichera partout.', mot.exemple);
+          const nom = await askText(trad(mot.nouveau),
+            trad('Son nom, tel qu’il s’affichera partout.'), trad(mot.exemple));
           if (!nom) { saisi = v; continue; }
           const slug = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
             .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'etab';
@@ -8350,6 +8383,39 @@ const ACTIONS = {
     if (!animeTout) render();
   },
 
+  /* Les memes deux gestes, dans le panneau des liquidites.
+
+     Ils ne passent pas par `render()` : le panneau porte des champs de saisie,
+     et le reconstruire sous les doigts perdrait le focus et la frappe en cours.
+     L'etat vit donc dans le DOM du panneau, qui ne survit pas a sa fermeture —
+     c'est voulu, une fenetre s'ouvre repliee ou depliee de la meme facon a
+     chaque fois, sans se souvenir d'un geste fait la fois d'avant. */
+  /* La portee est la fenetre entiere et non son corps : le bouton collectif vit
+     sur la ligne du sous-titre, les groupes dans le corps. Deux parents
+     differents, un seul ancetre commun. */
+  'liq-plier'(btn) {
+    const section = btn.closest('.liq-groupe');
+    const pli = section?.querySelector('.cpt-pli');
+    if (!pli) return;
+    const ouvert = !pli.classList.contains('ouvert');
+    pli.classList.toggle('ouvert', ouvert);
+    btn.setAttribute('aria-expanded', String(ouvert));
+    majBoutonLiqTout(btn.closest('#modal'));
+  },
+  'liq-plier-tout'(btn) {
+    const corps = btn.closest('#modal');
+    const plis = $$('.liq-groupe .cpt-pli', corps);
+    /* Le bouton bascule : s'il reste un groupe ouvert il ferme tout, sinon il
+       rouvre tout. Meme regle que « Tout replier » de la page Actifs. */
+    const ouvrir = !plis.some(p => p.classList.contains('ouvert'));
+    for (const p of plis) {
+      p.classList.toggle('ouvert', ouvrir);
+      const s = p.closest('.liq-groupe')?.querySelector('.liq-sommaire');
+      if (s) s.setAttribute('aria-expanded', String(ouvrir));
+    }
+    majBoutonLiqTout(corps);
+  },
+
   /* Création en trois étapes — une décision par écran. Les champs
      secondaires (numéro, notes) vivent dans la fiche ; seule la date
      d'ouverture d'un PEA ou d'un PER est demandée ici, parce qu'elle
@@ -8365,8 +8431,9 @@ const ACTIONS = {
        s'agit d'une maison n'avait pas de sens. */
     const e1 = await askForm({
       titre: trad('Qu’ajoutes-tu ?'),
-      sous: `Étape 1 sur ${etapes}${etabImpose ? `, chez ${etabById(etabImpose).nom}`
-        : ', cela détermine les placements possibles'}`,
+      sous: `${trad('Étape')} 1 ${trad('sur.etape', 'sur')} ${etapes}${etabImpose
+        ? `, ${trad('chez')} ${etabById(etabImpose).nom}`
+        : `, ${trad('cela détermine les placements possibles')}`}`,
       ok: 'Continuer',
       /* Les especes sont hors liste : il en existe deja un, pour tout le monde.
          En creer un second partagerait le meme argent en deux endroits. */
@@ -8420,20 +8487,21 @@ const ACTIONS = {
          d'office jetterait un nom qu'il a fallu taper. Mais il porte desormais la
          raison de sa presence. */
       const e2 = await askForm({
-        titre: mot.titre, sous: trad('Étape 2 sur 3'),
+        titre: trad(mot.titre),
+        sous: `${trad('Étape')} 2 ${trad('sur.etape', 'sur')} ${etapes}`,
         ok: 'Continuer',
         champs: [{ cle: 'etab', label: mot.question, type: 'liste', aide: mot.aide,
           options: [...proposables.map(e => [e.id,
             COMPTES().some(c => c.etabId === e.id) ? e.nom : `${e.nom} (aucun compte)`]),
-            ['__nouveau', `+ ${mot.nouveau}…`]],
+            ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
           valeur: proposables[0]?.id || '__nouveau' }],
       });
       if (!e2) return;
       etabId = e2.etab;
     }
     if (etabId === '__nouveau') {
-      const nom = await askText(mot.nouveau,
-        'Son nom, tel qu’il s’affichera partout.', mot.exemple);
+      const nom = await askText(trad(mot.nouveau),
+        trad('Son nom, tel qu’il s’affichera partout.'), trad(mot.exemple));
       if (!nom) return;
       /* Le contenant se nomme ici, il ne se cree qu'a la fin.
 
@@ -8452,11 +8520,11 @@ const ACTIONS = {
     const e3 = await askForm({
       titre: bien ? (estDetenuEnDirect(t) ? 'Valeur estimée'
                   : `Valeur ${t.classes.includes('nonCote') ? 'de la participation' : 'du bien'}`)
-                  : `${BASES.liquidites.nom} sur ce compte`,
+                  : `${BASES.liquidites.nom} ${trad('sur ce compte')}`,
       /* Le compte des étapes suit le parcours réellement suivi : annoncer
          « 3 sur 3 » après un « 1 sur 2 » ferait douter d'en avoir sauté une. */
-      sous: bien ? `Étape ${etapes} sur ${etapes}, la plus-value se calcule sur ces deux montants`
-                 : `Étape ${etapes} sur ${etapes}`,
+      sous: `${trad('Étape')} ${etapes} ${trad('sur.etape', 'sur')} ${etapes}${bien
+        ? `, ${trad('la plus-value se calcule sur ces deux montants')}` : ''}`,
       ok: 'Créer',
       champs: bien ? [
         /* Le nom, pour un bien sans contenant.
@@ -8659,7 +8727,7 @@ const ACTIONS = {
        ailleurs dans cette fenetre de compte. */
     if (v.clotureLe) c.clotureLe = v.clotureLe; else delete c.clotureLe;
     refreshAccounts(); Store.save(); render();
-    toast(`« ${nomCompteV2(c)} » archivé${v.clotureLe ? ` au ${fmtDate(v.clotureLe)}` : ''}`);
+    toast(`« ${nomCompteV2(c)} » ${trad('archivé')}${v.clotureLe ? ` ${trad('au')} ${fmtDate(v.clotureLe)}` : ''}`);
   },
   /* Restaurer se confirme, et ne vit plus que dans la fiche.
 
@@ -8677,7 +8745,7 @@ const ACTIONS = {
     const c = compteById(btn.dataset.id);
     if (!c) return;
     const v = valeurCompte(c);
-    if (!await askConfirm(`Restaurer « ${nomCompteV2(c)} » ?\n`
+    if (!await askConfirm(`${trad('Restaurer')} « ${nomCompteV2(c)} » ?\n`
       + `Il revient dans tous les totaux de ton patrimoine${
           Math.abs(v) > 0.005 ? `, pour ${fmtEUR(v)}` : ''}.\n\n`
       + (c.clotureLe
@@ -8688,7 +8756,7 @@ const ACTIONS = {
     c.statut = 'ouvert';
     delete c.clotureLe;
     refreshAccounts(); Store.save(); render();
-    toast(`« ${nomCompteV2(c)} » restauré${avait ? ', sa date de clôture est retirée' : ''}`);
+    toast(`« ${nomCompteV2(c)} » ${trad('restauré')}${avait ? trad(', sa date de clôture est retirée') : ''}`);
   },
   async 'annuler-fiche'(btn) {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -8703,7 +8771,7 @@ const ACTIONS = {
     retablirFiche();
     ficheAvant = null;
     refreshAccounts(); Store.save(); render();
-    toast('Modifications annulées');
+    toast(trad('Modifications annulées'));
     retour();
   },
 
@@ -8713,7 +8781,7 @@ const ACTIONS = {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     retourHaptique();
     Store.save();
-    toast('Enregistré ✓');
+    toast(trad('Enregistré ✓'));
     ficheAvant = null;
     ACTIONS.goto({ dataset: { view: btn?.dataset?.view || 'accounts', anchor: '' } });
   },
@@ -8782,7 +8850,7 @@ const ACTIONS = {
     }
     refreshAccounts(); Store.save();
     if (currentView() === 'ficheCompte') location.hash = '#/accounts'; else render();
-    toast(`« ${nomCompteV2(c)} » supprimé`);
+    toast(`« ${nomCompteV2(c)} » ${trad('supprimé')}`);
   },
 
   'scinder-cash'(btn) {
@@ -8834,7 +8902,7 @@ const ACTIONS = {
     c.lignes = c.lignes || [];
     c.lignes.push(litPlacement(v, { id: 'l' + Date.now().toString(36), classe }));
     refreshAccounts(); Store.save(); render();
-    toast(`« ${v.libelle} » ajouté · ${fmtEUR0(num(v.valeur))}`);
+    toast(`« ${v.libelle} » ${trad('ajouté')} · ${fmtEUR0(num(v.valeur))}`);
   },
 
   async 'editer-placement'(btn) {
@@ -8855,7 +8923,7 @@ const ACTIONS = {
     if (v.supprimer) {
       c.lignes.splice(i, 1);
       refreshAccounts(); Store.save(); render();
-      toast(`« ${l.libelle} » retiré`);
+      toast(`« ${l.libelle} » ${trad('retiré')}`);
       return;
     }
     Object.assign(l, litPlacement(v, l));
@@ -9058,7 +9126,7 @@ const ACTIONS = {
     const i = +btn.dataset.i;
     if (!e || !e.dettes?.[i]) return;
     const d = e.dettes[i];
-    if (!await askConfirm(`Retirer le crédit « ${d.libelle} » ?\n\nLe patrimoine net remontera de ${fmtEUR(num(d.montant))}. Réversible avec Ctrl+Z.`,
+    if (!await askConfirm(`${trad('Retirer le crédit')} « ${d.libelle} » ?\n\n${trad('Le patrimoine net remontera de')} ${fmtEUR(num(d.montant))}. ${trad('Réversible avec Ctrl+Z.')}`,
       { ok: 'Retirer', danger: false })) return;
     e.dettes.splice(i, 1);
     Store.save(); render();
@@ -9069,7 +9137,7 @@ const ACTIONS = {
     const m = suggestedMonthly();
     Store.state.meta.projMonthly = m;
     Store.save(); render();
-    toast(`Versement mensuel réglé sur ${fmtEUR0(m)}`);
+    toast(`${trad('Versement mensuel réglé sur')} ${fmtEUR0(m)}`);
   },
   'evo-range'(btn) { evoRange = btn.dataset.range; render(); },
   /* Les deux controles — le grand chiffre et la courbe — commandent le meme
@@ -9089,7 +9157,7 @@ const ACTIONS = {
     masquerRappel(genre, p.key);
     Store.save();
     render();
-    toast(`Rappel de ${p.label} masqué jusqu’au mois prochain`);
+    toast(`${trad('Rappel de')} ${p.label} ${trad('masqué jusqu’au mois prochain')}`);
   },
 
   /* « Plus tard » : sept jours, pas le mois entier. C'est la sortie de celui
@@ -9101,7 +9169,7 @@ const ACTIONS = {
     const quand = reporterRappel(genre);
     Store.save();
     render();
-    toast(`Rappel de ${p.label} repoussé au ${fmtJourMois(quand)}`);
+    toast(`${trad('Rappel de')} ${p.label} ${trad('repoussé au')} ${fmtJourMois(quand)}`);
   },
 
   /* Le tassement d'appui, comme la barre du bas. Il est pose avant la
@@ -9161,7 +9229,7 @@ const ACTIONS = {
       Store.addBackup('avant suppression de ligne');
       Store.state.positions.splice(suite.supprimer, 1);
       Store.save(); render();
-      toast(`« ${p.name || 'Ligne'} » supprimée`);
+      toast(`« ${p.name || trad('Ligne')} » ${trad('supprimée')}`);
       return;
     }
     if (suite && suite.vendre != null) {
@@ -9169,9 +9237,9 @@ const ACTIONS = {
       if (!v) return;
       Store.addBackup('avant vente');
       const a = sellPosition(v);
-      if (!a) { toast('Vente impossible'); return; }
+      if (!a) { toast(trad('Vente impossible')); return; }
       Store.save(); render();
-      toast(`${a.realised >= 0 ? 'Plus-value' : 'Moins-value'} de ${fmtSigned(a.realised)}`);
+      toast(`${a.realised >= 0 ? trad('Plus-value') : trad('Moins-value')} ${trad('de')} ${fmtSigned(a.realised)}`);
     }
     if (suite && suite.acheter != null) {
       const a = await askBuy(suite.acheter);
@@ -9191,7 +9259,7 @@ const ACTIONS = {
         }
       }
       Store.save(); render();
-      toast(`${a.qty} × ${fmtCur(a.price, p.currency)} · nouveau PRU ${fmtCur(p.buyPrice, p.currency)}`
+      toast(`${a.qty} × ${fmtCur(a.price, p.currency)} · ${trad('nouveau PRU')} ${fmtCur(p.buyPrice, p.currency)}`
         + (a.cashAccount ? ` · débité de ${ACC[a.cashAccount]?.short || 'cash'}` : ''));
     }
   },
@@ -9276,7 +9344,7 @@ const ACTIONS = {
     while (liste.some(p => p.id === id)) id = base + (n++);
     liste.push({ id, name: nom });
     Store.save(); render();
-    toast(`« ${nom} » ajoutée aux charges partagées`);
+    toast(`« ${nom} » ${trad('ajoutée aux charges partagées')}`);
   },
   async 'del-contributor'(btn) {
     const id = btn.dataset.id;
@@ -9284,7 +9352,7 @@ const ACTIONS = {
     if (!p) return;
     const total = Store.state.budget.fixedCharges.reduce((s, c) => s + shareOf(c, id), 0);
     const lignes = Store.state.budget.fixedCharges.filter(c => shareOf(c, id)).length;
-    if (!await askConfirm(`Retirer ${p.name} des charges partagées ?\n`
+    if (!await askConfirm(`${trad('Retirer')} ${p.name} ${trad('des charges partagées ?')}\n`
       + (total ? `${fmtEUR0(total)} de parts réparties sur ${lignes} ligne${lignes > 1 ? 's' : ''} `
                + `seront effacées. Les montants des charges ne changent pas, ni ton budget.\n\n`
                : `Aucune part ne lui est attribuée.\n\n`)
@@ -9292,15 +9360,15 @@ const ACTIONS = {
     Store.state.budget.contributors = Store.state.budget.contributors.filter(x => x.id !== id);
     for (const c of Store.state.budget.fixedCharges) if (c.shares) delete c.shares[id];
     Store.save(); render();
-    toast(`${p.name} retirée`);
+    toast(`${p.name} ${trad('retirée')}`);
   },
   async 'add-category'() {
     const nom = await askText('Nouvelle catégorie de dépenses',
       'Elle devient une colonne du tableau, vide sur tous les mois.', 'ex. Abonnements');
     if (!nom) return;
-    if (!addExpenseCategory(nom)) { toast('Cette catégorie existe déjà'); return; }
+    if (!addExpenseCategory(nom)) { toast(trad('Cette catégorie existe déjà')); return; }
     Store.save(); render();
-    toast(`Colonne « ${nom.trim()} » ajoutée`);
+    toast(`${trad('Colonne')} « ${nom.trim()} » ${trad('ajoutée')}`);
   },
   /* Retirer ne demande pas confirmation : rien n'est perdu, et le geste inverse
      est a cote, sur la meme ligne. Une question a chaque fois pour une action
@@ -9318,13 +9386,13 @@ const ACTIONS = {
     const cat = btn.dataset.cat;
     if (!reprendreCategorie(cat)) return;
     Store.save(); render();
-    toast(`« ${cat} » revient dans la saisie du mois`);
+    toast(`« ${cat} » ${trad('revient dans la saisie du mois')}`);
   },
   async 'del-category'(btn) {
     const cat = btn.dataset.cat;
     const total = expenseCategoryTotal(cat);
     const mois = Store.state.budget.expenses.filter(r => num(r.v?.[cat])).length;
-    if (!await askConfirm(`Supprimer la catégorie « ${cat} » ?\n`
+    if (!await askConfirm(`${trad('Supprimer la catégorie')} « ${cat} » ?\n`
       + (total
         ? `Elle contient ${fmtEUR0(total)} répartis sur ${mois} mois. Ces montants seront effacés `
           + `et tes totaux baisseront d'autant.\n\n`
@@ -9333,7 +9401,7 @@ const ACTIONS = {
     Store.addBackup('avant suppression de catégorie');
     removeExpenseCategory(cat);
     Store.save(); render();
-    toast(`Colonne « ${cat} » supprimée`);
+    toast(`${trad('Colonne')} « ${cat} » ${trad('supprimée')}`);
   },
   'add-expense-month'() {
     const list = Store.state.budget.expenses;
@@ -9345,7 +9413,7 @@ const ACTIONS = {
     list.sort((a, b) => String(a.month).localeCompare(String(b.month)));
     budgetYear = String(an);
     Store.save(); render();
-    toast(`Année ${an} ouverte, 12 mois à remplir`);
+    toast(`${trad('Année')} ${an} ${trad('ouverte, 12 mois à remplir')}`);
   },
   async 'del-expense-month'(btn) {
     const i = +btn.dataset.i, r = Store.state.budget.expenses[i];
@@ -9359,7 +9427,7 @@ const ACTIONS = {
     if (calendrier) clearMonthRow(r, 'note');
     else Store.state.budget.expenses.splice(i, 1);
     Store.save(); render();
-    toast(calendrier ? `${fmtMonth(r.month)} vidé` : 'Mois supprimé');
+    toast(calendrier ? `${fmtMonth(r.month)} ${trad('vidé')}` : trad('Mois supprimé'));
   },
   /* Une rentree exceptionnelle : quatre champs et une date.
 
@@ -9427,7 +9495,7 @@ const ACTIONS = {
     if (v.supprimer) {
       APPORTS().splice(i, 1);
       Store.save(); render();
-      toast(`« ${a.libelle} » retirée du journal`);
+      toast(`« ${a.libelle} » ${trad('retirée du journal')}`);
       return;
     }
     a.libelle = v.libelle;
@@ -9529,7 +9597,7 @@ const ACTIONS = {
       Store.state.budget.fixedCharges.splice(i, 1);
       Store.save(); render();
       /* Meme raison que dans `makeDeleter` : sans nom, on ne cite pas un vide. */
-      toast(c.label ? `« ${c.label} » supprimée` : 'Charge fixe supprimée');
+      toast(c.label ? `« ${c.label} » ${trad('supprimée')}` : trad('Charge fixe supprimée'));
       return;
     }
     c.label = v.label; c.amount = v.amount; c.period = v.period; c.provider = v.provider;
@@ -9558,7 +9626,7 @@ const ACTIONS = {
     if (!v) { rafraichirRevenus(); return; }
     Store.state.budget.income.push({ label: v.label, amount: v.amount });
     Store.save(); render(); rafraichirRevenus();
-    toast(`« ${v.label} » ajoutée aux revenus`);
+    toast(`« ${v.label} » ${trad('ajoutée aux revenus')}`);
   },
   /* Meme retour que pour l'ajout : la demande de confirmation ferme la
      fenetre des revenus, on la rouvre une fois la reponse donnee. */
@@ -9584,7 +9652,7 @@ const ACTIONS = {
     rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
     historyYear = String(an);
     Store.save(); render();
-    toast(`Année ${an} ouverte, 12 mois à remplir`);
+    toast(`${trad('Année')} ${an} ${trad('ouverte, 12 mois à remplir')}`);
   },
   /* Un mois du calendrier se vide ; seules les lignes hors calendrier
      (une clôture au 31/12, par exemple) se suppriment vraiment. */
@@ -9603,14 +9671,14 @@ const ACTIONS = {
     if (calendrier) clearMonthRow(r, 'comment');
     else Store.state.monthly.splice(i, 1);
     Store.save(); render();
-    toast(calendrier ? `${fmtMonth(r.date)} vidé` : 'Ligne supprimée');
+    toast(calendrier ? `${fmtMonth(r.date)} ${trad('vidé')}` : trad('Ligne supprimée'));
   },
   async 'resolve-row'(btn) {
     const p = Store.state.positions[+btn.dataset.i];
     if (!p) return;
     if (Quotes.isOnline() === null) await Quotes.health();
-    if (Quotes.isOnline() === false) { toast('Passerelle non détectée'); return; }
-    if (!isinIsValid(p.isin)) { toast(`ISIN invalide pour « ${p.name} »`); return; }
+    if (Quotes.isOnline() === false) { toast(trad('Passerelle non détectée')); return; }
+    if (!isinIsValid(p.isin)) { toast(`${trad('ISIN invalide pour')} « ${p.name} »`); return; }
     btn.disabled = true;
     try {
       const r = await Quotes.resolveIsin(p.isin.trim());
@@ -9623,7 +9691,7 @@ const ACTIONS = {
         if (champ) champ.value = r.best.symbol;
         toast(`${p.name} → ${r.best.symbol} (${r.best.exchange})`);
       } else {
-        toast(r.error || 'Aucune cotation trouvée');
+        toast(r.error || trad('Aucune cotation trouvée'));
         btn.disabled = false;
       }
     } catch (e) {
@@ -9634,7 +9702,11 @@ const ACTIONS = {
   async 'refresh-quotes'(btn) {
     if (Quotes.isOnline() === null) await Quotes.health();
     if (Quotes.isOnline() === false) {
-      toast('Passerelle non détectée : lance « python serve.py »');
+      /* La demonstration se lance par `python serve.py`, jamais par le script
+         Windows du depot prive : c'est un depot qu'on clone, pas une machine
+         qu'on a deja installee. La clef lui appartient donc, et vit dans son
+         propre i18n. */
+      toast(trad('Passerelle non détectée : lance « python serve.py »'));
       return;
     }
     /* La pastille d'etat porte des enfants : on la met en « encours » par
@@ -9656,7 +9728,7 @@ const ACTIONS = {
         .filter(c => !c.error && Math.abs(num(c.to) - num(c.from)) > 1e-9)
         .map(c => c.symbol));
       render();
-      if (empty) { toast('Aucun symbole à suivre'); return; }
+      if (empty) { toast(trad('Aucun symbole à suivre')); return; }
       const ok = changes.filter(c => !c.error).length;
       const ko = changes.length - ok;
       toast(`${ok} ${trad('cours mis à jour')}${ko ? ` · ${ko} ${trad('en échec')}` : ''}`);
@@ -9669,17 +9741,17 @@ const ACTIONS = {
   async 'cloud-push'() {
     const r = await CloudSync.push({ force: false });
     render();
-    toast(r.ok ? 'Envoyé en ligne' : r.skipped ? 'Déjà à jour' : r.conflict ? 'Conflit détecté' : 'Échec');
+    toast(r.ok ? trad('Envoyé en ligne') : r.skipped ? trad('Déjà à jour') : r.conflict ? trad('Conflit détecté') : trad('Échec'));
   },
   async 'cloud-force'() {
-    if (!await askConfirm("Imposer les données de cet appareil ?\n\nLa version en ligne, plus récente, sera remplacée.")) return;
+    if (!await askConfirm(trad('Imposer les données de cet appareil ?') + '\n\n' + trad('La version en ligne, plus récente, sera remplacée.'))) return;
     const r = await CloudSync.push({ force: true });
-    render(); toast(r.ok ? 'Version imposée' : 'Échec');
+    render(); toast(r.ok ? trad('Version imposée') : trad('Échec'));
   },
   async 'cloud-pull'() {
     try {
       const data = await CloudSync.pull();
-      if (!data) { toast('Rien en ligne'); return; }
+      if (!data) { toast(trad('Rien en ligne')); return; }
       const at = data.meta?.savedAt;
       if (!await askConfirm(`Recharger les données depuis le cloud ?\n\n`
         + `En ligne : ${at ? new Date(at).toLocaleString(locale()) : 'inconnue'}\n`
@@ -9687,11 +9759,11 @@ const ACTIONS = {
         + `L'état actuel sera sauvegardé avant remplacement.`)) return;
       Store.addBackup('avant rechargement cloud');
       Store.state = data; Store.migrate(); Store.save();
-      render(); toast('Données rechargées');
+      render(); toast(trad('Données rechargées'));
     } catch (e) { toast('Échec : ' + e.message); }
   },
   'make-backup'() {
-    Store.addBackup('manuelle') ? toast('Sauvegarde créée') : toast('Sauvegarde impossible (stockage plein)');
+    Store.addBackup('manuelle') ? toast(trad('Sauvegarde créée')) : toast(trad('Sauvegarde impossible (stockage plein)'));
     render();
   },
   async 'restore-backup'(btn) {
@@ -9700,19 +9772,19 @@ const ACTIONS = {
     if (!await askConfirm(`Restaurer la sauvegarde du ${new Date(b.at).toLocaleString(locale())} ?\n\n`
       + `L'état actuel sera d'abord sauvegardé, tu pourras donc revenir en arrière.`)) return;
     Store.restoreBackup(i);
-    render(); toast('Sauvegarde restaurée');
+    render(); toast(trad('Sauvegarde restaurée'));
   },
   'undo'() {
-    if (!Store.undo()) { toast('Rien à annuler'); return; }
-    render(); toast('Modification annulée');
+    if (!Store.undo()) { toast(trad('Rien à annuler')); return; }
+    render(); toast(trad('Modification annulée'));
   },
   'export-json'() {
     download(`tallya-${stamp()}.json`, JSON.stringify(Store.state, null, 2));
-    toast('Sauvegarde exportée');
+    toast(trad('Sauvegarde exportée'));
   },
   'export-xlsx-positions'() {
     Xlsx.save(`positions-${stamp()}.xlsx`, [sheetPositions()]);
-    toast('Positions exportées en Excel');
+    toast(trad('Positions exportées en Excel'));
   },
   'export-xlsx-all'() {
     // La feuille Ventes n'a de sens que s'il y a des ventes.
@@ -9731,18 +9803,21 @@ const ACTIONS = {
       sheetFixedCharges(),
     ];
     Xlsx.save(`tallya-${stamp()}.xlsx`, feuilles);
-    toast(`Classeur Excel exporté, ${feuilles.length} feuilles`);
+    toast(`${trad('Classeur Excel exporté,')} ${feuilles.length} ${trad('feuilles')}`);
   },
   async 'reset'() {
     if (!await askConfirm("Revenir aux données d'origine importées du Google Sheet ?\n\nToutes tes modifications locales seront perdues. Exporte d'abord une sauvegarde si besoin.")) return;
-    Store.reset(); render(); toast('Données réinitialisées');
+    Store.reset(); render(); toast(trad('Données réinitialisées'));
   },
   async 'wipe'() {
-    if (!await askConfirm("Effacer TOUTES les données de ce tableau de bord dans ce navigateur ?\n\nIrréversible.")) return;
-    if (!await askConfirm("Dernière confirmation : tout effacer ?")) return;
+    if (!await askConfirm(trad('Effacer TOUTES les données de ce tableau de bord dans ce navigateur ?') + '\n\n' + trad('Irréversible.'))) return;
+    if (!await askConfirm(trad('Dernière confirmation : tout effacer ?'))) return;
+    /* `cleStockage()` et non `STORAGE_KEY` : la demonstration ecrit sous une
+       clef a elle, pour qu'un visiteur qui remet tout a zero ne touche pas les
+       donnees d'un tableau de bord reel ouvert dans le meme navigateur. */
     try { localStorage.removeItem(cleStockage()); } catch (e) {}
     Store.state = structuredClone(SEED);
-    render(); toast('Données effacées');
+    render(); toast(trad('Données effacées'));
   },
   /* Photo de la situation actuelle, écrite dans une ligne précise du relevé. */
   async 'snapshot-row'(btn) {
@@ -9784,7 +9859,7 @@ const ACTIONS = {
        la part nette d'un bien immobilier mois apres mois. */
     row.dettes = round2(patrimoine().dettes);
     Store.save(); render();
-    toast(`${fmtMonth(row.date)} · ${fmtEUR0(t.total)} enregistré`, porteDeSortie());
+    toast(`${fmtMonth(row.date)} · ${fmtEUR0(t.total)} ${trad('enregistré')}`, porteDeSortie());
   },
 
   /* Saisir un mois entier dans une fenêtre : le seul chemin sur téléphone,
@@ -9919,13 +9994,13 @@ function fenetreRevenus() {
   const total = b.income.reduce((s, r) => s + revenuMensuel(r), 0);
   apercuOuvert = null;
 
-  $('#modalTitle').textContent = 'Revenus';
+  $('#modalTitle').textContent = trad('Revenus');
   /* Le « ≈ » dit qu'une partie du chiffre est declaree estimee : un revenu
      variable lisse en moyenne n'est pas un fait, et le sous-titre ne doit pas
      le vendre comme tel. */
   $('#modalSub').innerHTML = escMontant(
     `${revenuEstime() ? '≈ ' : ''}${fmtEUR0(total)} ${trad('par mois sur')} ${b.income.length} ${b.income.length > 1 ? trad('sources') : trad('source')}`
-    + (revenuEstime() ? ', dont des montants estimés' : ''));
+    + (revenuEstime() ? trad(', dont des montants estimés') : ''));
   /* La colonne « Bien » n'apparait que s'il y a un bien immobilier a proposer :
      sans logement locatif, elle serait une colonne vide de plus dans un tableau
      qui tient a peine sur un telephone. Un loyer rattache a son bien permet a la
@@ -9950,7 +10025,7 @@ function fenetreRevenus() {
       <div class="rev-source">
         <div class="rev-tete">
           <div class="field rev-nom">
-            <label>Source</label>
+            <label>${trad('Source')}</label>
             <input data-path="budget.income.${i}.label" value="${esc(r.label)}"
                    placeholder="${trad('ex. Salaire, loyer perçu')}">
           </div>
@@ -9959,20 +10034,20 @@ function fenetreRevenus() {
         </div>
         <div class="rev-champs">
           <div class="field">
-            <label>Montant</label>
+            <label>${trad('Montant')}</label>
             <input type="number" step="any" data-path="budget.income.${i}.amount" value="${r.amount}">
           </div>
           <div class="field">
-            <label>Période</label>
+            <label>${trad('Période')}</label>
             <select data-path="budget.income.${i}.period" class="annee">
               ${CHARGE_PERIODES.map(([cle, label]) => `<option value="${cle}"
-                ${chargePeriode(r) === cle ? 'selected' : ''}>${label}</option>`).join('')}
+                ${chargePeriode(r) === cle ? 'selected' : ''}>${trad(label)}</option>`).join('')}
             </select>
           </div>
           ${biens.length ? `<div class="field">
             <label>${trad('Bien rattaché')}</label>
             <select data-path="budget.income.${i}.bienId" class="annee">
-              <option value="">aucun</option>
+              <option value="">${trad('aucun')}</option>
               ${biens.map(c => `<option value="${esc(c.id)}" ${c.id === r.bienId ? 'selected' : ''}
                 >${esc(nomCompteV2(c))}</option>`).join('')}
             </select>
@@ -9984,12 +10059,12 @@ function fenetreRevenus() {
                    ${r.estime ? 'checked' : ''}>${trad(' montant estimé')}</label>
           <span class="spacer"></span>
           <span class="muted">${chargePeriode(r) !== 'mois'
-            ? `soit ${fmtEUR0(revenuMensuel(r))} ${trad('/ mois')} · ` : ''}${
-            fmtPct(total ? revenuMensuel(r) / total * 100 : 0, 1)} du total</span>
+            ? `${trad('soit')} ${fmtEUR0(revenuMensuel(r))} ${trad('/ mois')} · ` : ''}${
+            fmtPct(total ? revenuMensuel(r) / total * 100 : 0, 1)} ${trad('du total')}</span>
         </div>
       </div>`).join('')}</div>
     <div class="rev-total">
-      <span>Total</span><b>${fmtEUR(total)} ${trad('/ mois')}</b>
+      <span>${trad('Total')}</span><b>${fmtEUR(total)} ${trad('/ mois')}</b>
     </div>
     <div class="row" style="margin-top:12px">
       <button class="btn sm ghost" data-action="add-income">${trad('+ Ajouter une source de revenu')}</button>
@@ -10033,13 +10108,21 @@ function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX)
       champ.onkeydown = null;
       resolve(v);
     };
+    /* Valider a vide ne ferme pas : cette fenetre ne demande qu'une chose, et
+       repartir sans elle n'a jamais de sens. Elle le dit et garde la main, comme
+       un champ `requis` d'`askForm` — c'est « Annuler » qui sert a renoncer. */
+    const valider = () => {
+      const v = champ.value.trim();
+      if (!v) { champ.focus(); toast(`${titre} : ${trad('à remplir')}`); return; }
+      fermer(v);
+    };
     champ.onkeydown = e => {
-      if (e.key === 'Enter') { e.preventDefault(); fermer(champ.value.trim() || null); }
+      if (e.key === 'Enter') { e.preventDefault(); valider(); }
       if (e.key === 'Escape') { e.stopPropagation(); fermer(null); }
     };
     $('#txtCancel').onclick = () => fermer(null);
     $('#modalClose').onclick = () => fermer(null);
-    $('#txtOk').onclick = () => fermer(champ.value.trim() || null);
+    $('#txtOk').onclick = valider;
   });
 }
 
@@ -10074,7 +10157,11 @@ async function demanderTypePerso() {
     sous: trad('Il rejoint la liste, pour ce compte et les suivants'),
     ok: 'Créer',
     champs: [
-      { cle: 'nom', label: trad('Nom du nouveau type'), type: 'texte',
+      /* `requis` : sans lui, valider a vide fermait la fenetre sans un mot. Le
+         type ne se creait pas — `creerTypePerso` refuse un nom vide — mais rien
+         ne le disait, et le geste ressemblait a une reussite. Un champ dont
+         l'absence annule tout doit le dire avant de fermer. */
+      { cle: 'nom', label: trad('Nom du nouveau type'), type: 'texte', requis: true,
         exemple: trad('ex. Plan d’épargne logement') },
       /* La question porte sur le comportement, pas sur une « poche » : ce mot
          designe partout ailleurs les classes de la repartition, et la liste
@@ -10114,13 +10201,13 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
          Pas d'`<input disabled>` : un champ grise invite quand meme au clic, et
          il faudrait ensuite l'ecarter du depouillement. Du texte est du texte. */
       if (c.lecture) return `<div class="field">
-        <label>${esc(c.label)}${c.aide ? `<span class="sub">${esc(c.aide)}</span>` : ''}</label>
+        <label>${esc(trad(c.label))}${c.aide ? `<span class="sub">${esc(trad(c.aide))}</span>` : ''}</label>
         <p class="champ-lecture">${esc(String(c.valeur ?? ''))}</p>
       </div>`;
       if (c.type === 'case') return `
         <label class="field-case">
           <input type="checkbox" id="${id}" ${c.valeur ? 'checked' : ''}>
-          <span>${esc(c.label)}${c.aide ? `<span class="sub">${esc(c.aide)}</span>` : ''}</span>
+          <span>${esc(trad(c.label))}${c.aide ? `<span class="sub">${esc(trad(c.aide))}</span>` : ''}</span>
         </label>`;
       /* `suggestions` : ce qui a deja ete tape dans ce champ, propose sans etre
          impose. Un `datalist` et non une liste deroulante — le choix ferme
@@ -10141,7 +10228,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
               ${c.type === 'nombre' ? 'step="any" inputmode="decimal"' : 'autocomplete="off"'}
               ${dl ? `list="${dl}"` : ''}
               ${c.max ? `maxlength="${+c.max}"` : ''}
-              value="${esc(String(c.valeur ?? ''))}" placeholder="${esc(c.exemple || '')}">
+              value="${esc(String(c.valeur ?? ''))}" placeholder="${esc(trad(c.exemple || ''))}">
            ${dl ? `<datalist id="${dl}">${c.suggestions.map(s =>
               `<option value="${esc(s)}"></option>`).join('')}</datalist>` : ''}`;
       return `<div class="field">
@@ -10217,7 +10304,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       /* Un champ obligatoire vide ne ferme pas la fenetre en silence : on le
          designe, plutot que de creer une ligne sans nom. */
       const manquant = efface ? null : champs.find(c => c.requis && !String(out[c.cle]).trim());
-      if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label} : à remplir`); return; }
+      if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label} : ${trad('à remplir')}`); return; }
       if (suite) out.__encore = true;
       fermer(out);
     };
@@ -10234,8 +10321,8 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
        s'apprend a fermer sans lire. */
     const annulerOuDemander = async () => {
       if (JSON.stringify(valeurs()) === depart) { fermer(null); return; }
-      const garder = await askConfirm('Modifications non enregistrées\n'
-        + 'Ce que tu viens de saisir n’est pas encore dans tes données.',
+      const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
+        + trad('Ce que tu viens de saisir n’est pas encore dans tes données.'),
         { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
       if (garder) lire(); else fermer(null);
     };
@@ -10341,7 +10428,7 @@ function askSale(indexInitial) {
     const m = $('#modal');
     apercuOuvert = null;
     const ps = Store.state.positions;
-    if (!ps.length) { toast('Aucune ligne à vendre'); resolve(null); return; }
+    if (!ps.length) { toast(trad('Aucune ligne à vendre')); resolve(null); return; }
 
     $('#modalTitle').textContent = trad('Vendre une ligne');
     $('#modalSub').textContent = 'La plus-value est calculée sur ton prix de revient';
@@ -10803,7 +10890,7 @@ function askPosition(index) {
         + `${dev !== 'EUR' ? ` · change ${round4(num(p.fx) || 1)}` : ''}</span>`;
       const investi = $('#modalBody .hint');
       if (investi) investi.innerHTML = `soit ${fmtEUR(posInvested(p))} investis`;
-      toast('Ligne enregistrée');
+      toast(trad('Ligne enregistrée'));
     };
     $('#posSave').onclick = enregistrer;
     /* Fermer sans enregistrer abandonne : autant le dire, et proposer de garder.
@@ -10844,7 +10931,7 @@ function askPosition(index) {
        Les champs sales ne se demandent pas. La fenetre proposerait de garder des
        corrections sur une ligne qu'on vient d'accepter de faire disparaitre. */
     $('#posDelete').onclick = async () => {
-      const ok = await askConfirm(`Supprimer « ${p.name || 'cette ligne'} » ?\n`
+      const ok = await askConfirm(`${trad('Supprimer')} « ${p.name || trad('cette ligne')} » ?\n`
         + `${num(p.qty)} × ${fmtCur(p.price, dev)}, soit ${fmtEUR(posValue(p))}.\n\n`
         + `La ligne quitte le portefeuille sans vente : ni encaissement, ni `
         + `plus-value au journal. Réversible avec Ctrl+Z, et une sauvegarde du `
@@ -11279,7 +11366,7 @@ function askExpenseMonth(index) {
          recouverte, il faut bien la rendre. */
       if (!nom) { fermer({ ...etat, rouvrir: true }); return; }
       if (!addExpenseCategory(nom)) {
-        toast('Cette catégorie existe déjà');
+        toast(trad('Cette catégorie existe déjà'));
         fermer({ ...etat, rouvrir: true });
         return;
       }
@@ -11442,9 +11529,9 @@ function askMonthlySnapshot(index) {
             champs avec des zeros n'aiderait personne, le bloc disparait. */''}
       ${photo && revolu ? `
       <button class="btn pleine" id="relPhoto" type="button"
-              >⤒ Reprendre les montants actuels, ${fmtEUR0(photo)}</button>
-      <p class="hint" style="margin:6px 0 14px; text-align:center">Remplir tous les champs
-        automatiquement${aide(trad("Chaque champ ci-dessous reçoit la valeur actuelle du compte correspondant. Rien n’est enregistré avant que tu ne cliques sur « Enregistrer » : tu peux corriger ce qu’il a écrit, ou renoncer."))}</p>` : ''}
+              >⤒ ${trad('Reprendre les montants actuels,')} ${fmtEUR0(photo)}</button>
+      <p class="hint" style="margin:6px 0 14px; text-align:center">${trad('Remplir tous les champs '
+        + 'automatiquement')}${aide(trad("Chaque champ ci-dessous reçoit la valeur actuelle du compte correspondant. Rien n’est enregistré avant que tu ne cliques sur « Enregistrer » : tu peux corriger ce qu’il a écrit, ou renoncer."))}</p>` : ''}
       ${revolu ? '' : `
       <p class="avert">${trad('Ce mois n’a pas encore eu lieu. Il n’y a pas de montants à en '
         + 'reprendre, et ce que tu saisirais ici serait lu comme un relevé passé.')}</p>`}
@@ -11544,7 +11631,7 @@ function askMonthlySnapshot(index) {
       photoPrise = true;
       sale = true;
       majTotal();
-      toast('Montants actuels repris, à vérifier puis enregistrer');
+      toast(trad('Montants actuels repris, à vérifier puis enregistrer'));
     };
 
     const fermer = v => {
@@ -11586,7 +11673,7 @@ function askMonthlySnapshot(index) {
                                dettes: $('#relDettes').value, photo: photoPrise });
       sale = false;
       photoPrise = false;
-      toast(`${fmtMonth(r.date)} · ${fmtEUR0(rowTotal(Store.state.monthly[index]))} enregistré`);
+      toast(`${fmtMonth(r.date)} · ${fmtEUR0(rowTotal(Store.state.monthly[index]))} ${trad('enregistré')}`);
       return true;
     };
     $('#relOk').onclick = enregistrer;
@@ -11645,17 +11732,36 @@ const APERCUS = {
         total: poches().classes.liquidites,
         lignes: [],
         live: sommes,
-        html: groupes.map(g => `
-          <details class="liq-groupe" open>
-            <summary><span>${esc(g.label)}</span>
-              <b data-live="${esc(g.aff)}">${sommes()[g.aff]}</b><span class="cpt-chev">⌄</span></summary>
-            ${g.entrees.map(x => `
-              <div class="liq-ligne">
-                <span class="cpt-nom">${esc(nomCompteV2(x.c))}<span class="sub">${esc(nomEtabDe(x.c))}</span></span>
-                <input type="number" step="any" class="champ-inline"
-                       data-path="comptes.${x.ic}.cash.${x.j}.montant" value="${num(x.e.montant)}">
-              </div>`).join('')}
-          </details>`).join(''),
+        /* Le meme pli anime que les groupes de la page Actifs, et le meme
+           bouton pour les mener tous : `.cpt-pli` passe sa rangee de 0fr a 1fr,
+           seule facon d'animer une hauteur inconnue. `<details>` tenait ce role
+           et ne s'anime pas — et surtout il n'offrait aucune prise pour un geste
+           collectif, alors que c'est precisement ce qu'on vient faire ici :
+           replier les usages pour comparer leurs totaux d'un coup d'oeil. */
+        /* Le geste collectif vit sur la ligne du sous-titre, pas sur une ligne
+           a lui : c'est une commande de lecture, elle n'a pas a pousser le
+           contenu vers le bas dans une fenetre qui defile deja, et cette ligne
+           etait a moitie vide. */
+        sousAction: groupes.length > 1
+          ? `<button type="button" class="btn sm ghost" data-action="liq-plier-tout"
+                     aria-expanded="true">${trad('Tout replier')}</button>`
+          : '',
+        html: `
+          ${groupes.map(g => `
+          <section class="liq-groupe">
+            <button type="button" class="liq-sommaire" data-action="liq-plier"
+                    aria-expanded="true">
+              <span>${esc(g.label)}</span>
+              <b data-live="${esc(g.aff)}">${sommes()[g.aff]}</b><span class="cpt-chev">⌄</span></button>
+            <div class="cpt-pli ouvert"><div class="liq-corps">
+              ${g.entrees.map(x => `
+                <div class="liq-ligne">
+                  <span class="cpt-nom">${esc(nomCompteV2(x.c))}<span class="sub">${esc(nomEtabDe(x.c))}</span></span>
+                  <input type="number" step="any" class="champ-inline"
+                         data-path="comptes.${x.ic}.cash.${x.j}.montant" value="${num(x.e.montant)}">
+                </div>`).join('')}
+            </div></div>
+          </section>`).join('')}`,
         vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
       };
     }
@@ -12277,13 +12383,8 @@ const APERCUS = {
     const dec = l.prix < 10 ? 4 : 2;
     const nb = v => new Intl.NumberFormat(locale(),
       { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(v);
-    /*       Le prefixe « ^ » designe un indice chez Yahoo, pour toutes les places :
-       il ne se confond avec aucun ticker d'action ou d'ETF. On se garde de lire
-       la devise plutot que de tenir une liste des cinq indices du ruban, qui
-       oublierait le sixieme. */
     const estIndice = String(l.symbole || '').startsWith('^');
-    const unite = estIndice ? ' pts'
-                : l.devise === 'USD' ? ' $' : l.devise === 'EUR' ? ' €' : '';
+    const unite = uniteRepere(l);
     const m = marketStatus(l);
     const delta = l.prix - l.veille;
 
@@ -12514,6 +12615,19 @@ let apercuArg = null;
    fiche d'une ligne de titres et les panneaux d'apercu — et qu'un second
    exemplaire finirait par oublier un cas. Le bloc redevient propre : fermer
    ensuite ne demande plus rien. */
+/* Le libelle du bouton dit ce que le clic va faire, pas l'etat courant.
+
+   Il se recalcule apres chaque geste, celui d'un groupe seul comme celui de
+   tous : replier le dernier groupe ouvert a la main doit retourner le bouton,
+   sinon il proposerait de replier ce qui l'est deja. */
+function majBoutonLiqTout(fenetre) {
+  const btn = fenetre && $('[data-action="liq-plier-tout"]', fenetre);
+  if (!btn) return;
+  const reste = $$('.liq-groupe .cpt-pli', fenetre).some(p => p.classList.contains('ouvert'));
+  btn.textContent = reste ? trad('Tout replier') : trad('Tout déplier');
+  btn.setAttribute('aria-expanded', String(reste));
+}
+
 function appliquerDiffere(bloc = $('#modalBody')) {
   if (!bloc) return false;
   $$('[data-path]', bloc).forEach(applyField);
@@ -12542,7 +12656,11 @@ function openApercu(cle, arg) {
    que les tuiles et les notifications : tout est echappe, seul notre fragment
    traverse. Corriger les producteurs un a un aurait refait le defaut au
    prochain apercu.*/
-  $('#modalSub').innerHTML = escMontant(a.sous);
+  /* `sousAction` : une commande de lecture posee au bout du sous-titre. Elle
+     n'est pas echappee — c'est du balisage que le panneau fournit, comme `html`
+     juste en dessous — et le sous-titre, lui, l'est toujours. */
+  $('#modalSub').innerHTML = escMontant(a.sous) + (a.sousAction || '');
+  $('#modalSub').classList.toggle('avec-action', !!a.sousAction);
   $('#modalBody').innerHTML = `
     <!-- totalTexte : un repere de marche se compte en points ou en dollars,
          fmtEUR aurait colle un « € » sur le S&P 500. -->
@@ -13896,7 +14014,7 @@ function bindGlobal() {
     const etab = ETABS().find(x => x.id === c.etabId);
     if (etab && COMPTES().filter(x => x.etabId === etab.id).length === 1) etab.nom = nom;
     Store.save(); render();
-    toast(`Renommé en « ${nom} »`);
+    toast(`${trad('Renommé en')} « ${nom} »`);
   });
 
   document.addEventListener('change', e => {
@@ -13906,11 +14024,11 @@ function bindGlobal() {
     if (!nouveau || nouveau === ancien) { champ.value = ancien; return; }
     if (!renameExpenseCategory(ancien, nouveau)) {
       champ.value = ancien;
-      toast('Ce nom est déjà pris');
+      toast(trad('Ce nom est déjà pris'));
       return;
     }
     Store.save(); render();
-    toast(`« ${ancien} » renommée « ${nouveau} »`);
+    toast(`« ${ancien} » ${trad('renommée')} « ${nouveau} »`);
   });
 
   document.addEventListener('change', e => {
@@ -14318,7 +14436,7 @@ async function lookupSymbol(i) {
     const r = await fetch(`${Quotes.BASE}/api/quotes?symbols=${encodeURIComponent(sym)}`, { cache: 'no-store' });
     const q = (await r.json()).quotes?.[0];
     if (!q || q.error || !q.price) {
-      toast(`Symbole « ${sym} » introuvable`);
+      toast(`${trad('Symbole')} « ${sym} » ${trad('introuvable')}`);
       return;
     }
     p.symbol = q.symbol || sym;
@@ -14330,7 +14448,7 @@ async function lookupSymbol(i) {
     render();
     toast(`${q.name || p.symbol} · ${q.price} ${q.currency || ''}`);
   } catch (e) {
-    toast('Recherche impossible : ' + e.message);
+    toast(trad('Recherche impossible :') + ' ' + e.message);
   }
 }
 
@@ -14440,7 +14558,7 @@ function applyField(f) {
       refreshAccounts();
       try { localStorage.setItem(cleStockage(), JSON.stringify(Store.state)); } catch (e) {}
       render();
-      toast('Données à jour depuis le cloud');
+      toast(trad('Données à jour depuis le cloud'));
     } else if (cloud.newer) {
       /* Vrai conflit : cet appareil porte des modifications jamais envoyées
          et le cloud a bougé de son côté. Là seulement, on demande. */
