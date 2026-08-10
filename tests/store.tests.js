@@ -8871,7 +8871,9 @@ suite('Une fiche de ligne garde son ordre', () => {
 
   test('les six lignes se rendent toujours, dans le même ordre', () => {
     const bloc = blocIdentite();
-    const rendus = [...bloc.matchAll(/ligne\('([^']+)'/g)].map(x => x[1]);
+    /* Les intitules passent par trad() depuis le chantier des deux langues :
+       la clef reste la phrase francaise, c'est elle que ce test compare. */
+    const rendus = [...bloc.matchAll(/ligne\((?:trad\()?'([^']+)'/g)].map(x => x[1]);
     eq(rendus.join(' | '), ATTENDUS.join(' | '),
       'les intitulés doivent tous être là, dans cet ordre : c’est ce qui permet '
       + 'de savoir où regarder sans lire');

@@ -10343,7 +10343,7 @@ function askSale(indexInitial) {
     const ps = Store.state.positions;
     if (!ps.length) { toast('Aucune ligne à vendre'); resolve(null); return; }
 
-    $('#modalTitle').textContent = 'Vendre une ligne';
+    $('#modalTitle').textContent = trad('Vendre une ligne');
     $('#modalSub').textContent = 'La plus-value est calculée sur ton prix de revient';
     $('#modalBody').innerHTML = `
       <div class="modal-champs">
@@ -10488,17 +10488,17 @@ function askPosition(index) {
            fiche en saisie, et deux champs sur le meme chemin se disputaient la
            frappe. -->
       <div class="modal-champs champs-cote" style="margin:14px 0 4px">
-        <div class="field"><label>Quantité</label>
+        <div class="field"><label>${trad('Quantité')}</label>
           <input type="number" step="any" data-path="positions.${index}.qty" value="${p.qty ?? ''}"></div>
-        <div class="field"><label>Prix de revient (${esc(dev)})</label>
+        <div class="field"><label>${trad('Prix de revient')} (${esc(dev)})</label>
           <input type="number" step="any" data-path="positions.${index}.buyPrice" value="${p.buyPrice ?? ''}"></div>
       </div>
-      <p class="hint" style="margin:0 0 12px">soit ${fmtEUR(posInvested(p))} investis</p>
+      <p class="hint" style="margin:0 0 12px">${trad('soit')} ${fmtEUR(posInvested(p))} ${trad('investis')}</p>
 
       ${(() => {
         const emetteur = issuerOf(p), pays = isinCountry(p.isin), r = rangePosition(p);
-        const TYPES = { ETF: 'Fonds coté (ETF)', EQUITY: 'Action', MUTUALFUND: 'Fonds',
-                        CRYPTOCURRENCY: 'Crypto', CURRENCY: 'Devise', INDEX: 'Indice' };
+        const TYPES = { ETF: trad('Fonds coté (ETF)'), EQUITY: trad('Action'), MUTUALFUND: trad('Fonds'),
+                        CRYPTOCURRENCY: 'Crypto', CURRENCY: trad('Devise'), INDEX: trad('Indice') };
         return `
       <!-- « kv-texte » : cette liste porte de la prose, pas des montants.
            « HANetf ICAV - Future of Defence UCITS ETF - Accumulating » ne peut
@@ -10536,8 +10536,8 @@ function askPosition(index) {
       <!-- Six lignes, toujours les memes, dans cet ordre : c'est ce qui permet
            d'apprendre ou vit un chiffre. -->
       <dl class="kv kv-texte">
-        ${ligne('Nature', p.kind ? esc(TYPES[p.kind] || p.kind)
-          : '<span class="muted">inconnue, le cours ne l’a pas dit</span>')}
+        ${ligne(trad('Nature'), p.kind ? esc(TYPES[p.kind] || p.kind)
+          : `<span class="muted">${trad('inconnue, le cours ne l’a pas dit')}</span>`)}
         <!-- « Non renseigne » ne vaut que la ou quelque chose manque vraiment.
 
              « Je veux eviter des trucs non renseignes, c'est pas pro. » Une
@@ -10553,17 +10553,17 @@ function askPosition(index) {
         ${ligne('ISIN', p.isin
           ? `<span style="font-family:var(--font-nb)">${esc(p.isin)}</span>`
           : (assetClassDe(p) === 'crypto' || p.manual
-             ? '<span class="muted">sans objet</span>'
-             : `<span class="muted">à copier depuis ton courtier${aide(trad("Aucune source gratuite ne donne l’ISIN à partir d’un symbole : Yahoo ne le publie pas, et OpenFIGI ne fait que le chemin inverse. Ton relevé de courtier le porte, et le bouton « Vérifier » plus bas confirme qu’il désigne le bon titre."))}</span>`))}
-        ${ligne('Pays d’émission', pays
+             ? `<span class="muted">${trad('sans objet')}</span>`
+             : `<span class="muted">${trad('à copier depuis ton courtier')}${aide(trad("Aucune source gratuite ne donne l’ISIN à partir d’un symbole : Yahoo ne le publie pas, et OpenFIGI ne fait que le chemin inverse. Ton relevé de courtier le porte, et le bouton « Vérifier » plus bas confirme qu’il désigne le bon titre."))}</span>`))}
+        ${ligne(trad('Pays d’émission'), pays
           ? `${esc(pays)} <span class="muted">${esc(String(p.isin).slice(0, 2))}</span>`
           : (assetClassDe(p) === 'crypto' || p.manual
-             ? '<span class="muted">sans objet</span>'
-             : '<span class="muted">se déduit de l’ISIN</span>'))}
-        ${ligne('Place', marche
+             ? `<span class="muted">${trad('sans objet')}</span>`
+             : `<span class="muted">${trad('se déduit de l’ISIN')}</span>`))}
+        ${ligne(trad('Place'), marche
           ? `${esc(p.exchange || p.symbol || '')} <span class="muted">${marche.label}</span>`
-          : (p.manual ? '<span class="muted">saisie à la main</span>'
-                      : '<span class="muted">non résolue</span>'))}
+          : (p.manual ? `<span class="muted">${trad('saisie à la main')}</span>`
+                      : `<span class="muted">${trad('non résolue')}</span>`))}
         <!-- Le nom officiel se recopie d'un geste.
 
              Le nom vient deja de la recherche ou de l'ISIN a la creation : on
@@ -10574,15 +10574,15 @@ function askPosition(index) {
              ailleurs ici.
              (Pas de tiret cadratin ici : un controle balaye ce bloc a la
              recherche du texte affiche, et ne distingue pas le commentaire.) -->
-        ${ligne('Nom officiel', p.longName
+        ${ligne(trad('Nom officiel'), p.longName
           ? (p.longName === p.name
-             ? '<span class="muted">identique au nom de la ligne</span>'
+             ? `<span class="muted">${trad('identique au nom de la ligne')}</span>`
              : `${esc(p.longName)} <button type="button" class="btn xs ghost" id="posNomOfficiel"
-                  title="${trad('Recopier ce nom dans le nom de la ligne')}">Utiliser</button>`)
-          : '<span class="muted">arrive avec le cours</span>')}
-        ${ligne('Émetteur', emetteur
+                  title="${trad('Recopier ce nom dans le nom de la ligne')}">${trad('Utiliser')}</button>`)
+          : `<span class="muted">${trad('arrive avec le cours')}</span>`)}
+        ${ligne(trad('Émetteur'), emetteur
           ? `${esc(emetteur)} <span class="muted">${trad('d’après le nom du fonds')}</span>`
-          : '<span class="muted">se déduit du nom d’un fonds</span>')}
+          : `<span class="muted">${trad('se déduit du nom d’un fonds')}</span>`)}
       </dl>
 
       <dl class="kv" style="margin-top:12px">
@@ -10606,13 +10606,13 @@ function askPosition(index) {
              « le titre n'a pas bouge ». Elle dit maintenant que notre cours
              date d'avant minuit, et de quand exactement : c'est la seule chose
              que l'application sache vraiment de la journee. -->
-        ${jour && !jour.depuisAchat ? ligne("Aujourd'hui", jour.horsSeance
+        ${jour && !jour.depuisAchat ? ligne(trad('Aujourd’hui'), jour.horsSeance
             ? `<span class="muted">${trad('hors séance')}</span>`
-              + (num(p.quoteTime) ? ` <span class="muted">cours ${esc(fmtCoursQuand(p.quoteTime))}</span>` : '')
+              + (num(p.quoteTime) ? ` <span class="muted">${trad('cours')} ${esc(fmtCoursQuand(p.quoteTime))}</span>` : '')
             : `<span class="${cls(jour.eur)}">${fmtSignedPct(jour.pct, 2)}</span>`
               + ` <span class="muted">${fmtSigned(jour.eur)}</span>`) : ''}
-        ${ligne(`Plus / moins-value${jour?.depuisAchat
-            ? '<span class="sub">achetée aujourd’hui : c’est aussi ton résultat du jour</span>' : ''}`,
+        ${ligne(`${trad('Plus / moins-value')}${jour?.depuisAchat
+            ? `<span class="sub">${trad('achetée aujourd’hui : c’est aussi ton résultat du jour')}</span>` : ''}`,
             `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
             + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
         ${(() => {
@@ -10637,24 +10637,24 @@ function askPosition(index) {
           if (!debut) return '';
           const jours = (Date.now() - Date.parse(debut + 'T12:00:00')) / 86400000;
           if (!Number.isFinite(jours) || jours < 0) return '';
-          return ligne('Détenue depuis<span class="sub">ton premier achat sur cette ligne</span>',
-            `<span class="muted">${jours < 31 ? `${Math.round(jours)} jour${Math.round(jours) > 1 ? 's' : ''}`
+          return ligne(`${trad('Détenue depuis')}<span class="sub">${trad('ton premier achat sur cette ligne')}</span>`,
+            `<span class="muted">${jours < 31 ? `${Math.round(jours)} ${Math.round(jours) > 1 ? trad('jours') : trad('jour')}`
               : esc(fmtDuree(jours / 365.25))}</span>`);
         })()}
         <!-- Elle reste affichee sur une ligne achetee aujourd'hui : c'est un
              fait sur le titre, et c'est meme lui qui explique l'ecart entre ce
              qu'a fait le titre et ce qu'a fait ton argent. -->
-        ${jour && num(jour.prev) ? ligne('Clôture de la veille', fmtCur(jour.prev, dev)) : ''}
+        ${jour && num(jour.prev) ? ligne(trad('Clôture de la veille'), fmtCur(jour.prev, dev)) : ''}
         ${num(p.dayLow) && num(p.dayHigh)
-          ? ligne('Séance', `${fmtCur(p.dayLow, dev)} <span class="muted">à</span> ${fmtCur(p.dayHigh, dev)}`) : ''}
-        ${num(p.volume) ? ligne('Volume du jour', num(p.volume).toLocaleString(locale()) + ' titres') : ''}
+          ? ligne(trad('Séance'), `${fmtCur(p.dayLow, dev)} <span class="muted">${trad('à')}</span> ${fmtCur(p.dayHigh, dev)}`) : ''}
+        ${num(p.volume) ? ligne(trad('Volume du jour'), num(p.volume).toLocaleString(locale()) + ' ' + trad('titres')) : ''}
         <!-- Elle ne disait pas sur quoi elle porte, et la meme ligne s'affiche
              a 3,12 % ici pour 3,6 % en « Poids » sur l'accueil. Les deux sont
              justes : ce ne sont pas les memes bases, et ce n'est pas un defaut
              tant que chacune l'annonce. Celle-ci compte la tresorerie du
              courtier, comme les cibles ; « Poids » ne compte que ce qui cote,
              parce qu'il sert a dire si un mouvement du jour pese. -->
-        ${ligne(`Part du portefeuille${aide(trad("Sur tes comptes d’investissement, titres et trésorerie qui y attend d’être placée : la même base que tes cibles de répartition. La colonne « Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour une même ligne, et tous les deux justes."))}`,
+        ${ligne(`${trad('Part du portefeuille')}${aide(trad("Sur tes comptes d’investissement, titres et trésorerie qui y attend d’être placée : la même base que tes cibles de répartition. La colonne « Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour une même ligne, et tous les deux justes."))}`,
             fmtPct(stockTotals().balance ? posValue(p) / stockTotals().balance * 100 : 0))}
       </dl>
 
@@ -10666,8 +10666,8 @@ function askPosition(index) {
            passerelle saura interroger la repartition sectorielle d'un ETF,
            c'est elle qui remplira ce champ, pas un menu. -->
       <dl class="kv" style="margin-top:12px">
-        <dt>Classement<span class="sub">${trad('déduit automatiquement')}</span></dt>
-        <dd>${esc(ZONES[zoneDe(p)])} <span class="muted">·</span> ${esc(SECTEURS[secteurDe(p)])}</dd>
+        <dt>${trad('Classement')}<span class="sub">${trad('déduit automatiquement')}</span></dt>
+        <dd>${esc(trad(ZONES[zoneDe(p)]))} <span class="muted">·</span> ${esc(trad(SECTEURS[secteurDe(p)]))}</dd>
       </dl>
 
       ${r ? `<div class="an52">
@@ -10677,21 +10677,21 @@ function askPosition(index) {
         </div>
         <div class="an52-piste"><i style="left:${r.pct.toFixed(1)}%"></i></div>
         <div class="an52-pied muted">
-          ${r.pct >= 90 ? 'proche de son plus haut de l’année'
-            : r.pct <= 10 ? 'proche de son plus bas de l’année'
-            : `à ${Math.round(r.pct)} % de l’amplitude annuelle`}
+          ${r.pct >= 90 ? trad('proche de son plus haut de l’année')
+            : r.pct <= 10 ? trad('proche de son plus bas de l’année')
+            : `${trad('à')} ${Math.round(r.pct)} % ${trad('de l’amplitude annuelle')}`}
         </div>
       </div>` : ''}`;
       })()}
 
       <div class="modal-champs" style="margin-top:12px">
-        <div class="field"><label>Nom${aide(
-          `${NOM_LIGNE_MAX} caractères au plus : ce nom se lit dans les colonnes de `
-          + `Marchés, où la place est comptée. Le nom officiel du titre reste plus `
-          + `haut sur cette fiche, et le bouton qui le suit le recopie ici.`)}</label>
+        <div class="field"><label>${trad('Nom')}${aide(
+          `${NOM_LIGNE_MAX} ${trad('caractères au plus : ce nom se lit dans les colonnes de '
+          + 'Marchés, où la place est comptée. Le nom officiel du titre reste plus '
+          + 'haut sur cette fiche, et le bouton qui le suit le recopie ici.')}`)}</label>
           <input data-path="positions.${index}.name" maxlength="${NOM_LIGNE_MAX}"
                  value="${esc(p.name || '')}"></div>
-        <div class="field"><label>Compte</label>
+        <div class="field"><label>${trad('Compte')}</label>
           <select data-path="positions.${index}.account">
             ${accountsWhere(a => a.holdings).map(a =>
               `<option value="${a.id}" ${a.id === p.account ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
@@ -10700,31 +10700,31 @@ function askPosition(index) {
           <select data-path="positions.${index}.assetClass">
             ${OPTIONS_CLASSE.map(([v, l]) => `<option value="${v}" ${v === assetClassDe(p) ? 'selected' : ''}>${esc(l)}</option>`).join('')}
           </select></div>
-        <div class="field"><label>Date d’achat${aide(DATE_ACHAT_AIDE)}</label>
+        <div class="field"><label>${trad('Date d’achat')}${aide(DATE_ACHAT_AIDE)}</label>
           <input type="date" data-path="positions.${index}.dateAchat" value="${esc(p.dateAchat || '')}"></div>
-        <div class="field"><label>Nature${aide(trad("Un fonds répartit le risque sur des centaines de lignes, un titre en direct le concentre sur une société. La classe d'actif ne le dit pas (un MSCI World et une action Meta sont tous deux des actions), et c'est pourtant ce qui distingue un socle d'un pari. Déduit de l'instrument, corrigeable ici."))}</label>
+        <div class="field"><label>${trad('Nature')}${aide(trad("Un fonds répartit le risque sur des centaines de lignes, un titre en direct le concentre sur une société. La classe d'actif ne le dit pas (un MSCI World et une action Meta sont tous deux des actions), et c'est pourtant ce qui distingue un socle d'un pari. Déduit de l'instrument, corrigeable ici."))}</label>
           <select data-path="positions.${index}.nature">
-            <option value="" ${!p.nature ? 'selected' : ''}>Auto, ${esc(NATURES[natureDe({ ...p, nature: '' })])}</option>
+            <option value="" ${!p.nature ? 'selected' : ''}>Auto, ${esc(trad(NATURES[natureDe({ ...p, nature: '' })]))}</option>
             ${Object.entries(NATURES).map(([v, l]) =>
-              `<option value="${v}" ${p.nature === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+              `<option value="${v}" ${p.nature === v ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}
           </select></div>
         <!-- Le role manquait ici : depuis que le tableau cede la place a une
              liste sur telephone, la fiche est le seul endroit ou classer une
              ligne, et il faut donc y trouver les quatre reglages. -->
-        <div class="field"><label>Rôle</label>
+        <div class="field"><label>${trad('Rôle')}</label>
           <select data-path="positions.${index}.role">
-            ${OPTIONS_ROLE.map(([v, l]) => `<option value="${v}" ${v === roleDe(p) ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+            ${OPTIONS_ROLE.map(([v, l]) => `<option value="${v}" ${v === roleDe(p) ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}
           </select></div>
 
-        <div class="field"><label>Cours (${esc(dev)})</label>
+        <div class="field"><label>${trad('Cours')} (${esc(dev)})</label>
           <input type="number" step="any" data-path="positions.${index}.price" value="${p.price ?? ''}"></div>
         <!-- La valeur calculee ou saisie. Cette bascule n'existait que dans le
              tableau de quinze colonnes, sous la forme d'une case a cocher
              « man. » : en cachant ce tableau, elle devenait inatteignable. -->
-        <div class="field"><label>Valeur${aide(trad("Par défaut, la valeur d’une ligne est quantité × cours, et le cours se rafraîchit tout seul. « Saisie à la main » sert aux lignes qu’aucune place ne cote : une part de société, un contrat, un actif que tu valorises toi-même. Le cours cesse alors d’être interrogé."))}</label>
+        <div class="field"><label>${trad('Valeur')}${aide(trad("Par défaut, la valeur d’une ligne est quantité × cours, et le cours se rafraîchit tout seul. « Saisie à la main » sert aux lignes qu’aucune place ne cote : une part de société, un contrat, un actif que tu valorises toi-même. Le cours cesse alors d’être interrogé."))}</label>
           <select data-path="positions.${index}.manual" data-type="bool">
-            <option value="false" ${p.manual ? '' : 'selected'}>Calculée, quantité × cours</option>
-            <option value="true" ${p.manual ? 'selected' : ''}>Saisie à la main</option>
+            <option value="false" ${p.manual ? '' : 'selected'}>${trad('Calculée, quantité × cours')}</option>
+            <option value="true" ${p.manual ? 'selected' : ''}>${trad('Saisie à la main')}</option>
           </select></div>
         <!-- Verifier un ISIN, c'est deux questions : est-il bien forme, et
              designe-t-il le bon titre. La premiere se repond hors ligne, la clé
@@ -10739,11 +10739,11 @@ function askPosition(index) {
         <div class="field"><label>ISIN
             <button type="button" class="btn xs ghost" id="posIsinVerif"
                     style="margin-left:8px"
-                    title="${trad('Vérifier la clé de contrôle, puis à quel titre ce code correspond')}">Vérifier</button></label>
+                    title="${trad('Vérifier la clé de contrôle, puis à quel titre ce code correspond')}">${trad('Vérifier')}</button></label>
           <input data-path="positions.${index}.isin" value="${esc(p.isin || '')}"
                  maxlength="12" style="text-transform:uppercase">
           <p class="hint" id="posIsinAvis" style="margin:8px 0 0"></p></div>
-        <div class="field"><label>Symbole${(p.isin || '').trim() ? `
+        <div class="field"><label>${trad('Symbole')}${(p.isin || '').trim() ? `
             <button type="button" class="btn xs ghost" data-action="resolve-row" data-i="${index}"
                     style="margin-left:8px"
                     title="${trad('Remplacer le symbole par celui que désigne l\'ISIN')}">${trad('↻ Depuis l\'ISIN')}</button>` : ''}</label>
@@ -10768,9 +10768,9 @@ function askPosition(index) {
            bouton coûte une plus-value qui n'apparaîtra jamais nulle part. -->
       <div class="fiche-danger">
         <button type="button" class="btn ghost danger" id="posDelete">${trad('Supprimer cette ligne')}</button>
-        <p class="hint">Elle quitte le portefeuille sans passer par une vente : rien
-          n’est encaissé, et aucune plus-value n’entre au journal. Pour solder en
-          encaissant, c’est « Vendre ».</p>
+        <p class="hint">${trad('Elle quitte le portefeuille sans passer par une vente : rien '
+          + 'n’est encaissé, et aucune plus-value n’entre au journal. Pour solder en '
+          + 'encaissant, c’est « Vendre ».')}</p>
       </div>`;
     /* « Enregistrer » ne sauvegarde rien de plus : chaque frappe est deja ecrite,
        et c'est le probleme — rien ne le disait. Le bouton rafraichit la fiche sur
@@ -10778,8 +10778,8 @@ function askPosition(index) {
        quantite, et un message confirme. On reste sur la ligne : verifier sa
        correction ne doit pas demander de la rouvrir. */
     $('#modalFoot').innerHTML =
-      `<button class="btn ghost" id="posSell" type="button">− Vendre</button>
-       <button class="btn ghost" id="posBuy" type="button">+ Acheter</button>
+      `<button class="btn ghost" id="posSell" type="button">− ${trad('Vendre')}</button>
+       <button class="btn ghost" id="posBuy" type="button">+ ${trad('Acheter')}</button>
        <span class="spacer"></span>
        <button class="btn" id="posSave" type="button">${trad('Enregistrer')}</button>
        <button class="btn ghost" id="posOk" type="button">${trad('Fermer')}</button>`;
@@ -10834,7 +10834,7 @@ function askPosition(index) {
       champ.value = String(p.longName || '').slice(0, NOM_LIGNE_MAX).trim();
       champ.dispatchEvent(new Event('change', { bubbles: true }));
       champ.focus();
-      toast('Nom officiel repris, à enregistrer');
+      toast(trad('Nom officiel repris, à enregistrer'));
     };
     /* La confirmation est ici, avant la fermeture, parce que c'est ici qu'on
        peut encore nommer la ligne et son montant. La suppression, elle, se fait
