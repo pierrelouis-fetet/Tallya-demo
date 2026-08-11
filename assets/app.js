@@ -1684,18 +1684,16 @@ function viewPerformance() {
              de chaque ligne annonce depuis combien de temps elle est detenue —
              la duree comme un fait, pas comme un taux. -->
       </dl>
-      ${(() => {
-        const sansDate = Store.state.positions.filter(p => posValue(p) > 0 && !p.dateAchat).length;
-        if (!sansDate) return '';
-        /* La relance ne parle plus que de l'ecart du jour, seul calcul qui
-           depende encore de cette date : une ligne prise ce matin porterait la
-           baisse que le titre avait deja subie avant l'achat, et rien ne le
-           dirait. C'est le defaut qui a coute la soiree du 5 aout. */
-        return `<p class="hint" style="margin:12px 0 0">
-          ${sansDate} ${sansDate > 1
-            ? trad('lignes n’ont pas de date d’achat : leur écart du jour suppose que tu les détenais hier soir. La date se renseigne dans la fiche de la ligne.')
-            : trad('ligne n’a pas de date d’achat : son écart du jour suppose que tu la détenais hier soir. La date se renseigne dans la fiche de la ligne.')}</p>`;
-      })()}
+      <!-- Trois lignes de prose vivaient ici, sous la colonne de chiffres, pour
+           reserver l'ecart du jour : « ces lignes n'ont pas de date d'achat, leur
+           ecart du jour suppose que tu les detenais hier soir ».
+
+           Elles sont parties, et rien n'est perdu. La reserve etait juste, mais
+           posee sur la mauvaise carte : celle-ci montre la plus-value latente,
+           qui ne depend d'aucune date. L'ecart du jour s'affiche ailleurs, et sa
+           colonne « Var. » porte deja la meme reserve dans son aide, a l'endroit
+           exact ou le chiffre concerne se lit. Une reserve se dit une fois, la ou
+           elle porte. -->
     </div>
     <div class="card">
       <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
@@ -15212,7 +15210,29 @@ function applyField(f) {
     } else if (cloud.empty) {
       await CloudSync.push({ force: true });   // premier envoi
     }
-    if (cloud.available) window.addEventListener('pagehide', () => CloudSync.flushOnUnload());
+    /* Deux evenements, et c'est le second qui repare la perte.
+
+       `pagehide` ne suffit pas sur telephone : verrouiller l'ecran ou passer a
+       une autre application ne decharge pas la page, elle est gelee puis
+       restauree. L'evenement n'arrive donc jamais, le minuteur d'envoi differe ne
+       tire pas non plus — un onglet gele n'execute rien — et la modification
+       reste dans le seul `localStorage`. Elle se perd au premier appareil qui
+       pousse ensuite.
+
+       `visibilitychange` vers `hidden` est le seul signal fiable de ce
+       passage-la, sur iOS comme sur Android. C'est le dernier moment ou du code
+       tourne encore, donc le dernier ou l'on peut ecrire.
+
+       Les deux restent branches : `pagehide` couvre la fermeture d'onglet sur
+       ordinateur, ou la page peut disparaitre sans jamais devenir cachee.
+       `flushOnUnload` ne fait rien quand le corps n'a pas change, donc le double
+       appel est sans effet. */
+    if (cloud.available) {
+      window.addEventListener('pagehide', () => CloudSync.flushOnUnload());
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) CloudSync.flushOnUnload();
+      });
+    }
   } catch (e) { console.warn('Synchro cloud indisponible', e); }
 
 

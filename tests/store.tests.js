@@ -12308,6 +12308,69 @@ suite('Le versement mensuel dit où il va', () => {
 });
 
 /* ------------------------------------------------------------------
+   Une modification ne se perd pas quand l ecran se verrouille
+   ------------------------------------------------------------------ */
+suite('Une modification ne se perd pas quand l’écran se verrouille', () => {
+
+  /* « Regulierement ça ne sauvegarde pas sur le cloud et j'ai une version
+     anterieure en rouvrant. » Le scenario etait deja decrit dans `cloudsync.js`,
+     et son dernier maillon manquait : l'envoi differe s'armait, l'ecran se
+     verrouillait avant, et rien ne partait.
+
+     Un onglet gele n'execute aucun minuteur. Le seul moment ou du code tourne
+     encore est le passage en arriere-plan, et sur telephone il ne se signale pas
+     par `pagehide` — la page n'est pas dechargee, elle est mise de cote puis
+     restauree — mais par `visibilitychange` vers `hidden`. */
+
+  test('le passage en arrière-plan écrit ce qui reste en attente', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/document\.addEventListener\('visibilitychange', \(\) => \{\s*if \(document\.hidden\) CloudSync\.flushOnUnload\(\);/.test(src),
+      'sans cet écouteur, verrouiller l’écran perd la dernière saisie');
+    /* `pagehide` reste : sur ordinateur une page peut disparaitre sans jamais
+       devenir cachee. */
+    vrai(/addEventListener\('pagehide', \(\) => CloudSync\.flushOnUnload\(\)\)/.test(src),
+      'et la fermeture d’onglet reste couverte');
+  });
+
+  test('le délai d’envoi laisse une fenêtre courte', () => {
+    /* Huit secondes regroupaient bien les modifications, et ouvraient une
+       fenetre de huit secondes ou tout se perdait. Le regroupement tient encore
+       a 2,5 s : une saisie au clavier ne produit qu'un envoi. */
+    const cs = lireSource('assets/cloudsync.js');
+    const m = cs.match(/const WRITE_DELAY = (\d+);/);
+    vrai(m, 'le délai doit être trouvable');
+    vrai(+m[1] <= 3000, `délai de ${m[1]} ms : trop long pour un geste sur téléphone`);
+    vrai(+m[1] >= 1000, `délai de ${m[1]} ms : chaque frappe partirait séparément`);
+  });
+
+  test('le flush ne réenvoie pas deux fois le même état', () => {
+    /* L'ecran se cache, puis la page se decharge : deux appels a la suite. Le
+       corps envoye est retenu, donc le second ne fait rien — et le minuteur est
+       annule, pour qu'une page restauree ne repousse pas un etat deja parti. */
+    const cs = lireSource('assets/cloudsync.js');
+    const fn = cs.slice(cs.indexOf('function flushOnUnload'),
+                        cs.indexOf('function flushOnUnload') + 700);
+    vrai(/if \(payload === lastPayload\) return;/.test(fn),
+      'un état déjà envoyé ne repart pas');
+    vrai(/lastPayload = payload;/.test(fn),
+      'et le beacon n’ayant pas de réponse, c’est ici que le repère se pose');
+    vrai(/clearTimeout\(timer\)/.test(fn),
+      'le minuteur armé est annulé : une page restaurée ne repousse rien');
+  });
+
+  test('une réserve se dit une fois, là où elle porte', () => {
+    /* Trois lignes de prose reservaient l'ecart du jour sous la carte de la
+       plus-value latente, qui ne depend d'aucune date d'achat. La colonne « Var. »
+       porte la meme reserve dans son aide, a l'endroit ou le chiffre se lit. */
+    const src = lireSource('assets/app.js');
+    vrai(!/lignes n’ont pas de date d’achat/.test(src),
+      'la mention a quitté la carte de la plus-value latente');
+    vrai(/tu ne la détenais pas hier soir/.test(src),
+      'et la réserve reste dite dans l’aide de la colonne concernée');
+  });
+});
+
+/* ------------------------------------------------------------------
    Un seul signe moins dans toute l application
    ------------------------------------------------------------------ */
 suite('Un seul signe moins', () => {

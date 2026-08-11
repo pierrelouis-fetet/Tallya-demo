@@ -9,7 +9,13 @@
 
 const CloudSync = (() => {
 
-  const WRITE_DELAY = 8000;     // on regroupe généreusement les modifications
+  /* Deux secondes et demie, et non huit.
+     Huit secondes regroupent bien les modifications, mais elles ouvrent une
+     fenetre ou tout se perd : on corrige un montant, on verrouille l'ecran, et
+     le telephone gele l'onglet avant que le minuteur n'ait tire. Le regroupement
+     tient encore a 2,5 s — une saisie au clavier ne produit qu'un envoi — et la
+     fenetre de perte est trois fois plus courte. */
+  const WRITE_DELAY = 2500;
 
   /* Horodatage du dernier état qu'on sait aligné avec le cloud. Il survit au
      rechargement : sans lui, on ne pourrait pas distinguer « cet appareil a
@@ -152,14 +158,28 @@ const CloudSync = (() => {
     return { available: true, ready: true, user, aEnvoyer: !aligne && !!localAt };
   }
 
-  /* Écrit ce qui reste en attente quand on ferme l'onglet. */
+  /* Écrit ce qui reste en attente quand l'onglet s'en va.
+
+     `sendBeacon` et non `fetch` : le navigateur le prend en charge et le poste
+     apres la fermeture, ce qu'une requete ordinaire ne survit pas.
+
+     Le minuteur d'envoi differe est annule au passage : sans cela, une page
+     restauree depuis le cache d'arriere-plan garde un minuteur arme sur un etat
+     deja envoye, et repousse le meme corps une seconde fois. Sans consequence
+     sur les donnees, mais une ecriture pour rien.
+
+     `lastPayload` est mis a jour tout de suite : le beacon part sans reponse a
+     attendre, donc rien d'autre ne peut le faire. Deux passages a la suite —
+     l'ecran se cache, puis la page se decharge — n'envoient ainsi qu'une fois. */
   function flushOnUnload() {
     if (!available) return;
     const payload = JSON.stringify(Store.state);
     if (payload === lastPayload) return;
+    clearTimeout(timer);
     try {
       navigator.sendBeacon('/api/state',
         new Blob([payload], { type: 'application/json' }));
+      lastPayload = payload;
     } catch (e) { /* rien à faire de plus au moment de la fermeture */ }
   }
 
