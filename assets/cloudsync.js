@@ -50,7 +50,35 @@ const CloudSync = (() => {
     return r.json();
   }
 
-  async function push({ force = false } = {}) {
+  /* Un seul envoi en vol a la fois.
+
+     Rien ne l'empechait, et l'envoi immediat a chaque geste rendait le defaut
+     atteignable : deux clics rapproches lançaient deux `PUT` concurrents, et
+     c'est le plus lent qui arrivait en dernier — donc potentiellement un etat
+     plus ancien, ecrit par-dessus le plus recent. Sur un reseau mobile ou les
+     latences varient d'un facteur trois, ce n'est pas une hypothese d'ecole.
+
+     Quand un envoi est deja parti, on ne l'annule pas : on note qu'il faudra
+     recommencer, et le `finally` s'en charge. Le dernier etat gagne toujours,
+     puisque `push()` relit `Store.state` a chaque tour. */
+  let enVol = null;
+  let aRejouer = false;
+  /* Quinze secondes : assez pour laisser passer une coupure de tunnel ou un
+     serveur qui tousse, assez peu pour que la modification ne dorme pas. */
+  const RETRY_DELAY = 15000;
+  let reessaiArme = false;
+
+  async function push(opts = {}) {
+    if (enVol) { aRejouer = true; return enVol; }
+    enVol = pushMaintenant(opts);
+    try { return await enVol; }
+    finally {
+      enVol = null;
+      if (aRejouer) { aRejouer = false; push(opts); }
+    }
+  }
+
+  async function pushMaintenant({ force = false } = {}) {
     if (!available) return { skipped: true };
     const payload = JSON.stringify(Store.state);
     if (!force && payload === lastPayload) return { skipped: true };
@@ -88,6 +116,20 @@ const CloudSync = (() => {
       return { ok: true };
     } catch (e) {
       status.error = e.message;
+      /* Un echec reseau n'etait suivi de rien : l'erreur se notait, et la
+         modification attendait la prochaine frappe ou la prochaine ouverture de
+         l'application. Corriger un montant dans un train, puis ranger son
+         telephone, suffisait a la laisser en arriere-plan pendant des heures.
+
+         Un seul reessai arme, et non une boucle : si le reseau est vraiment
+         coupe, c'est l'evenement `online` qui reprendra la main — insister
+         toutes les quinze secondes ne ferait que vider la batterie. Le repere
+         est pose avant l'attente, pour que deux echecs de suite n'arment pas
+         deux minuteurs. */
+      if (!reessaiArme) {
+        reessaiArme = true;
+        setTimeout(() => { reessaiArme = false; push(); }, RETRY_DELAY);
+      }
       return { error: e.message };
     } finally {
       status.pushing = false;

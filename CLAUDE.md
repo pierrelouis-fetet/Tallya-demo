@@ -235,6 +235,19 @@ personne réelle, aucune donnée de santé, jamais.
 Un chiffre réel commité ici part en ligne au push suivant, et un dépôt public
 ne se dépublie pas. Le fixture des tests est synthétique, et il doit le rester.
 
+**Les captures du README se regénèrent par `python captures.py`**, jamais à la
+main. Les quatre doivent montrer le même patrimoine : prises à des moments
+différents, elles se contredisaient de 918,83 € et un lecteur attentif en
+concluait que l'application compte mal. Le script pose la graine une fois, passe
+en anglais, et prend les quatre images d'un seul tenant. Il faut que le serveur
+tourne (`python serve.py --port 8766 --no-browser`).
+
+Deux détails qui coûtent une heure si on les redécouvre : Chrome refuse la
+connexion de débogage sans `--remote-allow-origins`, et `--screenshot` ne suffit
+pas — il agrandit la fenêtre sans émuler l'appareil, donc les règles CSS de
+téléphone ne s'appliquent pas et le rendu déborde. C'est
+`Emulation.setDeviceMetricsOverride` qui donne ce qu'un téléphone affiche.
+
 **La graine est le jeu de démonstration**, et il n'en existe pas de second :
 `assets/demo.json` a vécu à côté d'elle, les deux ont divergé, le fichier est
 parti. C'est donc la graine qu'un visiteur voit au premier chargement, et

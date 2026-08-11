@@ -14587,7 +14587,11 @@ function bindGlobal() {
     const bloc = f.closest('[data-differe]');
     if (bloc) { bloc.dataset.differe = 'sale'; return; }
     applyField(f);
-    Store.save();
+    /* Le seul cas ou l'envoi au cloud se regroupe : taper « 12500 » produit cinq
+       de ces evenements, et une meme cle n'accepte qu'une ecriture par seconde.
+       Partout ailleurs — un bouton, une fenetre validee — l'envoi part tout de
+       suite, parce que le geste est fini. */
+    Store.save({ differe: true });
     marquerEcrit(f);
     renderSidebar();
     majApercu();                       // les totaux de la fenêtre suivent
@@ -14665,6 +14669,9 @@ function bindGlobal() {
     const bloc = f.closest('[data-differe]');
     if (bloc) { bloc.dataset.differe = 'sale'; return; }
     applyField(f);
+    /* `change` clot une saisie — une liste choisie, un champ quitte — donc rien a
+       regrouper : l'envoi part tout de suite. Seul `input`, caractere par
+       caractere, a besoin du delai. */
     Store.save();
     marquerEcrit(f);
     /* Une liste ne reprend pas le focus, et c'est un correctif.
@@ -15232,6 +15239,10 @@ function applyField(f) {
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) CloudSync.flushOnUnload();
       });
+      /* Le reseau revient : ce qui n'a pas pu partir repart. Un reessai arme
+         couvre le serveur qui tousse, celui-ci couvre le tunnel et le mode
+         avion — les deux cas ou insister n'aurait servi a rien. */
+      window.addEventListener('online', () => CloudSync.push());
     }
   } catch (e) { console.warn('Synchro cloud indisponible', e); }
 

@@ -6763,7 +6763,7 @@ suite('La vue des comptes suit sa source', () => {
        qu’on peut interroger, elle vit dans l’ordre des appels. */
     const src = lireSource('assets/store.js');
     vrai(src, 'le source doit être lisible');
-    const debut = src.indexOf('  save() {');
+    const debut = src.indexOf('  save(opts = {}) {');
     vrai(debut > 0, 'save() doit être trouvable');
     /* La fenêtre s’arrête au membre suivant, pas à un nombre de caractères :
        une borne en longueur se serait cassée à la première ligne de
@@ -8116,8 +8116,10 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
        caractère — et l'on marquait comme synchronisé un état plus récent que
        celui réellement transmis. */
     const src = sourceSync();
-    const push = src.match(/async function push\([\s\S]*?\n  \}/);
-    vrai(push, 'push() doit être trouvable');
+    /* `pushMaintenant` porte l'envoi lui-meme ; `push` ne fait plus que garder
+       qu'un seul soit en vol a la fois. C'est la premiere qu'on inspecte. */
+    const push = src.match(/async function pushMaintenant\([\s\S]*?\n  \}/);
+    vrai(push, 'pushMaintenant() doit être trouvable');
     /* Sans les commentaires : celui de cette fonction cite justement la ligne
        fautive pour expliquer pourquoi elle est partie, et le contrôle se serait
        fait prendre par la prose qui le justifie. */
@@ -9563,8 +9565,8 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
        a plusieurs endroits, et le premier trouve n'etait pas celui-ci. */
     const ancre = src.indexOf("const f = e.target.closest('[data-path]')");
     vrai(ancre > 0, 'l’écouteur des champs doit être trouvable');
-    const ecouteur = src.slice(ancre, ancre + 400);
-    vrai(/applyField\(f\);\s*Store\.save\(\);/.test(ecouteur),
+    const ecouteur = src.slice(ancre, ancre + 800);
+    vrai(/applyField\(f\);[\s\S]{0,450}?Store\.save\(/.test(ecouteur),
       'la fiche continue d’écrire à la frappe : le bouton confirme, il ne conditionne pas');
   });
 
@@ -9644,7 +9646,7 @@ suite('Une fiche se valide ou s’annule, et rien ne se saisit sans borne', () =
       'une fiche non modifiée se ferme sans rien demander');
     /* L'ecriture continue reste la regle. */
     const ancre = src.indexOf("const f = e.target.closest('[data-path]')");
-    vrai(/applyField\(f\);\s*Store\.save\(\);/.test(src.slice(ancre, ancre + 400)),
+    vrai(/applyField\(f\);[\s\S]{0,450}?Store\.save\(/.test(src.slice(ancre, ancre + 800)),
       'la fiche continue d’écrire à chaque frappe');
     /* L'instantane se prend au premier rendu d'une route, sinon la fiche se
        re-rend a chaque frappe et la photo serait toujours identique. */
@@ -12356,6 +12358,41 @@ suite('Une modification ne se perd pas quand l’écran se verrouille', () => {
       'et le beacon n’ayant pas de réponse, c’est ici que le repère se pose');
     vrai(/clearTimeout\(timer\)/.test(fn),
       'le minuteur armé est annulé : une page restaurée ne repousse rien');
+  });
+
+  test('un geste explicite part tout de suite, seule la frappe se regroupe', () => {
+    /* Chaque `save()` armait le minuteur : le clic sur « Enregistrer » — le geste
+       par lequel on dit « c'est bon » — attendait donc comme une frappe au
+       clavier, et c'est pendant cette attente que l'ecran se verrouillait.
+       Le defaut est desormais l'envoi immediat ; le regroupement se demande. */
+    const st = lireSource('assets/store.js');
+    vrai(/if \(opts\.differe\) CloudSync\.schedulePush\(\); else CloudSync\.push\(\);/.test(st),
+      'save() pousse tout de suite, sauf demande contraire');
+    vrai(/save\(opts = \{\}\) \{/.test(st), 'et la demande passe par un argument');
+    const src = lireSource('assets/app.js');
+    /* Un seul appelant demande le regroupement : l'ecouteur de frappe. */
+    const differes = src.match(/Store\.save\(\{ differe: true \}\)/g) || [];
+    eq(differes.length, 1,
+      'seule la saisie caractère par caractère se regroupe, et une seule fois');
+    /* `change` clot une saisie : il ne se regroupe pas. */
+    const surChange = src.slice(src.indexOf("document.addEventListener('change'"),
+                                src.indexOf("document.addEventListener('change'") + 500);
+    vrai(/Store\.save\(\);/.test(surChange) && !/differe: true/.test(surChange),
+      'un champ quitté ou une liste choisie partent tout de suite');
+  });
+
+  test('deux envois ne se croisent pas', () => {
+    /* Avec un envoi par geste, deux clics rapproches lançaient deux PUT
+       concurrents : le plus lent arrivait en dernier, donc un etat plus ancien
+       ecrit par-dessus le plus recent. */
+    const cs = lireSource('assets/cloudsync.js');
+    vrai(/if \(enVol\) \{ aRejouer = true; return enVol; \}/.test(cs),
+      'un envoi déjà parti n’est pas doublé');
+    vrai(/if \(aRejouer\) \{ aRejouer = false; push\(opts\); \}/.test(cs),
+      'et ce qui est arrivé pendant le vol repart ensuite');
+    /* `push()` relit l'etat a chaque tour, donc le dernier gagne toujours. */
+    vrai(/async function pushMaintenant\(\{ force = false \} = \{\}\) \{\s*if \(!available\)/.test(cs),
+      'l’envoi relit Store.state à chaque tour');
   });
 
   test('une réserve se dit une fois, là où elle porte', () => {

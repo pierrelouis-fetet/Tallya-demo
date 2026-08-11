@@ -1762,7 +1762,9 @@ const Store = {
   _prev: null,
   _lastPush: 0,
 
-  save() {
+  /* `differe` : regrouper l'envoi au cloud au lieu de le faire tout de suite.
+     Reserve a la frappe, ou cinq caracteres valent cinq appels. */
+  save(opts = {}) {
     /* La projection des comptes se refait ici, et non chez l'appelant.
 
        Une vue ne se rafraichit pas a la main a huit endroits : la source
@@ -1784,9 +1786,29 @@ const Store = {
       console.warn('Sauvegarde impossible', e);
     }
     /* Jamais de synchronisation en demonstration : les chiffres fictifs
-       ecraseraient le patrimoine reel stocke en ligne. C'est la seule ligne
-       qui separe une demo inoffensive d'une perte de donnees. */
-    if (typeof CloudSync !== 'undefined' && !modeDemo()) CloudSync.schedulePush();
+       ecraseraient le patrimoine reel stocke en ligne. C'est la seule condition
+       qui separe une demo inoffensive d'une perte de donnees, et elle passe avant
+       tout le reste — le choix entre envoi immediat et envoi regroupe ne se pose
+       que s'il y a quelque chose a envoyer. */
+
+    /* Le cloud reçoit tout de suite, sauf pendant une frappe.
+
+       C'était l'inverse : chaque `save()` armait un minuteur, donc un clic sur
+       « Enregistrer » attendait deux secondes et demie avant de partir. Le geste
+       le plus explicite de l'application — celui par lequel on dit « c'est
+       bon » — était traité comme une frappe au clavier, et c'est pendant cette
+       attente que l'écran se verrouillait.
+
+       Le regroupement garde sa raison, mais elle ne vaut que pour la saisie
+       caractère par caractère : taper « 12500 » produit cinq écritures, et
+       Cloudflare KV n'accepte qu'une écriture par seconde sur une même clé. Les
+       deux écouteurs de frappe passent donc `differe`, et eux seuls.
+
+       Le défaut est ainsi le comportement sûr, et le regroupement devient une
+       exception qu'on demande là où elle se justifie. */
+    if (typeof CloudSync !== 'undefined' && !modeDemo()) {
+      if (opts.differe) CloudSync.schedulePush(); else CloudSync.push();
+    }
   },
 
   canUndo() { return this._undo.length > 0; },
