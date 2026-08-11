@@ -4785,6 +4785,56 @@ function latentPnl() {
            winners: ps.filter(p => posPerfEur(p) > 0).length, count: ps.length };
 }
 
+/* --- l'ecart du non cote, tenu a part -----------------------------------
+   `latentPnl()` ne lit que `positions` : le non cote, l'immobilier et les biens
+   n'apparaissaient donc nulle part dans la page Performance, alors qu'ils
+   portent souvent la moitie d'un patrimoine et qu'un prix de revient y est
+   saisi.
+
+   Une carte a part, et jamais un total commun avec les titres cotes. La raison
+   n'est pas la prudence, c'est la nature du chiffre : une plus-value cotee est
+   **constatee** — un cours l'a fixee, un tiers la publie — tandis qu'une
+   plus-value non cotee est **declaree**, c'est le detenteur qui a ecrit la valeur
+   du jour. Les additionner produirait une performance dont une part est une
+   opinion, sans que rien ne le signale, et le jour ou une valorisation bouge de
+   5 000 EUR le total sauterait comme si un marche avait bouge.
+
+   D'ou `estimeLe` remonte ici : l'age de la valeur fait partie du chiffre. Une
+   plus-value declaree il y a trois ans ne vaut pas celle d'hier, et c'est la
+   seule difference que la carte peut montrer honnetement. */
+function latentNonCote() {
+  const lignes = [];
+  for (const c of comptesOuverts()) {
+    for (const l of lignesDe(c)) {
+      /* Les lignes de marche ont leur propre carte : `marche` les designe, et non
+         une liste de classes ecrite ici — un ETF immobilier est cote. */
+      if (l.marche) continue;
+      const invested = num(l.prixDeRevient);
+      if (!(invested > 0)) continue;          // sans prix paye, aucun ecart a dire
+      lignes.push({
+        nom: nomLignePlacement(l, c), compte: c, compteId: c.id, classe: l.classe,
+        value: num(l.valeur), invested,
+        pnl: num(l.valeur) - invested,
+        pct: (num(l.valeur) / invested - 1) * 100,
+        estimeLe: l.estimeLe || null,
+        /* Une estimation d'il y a plus d'un an : c'est le seuil que la cloche
+           emploie deja pour reclamer une revue, donc le meme ici. */
+        vieille: l.estimeLe ? ageAnnees(l.estimeLe) >= 1 : true,
+      });
+    }
+  }
+  lignes.sort((a, b) => b.value - a.value);
+  const value = lignes.reduce((s, x) => s + x.value, 0);
+  const invested = lignes.reduce((s, x) => s + x.invested, 0);
+  return {
+    lignes, value, invested, pnl: value - invested,
+    /* Meme regle que partout : un pourcentage n'existe que sur une base
+       positive. */
+    pct: invested > 0 ? (value / invested - 1) * 100 : null,
+    aRevoir: lignes.filter(x => x.vieille).length,
+  };
+}
+
 function salesYears() {
   const ans = [...new Set((Store.state.sales || []).map(v => String(v.date).slice(0, 4)))];
   return ans.sort();

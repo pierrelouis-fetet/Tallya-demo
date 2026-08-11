@@ -969,6 +969,26 @@ input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
       pourtant large comme un nom de societe. */
 .field input[maxlength] { max-width: 11em; }
 table .field :is(input, select) { max-width: none; }
+
+/* Dans une grille, un champ remplit sa cellule.
+
+   Les plafonds ci-dessus ont leur raison hors grille : un champ seul sur une
+   ligne n'a pas besoin d'une boite de 320 px pour « 1 000 € ». Mais dans une
+   rangee, ils donnaient quatre largeurs differentes sur une meme fiche — 117 px
+   pour un nombre, 160 pour un menu, 299 pour un texte serre, 364 pour un texte
+   libre — et rien ne s'alignait avec rien. C'est la grille qui decide de la
+   largeur d'une cellule ; le champ, lui, l'occupe.
+
+   Le resultat tient les deux : deux champs d'une `g-2` sont egaux, trois d'une
+   `g-3` aussi, et les rangees successives s'alignent puisqu'elles partagent la
+   largeur de la carte. Un champ hors grille garde son plafond.
+
+   `align-self` est remis a son defaut : `.field select` le passait a `start`,
+   ce qui laissait le menu a sa largeur naturelle meme avec `width: 100%`. */
+.grid > .field :is(input, select, textarea),
+.grid .field :is(input, select, textarea) {
+  max-width: none; width: 100%; align-self: stretch;
+}
 /* Pas de derogation pour le telephone : sous 375 px le conteneur est deja
    plus etroit que ces plafonds, ils ne mordent plus. Un champ de nombre y
    garde ses 9 em, ce qui reste une cible confortable et laisse voir le
@@ -5094,11 +5114,22 @@ details[open]::details-content { block-size: auto; }
   .champ-ecrit { animation: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
 }
 
-/* Les deux boutons d'une fiche : « Annuler » et « Enregistrer et fermer ».
+/* Une rangee de boutons de fiche : « Annuler » et « Enregistrer », puis
+   « Archiver » et « Clôturer ».
 
    Cote a cote et de largeur egale sur telephone, ou le pouce les atteint tous
    les deux ; l'action pleine a droite, la ou se trouve deja « Valider » dans
-   toutes les fenetres de l'application. */
+   toutes les fenetres de l'application.
+
+   Les deux rangees partagent cette geometrie, et c'est le correctif : la seconde
+   etait un `.row` de boutons `sm`, donc plus basse, alignee a gauche quand la
+   premiere l'etait a droite, et de largeurs dictees par la longueur des mots.
+   Rien ne s'alignait sur rien. La hierarchie se dit par le remplissage — plein,
+   fantome, rouge — jamais par la taille : deux tailles de bouton dans une meme
+   carte se lisent comme un oubli.
+
+   Sur grand ecran, les boutons gardent leur largeur naturelle mais restent
+   colles au meme bord, donc les deux rangees s'alignent par la droite. */
 .fiche-valider {
   display: flex; gap: 8px; margin-bottom: 10px;
 }

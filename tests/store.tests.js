@@ -10173,8 +10173,12 @@ suite('Un bien change de contenant, et garde un seul nom', () => {
     vrai(bloc.length > 500, 'le panneau des liquidités doit être trouvable');
     vrai(!/<details class="liq-groupe"/.test(bloc),
       'plus de <details> : il ne s’anime pas');
-    vrai(/<div class="cpt-pli ouvert"><div class="liq-corps">/.test(bloc),
-      'le pli animé est celui des groupes de comptes, pas une seconde mécanique');
+    /* « ouvert » ne s'ecrit plus en dur : le pli se relit dans l'etat, sinon le
+       premier rendu suivant — celui d'« Enregistrer » — redepliait tout. */
+    vrai(/<div class="cpt-pli \$\{compteReplies\.has\(cleLiqPli\(g\.aff\)\) \? '' : 'ouvert'\}"><div class="liq-corps">/.test(bloc),
+      'le pli animé est celui des groupes de comptes, et son état se relit');
+    vrai(/data-cle="\$\{esc\(cleLiqPli\(g\.aff\)\)\}"/.test(bloc),
+      'chaque groupe porte la clé sous laquelle son pli se mémorise');
     vrai(/data-action="liq-plier-tout"/.test(bloc) && /data-action="liq-plier"/.test(bloc),
       'un geste par groupe, et un pour les mener tous');
     /* Le bouton collectif vit sur la ligne du sous-titre, deja a moitie vide :
@@ -10565,7 +10569,7 @@ suite('Un bien de valeur compte partout', () => {
        studio a 120 000 EUR sous un titre « Placements non cotés », et un
        total plus petit que la somme de ses lignes. */
     const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('pe: () => ('), src.indexOf('investi: ('));
+    const bloc = src.slice(src.indexOf('  pe: () => {'), src.indexOf('  investi: () =>'));
     vrai(bloc.length > 100, 'l’aperçu du non coté doit être trouvable');
     vrai(/l\.classe === 'nonCote'/.test(bloc),
       'les lignes se filtrent sur la classe du total, pas sur le groupe d’écran');
@@ -10806,6 +10810,33 @@ suite('Enregistrer : une règle, deux familles', () => {
      Le releve mensuel etait le transfuge : douze champs comme sa jumelle des
      depenses, mais Enregistrer fermait et « Annuler » jetait la saisie sans
      une question. */
+
+  test('un pied de fenêtre tient sur une ligne à 375 px', () => {
+    /* Le pied est le seul endroit de l'application ou la place est comptee
+       d'avance : ses boutons se partagent la largeur a parts egales sur
+       telephone. Trois boutons font 107 px chacun, quatre en font 80, et un
+       libelle trop long s'y plie en trois lignes — la hauteur du pied double, ses
+       voisins s'etirent avec lui, et « Enregistrer » parait enorme. C'est ce qui
+       est arrive avec « Voir les autres mois ».
+
+       La mesure porte sur la somme des libelles d'un meme pied, pas sur chacun :
+       « Enregistrer la vente » tient tres bien face au seul « Annuler », et
+       l'interdire aurait ete arbitraire. Trente-six caracteres, marge comprise
+       pour l'anglais, qui est parfois plus long. */
+    const src = lireSource('assets/app.js');
+    const pieds = src.match(/\$\('#modalFoot'\)\.innerHTML =[\s\S]{0,900}?`;/g) || [];
+    vrai(pieds.length >= 4, `au moins quatre pieds attendus, ${pieds.length} trouvés`);
+    for (const pied of pieds) {
+      const libelles = [...pied.matchAll(/trad\('([^']+)'\)/g)].map(m => m[1])
+        /* Les libelles hors bouton — un titre, une aide — ne comptent pas. */
+        .filter(l => l.length < 30);
+      if (!libelles.length) continue;
+      const somme = libelles.reduce((s, l) => s + l.length, 0);
+      vrai(somme <= 36,
+        `pied trop chargé (${somme} caractères) : ${libelles.join(' + ')}`
+        + '\n  un libellé plus court, ou une ligne dédiée comme .btn-encore');
+    }
+  });
 
   test('toute fenêtre de saisie en série porte la paire, sans exception', () => {
     /* Le balayage qui manquait : la regle etait ecrite, mais verifiee sur un seul
@@ -11984,6 +12015,33 @@ suite('Une application vide dit quoi faire', () => {
       'les deux conditions se cumulent : ni capital, ni versement');
   });
 
+  test('un pli replié le reste après un enregistrement', () => {
+    /* Le geste ne basculait qu'une classe CSS : le premier rendu suivant
+       reconstruisait le balisage avec « ouvert » en dur, et tout se redepliait.
+       Le registre est celui des groupes de comptes, sous un prefixe : le meme
+       fait, une seule liste. */
+    /* `cleLiqPli` et `compteReplies` vivent dans app.js, que le harnais ne charge
+       pas : le controle se fait sur le source, comme les autres de cette famille.
+       Ce qui se verifie cote donnees, c'est que le registre existe bien dans
+       `meta` et qu'il traverse une relecture de l'etat. */
+    Fixture.poser();
+    Store.state.meta.comptesReplies = ['liq:courant'];
+    const copie = structuredClone(Store.state);
+    Store.state = copie;
+    vrai((Store.state.meta.comptesReplies || []).includes('liq:courant'),
+      'le repli vit dans meta, donc il traverse une relecture de l’état');
+    const src = lireSource('assets/app.js');
+    vrai(/const cleLiqPli = aff => `liq:\$\{aff\}`;/.test(src),
+      'la clé est préfixée, pour ne pas heurter un contenant du même nom');
+    vrai(/comptesReplies/.test(src),
+      'et elle partage le registre des groupes de comptes, pas une seconde liste');
+    const action = src.slice(src.indexOf("'liq-plier'(btn)"), src.indexOf("'liq-plier-tout'(btn)"));
+    vrai(/compteReplies\.delete\(cle\)/.test(action) && /compteReplies\.add\(cle\)/.test(action),
+      'le geste écrit dans l’état');
+    vrai(/pli\.classList\.toggle\('ouvert', ouvert\)/.test(action),
+      'et bascule la classe sur place : un re-rendu tuerait l’animation');
+  });
+
   test('les cartes qui ne peuvent rien montrer disent ce qui les remplirait', () => {
     const src = lireSource('assets/app.js');
     /* La courbe : le graphique est monte apres le rendu, il ne connait pas ce qui
@@ -12066,6 +12124,85 @@ suite('Une application vide dit quoi faire', () => {
     /* Les types eligibles se derivent de leur table : celui qu'on ajoutera
        demain entrera dans la phrase sans qu'on y pense. */
     vrai(/TYPES_COMPTE\.filter/.test(bloc), 'la liste des types se dérive');
+  });
+});
+
+/* ------------------------------------------------------------------
+   L ecart du non cote se dit, sans se meler aux cours
+   ------------------------------------------------------------------ */
+suite('L’écart du non coté se dit, sans se mêler aux cours', () => {
+
+  test('la page Performance ignorait le non coté, et le calcul existe enfin', () => {
+    /* `latentPnl()` ne lit que `positions` : le non cote, l'immobilier et les
+       biens n'apparaissaient dans aucun ecart, alors qu'un prix de revient y est
+       saisi et qu'ils portent souvent la moitie d'un patrimoine. */
+    Fixture.poser();
+    const cote = latentPnl();
+    const nc = latentNonCote();
+    vrai(cote.count > 0 && nc.lignes.length > 0, 'le fixture porte les deux natures');
+    /* Aucune ligne de marche dans le non cote, et reciproquement : la frontiere
+       se lit sur `marche`, pas sur une liste de classes — un ETF immobilier est
+       cote. */
+    vrai(nc.lignes.every(l => l.classe !== 'actions'),
+      'les titres cotés restent chez eux');
+    pres(nc.value, nc.lignes.reduce((s, l) => s + l.value, 0), 'le total est la somme des parts');
+    pres(nc.invested, nc.lignes.reduce((s, l) => s + l.invested, 0), 'et l’investi aussi');
+    pres(nc.pnl, nc.value - nc.invested, 'l’écart est la différence des deux');
+  });
+
+  test('une ligne sans prix de revient n’entre pas dans l’écart', () => {
+    /* Sans prix paye, il n'y a pas d'ecart a dire : compter la valeur seule
+       gonflerait la plus-value de tout ce qu'on n'a pas su renseigner. */
+    Fixture.poser(s => {
+      s.comptes.find(c => c.id === 'c_pe').lignes.push(
+        { id: 'l_x', classe: 'nonCote', libelle: 'Sans prix', valeur: 5000, prixDeRevient: 0 });
+    });
+    const nc = latentNonCote();
+    vrai(!nc.lignes.some(l => l.nom === 'Sans prix'), 'elle reste dehors');
+    vrai(nc.invested > 0 && nc.pct !== null, 'et le pourcentage garde une base positive');
+  });
+
+  test('un pourcentage sans base positive n’existe pas', () => {
+    Fixture.poser(s => {
+      for (const c of s.comptes) for (const l of (c.lignes || [])) l.prixDeRevient = 0;
+    });
+    eq(latentNonCote().pct, null, 'plutôt qu’une division par zéro déguisée');
+    pres(latentNonCote().invested, 0, 'aucune base');
+  });
+
+  test('l’âge de la valeur fait partie du chiffre', () => {
+    /* Une plus-value declaree il y a trois ans ne vaut pas celle d'hier, et c'est
+       la seule difference qu'une valeur declaree puisse honnetement montrer. Le
+       seuil est celui de la cloche : un an. */
+    Fixture.poser(s => {
+      const l = s.comptes.find(c => c.id === 'c_pe').lignes[0];
+      l.estimeLe = '2020-01-01';
+    });
+    const vieille = latentNonCote().lignes.find(l => l.nom === 'Startups');
+    vrai(vieille && vieille.vieille, 'une estimation de 2020 est à revoir');
+    eq(latentNonCote().aRevoir >= 1, true, 'et le compte le dit');
+    /* Jamais estimee compte aussi : l'absence de date n'est pas une date recente. */
+    Fixture.poser(s => { delete s.comptes.find(c => c.id === 'c_pe').lignes[0].estimeLe; });
+    vrai(latentNonCote().lignes.find(l => l.nom === 'Startups').vieille,
+      'sans date, la valeur est à revoir : l’absence n’est pas une fraîcheur');
+  });
+
+  test('rien de tout cela n’entre dans la page des marchés', () => {
+    /* Marchés › Performance ne suit que ce dont le cours arrive tout seul, son
+       ecran vide le dit : y ramener le non cote le remettrait d'ou l'application
+       a mis du temps a le sortir. Et aucun total ne mele les deux natures. */
+    const src = lireSource('assets/app.js');
+    const perf = src.slice(src.indexOf('function viewPerformance'),
+                           src.indexOf('function viewPerformance') + 6000);
+    vrai(!/latentNonCote/.test(perf),
+      'la page Performance ne parle pas du non coté');
+    /* Il se lit dans son propre apercu, celui qui s'ouvre depuis l'accueil. */
+    const pe = src.slice(src.indexOf('  pe: () => {'), src.indexOf('  investi: () =>'));
+    vrai(/latentNonCote\(\)/.test(pe), 'l’aperçu du non coté porte l’écart');
+    vrai(/valeurs que tu déclares, pas des cours/.test(pe),
+      'et il nomme la nature du chiffre avant de le donner');
+    vrai(/\$\{fmtEUR0\(invested\)\} \$\{trad\('investis'\)\}/.test(pe),
+      'la note du total dit sa base : le montant investi');
   });
 });
 

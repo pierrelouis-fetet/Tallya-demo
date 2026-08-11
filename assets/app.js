@@ -4890,6 +4890,12 @@ let compteRecherche = '';
    etait construit au chargement du script, donc avant que le store soit lu —
    il partait toujours vide et le repli memorise ne s'appliquait jamais. Une
    seule source, interrogee au moment du rendu. */
+/* Les groupes d'usage de la fenetre des liquidites partagent ce registre, sous
+   un prefixe : c'est le meme fait — « ce groupe est replie » — et deux listes
+   auraient fini par se contredire. Le prefixe evite qu'un usage nomme comme un
+   contenant ne referme le mauvais groupe. */
+const cleLiqPli = aff => `liq:${aff}`;
+
 const compteReplies = {
   liste: () => Store.state?.meta?.comptesReplies || [],
   has(cle) { return this.liste().includes(cle); },
@@ -6269,11 +6275,17 @@ function viewFicheCompte(id) {
     <div class="card">
       <div class="card-head"><h2>Actions</h2></div>
       ${boutonEnregistrerFiche()}
-      <div class="row" style="gap:8px">
+      <!-- La meme geometrie que la rangee du dessus, et non une rangee de petits
+           boutons : deux hauteurs differentes, l'une justifiee a droite et l'autre
+           a gauche, ne s'alignaient sur rien. La hierarchie se dit par le
+           remplissage — plein, fantome, rouge — pas par la taille.
+           (Aucun backtick dans ce commentaire : il vit dans un litteral de
+           gabarit, et fermerait la chaine.) -->
+      <div class="fiche-valider">
         ${c.statut === 'archive'
-          ? `<button class="btn sm" data-action="restaurer-compte" data-id="${esc(c.id)}">Restaurer</button>`
-          : `<button class="btn sm ghost" data-action="archiver-compte" data-id="${esc(c.id)}">${trad('Archiver')}</button>`}
-        <button class="btn sm ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">${trad('Clôturer et supprimer')}</button>
+          ? `<button class="btn ghost" data-action="restaurer-compte" data-id="${esc(c.id)}">Restaurer</button>`
+          : `<button class="btn ghost" data-action="archiver-compte" data-id="${esc(c.id)}">${trad('Archiver')}</button>`}
+        <button class="btn ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">${trad('Clôturer et supprimer')}</button>
       </div>
       <p class="small muted" style="margin:12px 0 0">
         Archiver conserve l’historique et sort le compte de tous les totaux.
@@ -8780,6 +8792,10 @@ const ACTIONS = {
   /* La portee est la fenetre entiere et non son corps : le bouton collectif vit
      sur la ligne du sous-titre, les groupes dans le corps. Deux parents
      differents, un seul ancetre commun. */
+  /* Le geste bascule la classe sur place — c'est ce qui permet l'animation, un
+     re-rendu la tuerait — et il ecrit dans l'etat, pour que le rendu suivant la
+     retrouve. Les deux, pas l'un ou l'autre : sans l'ecriture, « Enregistrer »
+     redepliait tout ; sans la bascule sur place, le pli sauterait. */
   'liq-plier'(btn) {
     const section = btn.closest('.liq-groupe');
     const pli = section?.querySelector('.cpt-pli');
@@ -8787,6 +8803,11 @@ const ACTIONS = {
     const ouvert = !pli.classList.contains('ouvert');
     pli.classList.toggle('ouvert', ouvert);
     btn.setAttribute('aria-expanded', String(ouvert));
+    const cle = btn.dataset.cle;
+    if (cle) {
+      if (ouvert) compteReplies.delete(cle); else compteReplies.add(cle);
+      memoriserReplies();
+    }
     majBoutonLiqTout(btn.closest('#modal'));
   },
   'liq-plier-tout'(btn) {
@@ -8798,8 +8819,14 @@ const ACTIONS = {
     for (const p of plis) {
       p.classList.toggle('ouvert', ouvrir);
       const s = p.closest('.liq-groupe')?.querySelector('.liq-sommaire');
-      if (s) s.setAttribute('aria-expanded', String(ouvrir));
+      if (s) {
+        s.setAttribute('aria-expanded', String(ouvrir));
+        if (s.dataset.cle) {
+          if (ouvrir) compteReplies.delete(s.dataset.cle); else compteReplies.add(s.dataset.cle);
+        }
+      }
     }
+    memoriserReplies();
     majBoutonLiqTout(corps);
   },
 
@@ -11647,8 +11674,12 @@ function askExpenseMonth(index) {
        reste des montants non enregistres. « Annuler » est parti avec : devant un
        bouton qui n'enregistre plus en fermant, il ne designait plus rien de
        distinct de Fermer. */
+    /* Trois boutons se partagent la largeur a 375 px, soit 107 px chacun :
+       « Voir les autres mois » s'y pliait en trois lignes et faisait gonfler tout
+       le pied, ses voisins avec. Un libelle de pied reste court, c'est le seul
+       endroit de l'application ou la place est comptee d'avance. */
     $('#modalFoot').innerHTML =
-      `<button class="btn ghost sm" id="depAutres" type="button">${trad('Voir les autres mois')}</button>
+      `<button class="btn ghost sm" id="depAutres" type="button">${trad('Autres mois')}</button>
        <span class="spacer"></span>
        <button class="btn" id="depOk" type="button">${trad('Enregistrer')}</button>
        <button class="btn ghost" id="depFermer" type="button">${trad('Fermer')}</button>`;
@@ -12252,13 +12283,19 @@ const APERCUS = {
                      aria-expanded="true">${trad('Tout replier')}</button>`
           : '',
         html: `
+          <!-- Le pli se relit dans l'etat, il n'est plus ecrit « ouvert » en dur :
+               le geste ne basculait qu'une classe CSS, donc le premier rendu
+               suivant — celui d'« Enregistrer » — reconstruisait tout deplie.
+               Les groupes de la page Actifs memorisaient deja le leur ; c'est la
+               meme cle, prefixee, et le meme accesseur. -->
           ${groupes.map(g => `
           <section class="liq-groupe">
             <button type="button" class="liq-sommaire" data-action="liq-plier"
-                    aria-expanded="true">
+                    data-cle="${esc(cleLiqPli(g.aff))}"
+                    aria-expanded="${compteReplies.has(cleLiqPli(g.aff)) ? 'false' : 'true'}">
               <span>${esc(g.label)}</span>
               <b data-live="${esc(g.aff)}">${sommes()[g.aff]}</b><span class="cpt-chev">⌄</span></button>
-            <div class="cpt-pli ouvert"><div class="liq-corps">
+            <div class="cpt-pli ${compteReplies.has(cleLiqPli(g.aff)) ? '' : 'ouvert'}"><div class="liq-corps">
               ${g.entrees.map(x => {
                 const etab = sousNom(nomCompteV2(x.c), nomEtabDe(x.c));
                 return `
@@ -13101,17 +13138,59 @@ const APERCUS = {
      120 000 EUR sous un titre qui annonce le non cote. La valeur par compte
      est celle de ses lignes non cotees seulement, et la somme des parts
      refait le total. */
-  pe: () => ({
-    titre: trad('Placements non cotés'),
-    sous: trad('Pas mobilisables à court terme'),
-    total: nowByGroup().pe,
-    lignes: comptesOuverts()
-      .map(c => ({ label: nomCompteV2(c), meta: sousNom(nomCompteV2(c), nomEtabDe(c)),
-                   valeur: lignesDe(c).filter(l => l.classe === 'nonCote')
-                     .reduce((s, l) => s + l.valeur, 0) }))
-      .filter(r => r.valeur > 0.005),
-    vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
-  }),
+  /* L'ecart du non cote se lit ici, et nulle part ailleurs.
+
+     Pas dans Marchés › Performance : cette page-la ne suit que ce dont le cours
+     arrive tout seul, elle le dit elle-meme dans son ecran vide, et y ramener le
+     non cote serait le remettre exactement d'ou l'application a mis du temps a le
+     sortir. Pas dans une carte de plus non plus : le panneau existe deja, il
+     s'ouvre depuis l'accueil, et il montrait des valeurs sans jamais dire ce
+     qu'elles avaient coute.
+
+     Aucun total commun avec les titres cotes, jamais. Une plus-value cotee est
+     constatee — un cours l'a fixee — quand celle-ci est declaree par son
+     detenteur. Les additionner rendrait une performance dont une part est une
+     opinion, sans que rien ne le signale. Le sous-titre nomme donc la nature du
+     chiffre, et la note du total sa base. */
+  pe: () => {
+    const nc = latentNonCote();
+    const lignes = nc.lignes.filter(l => l.classe === 'nonCote');
+    const value = lignes.reduce((s, l) => s + l.value, 0);
+    const invested = lignes.reduce((s, l) => s + l.invested, 0);
+    const pnl = value - invested;
+    const vieilles = lignes.filter(l => l.vieille).length;
+    return {
+      titre: trad('Placements non cotés'),
+      /* La nature avant la liquidite : c'est elle qui explique pourquoi l'ecart
+         ci-dessous n'est pas une performance de marche. Le rappel de revue s'y
+         ajoute plutot que dans un champ que le composant ne rend pas — la cloche
+         le porte deja a un an, ici il ne fait que se voir au bon moment. */
+      sous: [trad('valeurs que tu déclares, pas des cours'),
+             vieilles ? `${vieilles} ${vieilles > 1 ? trad('à revoir') : trad('à revoir')}`
+                      : trad('pas mobilisables à court terme')].join(' · '),
+      total: nowByGroup().pe,
+      /* Un pourcentage dit sa base : ici le montant investi, et rien d'autre.
+         Sans prix de revient saisi, il n'y a pas d'ecart a dire — la note se
+         contente alors du total. */
+      totalNote: invested > 0
+        ? `${fmtEUR0(invested)} ${trad('investis')} · ${trad('écart')} ${fmtSigned(pnl)} (${
+            fmtSignedPct(pnl / invested * 100, 1)})`
+        : trad('prix de revient non renseigné'),
+      lignes: lignes.map(l => ({
+        label: l.nom,
+        meta: [sousNom(l.nom, nomCompteV2(l.compte), nomEtabDe(l.compte)),
+               /* L'age de la valeur fait partie du chiffre : une estimation d'il
+                  y a trois ans ne vaut pas celle d'hier, et c'est la seule
+                  difference qu'une valeur declaree puisse honnetement montrer. */
+               l.estimeLe ? `${trad('estimé')} ${fmtDate(l.estimeLe)}`
+                          : trad('jamais estimé')].filter(Boolean).join(' · '),
+        valeur: l.value,
+        perf: l.invested > 0 ? l.pct : null,
+        route: `#/compte/${encodeURIComponent(l.compteId)}`,
+      })),
+      vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
+    };
+  },
 
   investi: () => ({
     titre: BASES.place.nom,
