@@ -27,6 +27,10 @@ function lireSource(fichier) {
 
 /* Jouer un contrôle à une date choisie.
 
+   `todayISO` est une déclaration de fonction, donc remplaçable — un `const`
+   lexical ne l'aurait pas été. Le rétablissement est dans un `finally` : un
+   échec au milieu laisserait sinon toutes les suites suivantes au 4 août 2026.
+
    Cette fonction vivait à l'intérieur d'une suite, et la suivante qui en a eu
    besoin ne la voyait pas. Une seule définition, en haut, pour toutes. */
 function auJour(iso, faire) {
@@ -519,7 +523,14 @@ suite('Classement d’une ligne de marché', () => {
   });
 
   test('un nom de fonds se reconnaît, et l’utilisateur garde le dernier mot', () => {
-    /*       L'emetteur manquait, et c'est le signal le plus fiable : personne
+    /* La detection lisait `/\b(etf|ucits|msci|s&p|index|indice|world)\b/` : sept
+       noms de fonds courants sur quatorze passaient pour des actions en direct,
+       dont « Future of Defence », une ligne reelle du portefeuille de
+       le propriétaire. Il a demande si le champ Nature ne devrait pas etre
+       automatique et verrouille — la reponse est non, parce qu'une regle sur un
+       nom se trompe, mais elle ne doit pas se tromper une fois sur deux.
+
+       L'emetteur manquait, et c'est le signal le plus fiable : personne
        n'appelle une action « Amundi » ni « iShares ». */
     const fonds = ['Amundi MSCI World', 'Lyxor Nasdaq-100', 'iShares Core S&P 500',
       'Vanguard FTSE All-World', 'SPDR Gold Shares', 'Amundi Euro Stoxx 50',
@@ -691,7 +702,13 @@ suite('Classement d’une ligne de marché', () => {
   });
 
   test('retirer une classe ne détruit pas sa cible', () => {
-    /*       Un geste reversible ne doit rien detruire en chemin. La cible part dans
+    /* Le ✕ d'une classe mettait sa cible a zero. Avec un decoupage par role,
+       « 70 % de core, 20 % de satellite » devenait `0` — un seul nombre — et
+       remettre la classe rendait une ligne vide. Le propriétaire a retire
+       « Actions » et cru la perte definitive : le chemin de retour vivait dans
+       une phrase de prose, pas dans le bouton qui parle d'ajouter une classe.
+
+       Un geste reversible ne doit rien detruire en chemin. La cible part dans
        `ciblesRetirees` et revient telle quelle, decoupage compris. */
     Fixture.poser(e => {
       e.targets.classes = { actions: { core: 70, satellite: 20 }, metaux: 5 };
@@ -1564,7 +1581,11 @@ suite('Une bande trop mince ne porte pas de trait', () => {
 
 suite('Le tirer-pour-rafraîchir résiste au lieu de se laisser étirer', () => {
 
-  /*     L'amortissement existait pourtant — mais **linéaire** : 60 % de la course du
+  /* « Un écran peut se tirer beaucoup trop, il faudrait une résistance qu'on
+     ressent, comme Courtier A », et « le rafraîchissement se déclenche très
+     facilement vu qu'il n'y a aucune résistance ».
+
+     L'amortissement existait pourtant — mais **linéaire** : 60 % de la course du
      doigt, sans borne. Tirer deux fois plus loin descendait deux fois plus bas,
      indéfiniment. Un ratio n'est pas une résistance : il ralentit, il ne s'oppose
      jamais, et rien n'empêchait de creuser un demi-écran de vide.
@@ -1637,7 +1658,11 @@ suite('Le tirer-pour-rafraîchir résiste au lieu de se laisser étirer', () => 
 
 suite('Une couleur de donnée ne se confond pas avec une couleur de sens', () => {
 
-  /*     Cinq teintes de série tombaient à moins de 12° d'une couleur qui **veut dire
+  /* Mesuré le 5 août 2026, à la demande du propriétaire : « je voudrais que tout
+     soit bien premium niveau couleurs, pas de couleurs qui ne matchent pas
+     ensemble. » Ce n'était pas une affaire de goût, et la mesure le montre.
+
+     Cinq teintes de série tombaient à moins de 12° d'une couleur qui **veut dire
      quelque chose** — et l'or des métaux précieux était à **1°** de l'ambre des
      avertissements en thème sombre. La même couleur signifiait donc deux choses :
      l'oeil apprend un code sur un écran, et le voit démenti sur le suivant. C'est
@@ -1822,6 +1847,12 @@ suite('Pièges de source', () => {
        texte comme un autre : un backtick y ferme la chaîne et le fichier
        entier cesse de parser.
 
+       Ce contrôle ne regardait qu'`app.js`. Le 5 août 2026, un backtick posé
+       dans un commentaire de `charts.js` a vidé tous les graphiques de
+       l'application — « trace is not defined » — et la suite est restée verte :
+       le fichier n'était pas dans la liste. C'est le sixième cas du même piège
+       dans la même session, et le premier que le test a laissé passer.
+
        La liste couvre donc maintenant tout ce qui bâtit du balisage dans un
        littéral. Le contrôle de parse, juste au-dessus, connaît déjà ces
        fichiers : c'est la même liste, et elle vit ici parce qu'aucune des deux
@@ -1840,7 +1871,11 @@ suite('Pièges de source', () => {
   });
 
   test('geler le fond ne rogne pas la page', () => {
-    /*       `gelerFond()` pose `position: fixed` sur le corps avec un decalage negatif
+    /* Signale par le propriétaire sur la carte « Portefeuille titres » : « pourquoi
+       je ne vois plus l'arriere-plan quand je clique ». Tout etait noir au-dessus
+       de la feuille.
+
+       `gelerFond()` pose `position: fixed` sur le corps avec un decalage negatif
        egal au defilement. Il posait aussi `overflow: hidden`, qui fait du corps
        une boite de rognage : un corps fixe sans hauteur prend alors celle de
        l'ecran. Mesure du jour, page defilee a 1 833 px : le corps mesurait 812 px
@@ -1875,7 +1910,11 @@ suite('Pièges de source', () => {
        ferme la confirmation, puis la saisie. La seconde fermeture faisait
        avancer le compteur, la sortie differee de la premiere se croyait perimee
        et rendait la main sans rien eteindre — `#confirm` restait `hidden =
-       false` pour le reste de la session. */
+       false` pour le reste de la session.
+
+       Invisible a l'ecran (`pointer-events: none`, opacite nulle), donc jamais
+       signale, mais present dans l'arbre d'accessibilite. Trouve le 5 aout 2026
+       en verifiant tout autre chose. */
     vrai(source, 'app.js doit être lisible pour ce contrôle');
     vrai(/const generationModal = new WeakMap\(\)/.test(source),
       'le compteur de génération doit être par fenêtre, pas partagé');
@@ -1887,7 +1926,12 @@ suite('Pièges de source', () => {
   });
 
   test('aucun pavé de texte sur une carte', () => {
-    /*       Mesure du jour, dans le navigateur : 11 paragraphes de plus de 25 mots,
+    /* Le propriétaire, 5 aout 2026, capture a l'appui : « ici toujours beaucoup de
+       texte ». La carte « Core et satellites » portait 74 mots autour de trois
+       barres, dont un paragraphe qui repetait mot pour mot la premiere phrase
+       de sa propre bulle d'aide, deux centimetres plus bas.
+
+       Mesure du jour, dans le navigateur : 11 paragraphes de plus de 25 mots,
        433 mots au total. Apres deplacement dans les bulles : 6 paragraphes,
        175 mots, le plus long a 34.
 
@@ -1924,10 +1968,11 @@ suite('Pièges de source', () => {
 
     const fautifs = [];
     for (const m of nu.matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/g)) {
-      /*         Un ecran vide est exempte, et ce n'est pas un passe-droit : quand il
-         n'y a aucun chiffre a montrer, le texte EST le contenu de la carte.
-         La classe `empty` le declare — un paragraphe qui veut en profiter
-         doit donc se dire ecran vide, ce qui se relit. */
+      /* Un ecran vide est exempte, et ce n'est pas un passe-droit : quand il n'y
+         a aucun chiffre a montrer, le texte EST le contenu de la carte. Il dit
+         quoi faire pour qu'elle se remplisse, ce qui demande des phrases. La
+         classe `empty` le declare — un paragraphe qui veut en profiter doit donc
+         se dire ecran vide, ce qui se relit. */
       if (/\bclass="[^"]*\bempty\b/.test(m[1])) continue;
       const texte = sansInterpolation(m[2]).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
       const mots = texte ? texte.split(' ').length : 0;
@@ -2017,7 +2062,12 @@ suite('Pièges de source', () => {
   });
 
   test('une bulle d’aide s’ouvre aussi dans une fenêtre', () => {
-    /*       1. Les écouteurs étaient posés élément par élément, dans une boucle sur
+    /* Trois défauts empilés, et c'est pour ça qu'aucune bulle de fenêtre n'a
+       jamais fonctionné. Signalé par le propriétaire sur « Part du portefeuille »,
+       mais une dizaine d'autres étaient mortes de la même façon : « Nature »,
+       « Valeur », « Date d'achat », toutes celles des aperçus.
+
+       1. Les écouteurs étaient posés élément par élément, dans une boucle sur
           `$$('[data-aide]')` rejouée à chaque rendu. Elle ne pouvait atteindre
           que ce qui existait au moment du rendu de la page — jamais le contenu
           d'une fenêtre, qui naît après. Un écouteur délégué ne connaît pas les
@@ -2202,6 +2252,11 @@ suite('Pièges de source', () => {
 
     /* Le cas concret qui a casse, verifie nommement.
 
+       L'ordre s'est inverse le 5 aout 2026 : Patrimoine ouvre Allocation, Cible
+       est a un geste. Une cible se regle deux fois par an, un patrimoine se
+       regarde toutes les semaines — et quelqu'un qui ne fait pas de bourse
+       tombait d'emblee sur un ecran qui ne lui parle pas.
+
        Ce qui rend l'inversion possible est justement ce que ce test protege :
        les deux onglets portent leur propre route, donc aucun ne depend d'etre
        le premier. C'est le contraire qui avait casse. */
@@ -2354,7 +2409,14 @@ suite('Pièges de source', () => {
        donc toujours d'accord avec elle-meme et sans collision possible. */
     vrai(/function teinteGroupe\(\)/.test(bloc),
       'et elle ne reçoit plus rien dont elle pourrait la tirer');
-    /* Et chaque groupe garde une vraie couleur, tiree de ce qu'il contient. */
+    /* Et chaque groupe garde une vraie couleur, tiree de ce qu'il contient.
+
+       L'assertion regardait `CLASSE_COULEURS[classe]`, passe par l'onglet
+       « Placement » de la page Actifs — onglet retire le 8 aout 2026, puisqu'il
+       redisait la carte « Repartition » de l'accueil sans son pourcentage. Elle
+       porte donc sur le mecanisme qui reste, et qui tient le meme invariant :
+       `teinteDominante()` prend la classe majoritaire du contenu. Un courtier
+       plein de titres se lit vert, un livret bleu, et jamais l'inverse. */
     vrai(/teinteDominante\(/.test(source),
       'chaque groupe reçoit la couleur de ce qu’il contient');
     /* Les trois groupes de la page Actifs — un établissement, le hors-contenant,
@@ -2417,7 +2479,14 @@ suite('Pièges de source', () => {
 
        Le risque de ce genre de tri est d'enterrer la donnee : quelqu'un qui a
        saisi une date sur un livret doit pouvoir la corriger ou l'effacer, et un
-       champ qu'on ne peut plus atteindre est une donnee perdue. */
+       champ qu'on ne peut plus atteindre est une donnee perdue.
+
+       Depuis le 5 aout 2026 la date ne se saisit plus dans la page : elle s'y
+       lit, et se corrige par « Modifier ». L'invariant n'a pas bouge, c'est
+       l'endroit ou il se verifie qui a change — la premiere version de ce test
+       comptait deux champs de saisie et a echoue au bon moment. Il regarde donc
+       les deux moities : ce que la fiche montre, et ce que le formulaire
+       propose. */
     const fiche = source.slice(source.indexOf('function viewFicheCompte'),
                                source.indexOf('function viewFicheEtab'));
     vrai(fiche.length > 1000, 'la fiche de compte doit être trouvable');
@@ -2626,6 +2695,18 @@ suite('Pièges de source', () => {
     /* La barre du bas est une pilule flottante, et ce qui compte est autant ce
        qu'elle porte que ce qu'elle ne porte pas.
 
+       Ce contrôle a changé de camp deux fois, et c'est la deuxième version qui
+       se trompait. Il a d'abord exigé une pilule. Le 5 août 2026 il a exigé
+       l'inverse — une barre pleine largeur qui touche le bord — parce qu'un
+       iPhone montrait 43 px de page nue sous la pilule, presque noirs en thème
+       sombre, lus comme un bord d'écran perdu. Mais la bande morte ne venait pas
+       de la pilule : elle venait de sa jupe, 200 px de couleur de page peints
+       sous elle, qui masquaient le contenu au lieu de le laisser défiler. La
+       barre pleine largeur a supprimé la bande en étalant son flou d'un bord à
+       l'autre, et le propriétaire a tranché sur photo : « tout le bas apparaît flou
+       au lieu de juste l'ovale du menu, le reste devrait être limpide, on devrait
+       voir l'écran défiler derrière ».
+
        D'où les trois assertions : la pilule est détachée des bords, la zone de
        gestes la soulève au lieu de la gonfler, et *rien* n'est peint sous elle.
        La dernière est celle qui aurait attrapé le défaut d'origine. */
@@ -2649,7 +2730,7 @@ suite('Pièges de source', () => {
       'la tranche lue doit être la seule règle .tabbar, pas la moitié du fichier');
     /* Le jeton et non plus 999px en toutes lettres : l'intention du contrôle
        est « c'est une pilule », et l'échelle des rayons est fermée depuis le
-       */
+       9 août 2026. */
     vrai(/border-radius:\s*var\(--radius-pill\)/.test(regleTabbar),
       'la barre du bas est un ovale : c’est lui qui porte le fond et le flou, et '
       + 'lui seul');
@@ -2960,6 +3041,11 @@ suite('Projection de capitalisation', () => {
     /* Le taux « autres actifs » couvrait le non cote ET les liquidites : deux
        choses sans rapport sous un seul pourcentage, qui forcait a choisir entre
        sous-estimer un livret et inventer un rendement au non cote.
+
+       Un troisieme selecteur a ete essaye pour les separer. Le propriétaire l'a
+       refuse, et il avait raison : les liquidites ne capitalisent pas dans cette
+       application, livret ou non, donc il n'y a rien a regler pour elles. Une
+       constante n'a pas besoin d'un menu.
 
        Ce que le test verrouille : le taux ne touche que le non cote, les
        liquidites traversent la projection telles quelles, et la somme des deux
@@ -3644,9 +3730,14 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
   });
 
   test('sans heure mais place fermée, l’écart n’est pas celui du jour', () => {
-    /*       Sans heure on ne sait pas, et on garde l'ecart — sauf si la place se
-       declare fermee, auquel cas on sait, et l'ecart affiche serait celui de
-       la derniere seance. */
+    /* La troisieme branche, ajoutee le 5 aout 2026. Sans heure on ne sait pas,
+       et on garde l'ecart — sauf si la place se declare fermee, auquel cas on
+       sait, et l'ecart affiche serait celui de la derniere seance.
+
+       C'est le defaut que le propriétaire a cru voir apres un rafraichissement.
+       Ses lignes portaient toutes une heure ce jour-la, donc ce n'etait pas ça ;
+       mais la garde s'ouvrait bel et bien des qu'une source muette repondait un
+       dimanche. */
     avecCours(null, 6.161, 6.121);
     Store.state.positions[0].marketState = 'CLOSED';
     const d = posDayChange(Store.state.positions[0]);
@@ -3672,7 +3763,12 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
     eq(dayPerformance().sansDonnee, 1, 'et la ligne est comptée comme sans donnée');
   });
 
-  /*     Le mouvement du titre était juste. C'est l'effet sur le patrimoine qui était
+  /* --- une ligne achetée aujourd'hui n'a pas de veille -------------------
+     Signalé par le propriétaire le 5 août 2026 sur une ligne Uber : le titre avait
+     déjà perdu 5 % quand il l'a prise, l'écran lui comptait cette baisse-là.
+     « Il croit que j'ai perdu 5 %, sauf que non, j'ai perdu que 1 %. »
+
+     Le mouvement du titre était juste. C'est l'effet sur le patrimoine qui était
      faux : il suppose qu'on détenait la ligne à la clôture de la veille. */
 
   test('une ligne achetée aujourd’hui ne porte pas la baisse d’avant l’achat', () => {
@@ -3814,7 +3910,15 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
     vrai(/jour\(horodatages\[i\]\) < jourDuCours/.test(m[0]),
       'et ne retenir qu’une clôture d’un jour antérieur à celui du cours');
 
-    /*       La bougie de la veille fait donc foi, et son absence aussi : quand elle
+    /* La priorite s'est inversee le 5 aout 2026, sur mesure.
+       `meta.previousClose` etait le premier choix. Ce jour-la il valait `null`
+       pour DCAM.PA, et la serie portait un horodatage pour le 4 sans aucune
+       cloture : Yahoo sait qu'il y a eu seance, il n'en a pas le cours. En
+       enjambant ce trou on remontait au 3, et l'ecart du jour comptait deux
+       seances — Tallya annonçait +1,93 % quand le courtier disait +0,58 %, soit
+       302 EUR de mouvement pour 100 reels.
+
+       La bougie de la veille fait donc foi, et son absence aussi : quand elle
        manque, aucune cloture n'est publiee et la ligne n'a pas d'ecart du jour.
        Se taire vaut mieux qu'un chiffre faux d'un facteur trois. */
     vrai(!/if \(closes\[i\] == null\) continue;/.test(m[0]),
@@ -3849,7 +3953,11 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
   });
 
   test('un trou dans la série journalière se comble, il ne se saute pas', () => {
-    /*       Trois comportements possibles, et deux sont mauvais. Enjamber le trou
+    /* Le 5 aout 2026, Yahoo n'avait aucune cloture pour le 4 — ni sur DCAM.PA,
+       ni sur NATO.PA, ni sur BTC-USD, ni sur EUR/USD. Une panne de donnees, pas
+       un jour sans seance.
+
+       Trois comportements possibles, et deux sont mauvais. Enjamber le trou
        prend l'avant-veille et fait compter deux seances : +1,93 % la ou le
        courtier disait +0,58 %. Refuser de publier supprime l'ecart du jour
        partout a la fois — l'ecran a annonce « 3 sans cours de veille » sur cinq
@@ -3872,6 +3980,13 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
 
 /* ------------------------------------------------------------------
    11 ter. L'heure d'un cours n'est pas l'heure de la requête
+
+   Le défaut du 6 août 2026, et la seule chose qui le rendait invisible.
+   « Le marché est ouvert mais les positions affichent quasi 0 en mouvement. »
+   La passerelle répondait à 16:15 en portant des prix imprimés la veille à
+   22:00 ; l'application affichait trois certificats de fraîcheur pour une
+   donnée vieille de dix-huit heures — la pastille « il y a 2 min », l'aperçu
+   « cours de 16:15 », la ligne « ouvert · +0,00 % ».
 
    Aucun chiffre n'était faux. `posDayChange()` rendait bien `horsSeance: true`
    et un écart nul, ce qui est la réponse exacte à « depuis la clôture d'hier ».
@@ -4069,7 +4184,12 @@ suite('Un cours dit de quand il date', () => {
   });
 
   test('le ruban d’indices suit la même règle que les lignes de titres', () => {
-    /*       C'est la lecon que ce fichier a deja notee deux fois : une regle ecrite
+    /* Trouve en verifiant le correctif a l'ecran : la carte « Aujourd'hui »
+       disait enfin la verite, et le ruban juste au-dessus affichait toujours
+       « S&P 500 · −0,17 % » sous un soleil — le mouvement de la veille, le
+       6 aout 2026 a 16:45.
+
+       C'est la lecon que ce fichier a deja notee deux fois : une regle ecrite
        pour un cas s'applique a tous ceux qui lui ressemblent, et s'arreter au
        symptome signale revient a attendre le suivant. Le repere portait deja
        `quoteTime`, `marketState` et `session` — tout ce que `coteAujourdhui()`
@@ -4188,7 +4308,7 @@ suite('Ce que la cloche annonce', () => {
   });
 
   test('une famille ignorée ne compte plus', () => {
-    /* La famille est un **sujet**, plus une gravité. */
+    /* La famille est un **sujet** depuis le 5 août 2026, plus une gravité. */
     enRetard();
     const avant = notifications().filter(n => n.sujet === 'saisies').length;
     vrai(avant > 0, 'il faut des saisies en attente pour ce contrôle');
@@ -4484,7 +4604,15 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
   test('« Type de compte » et « Comptes & enveloppes » comptent le même argent', () => {
     /* Les deux cartes de la page Patrimoine sont deux granularites d'un seul
        total : le type d'enveloppe, puis le compte. Leurs sommes doivent donc
-       etre egales, et c'est un invariant plus fort que celui d'avant. */
+       etre egales, et c'est un invariant plus fort que celui d'avant.
+
+       « Type de compte » ne portait que la bourse. Sur une page ou tout le
+       reste se rapporte aux avoirs ou a ce qui est place, elle annonçait
+       13 814 EUR quand ses voisines annonçaient 25 397 et 30 523 : quatre
+       cartes, quatre denominateurs. Chacun etait nomme, donc aucun ne mentait,
+       mais le propriétaire a signale le 5 aout 2026 que la carte « gene ». Nommer
+       une base ne dispense pas de prendre celle de ses voisines quand rien ne
+       justifie d'en changer. */
     Fixture.poser();
     const parType = byAccountType().reduce((s, x) => s + x.value, 0);
     const parCompte = allocationByAccount().reduce((s, x) => s + x.value, 0);
@@ -4527,7 +4655,12 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
   });
 
   test('les deux bases s’emboîtent, elles ne se contredisent pas', () => {
-    /* Placé ⊂ avoirs, et l'écart entre les deux vaut exactement les liquidités. */
+    /* Placé ⊂ avoirs, et l'écart entre les deux vaut exactement les liquidités.
+
+       Il y avait trois bases sur cette page, et « bourse ⊂ placé ⊂ avoirs » se
+       vérifiait ici. La lecture par type d'enveloppe partage désormais la base
+       de sa voisine — c'est la correction du 5 août 2026 — donc il n'en reste
+       que deux, et une carte de moins à réconcilier de tête en lisant la page. */
     Fixture.poser();
     const parType = byAccountType().reduce((s, x) => s + x.value, 0);
     const place = allocationByAccount().reduce((s, x) => s + x.value, 0);
@@ -4628,7 +4761,13 @@ suite('Le texte affiché porte ses accents', () => {
    ------------------------------------------------------------------ */
 suite('Les balises de version ne mentent pas', () => {
 
-  /*     Ce contrôle est le seul du lot qui se vérifie lui-même : il tourne dans la
+  /* La consigne du projet demande de changer la version des `?v=` dès qu'un
+     fichier d'`assets/` change, dans `index.html` ET dans `tests.html`. Oublier
+     le second est le pire des deux oublis : la page de tests resert alors
+     l'ancien JavaScript et rend un vert mensonger — elle affirmerait que le
+     correctif passe alors qu'elle ne l'a pas chargé.
+
+     Ce contrôle est le seul du lot qui se vérifie lui-même : il tourne dans la
      page dont il parle. Aucun regard humain ne l'aurait attrapé, c'est
      précisément un oubli. */
 
@@ -4766,7 +4905,11 @@ suite('Les balises de version ne mentent pas', () => {
    ------------------------------------------------------------------ */
 suite('L’application s’adresse toujours de la même façon', () => {
 
-  /*     Aucune des deux ne se voit en relisant le code : elles ne sautent aux yeux
+  /* Deux fautes signalees par le propriétaire le 4 aout 2026, sur deux captures :
+     « Banques, courtiers et tous vos placements » sous Comptes, et « ce que tu
+     vises… » sans majuscule sous Allocation.
+
+     Aucune des deux ne se voit en relisant le code : elles ne sautent aux yeux
      que cote a cote, a l'ecran, et rien ne met deux ecrans cote a cote. D'ou
      ces deux controles, qui derivent la liste au lieu de la recopier. */
 
@@ -4796,7 +4939,9 @@ suite('L’application s’adresse toujours de la même façon', () => {
   });
 
   test('le texte affiché tutoie, bulles d’aide comprises', () => {
-    /*       Elle a longtemps melange les deux. `CLAUDE.md` disait « vouvoiement dans
+    /* L'application tutoie partout, decision du propriétaire du 5 aout 2026.
+
+       Elle a longtemps melange les deux. `CLAUDE.md` disait « vouvoiement dans
        les textes d'aide », mais le code ne l'avait jamais suivi : au moment de
        la mesure, les bulles portaient 60 tutoiements pour 30 vouvoiements. Ce
        n'etait donc pas un style, c'etait une regle ecrite que personne
@@ -4819,7 +4964,17 @@ suite('L’application s’adresse toujours de la même façon', () => {
   });
 
   test('un crédit s’appelle un crédit sur tous les boutons qui en créent un', () => {
-    /*       La liste se derive des boutons : celui qu'on ajoutera demain est couvert
+    /* Quatre boutons creaient le meme objet : deux disaient « Pret », deux
+       disaient « Credit », sous une section « Financement ». Le propriétaire a
+       demande la difference entre les deux — il n'y en avait aucune, c'etait
+       le meme `ajouter-credit` ecrivant dans `etab.dettes`. Trois mots pour une
+       chose, et la question etait legitime.
+
+       Tranche le 5 aout 2026 : « Credit » nomme l'objet, « Financement » reste
+       le titre de la section sur la fiche d'un bien. Le titre dit le sujet, le
+       bouton dit l'objet.
+
+       La liste se derive des boutons : celui qu'on ajoutera demain est couvert
        sans que personne ait à y penser. */
     const src = sansCommentaires(lireSource('assets/app.js') || '');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
@@ -4906,7 +5061,10 @@ suite('Un champ qui se répète propose ce qu’on y a déjà mis', () => {
    ------------------------------------------------------------------ */
 suite('Un indice de ligne peut valoir zéro', () => {
 
-  /*     `lignesDe()` pose `ref: i`, l'indice de la ligne dans son compte. La vue
+  /* Signale par le propriétaire le 5 aout 2026 : « je ne peux plus modifier le
+     montant d'un placement non cote ». Il n'avait jamais pu.
+
+     `lignesDe()` pose `ref: i`, l'indice de la ligne dans son compte. La vue
      rendait le nom cliquable sous condition `(editable && !l.marche && l.ref)`
      — une verite booleenne sur un indice. Zero est faux, donc la PREMIERE ligne
      de chaque compte n'etait pas cliquable, et ses trois comptes non cotes n'en
@@ -4958,7 +5116,10 @@ suite('Un indice de ligne peut valoir zéro', () => {
    ------------------------------------------------------------------ */
 suite('Retirer une catégorie n’efface rien', () => {
 
-  /*     Le seul geste qui existait, `removeExpenseCategory`, efface les montants de
+  /* Demande du propriétaire, 5 aout 2026 : « pouvoir supprimer une categorie
+     dans un mois, sans que ca supprime l'historique des mois precedents ».
+
+     Le seul geste qui existait, `removeExpenseCategory`, efface les montants de
      tous les mois. Il reste, parce qu'une colonne creee par erreur doit pouvoir
      partir en entier. Retirer est l'autre geste, et le piege est evident une
      fois nomme : treize endroits parcourent `expenseCategories()` pour sommer,
@@ -5070,7 +5231,12 @@ suite('Retirer une catégorie n’efface rien', () => {
    ------------------------------------------------------------------ */
 suite('Ce qu’on règle une fois ne reste pas ouvert', () => {
 
-  /*     La regle complete tient en une phrase : la frequence commande la forme. Un
+  /* Regle donnee par le propriétaire le 5 aout 2026, apres avoir vu la fiche d'un
+     etablissement : « le nom de la banque devrait etre ecrit en gros avec un
+     petit bouton modifier, pas un champ qui reste ouvert. Idem pour un compte,
+     et type de compte. On touche qu'une fois normalement. »
+
+     La regle complete tient en une phrase : la frequence commande la forme. Un
      champ qu'on revient corriger chaque mois — le montant des liquidites, une
      note — reste en saisie directe, parce qu'un bouton de plus a chaque fois
      serait un geste de plus a chaque fois. Un champ qu'on regle a la creation
@@ -5128,11 +5294,12 @@ suite('Ce qu’on règle une fois ne reste pas ouvert', () => {
   });
 
   test('la fiche d’un établissement porte la teinte de son groupe', () => {
-    /*       Le point qui compte n'est pas qu'il y ait une couleur, c'est que ce
-       soit la meme : elle vient de teinteDominante(), la fonction qui colore
-       deja le groupe dans la liste. Une seconde facon de la calculer
-       donnerait deux couleurs pour un seul etablissement, sans que rien ne
-       dise laquelle a raison. */
+    /* Demande du propriétaire : garder le code couleur en haut de la fiche.
+       Le point qui compte n'est pas qu'il y ait une couleur, c'est que ce soit
+       la meme : elle vient de teinteDominante(), la fonction qui colore deja le
+       groupe dans la liste. Une seconde facon de la calculer donnerait deux
+       couleurs pour un seul etablissement, sans que rien ne dise laquelle a
+       raison. */
     const s = lireSource('assets/app.js') || '';
     const fiche = s.slice(s.indexOf('function viewFicheEtab'),
                           s.indexOf('function viewFicheEtab') + 3000);
@@ -5336,7 +5503,13 @@ suite('La police des titres ne descend pas sur les chiffres', () => {
    ------------------------------------------------------------------ */
 suite('Un courtier qui prête sur marge', () => {
 
-  /*     Ce que ces contrôles interdisent : que la marge change la valeur des avoirs,
+  /* La question du détenteur, le 4 août 2026 : « si mon courtier me fait du levier,
+     je dois mettre ça comment ». Réponse du modèle : un crédit sur
+     l'établissement, comme un prêt immobilier. Les titres achetés avec cet
+     argent restent comptés en entier — on les possède — et le montant prêté se
+     retranche du patrimoine net, une seule fois.
+
+     Ce que ces contrôles interdisent : que la marge change la valeur des avoirs,
      qu'elle soit déduite une fois par compte au lieu d'une fois par crédit, ou
      qu'elle vienne se ranger parmi les enveloppes. Le levier est une dette, pas
      une enveloppe, et `byAccountType()` le dit depuis toujours en écartant les
@@ -5369,8 +5542,11 @@ suite('Un courtier qui prête sur marge', () => {
   });
 
   test('elle ne devient pas une enveloppe', () => {
-    /*       L'invariant se compare a lui-meme plutot qu'a un montant ecrit en dur :
-       la repartition par enveloppe doit etre identique avec et sans la marge. */
+    /* L'invariant se compare a lui-meme plutot qu'a un montant ecrit en dur :
+       la repartition par enveloppe doit etre identique avec et sans la marge.
+       Epingler « 9 750 » revenait a epingler la base de la carte, et le test
+       tombait le jour ou cette base a change — le 5 aout 2026 — alors que la
+       regle qu'il defend, elle, n'avait pas bouge d'un centime. */
     Fixture.poser();
     const sansMarge = byAccountType().reduce((s, x) => s + x.value, 0);
     Fixture.poser(surMarge);
@@ -5406,14 +5582,21 @@ suite('Un courtier qui prête sur marge', () => {
    ------------------------------------------------------------------ */
 suite('Les paliers d’autonomie couvrent tout, dans le bon ordre', () => {
 
-  /*     L'écart valait exactement ses espèces. `mobilisabilite()` gardait une
-     liste de deux types écrite à la main — « courant ou livret » — et les
-     espèces sont arrivées après : des billets dans un portefeuille tombaient
-     derrière un virement bancaire, en « quelques jours ». Elle lit maintenant
-     le groupe du type de compte, qui dit déjà que c'est du cash. */
+  /* Le défaut trouvé par le propriétaire le 4 août 2026 : la jauge annonçait
+     6 011 € de coussin quand « Disponible tout de suite » en montrait 5 361.
+     L'écart valait exactement ses espèces. `mobilisabilite()` gardait une liste
+     de deux types écrite à la main — « courant ou livret » — et les espèces sont
+     arrivées après : des billets dans un portefeuille tombaient derrière un
+     virement bancaire, en « quelques jours ». Elle lit maintenant le groupe du
+     type de compte, qui dit déjà que c'est du cash. */
 
   test('la jauge plus les projets font le disponible immédiat', () => {
-    /*       Les deux chiffres sont justes. La jauge est le coussin — precaution plus
+    /* Le meme defaut, une marche plus loin, signale le 5 aout 2026 : la jauge
+       annonçait 3 714 EUR et « Disponible tout de suite » 5 734, deux lignes
+       plus bas. L'ecart valait exactement l'argent reserve a un projet, et rien
+       a l'ecran ne le disait.
+
+       Les deux chiffres sont justes. La jauge est le coussin — precaution plus
        cash disponible, ce que la regle des 3 a 6 mois vise — et le palier est
        tout le cash immediatement mobilisable, projets compris : cet argent
        existe, on y toucherait avant de manquer.
@@ -5871,7 +6054,12 @@ suite('Une mensualité rembourse du capital et paie des intérêts', () => {
    ------------------------------------------------------------------ */
 suite('Un capital restant dû se projette au lieu de s’oublier', () => {
 
-  /*     L'application projette donc l'amortissement depuis la dernière vérification,
+  /* Question du propriétaire : « quelle est la meilleure solution pour que la
+     ligne de crédit soit mise à jour et pas oubliée ». C'est le seul champ de
+     l'application qui devient faux sans que personne y touche, et compter sur la
+     mémoire d'une correction de 348 € invisible à l'écran ne marchera pas.
+
+     L'application projette donc l'amortissement depuis la dernière vérification,
      réclame la mise à jour au bout de trois mois, et propose le montant. Elle
      n'écrit rien d'office : un remboursement anticipé la démentirait. */
 
@@ -5964,7 +6152,13 @@ suite('Un capital restant dû se projette au lieu de s’oublier', () => {
    ------------------------------------------------------------------ */
 suite('Une charge fixe rembourse un crédit, et la mensualité ne se saisit qu’une fois', () => {
 
-  /*     La charge détient désormais le montant, le crédit le lit. Ce que ces
+  /* Idée du propriétaire : « je veux que le crédit se rembourse par la charge
+     fixe quand c'est possible ». La mensualité était saisie deux fois — en charge
+     fixe, parce que le budget doit la connaître, et sur le crédit, pour projeter
+     l'amortissement. Deux endroits pour un fait, rien qui garantisse qu'ils
+     s'accordent.
+
+     La charge détient désormais le montant, le crédit le lit. Ce que ces
      contrôles interdisent : que le budget bouge en rattachant, que deux charges
      se partagent un crédit, et que le montant du crédit l'emporte sur celui de
      la charge. */
@@ -6048,9 +6242,11 @@ suite('Une charge fixe rembourse un crédit, et la mensualité ne se saisit qu�
    ------------------------------------------------------------------ */
 suite('Un crédit avec mensualité pose sa charge fixe', () => {
 
-  /*     « Je viens de créer un crédit avec mensualités et je ne le vois pas ici
-     », capture de l'onglet Charges fixes à l'appui. L'argent sortait tous les
-     mois et le budget l'ignorait. */
+  /* « Je viens de créer un crédit avec mensualités et je ne le vois pas ici »,
+     capture de l'onglet Charges fixes à l'appui. L'argent sortait tous les mois et
+     le budget l'ignorait. La fenêtre du crédit porte donc une case, cochée
+     d'avance, et la règle est celle du propriétaire : uniquement s'il y a une
+     mensualité. */
 
   const CREDIT = (mensualite) => ({
     id: 'd_pret', libelle: 'Prêt immobilier', montant: 96000, mensualite,
@@ -6219,7 +6415,11 @@ suite('Une rentrée exceptionnelle se garde en mémoire', () => {
    ------------------------------------------------------------------ */
 suite('Un patrimoine net négatif se dit, et ne se divise pas', () => {
 
-  /*     Deux règles en sont sorties. Un pourcentage de variation n'existe que sur une
+  /* Le propriétaire a saisi un crédit de 121 000 € sans le bien qu'il finance : le
+     net est passé à −90 541 €, et l'écran annonçait « −475,5 % » puis
+     « −580,3 % ». Le montant était juste, les pourcentages n'avaient aucun sens.
+
+     Deux règles en sont sorties. Un pourcentage de variation n'existe que sur une
      base positive et sans changement de signe — diviser par une base négative
      retourne le résultat, et une base qui traverse zéro rend le rapport
      arbitrairement grand. Et l'application nomme la cause la plus probable au
@@ -6717,8 +6917,11 @@ suite('Un compte dit chez qui il est', () => {
   });
 
   test('l’établissement s’affiche même quand le nom le répète', () => {
-    /*       Il a d’abord été masqué dans ce cas, pour éviter « Plateforme ·
-       Plateforme ». */
+    /* Il a d’abord été masqué dans ce cas, pour éviter « Plateforme ·
+       Plateforme ». Tranché en sens inverse le 5 août 2026 : dans une liste de
+       douze champs, un blanc ne dit pas s’il signifie « pas d’établissement »
+       ou « déjà écrit dans le nom », et la règle cessait d’être lisible depuis
+       l’écran, le seul endroit où elle compte. */
     Fixture.poser(e => {
       e.comptes.find(c => c.id === 'c_livret').libelle = 'Livret A Banque';
     });
@@ -6818,7 +7021,13 @@ suite('Les classes posées par le JavaScript existent', () => {
   });
 
   test('aucun pan de la feuille n’est écrit deux fois', () => {
-    /*       Ça ne se voit pas à l'écran : les copies sont identiques, la dernière
+    /* Trois copies mortes trouvées le 5 août dans la même région de la feuille :
+       un pan de 68 lignes, un autre de 31, et le bloc `.snap` que le fichier
+       signalait déjà. Le commentaire d'une règle voisine le disait sans le
+       chercher — « ces règles étaient dupliquées à l'identique un peu plus
+       haut » — donc c'est arrivé au moins deux fois.
+
+       Ça ne se voit pas à l'écran : les copies sont identiques, la dernière
        gagne, tout s'affiche juste. Ça se voit le jour où l'on retouche une des
        deux. Une règle corrigée dans la copie du haut n'a aucun effet, et on
        cherche ailleurs.
@@ -6851,7 +7060,13 @@ suite('Les classes posées par le JavaScript existent', () => {
    ------------------------------------------------------------------ */
 suite('Une plus-value se calcule dans une seule monnaie', () => {
 
-  /*     La cause : la création d'une ligne posait `fxBuy: 1` en dur, avant qu'on sache
+  /* Le défaut : un titre acheté au cours du jour annonçait une perte de 12,86 %.
+     La valeur recevait le change (10 × 69,00 $ × 0,8662 = 597,67 €), le prix de
+     revient non (10 × 68,59 = 685,90, des dollars comptés en euros), et l'écart
+     entre les deux se lisait comme une moins-value. Signalé par le propriétaire le
+     5 août 2026 sur une ligne Uber, et déjà vrai sur sa ligne Gold.
+
+     La cause : la création d'une ligne posait `fxBuy: 1` en dur, avant qu'on sache
      de quel titre il s'agit. La devise arrivait ensuite, `fx` était mis à jour, et
      ce 1 restait. Un total qui n'égale pas la somme de ses parts, une fois de plus,
      et invisible : les deux nombres étaient justes, dans deux monnaies. */
@@ -7017,7 +7232,10 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
   });
 
   test('Entrée enchaîne une saisie, et ne fabrique pas de ligne vide', () => {
-    /*       Il y en avait deux endroits pendant une heure : le détail d'une catégorie de
+    /* Là où l'on saisit plusieurs lignes d'affilée sur un ordinateur, Entrée pose
+       la suivante — demande du propriétaire, « si je veux en rentrer plein ».
+
+       Il y en avait deux endroits pendant une heure : le détail d'une catégorie de
        dépenses et le tableau des charges fixes. Le second est parti avec ses
        champs, le tableau passant désormais par sa fenêtre. Reste donc un seul
        porteur de la règle, et c'est cohérent : on n'enchaîne des lignes que là où
@@ -7074,7 +7292,12 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
   });
 
   test('une ligne qui ouvre sa fenêtre ne porte pas de champ', () => {
-    /*       L'invariant est le même dans les deux sens. Un champ dans une ligne
+    /* Deux tableaux du bureau ouvrent une fenêtre au clic sur la ligne : les mois
+       de dépenses, puis les charges fixes. Le second éditait ses cases en place,
+       et le propriétaire a tranché le 5 août 2026 : « je veux que ça fonctionne comme
+       le tableau depenses du mois ».
+
+       L'invariant est le même dans les deux sens. Un champ dans une ligne
        cliquable ne se laisse pas remplir — le clic part à la fenêtre avant
        d'arriver au champ — et il ouvrirait une deuxième surface d'édition pour un
        sous-ensemble des champs, celle qui perd toujours puisqu'elle ne peut pas
@@ -7324,7 +7547,17 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
   });
 
   test('un sous-onglet ramène en haut, un onglet du bas garde sa place', () => {
-    /*       La distinction tient à une comparaison, et il faut donc les deux mémoires :
+    /* La question posée le 5 août : « c'est quoi le standard ? » Elle n'a pas la
+       même réponse aux deux niveaux, et c'est pour ça qu'un seul mécanisme les
+       traitait mal tous les deux.
+
+       Les cinq onglets du bas sont des destinations : iOS garde une position par
+       onglet, Material 3 demande de restaurer l'état d'une destination. Deux
+       sous-onglets sont deux contenus de la même page, de longueurs différentes —
+       un sélecteur segmenté, pas une destination. Rester à 1 500 px en passant de
+       Dépenses à Relevés ne désigne rien du tout.
+
+       La distinction tient à une comparaison, et il faut donc les deux mémoires :
        la signature complète pour retrouver sa place, la clé de vue seule pour
        savoir si l'on a seulement changé d'onglet. Le contrôle exige les deux — avec
        la seule signature, un changement de sous-onglet est indiscernable d'un
@@ -7416,7 +7649,12 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
     vrai(/sous-page/.test(bloc),
       'et une sous-page ne cache jamais sa barre, qui porte le retour');
 
-    /*       La recherche part de `i` et non en arrière : le routeur écoute lui aussi
+    /* Changer d'écran rend la barre, sans condition : on arrive en haut d'une page
+       neuve. Une version avait conditionné ce retour à la position, pour qu'un
+       changement de sous-onglet garde la barre retirée ; écarté par le propriétaire —
+       « le changement de menu, oui on doit arriver en haut forcément ».
+
+       La recherche part de `i` et non en arrière : le routeur écoute lui aussi
        `hashchange`, plus haut dans le fichier, et remonter tombait sur le sien. */
     const surHash = js.slice(js.indexOf(`addEventListener('hashchange'`, i), i + 1400);
     vrai(/classList\.remove\('haut-cache'\)/.test(surHash),
@@ -7451,8 +7689,11 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
     vrai(retour[2].replace(/\s/g, '') !== depart[2].replace(/\s/g, ''),
       'et les courbes doivent différer, sinon le mouvement est le même dans les deux '
       + 'sens et se lit comme un tiroir');
-    /*       Il suit desormais la barre par sa position de collage, qui n'a rien a
-       animer. Voir « un bandeau d'etablissement ne se translate pas ». */
+    /* Les sous-onglets seuls, et plus le bandeau d'etablissement : celui-ci a
+       quitte la translation le 5 aout au soir, parce qu'elle sortait chaque titre
+       de sa carte, qui le decoupait. Il suit desormais la barre par sa position de
+       collage, qui n'a rien a animer. Voir « un bandeau d'etablissement ne se
+       translate pas ». */
     for (const [regle, attendu] of [
       [/\.sous-onglets\s*\{[^}]*transition:\s*transform\s+([\d.]+)s/, retour[1]],
       [/body\.haut-cache\s+\.sous-onglets[^{]*\{[^}]*transition-duration:\s*([\d.]+)s/, depart[1]],
@@ -7551,7 +7792,11 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
    ------------------------------------------------------------------ */
 suite('Une ligne de projection annonce le taux qu’elle subit', () => {
 
-  /*     Le défaut classique de cette base de code : deux listes du même fait, dont
+  /* « Le panneau "Ce que tu as déjà" affiche 8,00 % par an sur la ligne
+     Liquidités alors que le calcul les porte à plat : le chiffre est juste, son
+     explication est fausse. » le propriétaire, 6 août 2026.
+
+     Le défaut classique de cette base de code : deux listes du même fait, dont
      une seule est tenue à jour. `pochesProjection()` a sorti les liquidités de
      la poche de marché et leur a retiré tout rendement ; la fiche, elle, a gardé
      l'ancien découpage et leur collait le taux du non coté.
@@ -7646,7 +7891,10 @@ suite('Une ligne de projection annonce le taux qu’elle subit', () => {
    ------------------------------------------------------------------ */
 suite('La projection n’a qu’un seul horizon', () => {
 
-  /*     Ils réglaient deux choses différentes sous le même nom : celui de l'en-tête
+  /* « Les deux menus "par horizon" de Projection doivent être corrélés : une
+     seule variable, deux endroits qui l'écrivent. » le propriétaire, 6 août 2026.
+
+     Ils réglaient deux choses différentes sous le même nom : celui de l'en-tête
      posait `meta.projHorizon`, celui du tableau nourrissait `projExtra`, une
      ligne libre que le graphique ignorait. Deux valeurs rangées séparément pour
      une seule question, c'est exactement ce que ce projet interdit ailleurs. */
@@ -7702,7 +7950,11 @@ suite('La projection n’a qu’un seul horizon', () => {
    ------------------------------------------------------------------ */
 suite('Un graphique ne prend pas le geste de défilement', () => {
 
-  /*     Le premier contact posait l'infobulle, et un doigt qui traverse un
+  /* « Le graphique de l'accueil ouvre son infobulle quand on le touche pour
+     faire défiler la page : il faut un délai ou un seuil. » le propriétaire,
+     6 août 2026.
+
+     Le premier contact posait l'infobulle, et un doigt qui traverse un
      graphique de 300 px pour atteindre le bas de la page en pose forcément un.
 
      Le geste vit dans `cablerInfobulle`, qui ne touche ni au DOM ni au temps
@@ -7845,7 +8097,10 @@ suite('Un graphique ne prend pas le geste de défilement', () => {
    ------------------------------------------------------------------ */
 suite('Une ligne sans nom se supprime quand même', () => {
 
-  /*     Le champ « Poste » est obligatoire, la case « Supprimer cette charge » vit
+  /* « Une charge fixe sans nom ne se supprimait pas, il fallait mettre une
+     lettre. » le propriétaire, 6 août 2026.
+
+     Le champ « Poste » est obligatoire, la case « Supprimer cette charge » vit
      dans la même fenêtre, et valider renvoyait « Poste : à remplir ». Il fallait
      donc baptiser une ligne pour avoir le droit de la faire disparaître — et la
      ligne sans nom est justement celle qu'on veut le plus souvent effacer,
@@ -7897,7 +8152,11 @@ suite('Une ligne sans nom se supprime quand même', () => {
    ------------------------------------------------------------------ */
 suite('Une ligne de titres se supprime depuis sa fiche', () => {
 
-  /*     Le tableau des lignes ne se rend pas sous 768 px — c'est la règle
+  /* « Supprimer une position sans la vendre : bouton rouge en bas de la fiche,
+     avec confirmation. La croix n'existe que sur PC. » le propriétaire,
+     6 août 2026.
+
+     Le tableau des lignes ne se rend pas sous 768 px — c'est la règle
      d'affichage du projet — et la croix de suppression y vivait seule. Sur
      téléphone, une ligne saisie par erreur ne pouvait plus quitter le
      portefeuille. */
@@ -7939,7 +8198,9 @@ suite('Une ligne de titres se supprime depuis sa fiche', () => {
    ------------------------------------------------------------------ */
 suite('Une vente s’ajoute depuis le journal des ventes', () => {
 
-  /*     Le seul chemin était le bouton « − Vendre » de la carte « Lignes de titres »,
+  /* « Ajouter une vente plus facilement. » le propriétaire, 6 août 2026.
+
+     Le seul chemin était le bouton « − Vendre » de la carte « Lignes de titres »,
      dans Marchés — si loin que la page Performance écrivait l'itinéraire : « Le
      bouton "Vendre une ligne" se trouve dans Marchés ». Quand une page doit
      donner la direction de son propre geste, c'est le geste qui est mal placé.
@@ -7991,7 +8252,12 @@ suite('Une vente s’ajoute depuis le journal des ventes', () => {
    ------------------------------------------------------------------ */
 suite('Aucun survol ne peut rester collé au doigt', () => {
 
-  /*     Au doigt, `:hover` ne se lève pas : le navigateur le pose à l'appui et le
+  /* « Des fois la charge fixe ou une autre ligne reste surlignée sur téléphone
+     alors que je touche rien. » le propriétaire, 6 août 2026, capture à l'appui :
+     « Charges fixes » peinte à l'accent sur la carte « Où va ce que tu gagnes »,
+     sans que rien ne soit survolé.
+
+     Au doigt, `:hover` ne se lève pas : le navigateur le pose à l'appui et le
      laisse allumé jusqu'à ce qu'on touche ailleurs. Toute règle de survol est
      donc une tache de peinture sur téléphone.
 
@@ -8067,7 +8333,11 @@ suite('Aucun survol ne peut rester collé au doigt', () => {
    ------------------------------------------------------------------ */
 suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
 
-  /*     L'écriture, elle, était juste : mesuré dans le navigateur, le changement
+  /* « Ça fait plusieurs fois que je dois remettre le livret A en épargne de
+     précaution, ça se remet en projet prévu. Ça sauvegarde bien le
+     changement ? » le propriétaire, 6 août 2026.
+
+     L'écriture, elle, était juste : mesuré dans le navigateur, le changement
      entre bien dans l'état et y reste. Le seul mécanisme du code capable de
      défaire une modification enregistrée, sans un mot, est l'adoption
      silencieuse de la version en ligne au démarrage.
@@ -8147,7 +8417,11 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
    ------------------------------------------------------------------ */
 suite('Un compte archivé reste consultable et daté', () => {
 
-  /*     La carte des comptes archivés ne rendait que « Restaurer » et une croix :
+  /* « Quand j'archive un compte, je veux pouvoir toujours cliquer dessus, et
+     indiquer une date de clôture. On a une date d'ouverture mais pas de
+     clôture. » le propriétaire, 6 août 2026.
+
+     La carte des comptes archivés ne rendait que « Restaurer » et une croix :
      le nom n'ouvrait rien. Un compte archivé devenait donc inatteignable, alors
      que c'est justement pour son historique qu'on l'archive plutôt que de le
      supprimer. */
@@ -8239,7 +8513,13 @@ suite('Un compte archivé reste consultable et daté', () => {
    ------------------------------------------------------------------ */
 suite('Une page ne liste pas trois fois les mêmes positions', () => {
 
-  /*     Il reste deux listes, et elles répondent à deux questions différentes : ce
+  /* « Dans positions, on a 3 fois de suite toutes les positions : dans la carte
+     ajd, puis performance par ligne, puis lignes de titre. C'est donc bizarre.
+     Déjà performance par ligne est aussi dans performance non ? » le propriétaire,
+     6 août 2026. Oui, à la fonction près : les deux cartes appelaient
+     `rankedBars` sur la plus-value latente par position, triée.
+
+     Il reste deux listes, et elles répondent à deux questions différentes : ce
      qui a bougé aujourd'hui, et ce que je détiens. La plus-value se lit sur la
      page dont c'est le sujet. */
 
@@ -8295,9 +8575,17 @@ suite('Une page ne liste pas trois fois les mêmes positions', () => {
    ------------------------------------------------------------------ */
 suite('L’objectif de dépenses se voit comme un réglage', () => {
 
-  /*     Troisième tentative sur ce réglage : un champ discret sans intitulé, puis un
+  /* « Mettre ça un peu plus flashy, peut-être violet ? On ne voit pas bien où on
+     peut changer l'objectif. » le propriétaire, 6 août 2026, capture à l'appui.
+
+     Troisième tentative sur ce réglage : un champ discret sans intitulé, puis un
      champ étiqueté qui doublonnait avec son jumeau de l'onglet voisin, puis un
-     montant cliquable souligné d'un pointillé gris — qui ne se voyait pas. */
+     montant cliquable souligné d'un pointillé gris — qui ne se voyait pas.
+
+     Celle-ci n'invente rien : elle reprend le signal qui a déjà répondu à la
+     même remarque deux cartes plus bas, quand « j'ai mis du temps à comprendre
+     que je pouvais cliquer sur le 4 500 » avait valu son chevron au montant des
+     revenus. Même problème, même signal. */
 
   test('le montant porte l’accent et le chevron', () => {
     const src = lireSource('assets/app.js');
@@ -8347,7 +8635,11 @@ suite('L’objectif de dépenses se voit comme un réglage', () => {
    ------------------------------------------------------------------ */
 suite('La barre du haut ne revient pas au moindre geste', () => {
 
-  /*     Le motif du marché — `enterAlways` de Material 3 — rend la barre au premier
+  /* « Je trouve que le menu revient trop vite quand on redéfile vers le haut,
+     il faudrait un battement, genre un tiers d'écran de slide avant que ça
+     revienne. » le propriétaire, 6 août 2026.
+
+     Le motif du marché — `enterAlways` de Material 3 — rend la barre au premier
      geste vers le haut. En lecture, on remonte sans arrêt de quelques dizaines
      de pixels : pour relire une ligne, pour revoir un total qu'on vient de
      dépasser. Chacune de ces corrections faisait retomber la barre sur le
@@ -8479,7 +8771,11 @@ suite('La barre du haut ne revient pas au moindre geste', () => {
    ------------------------------------------------------------------ */
 suite('La barre latérale ne s’en va pas avec la page', () => {
 
-  /*     Mesure à 1 280 × 900 sur un document de 2 062 px : la barre, pourtant en
+  /* « Bonne idée ou pas, que ce menu défile avec l'écran quand on défile vers le
+     bas ou le haut ? » le propriétaire, 6 août 2026. Non — et surtout, il le
+     faisait déjà, ce qui n'était pas un choix mais un défaut.
+
+     Mesure à 1 280 × 900 sur un document de 2 062 px : la barre, pourtant en
      `position: sticky; top: 0`, était à `top: -800px` après un défilement de
      800. Pas un pixel de retenue.
 
@@ -8613,7 +8909,12 @@ suite('Le mode masqué n’imprime pas ses balises', () => {
   });
 
   test('aucun montant formaté ne part dans un canal texte', () => {
-    /*       Corriger cette fenetre seule referait le defaut au prochain apercu — une
+    /* La fenetre « Mois au-dessus de l'objectif » entierement recouverte de
+       balisage, photo du 8 aout 2026 : son sous-titre compose « objectif
+       ${fmtEUR0(cible)} par mois » et partait dans textContent, qui imprime
+       une balise au lieu de la dessiner.
+
+       Corriger cette fenetre seule referait le defaut au prochain apercu — une
        quarantaine composent leurs textes ainsi. La regle se derive donc de la
        source : une affectation `.textContent =` ne peut pas porter un
        formateur de montant dans sa propre expression. Ceux qui en portent un
@@ -8643,6 +8944,12 @@ suite('Le mode masqué n’imprime pas ses balises', () => {
 
 /* ------------------------------------------------------------------
    L'échelle visuelle est fermée
+
+   Mesure du 9 août 2026, avant fermeture : 23 rayons distincts, 16
+   graisses, 6 ombres noires écrites en dur et identiques dans les deux
+   thèmes. Aucune de ces différences n'était une décision — 7 px contre
+   8 px ne se voit pas — mais leur somme se voit : une interface dont
+   aucun coin ne répond au voisin a l'air assemblée, pas dessinée.
 
    La règle est celle des couleurs, déjà en place plus haut : une échelle
    se ferme, et la valeur suivante demande d'élargir l'échelle, pas de
@@ -8753,7 +9060,10 @@ suite('L’échelle visuelle est fermée', () => {
    ------------------------------------------------------------------ */
 suite('Le rappel des saisies attend son jour', () => {
 
-  /*     La cloche réclamait le relevé dès le 1er. Quelqu'un payé le 15 voyait donc
+  /* « Certains auront peut-être leur salaire en milieu de mois et voudront
+     relever à ce moment. » le propriétaire, 6 août 2026.
+
+     La cloche réclamait le relevé dès le 1er. Quelqu'un payé le 15 voyait donc
      la pastille allumée quinze jours pour rien — et une alerte qu'on apprend à
      ignorer ne sert plus à rien le jour où elle a raison. */
 
@@ -8922,7 +9232,10 @@ suite('Un mois resté vide se signale', () => {
    ------------------------------------------------------------------ */
 suite('Un onglet du bas ramène à son premier sous-onglet', () => {
 
-  /*     L'onglet retenait le clic quand on était « déjà dessus », pour se contenter
+  /* « Quand je clique sur aperçu je dois revenir à l'onglet ajd, même si je suis
+     sur l'autre onglet. » le propriétaire, 6 août 2026.
+
+     L'onglet retenait le clic quand on était « déjà dessus », pour se contenter
      de remonter en haut de page. Mais « déjà dessus » se jugeait sur la vue, pas
      sur l'adresse — et ces deux choses diffèrent dès qu'une vue a des
      sous-onglets : sur Projection, l'adresse est `#/objective` et la vue reste
@@ -8956,7 +9269,10 @@ suite('Un onglet du bas ramène à son premier sous-onglet', () => {
    ------------------------------------------------------------------ */
 suite('Une fiche de ligne garde son ordre', () => {
 
-  /*     Uber n'a ni ISIN, ni pays d'émission, ni nom officiel. Ces lignes ne se
+  /* « Selon la fiche rien n'est dans le même ordre. » le propriétaire, 6 août 2026,
+     deux captures côte à côte : Uber et Nvidia.
+
+     Uber n'a ni ISIN, ni pays d'émission, ni nom officiel. Ces lignes ne se
      rendaient que si elles avaient une valeur, donc tout ce qui suit —
      aujourd'hui, plus-value, clôture de la veille, part du portefeuille —
      remontait de trois crans d'une fiche à l'autre. On ne peut apprendre où vit
@@ -9006,7 +9322,10 @@ suite('Une fiche de ligne garde son ordre', () => {
        Un tiret n'aurait rien appris, et le tiret cadratin est proscrit du texte
        affiché. */
     const bloc = blocIdentite();
-    /*       Ces cas disent « sans objet », et le vrai manque dit où le trouver. */
+    /* « Non renseigné » a disparu de l'ISIN le 6 août : il désignait un défaut
+       là où il n'y en a pas — une cryptomonnaie n'a pas d'ISIN, une ligne saisie
+       à la main non plus. Ces cas disent « sans objet », et le vrai manque dit
+       où le trouver. */
     for (const mot of ['sans objet', 'à copier depuis ton courtier', 'se déduit de l’ISIN',
                        'identique au nom de la ligne', 'se déduit du nom d’un fonds']) {
       vrai(bloc.includes(mot), `l’état vide « ${mot} » doit exister`);
@@ -9020,7 +9339,11 @@ suite('Une fiche de ligne garde son ordre', () => {
    ------------------------------------------------------------------ */
 suite('Le panneau des notifications n’est pas rogné par sa barre', () => {
 
-  /*     La cause est une régression du correctif de la veille. La barre latérale a
+  /* « Le bouton notifications ne marche plus sur téléphone, rien ne s'affiche. »
+     le propriétaire, 6 août 2026. Il marchait : le panneau s'ouvrait, on ne le
+     voyait pas.
+
+     La cause est une régression du correctif de la veille. La barre latérale a
      reçu `overflow-y: auto` pour qu'un écran court ne rende pas son pied
      inatteignable — juste pour le rail vertical de l'ordinateur. Or sous 768 px,
      ce même sélecteur est la bande de 54 px du haut, et `overflow: auto` en fait
@@ -9082,7 +9405,10 @@ suite('Le panneau des notifications n’est pas rogné par sa barre', () => {
    ------------------------------------------------------------------ */
 suite('Le journal des ventes se borne par année', () => {
 
-  /*     Il en avait 500. La carte n'avait aucune commande : elle déroulait tout ce
+  /* « Ça s'affiche comment ? Ça se filtre par année ? Si je fais 500 ventes j'ai
+     500 lignes ? Il faut un sélecteur d'année. » le propriétaire, 6 août 2026.
+
+     Il en avait 500. La carte n'avait aucune commande : elle déroulait tout ce
      que la plage glissante retenait, et cette plage se réglait deux cartes plus
      haut, sur les graphiques.
 
@@ -9125,29 +9451,48 @@ suite('Le journal des ventes se borne par année', () => {
       'la plage glissante doit passer par le même calcul');
   });
 
-  test('la carte porte son sélecteur et son dépliant', () => {
+  test('une seule borne de temps sur la page, et le dépliant reste', () => {
+    /* Il y en avait deux : la plage glissante reglait les courbes, un menu
+       d'annee reglait le journal, et rien n'empechait l'un de dire 2025 et
+       l'autre 2026. Le menu a rejoint les crans, dans un contrôle unique. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     const bloc = src.match(/function salesCard\(\) \{[\s\S]*?\n\}/);
     vrai(bloc, 'la carte du journal doit être trouvable');
-    vrai(/yearControl\('sales-year'/.test(bloc[0]),
-      'un sélecteur d’année : sans lui, cinq cents ventes font cinq cents lignes');
-    vrai(/<details class="data-view">/.test(bloc[0]),
-      'et un dépliant : l’année borne combien de lignes existent, lui borne quand '
+    vrai(/const st = salesStats\(salesRange\);/.test(bloc[0]),
+      'le journal se borne comme les graphiques, par la plage de la page');
+    vrai(!/yearControl\(/.test(bloc[0]),
+      'et n’a plus de sélecteur propre : deux menus d’année jumeaux pouvaient se contredire');
+    /* Sur la source sans ses commentaires : le fichier explique pourquoi cet etat
+       a disparu, et cette explication doit pouvoir citer son nom. */
+    vrai(!/salesYear/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
+      'l’état séparé est parti, sinon la borne existerait encore en double');
+    vrai(/<details class="data-view"/.test(bloc[0]),
+      'le dépliant reste : la borne dit combien de lignes existent, lui dit quand '
       + 'on les voit');
-    vrai(!/salesRange/.test(bloc[0]),
-      'la plage glissante a quitté cette carte : deux bornes de temps sur un même '
-      + 'écran demandent de se souvenir laquelle commande quoi');
   });
 
-  test('l’année par défaut est celle en cours, et ne se fige pas', () => {
-    /* Écrite en dur à la déclaration, elle serait fausse au 1er janvier. */
-    const src = lireSource('assets/app.js');
-    vrai(/^let salesYear = null;/m.test(src),
-      'l’année du journal doit être décidée au rendu, pas à la déclaration');
-    const bloc = src.match(/function salesCard\(\) \{[\s\S]*?\n\}/);
-    vrai(/new Date\(\)\.getFullYear\(\)/.test(bloc[0]),
-      'et se caler sur l’année courante');
+  test('une année est une plage, fermée des deux côtés', () => {
+    /* Filtrer une annee sur son seul debut aurait montre 2025 et tout ce qui a
+       suivi : une duree glissante n'a pas de fin, une annee civile en a une. */
+    eq(estAnnee('2025'), true, 'quatre chiffres font une année');
+    eq(estAnnee('5y'), false, 'un cran de durée n’en est pas une');
+    const b = rangeBornes('2025');
+    eq(b.debut, '2025-01-01', 'elle ouvre au 1er janvier');
+    eq(b.fin, '2025-12-31', 'et se ferme au 31 décembre');
+    eq(rangeBornes('all').fin, null, 'une durée n’a pas de fin');
+    eq(rangeLabel('2025'), '2025', 'et son libellé est son nom');
+    eq(pasDesVentes('2025'), 'mois', 'une année se lit par mois, douze barres nommées');
+
+    Fixture.poser();
+    declarerVente({ date: '2025-03-10', name: 'En 2025', gross: 1000, realised: 200 });
+    declarerVente({ date: '2026-06-20', name: 'En 2026', gross: 300, realised: 50 });
+    eq(salesStats('2025').count, 1, 'la plage 2025 ne retient que 2025');
+    pres(salesStats('2025').realised, 200, 'et son total est celui de cette année');
+    eq(salesStats('2026').count, 1, '2026 de son côté');
+    eq(salesStats('all').count, 2, 'et « Tout » les garde toutes les deux');
+    eq(anneesDesVentes().join(','), '2026,2025',
+      'les années offertes sont celles où une vente existe, la plus récente devant');
   });
 });
 
@@ -9156,7 +9501,10 @@ suite('Le journal des ventes se borne par année', () => {
    ------------------------------------------------------------------ */
 suite('La carte Objectif met en avant l’écart, pas le patrimoine', () => {
 
-  /*     Il l'était trois fois sur le même écran : en grand dans cette carte, vingt
+  /* « Le chiffre 30 000 est mis en avant, et il est un peu redondant avec
+     l'autre onglet. » le propriétaire, 6 août 2026.
+
+     Il l'était trois fois sur le même écran : en grand dans cette carte, vingt
      pixels plus bas comme première barre de « Ce que tu as déjà », et en chiffre
      de tête de l'onglet Aujourd'hui.
 
@@ -9211,7 +9559,10 @@ suite('La carte Objectif met en avant l’écart, pas le patrimoine', () => {
    ------------------------------------------------------------------ */
 suite('L’objectif ne se peint pas d’une couleur qui ne dit rien', () => {
 
-  /*     La barre portait `--degrade-budget`, bleu vers rose, créé pour accorder la
+  /* « Ça manque peut-être de professionnalisme, étant donné que ça ne colle pas
+     au graphique de projection plus bas. » le propriétaire, 6 août 2026.
+
+     La barre portait `--degrade-budget`, bleu vers rose, créé pour accorder la
      jauge de l'accueil et les barres de catégories du Budget. Sur Projection,
      aucun autre élément ne le porte : le graphique en dessous parle en azur et
      en turquoise. Les deux ne partageaient littéralement aucune couleur, et un
@@ -9291,7 +9642,12 @@ suite('L’objectif ne se peint pas d’une couleur qui ne dit rien', () => {
    ------------------------------------------------------------------ */
 suite('Une grille ne réserve pas de place à ce qu’elle ne montre pas', () => {
 
-  /*     `.flow-row` sert deux cartes : les charges fixes, qui montrent la part de
+  /* « Toujours un gros espace vide à droite sur iPhone. » le propriétaire, signalé
+     trois fois avant d'être mesuré — il fallait une capture assez large pour
+     voir que le vide longeait le bord de la carte, et pas seulement les
+     montants.
+
+     `.flow-row` sert deux cartes : les charges fixes, qui montrent la part de
      chaque poste, et les dépenses du mois, qui ne la montrent pas. Les quatre
      colonnes étaient déclarées pour les deux — la seconde gardait donc 42 px
      réservés à rien, plus 10 px d'écart, soit un couloir de 52 px. Mesure à
@@ -9340,7 +9696,10 @@ suite('Une grille ne réserve pas de place à ce qu’elle ne montre pas', () =>
    ------------------------------------------------------------------ */
 suite('Le détail d’une dépense ne perd pas un montant nommé', () => {
 
-  /*     La règle exigeait deux lignes pour conserver le détail. Elle avait sa
+  /* « Quand je rentre le nom d'une dépense, si il n'y en a qu'une, même après
+     avoir enregistré, ça n'enregistre pas. » le propriétaire, 6 août 2026.
+
+     La règle exigeait deux lignes pour conserver le détail. Elle avait sa
      raison — « Voyages, 220, dont 220 » ne dit rien de plus que « Voyages,
      220 » — mais elle ne valait que pour un montant **sans nom**. Avec un nom,
      la ligne porte ce que le total ne porte pas, et c'est exactement ce qu'on
@@ -9416,9 +9775,12 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
   });
 
   test('le brut se dérive des classes au lieu de les recompter', () => {
-    /*       La faute qui a motive ce test : `patrimoine()` tenait deux listes
-       ecrites a la main, l'une pour `classes`, l'autre pour la somme du brut.
-       C'est la regle cardinale du projet, violee par un doublon de liste. */
+    /* La faute qui a motive ce test : `patrimoine()` tenait deux listes ecrites a
+       la main, l'une pour `classes`, l'autre pour la somme du brut. Une classe
+       ajoutee dans la premiere et oubliee dans la seconde donnait un total plus
+       petit que la somme de ses parts — mesure du 6 aout 2026, 34 810 contre
+       30 610 — sans que rien a l'ecran ne le dise. C'est la regle cardinale du
+       projet, violee par un doublon de liste. */
     Fixture.poser();
     Store.state.comptes.push({ id: 'c_bv', etabId: null, type: 'bienValeur',
       statut: 'ouvert', libelle: 'Moto', ouvertLe: '2023-04-10', cash: [],
@@ -9502,8 +9864,11 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
     const fn = src.slice(debut, debut + 5000);
     vrai(/nomLignePlacement\(l, compte\)/.test(fn),
       'la ligne tire son nom de la fonction qui en décide, une seule fois');
-    /*       Le dernier appelant de `lignePlacement()` est la fiche d'un compte, ou
-       la classe de chaque ligne est au contraire l'information utile. */
+    /* Le repli `sansClasse` et la vue groupee par classe sont partis ensemble le
+       8 aout 2026 : cet onglet redisait ce que la carte « Repartition » de
+       l'accueil dit deja, avec sa part et sa base en plus. Le dernier appelant
+       de `lignePlacement()` est la fiche d'un compte, ou la classe de chaque
+       ligne est au contraire l'information utile. */
     vrai(/function lignePlacement\(l, compte, editable = false\) \{/.test(src),
       'le paramètre est parti avec sa vue : trois arguments, plus quatre');
     eq((src.match(/[^m]lignePlacement\(/g) || []).length, 2,
@@ -9689,7 +10054,10 @@ suite('Le balisage et le dictionnaire disent le même mot', () => {
        C'est la faute que ce projet corrige sans arret, sous une forme nouvelle :
        une liste se derive, elle ne se recopie pas. Ici on ne peut pas deriver —
        le balisage doit rester lisible sans JavaScript, et le dictionnaire doit
-       porter l'anglais — mais on peut refuser qu'ils divergent. */
+       porter l'anglais — mais on peut refuser qu'ils divergent.
+
+       Signale par le propriétaire le 7 aout 2026 : « j'ai toujours Comptes sur le
+       web ». */
     const html = lireSource('index.html');
     const js = lireSource('assets/i18n.js');
     vrai(html && js, 'index.html et i18n.js doivent être lisibles');
@@ -9754,7 +10122,11 @@ suite('La page Actifs range ce qu’on tient chez un tiers et ce qu’on tient s
        d'achat ? ». Le non cote dit oui : c'est le parcours de creation qui s'en
        sert. `estDetenuEnDirect()` repond a « le contenant est-il la chose
        elle-meme ? », et le non cote dit non — une part de societe a un emetteur
-       en face, et une plateforme la tient pour toi. */
+       en face, et une plateforme la tient pour toi.
+
+       Le premier jet de la page lisait `estUnBien()`, et Plateforme C et Plateforme A se
+       rangeaient sous « Biens et especes » alors que ce sont des plateformes.
+       Mesure du 8 aout 2026. */
     vrai(estDetenuEnDirect(typeCompte('immo')), 'un appartement se tient soi-même');
     vrai(estDetenuEnDirect(typeCompte('bienValeur')), 'une montre aussi');
     vrai(!estDetenuEnDirect(typeCompte('nonCote')),
@@ -10051,7 +10423,12 @@ suite('Un bien se crée seul, s’estime, et se modifie par un bouton', () => {
 suite('Un bien change de contenant, et garde un seul nom', () => {
   test('un crédit se pose sur le contenant, et une seule fois', () => {
     /* Le constat qui a lance ce chantier : trois studios ranges dans un meme
-       contenant, un credit ajoute a l'un, et « ca a attache le credit aux 3 ». */
+       contenant, un credit ajoute a l'un, et « ca a attache le credit aux 3 ».
+
+       Le calcul, lui, etait juste — mesure du 8 aout 2026 : 12 000 comptes une
+       fois, brut moins dettes egale net a l'euro pres. Ce test fige cette moitie
+       de la reponse, pour qu'un futur reglage du rattachement ne se mette pas a
+       compter la dette autant de fois qu'elle a de biens en face. */
     Fixture.poser();
     /* L'ecart, pas la valeur absolue : le fixture porte deja ses propres
        credits, et figer un total ici ferait echouer ce test au prochain
@@ -10216,7 +10593,12 @@ suite('Un bien change de contenant, et garde un seul nom', () => {
 
 suite('La pastille des cours ne certifie que ce qu’elle sait', () => {
   test('elle date le prix, jamais la requête', () => {
-    /*       La demande du 8 aout — « marquer actualise a l'instant » — revenait a
+    /* L'invariant fondateur, pose le 6 aout 2026 : elle affichait `lastRun`,
+       l'heure a laquelle on a interroge la passerelle, et disait donc « il y a
+       2 min » sur des cours imprimes la veille a 22 h. Le seul repere de
+       fraicheur de l'application certifiait precisement ce qui etait faux.
+
+       La demande du 8 aout — « marquer actualise a l'instant » — revenait a
        retablir ce defaut. Ce test est la pour qu'aucune demande future ne le
        fasse par inadvertance. */
     const src = lireSource('assets/app.js');
@@ -10241,10 +10623,11 @@ suite('La pastille des cours ne certifie que ce qu’elle sait', () => {
   });
 
   test('trois états, parce qu’un portefeuille tient sur deux places', () => {
-    /*       Paris ouvre a 9 h, New York a 15 h 30 : entre les deux, la moitie des
+    /* Paris ouvre a 9 h, New York a 15 h 30 : entre les deux, la moitie des
        lignes a cote et l'autre non. Un age serait alors celui de la moitie
        fraiche, et le point vert dirait que tout va bien au-dessus d'un
-       portefeuille a moitie perime. France mais pas US ». */
+       portefeuille a moitie perime. Question du propriétaire le 8 aout 2026 :
+       « et si la moitie du marche est ouvert ? France mais pas US ». */
     const src = lireSource('assets/app.js');
     const debut = src.indexOf('const marche = coursAsOf();');
     /* Borne par la fin de la fonction : une tranche fixe ratait la derniere
@@ -10413,7 +10796,14 @@ suite('Un graphique de ventes tient debout à huit cents ventes', () => {
 
 suite('Un loyer se rattache depuis le bien, pas depuis une liste', () => {
   test('deux boutons qui font, là où il y en avait un qui renvoyait', () => {
-    /*       La carte « Financement » juste en dessous montrait la bonne forme depuis
+    /* « Loyers » ouvrait la fenetre generique des revenus fixes, ou il fallait
+       retrouver la bonne ligne et changer sa liste de « aucun » vers ce bien :
+       trois gestes, dans un ecran qui ne parle pas du bien, et dont l'intitule
+       — « Revenus fixes » — ne ressemble pas au bouton clique. « Il n'y a pas
+       vraiment de bouton pour rattacher un loyer, j'arrive sur revenu fixe »,
+       le propriétaire, 8 aout 2026.
+
+       La carte « Financement » juste en dessous montrait la bonne forme depuis
        le debut : « + Credit » cree le credit rattache, sans detour. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
@@ -10436,8 +10826,9 @@ suite('Un loyer se rattache depuis le bien, pas depuis une liste', () => {
   });
 
   test('le loyer et la charge créés depuis la fiche entrent dans le cash-flow', () => {
-    /*       Le controle qui compte : un loyer pose par ce bouton doit se retrouver
-       dans `cashFlowBien()`, sinon le geste ne sert a rien. */
+    /* Le controle qui compte : un loyer pose par ce bouton doit se retrouver dans
+       `cashFlowBien()`, sinon le geste ne sert a rien. Mesure du 8 aout 2026 :
+       650 EUR de loyer, 1 200 EUR de taxe fonciere par an, cash-flow 550 EUR. */
     Fixture.poser();
     Store.state.etabs.push({ id: 'e_m', nom: 'Studio Marseille', notes: '', dettes: [] });
     Store.state.comptes.push({ id: 'c_m', etabId: 'e_m', type: 'immo', statut: 'ouvert',
@@ -10492,7 +10883,18 @@ suite('Un loyer se rattache depuis le bien, pas depuis une liste', () => {
 });
 
 /* ------------------------------------------------------------------
-   Un bien de valeur compte partout ou l'argent compte */
+   Un bien de valeur compte partout ou l'argent compte
+
+   « J'ai teste l'ajout d'une montre a 10 000 EUR mais mon patrimoine net
+   n'augmente pas ! Et n'apparait pas dans allocation - patrimoine. »
+   le propriétaire, 9 aout 2026.
+
+   patrimoine() comptait la montre depuis le 6 aout — son brut se derive de
+   toutes les classes. Mais nowByGroup() sommait cinq poches ecrites a la
+   main, sans `biens`, et tout ce qui lit nowTotals() (pied de barre,
+   allocation, courbe d'evolution, projection) l'ignorait. Deux bruts dans
+   l'application, un seul juste, aucun ecran pour le dire.
+   ------------------------------------------------------------------ */
 suite('Un bien de valeur compte partout', () => {
 
   const MONTRE = 10000;
@@ -10612,7 +11014,7 @@ suite('La navigation arrive en haut, la memoire sert au retour de fiche', () => 
 });
 
 /* ------------------------------------------------------------------
-   Budget : la base d un pourcentage, et l annee comme borne
+   Budget, retours du 9 aout 2026
    ------------------------------------------------------------------ */
 suite('Budget : le pourcentage dit sa base, l annee reste une annee', () => {
 
@@ -10644,7 +11046,9 @@ suite('Budget : le pourcentage dit sa base, l annee reste une annee', () => {
     vrai(!/Toutes les années/.test(fn), 'le cran a quitté la fonction, donc tous ses appelants');
     /* Et une valeur `all` restee d un vieux geste retombe sur l annee en
        cours, pour chacun des quatre etats d annee. */
-    for (const etat of ['budgetYear', 'evoYear', 'salesYear', 'historyYear']) {
+    /* `salesYear` a quitte cette liste avec le selecteur du journal : sa borne
+       est celle de la page, et `rangeControl` n'offre pas de cran « toutes ». */
+    for (const etat of ['budgetYear', 'evoYear', 'historyYear']) {
       vrai(new RegExp(`if \\(${etat} === 'all'\\) ${etat} = null;`).test(src),
         `${etat} doit absorber l’ancienne valeur « all »`);
     }
@@ -10714,15 +11118,21 @@ suite('Une vente déclarée n’écrit que le journal', () => {
       'et aucun euro ne repart d’un compte qui n’avait rien reçu');
   });
 
-  test('ses colonnes muettes se taisent à l’écran, avec leur raison', () => {
-    /* Sans quantite ni prix, la ligne du tableau ecrivait « 0 » et « 0,00 € » :
-       une vente amputee plutot qu une vente declaree. */
+  test('ses champs muets se taisent à l’écran, avec leur raison', () => {
+    /* Sans quantite ni prix, la ligne ecrivait « 0 » et « 0,00 € » : une vente
+       amputee plutot qu'une vente declaree. Le tableau a cede la place a une liste
+       cliquable et a un panneau de detail, et la regle a suivi les deux — c'est le
+       genre de silence qu'un remplacement d'affichage emporte sans le dire. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    vrai(/v\.declaree \? '' : num\(v\.qty\)/.test(src),
-      'la quantité se tait sur une vente déclarée');
-    vrai(/declaree[\s\S]{0,80}?déclarée, pour mémoire/.test(src),
-      'et la ligne dit d’où elle vient');
+    const carte = src.match(/function salesCard\(\) \{[\s\S]*?\n\}/)[0];
+    vrai(/v\.declaree \? trad\('déclarée, pour mémoire'\)/.test(carte),
+      'la ligne dit d’où elle vient au lieu d’annoncer une quantité nulle');
+    vrai(/num\(v\.qty\)\} × \$\{fmtCur\(v\.price, dev\)\}/.test(carte),
+      'et la quantité ne s’affiche que sur une vente qui en a une');
+    const ap = src.slice(src.indexOf('vente: (i) =>'), src.indexOf('vente: (i) =>') + 2200);
+    vrai(/\$\{v\.declaree \? '' : `/.test(ap),
+      'le panneau tait les trois champs de prix sur une vente déclarée');
     vrai(/if \(v\.declaree\) \{\n    Store\.state\.sales\.splice/.test(lireSource('assets/store.js')),
       'l’annulation la retire sans rien défaire d’autre');
   });
@@ -10734,7 +11144,7 @@ suite('Une vente déclarée n’écrit que le journal', () => {
 suite('Marchés : le filtre de compte suit les règles du filtre de rôle', () => {
 
   test('il agit sur la liste, se dérive des positions, et se tait seul', () => {
-    /* Filtrer sur un compte ne doit montrer que ses positions.
+    /* « Si je mets CTO Courtier B, je ne vois que les positions de ce compte. »
        Meme regime que le filtre Core / Satellite : la liste des lignes, pas
        les tuiles du haut — une valeur de portefeuille qui changerait selon un
        filtre d affichage serait un piege. */
@@ -10803,7 +11213,11 @@ suite('Détail mensuel : tri des lignes, ordre des colonnes', () => {
    ------------------------------------------------------------------ */
 suite('Enregistrer : une règle, deux familles', () => {
 
-  /*     - fenetre de SAISIE EN SERIE (fiche de ligne, depenses du mois, releve,
+  /* « Certaines cartes il faut enregistrer puis fermer. D autres enregistrer
+     ferme la carte. » (9 aout 2026). L inventaire a montre deux familles
+     voulues et UNE vraie incoherence, corrigee ici :
+
+     - fenetre de SAISIE EN SERIE (fiche de ligne, depenses du mois, releve,
        apercus modifiables) : Enregistrer ecrit et reste, Fermer part et
        demande s il reste du non-enregistre ;
      - fenetre d ACTE (creer, vendre, confirmer) : le bouton porte le nom de
@@ -12670,6 +13084,231 @@ suite('Un montant n’a qu’un porteur', () => {
       'le champ garde la saisie, et un mot dit ce que le calcul en fait');
     vrai(/num\(l\.part\) && \(num\(l\.part\) < 0 \|\| num\(l\.part\) > 100\)/.test(src),
       'et ce mot n’apparaît que pour une valeur vraiment hors bornes, jamais sur 100');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Performance ne dit que ce qu'elle peut prouver
+   ------------------------------------------------------------------ */
+suite('Performance ne dit que ce qu’elle peut prouver', () => {
+
+  test('un écart ne se calcule pas entre deux périmètres', () => {
+    /* La courbe de plus-value latente retranchait un prix de revient de
+       portefeuille d'une poche de releve. Les deux ne couvrent pas le meme
+       ensemble : la poche « bourse » d'un releve porte la valeur entiere des
+       comptes, especes du courtier comprises, quand le prix de revient ne
+       couvre que les positions. L'ecart compte donc le cash comme du gain, et
+       sur le fixture il le compte a l'euro pres. */
+    Fixture.poser();
+    const row = Store.state.monthly[0];
+    const vrai0 = latentPnl().pnl;
+    const faux = rowGroups(row).bourse - portfolioPnl().invested;
+    pres(faux - vrai0, Fixture.CASH_A_INVESTIR,
+      'le cash qui dort chez le courtier se lisait comme une plus-value');
+
+    /* Le perimetre ne se rattrape pas apres coup : un releve ne dit pas quelle
+       part d'un compte etait investie ce mois-la. Le calcul est donc parti, et
+       avec lui le champ que plus personne ne lisait. */
+    const store = lireSource('assets/store.js');
+    const app = lireSource('assets/app.js');
+    vrai(store && app, 'les deux sources doivent être lisibles');
+    vrai(!/function latentSeries/.test(store),
+      'aucun calcul ne mélange plus les deux périmètres');
+    vrai(!/latentSeries\(/.test(app), 'et aucun écran ne l’appelle');
+    vrai(!/\brow\.inv\s*=/.test(app),
+      'plus d’écriture d’un champ que rien ne lit : un champ mort dérive en silence');
+  });
+
+  test('un pourcentage n’existe que sur une base positive', () => {
+    /* « +0,00 % » s'affichait sur une plage sans une seule vente, ce qui affirme
+       une performance nulle la ou il n'y a rien eu. Et `fmtSignedPct` ne peut pas
+       s'en apercevoir : elle rend « +0,00 % » pour 0 comme pour null, le signe
+       venant d'une comparaison que null passe. C'est donc au calcul de se taire. */
+    eq(statsDesVentes([]).pct, null, 'aucune vente, aucune base, aucun pourcentage');
+
+    Fixture.poser();
+    declarerVente({ date: '2026-03-01', name: 'Cadeau', gross: 300, realised: 300 });
+    const st = salesStats('all');
+    pres(st.invested, 0, 'une ligne encaissee sans prix de revient');
+    eq(st.pct, null, 'et son pourcentage se tait plutôt que de valoir l’infini');
+    pres(st.realised, 300, 'l’euro, lui, reste dit');
+
+    Fixture.poser(s => { for (const p of s.positions) p.buyPrice = 0; });
+    const lat = latentPnl();
+    pres(lat.invested, 0, 'des lignes sans prix de revient');
+    eq(lat.pct, null, 'pas de base, pas de pourcentage');
+    vrai(lat.pnl > 0, 'alors que l’écart en euros existe et se dit');
+  });
+
+  test('les écrans se taisent avec le calcul', () => {
+    /* Une garde dans le calcul ne suffit pas : c'est l'ecran qui imprime. Sept
+       surfaces affichaient ce pourcentage, dont deux apercus et un export. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    /* La garde peut tenir sur la meme ligne ou deux lignes plus haut, dans un
+       ternaire etale : on la cherche dans ce qui precede immediatement, et sur
+       la meme variable — une garde sur `lat` ne protege pas `tout`. */
+    const restants = [...src.matchAll(/fmtSignedPct\((lat|tout|pnl|st)\.pct/g)]
+      .filter(m => !src.slice(Math.max(0, m.index - 220), m.index)
+        .includes(`${m[1]}.pct == null`));
+    eq(restants.length, 0,
+      `un pourcentage imprimé sans garde : ${restants.map(m => m[0]).join(', ')}`);
+    vrai(/st\.pct == null \? null : round2\(st\.pct\)/.test(src),
+      'et l’export met une cellule vide, pas un zéro qui se moyennerait');
+  });
+
+  test('un seul calcul pour la plus-value du portefeuille', () => {
+    /* `portfolioPnl` et `latentPnl` sommaient les memes positions chacun de son
+       cote. Deux exemplaires d'une meme somme finissent par dire deux choses :
+       celui-ci rendait encore 0 % sur une base nulle quand l'autre se taisait. */
+    Fixture.poser();
+    const a = portfolioPnl(), b = latentPnl();
+    for (const cle of ['value', 'invested', 'pnl']) pres(a[cle], b[cle], `${cle} doit être unique`);
+    eq(a.pct, b.pct, 'le pourcentage aussi, y compris quand il est nul');
+    const store = lireSource('assets/store.js');
+    vrai(/function portfolioPnl\(\) \{ return latentPnl\(\); \}/.test(store),
+      'un nom de plus, pas un calcul de plus');
+  });
+
+  test('les deux plus-values, et leur somme seulement s’il y a de quoi sommer', () => {
+    /* Elles etaient quatre pour trois chiffres : le total valait la somme de ses
+       deux voisines, et la quatrieme comptait les lignes gagnantes en ouvrant
+       l'apercu de la premiere. Pire, la tuile du realise suivait la plage
+       choisie pendant que le total prenait tout : deux bornes de temps cote a
+       cote, sur une rangee qui pretend s'additionner.
+
+       Le total n'apparait qu'a la premiere vente : sans vente il repete la
+       latente mot pour mot, et c'est l'etat de presque tout le monde. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function viewPerformance'),
+                           src.indexOf('function mountPerformance'));
+    vrai(bloc, 'la vue doit être trouvable');
+    vrai(/class="grid \$\{tout\.count \? 'g-3' : 'g-2'\} g-tuiles"/.test(bloc),
+      'la rangée compte ses tuiles, elle ne laisse pas un trou');
+    vrai(/\$\{tout\.count \? `[\s\S]{0,200}?data-apercu="perfTotale"/.test(bloc),
+      'la tuile du total est gardée par l’existence d’une vente');
+    vrai(/const total = lat\.pnl \+ tout\.realised;/.test(bloc),
+      'le total est la somme de ses deux parts');
+    vrai(/data-apercu="perfRealisee" data-arg="all"/.test(bloc),
+      'la tuile du réalisé prend la même borne que le total, et son aperçu la reçoit');
+    vrai(!/st\.realised/.test(bloc),
+      'aucun montant de la plage glissante dans la rangée : elle garde les graphiques');
+    /* Un zero signe annonce un gain nul ; une absence de ligne ou de vente n'est
+       pas un gain nul. Les deux tuiles suivent la meme regle. */
+    for (const v of ['lat', 'tout']) {
+      vrai(new RegExp(`\\$\\{\\s*${v}\\.count \\? fmtSigned\\(${v}\\.(pnl|realised)\\) : fmtEUR0\\(0\\)\\}`).test(bloc),
+        `la tuile « ${v} » dit son zéro sans signe quand elle n’a rien à compter`);
+    }
+    vrai(!/Lignes en gain/.test(src), 'la quatrième tuile est partie du fichier');
+    vrai(/perfLatente/.test(bloc) && (bloc.match(/data-apercu="perfLatente"/g) || []).length === 1,
+      'et deux tuiles ne partagent plus une seule porte');
+  });
+
+  test('une page de plus-values sans ligne ni vente dit ce qui la remplirait', () => {
+    /* Trois tuiles a zero, deux graphiques vides et un journal vide : le mur de
+       zeros que les trois autres pages ont deja quitte. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function viewPerformance'),
+                           src.indexOf('function mountPerformance'));
+    vrai(/if \(!lat\.count && !tout\.count\) return/.test(bloc),
+      'la garde porte sur ce qui existe : une ligne détenue, ou une vente au journal');
+    vrai(/Une plus-value se mesure sur des lignes que tu détiens/.test(bloc),
+      'et la phrase dit de quoi une plus-value est faite');
+    vrai(/data-action="sous-onglet" data-route="positions"/.test(bloc),
+      'la porte mène à l’onglet voisin, qui explique déjà où poser un titre');
+  });
+
+  test('un chiffre de marché dit de quand il date', () => {
+    /* La plus-value latente vaut ce que les cours disent, et Performance
+       n'affichait aucune heure : « +978 € » sans une date, et « depuis le
+       debut » qui ne datait rien non plus. La barre d'etat existait, sur la page
+       voisine seulement. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    vrai(/function barreEtatCours\(\)/.test(src),
+      'la barre est une fonction : deux exemplaires porteraient deux boutons');
+    /* Un seul endroit declare le bouton, deux l'appellent. La verification porte
+       sur l'identifiant, qui doit rester unique dans la page rendue. */
+    eq((src.match(/id="btnQuotes"/g) || []).length, 1,
+      'un seul btnQuotes déclaré, sinon deux nœuds partagent un identifiant');
+    eq((src.match(/barreEtatCours\(\)/g) || []).length, 3,
+      'une définition et deux appels : Positions et Performance');
+    const bloc = src.slice(src.indexOf('function viewPerformance'),
+                           src.indexOf('function mountPerformance'));
+    vrai(/\$\{lat\.count \? barreEtatCours\(\) : ''\}/.test(bloc),
+      'et rien à dater pour qui n’a que des ventes, dont chaque ligne porte sa date');
+
+    /* Le panneau du total date chacune de ses deux parts, par ce qui la fixe. */
+    const totale = src.slice(src.indexOf('perfTotale: ()'), src.indexOf('perfTotale: ()') + 1400);
+    vrai(/fmtCoursQuand\(coursAsOf\(\)\)/.test(totale),
+      'le latent porte l’heure du cours, celle de la place et non de la requête');
+    vrai(/fmtDate\(jours\[0\]\)/.test(totale) && /jours\[jours\.length - 1\]/.test(totale),
+      'l’encaissé porte les bornes de ses ventes, prises au journal');
+  });
+
+  test('chaque vente s’ouvre, et son détail porte ce que les tuiles disaient', () => {
+    /* Trois tuiles annoncaient le produit encaisse, le prix de revient cede et le
+       taux de reussite : trois totaux de page pour des faits qui appartiennent a
+       chaque vente, et dont deux se relisaient en tete de page. Elles sont parties,
+       le detail de la vente les porte, et le tableau de dix colonnes est devenu la
+       liste cliquable que la regle de la maison impose au-dela de trois. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const bloc = src.match(/function salesCard\(\) \{[\s\S]*?\n\}/)[0];
+    vrai(/ligneListe\(\{/.test(bloc) && /action: 'open-sale'/.test(bloc),
+      'chaque vente est une ligne cliquable, le nom lu est le bouton cliqué');
+    /* `.liste-mobile` est le repli d'une grille : elle est en `display: none`
+       au-dela de 768 px. Une liste qui remplace un tableau au lieu de le doubler
+       doit porter `.liste-principale`, sinon elle est invisible sur un ecran
+       large — le depliant s'ouvrait sur du vide, et rien dans le balisage ne le
+       disait. */
+    vrai(/class="liste-principale"/.test(bloc) && !/class="liste-mobile"/.test(bloc),
+      'la liste est la lecture principale, pas le repli d’une grille qui n’existe plus');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.liste-principale \{ display: block; \}/.test(css),
+      'et cette classe s’affiche à toutes les largeurs');
+    vrai(!/liste-releves/.test(css) && !/liste-releves/.test(src),
+      'un seul nom pour cette idée : celui qui nommait la première carte a été généralisé');
+    vrai(!/<table>/.test(bloc),
+      'plus de tableau de dix colonnes, qui débordait latéralement sous 768 px');
+    vrai(!/Produit des ventes|Prix de revient vendu', st\.invested|Ventes gagnantes/.test(bloc),
+      'ni les trois tuiles, dont deux redisaient la tête de page');
+    vrai(!/data-action="del-sale"/.test(bloc),
+      'l’annulation quitte la liste : un geste irréversible collé au geste de lecture');
+
+    const ap = src.slice(src.indexOf('vente: (i) =>'), src.indexOf('vente: (i) =>') + 2200);
+    vrai(ap.length > 500, 'l’aperçu d’une vente doit être trouvable');
+    for (const champ of ['Produit encaissé', 'Prix de revient vendu', 'Plus-value']) {
+      vrai(ap.includes(champ), `le détail porte « ${champ} », que la tuile disait pour la page`);
+    }
+    vrai(/data-action="del-sale" data-i="\$\{idx\}"/.test(ap),
+      'et l’annulation, là où le geste a la place de dire ce qu’il emporte');
+    vrai(!/ventesRealisees/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
+      'l’aperçu de la tuile disparue est parti avec elle : une fonction sans appelant '
+      + 'est la moitié qu’on oublie');
+
+    /* Un panneau ne survit pas a ce qu'il decrit : il porte le bouton qui retire
+       la vente, et son rafraichissement sortirait en silence faute de la
+       retrouver — donc un ecran fige sur des montants qui n'existent plus. */
+    vrai(/function fermerApercuSi\(cle\)/.test(src), 'la fermeture existe');
+    eq((src.match(/fermerApercuSi\('vente'\)/g) || []).length, 2,
+      'et elle est appelée dans les deux branches de del-sale, déclarée comme annulée');
+  });
+
+  test('les libellés nouveaux ont leur anglais, les anciens sont partis', () => {
+    for (const cle of ['Résultat de tes positions', 'latente et encaissée, depuis le début',
+                       'Aller à Positions', 'prix de revient non renseigné',
+                       'vente gagnante', 'vente gagnante sur', 'ligne détenue',
+                       'aucune ligne détenue',
+                       'Une plus-value se mesure sur des lignes que tu détiens : la latente vient '
+                       + 'de leur prix de revient, l’encaissée du journal de tes ventes. Pose une '
+                       + 'première ligne et cette page se remplit toute seule.']) {
+      vrai(I18N.en[cle], `« ${cle} » doit avoir son anglais`);
+    }
+    for (const morte of ['Lignes en gain', 'Résultat total', 'Plus-value latente dans le temps',
+                         'latente + réalisée depuis le début']) {
+      vrai(!I18N.en[morte], `« ${morte} » ne s’affiche plus : sa clé n’a plus à vivre`);
+    }
   });
 });
 

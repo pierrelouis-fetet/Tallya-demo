@@ -2210,26 +2210,20 @@ function nowTotals() {
            invested: brut - g.cash };
 }
 
-/* --- plus-value latente dans le temps ---------------------------------
-   Un releve mensuel dit ce que valait le portefeuille, pas ce qu'il avait
-   coute : le gain latent d'alors n'est donc pas reconstituable apres coup.
-   Depuis que la prise de photo enregistre aussi le prix de revient (`inv`),
-   la courbe se construit, un point par mois ou l'information existe.
+/* --- pas de plus-value latente dans le temps ---------------------------
+   Le calcul demande deux nombres pris au meme instant sur le meme perimetre :
+   ce que valaient les lignes, et ce qu'elles avaient coute. L'historique ne
+   porte que le premier, et par compte entier : la poche « bourse » d'un releve
+   contient les especes qui dorment chez le courtier et les placements manuels
+   du compte, quand un prix de revient de portefeuille ne couvre que les
+   positions. Retrancher l'un de l'autre compte le cash comme du gain, et laisse
+   dehors le cout des positions rangees en crypto.
 
-   Les mois anterieurs a ce changement n'en ont pas, et sont ecartes plutot
-   que completes avec le prix de revient d'aujourd'hui, qui inventerait des
-   gains la ou il n'y avait que des versements. */
-function latentSeries() {
-  return Store.state.monthly
-    .filter(r => num(r.inv) > 0 && rowGroups(r).bourse > 0)
-    .map(r => ({
-      date: r.date,
-      label: fmtMonth(r.date),
-      value: rowGroups(r).bourse - num(r.inv),
-      invested: num(r.inv),
-      market: rowGroups(r).bourse,
-    }));
-}
+   Le perimetre ne se rattrape pas apres coup : un releve ne dit pas quelle part
+   d'un compte etait investie ce mois-la. Et le reconstituer depuis les dates
+   d'achat se tromperait toujours du meme cote, le flatteur — une ligne renforcee
+   porte un prix moyen et une seule date, donc l'argent verse en dernier
+   compterait comme present depuis le debut. */
 
 /* --- une ligne d'historique --- */
 function rowGroups(row) {
@@ -2285,12 +2279,41 @@ const HISTORY_RANGES = [
 /* Libellé lisible d'une plage. Les identifiants ne vivent qu'en memoire, mais
    un « 15y » d'une session precedente ou d'un signet ne doit pas afficher
    « undefined » : on retombe sur la forme generique, puis sur « Tout ». */
+/* Une annee civile est une plage, au meme titre qu'une duree glissante.
+
+   Ce n'est pas le cran derive qu'on a retire jadis : celui-la etait une duree
+   calculee sur la profondeur des donnees, « 2 ans », qui n'est un repere nulle
+   part et qui se deplace a mesure que l'historique vieillit. Une annee est un
+   objet nomme et fixe, 2025 restera 2025, et c'est la borne dans laquelle un
+   journal se lit — « mes ventes de 2025 » est la question qu'on se pose, jamais
+   « mes ventes des trois dernieres annees ». */
+const estAnnee = id => /^\d{4}$/.test(String(id || ''));
+
+/* Les annees ou quelque chose s'est passe, de la plus recente a la plus ancienne.
+   Derivee des dates, jamais ecrite a la main : une annee absente de la liste ne
+   pourrait pas etre choisie, et une annee de trop offrirait une plage vide. */
+function anneesPresentes(dates) {
+  return [...new Set(dates.map(d => String(d || '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))]
+    .sort().reverse();
+}
+
 function rangeLabel(id) {
+  if (estAnnee(id)) return String(id);
   const fixe = HISTORY_RANGES.find(r => r.id === id);
   if (fixe) return fixe.label;
   if (id === 'ytd') return 'YTD';
   const m = String(id || '').match(/^(\d+)y$/);
   return m ? (m[1] === '1' ? trad('1 an') : `${m[1]} ${trad('ans')}`) : trad('Tout');
+}
+
+/* Les deux bornes d'une plage, et non la seule ouverture.
+
+   Une duree glissante n'a pas de fin — elle court jusqu'a aujourd'hui — donc un
+   seuil suffisait. Une annee civile est fermee des deux cotes, et filtrer une
+   annee sur son seul debut aurait montre 2025 **et tout ce qui a suivi**. */
+function rangeBornes(range) {
+  if (estAnnee(range)) return { debut: `${range}-01-01`, fin: `${range}-12-31` };
+  return { debut: rangeStart(range), fin: null };
 }
 
 /* `ecarts` : la serie porte des variations et non des valeurs.
@@ -4685,6 +4708,10 @@ function annulerVente(i) {
 /* Date de début d'une plage (YTD, 1 an, 3 ans…), ou null pour « tout ». */
 function rangeStart(range) {
   if (!range || range === 'all') return null;
+  /* Une annee vaut son 1er janvier. La garde est ici et pas seulement chez
+     l'appelant : sans elle, `parseInt('2025')` faisait remonter de deux mille ans
+     et la plage rendait tout, sans erreur nulle part. */
+  if (estAnnee(range)) return `${range}-01-01`;
   const now = new Date();
   const d = range === 'ytd'
     ? new Date(now.getFullYear(), 0, 1)
@@ -4707,7 +4734,12 @@ function statsDesVentes(ventes) {
     sales: ventes, count: ventes.length,
     realised, invested,
     gross: ventes.reduce((s, v) => s + num(v.gross), 0),
-    pct: invested ? realised / invested * 100 : 0,
+    /* `null` et non 0 : sans vente, ou sans prix de revient sur celles qui
+       existent, il n'y a pas de base. Le zero s'affichait « +0,00 % » sur une
+       plage vide, ce qui affirme une performance nulle la ou il n'y a rien eu.
+       La regle de la maison, deja tenue par `deltas()` : un pourcentage
+       n'existe que sur une base positive, et l'ecran se contente de l'euro. */
+    pct: invested > 0 ? realised / invested * 100 : null,
     wins: ventes.filter(v => num(v.realised) > 0).length,
   };
 }
@@ -4730,7 +4762,9 @@ const PAS_DES_VENTES = { ytd: 'mois', '1y': 'mois', '3y': 'trimestre', '5y': 'tr
    une table de traduction pour trois valeurs aurait fait deux endroits ou un
    seul suffit. La premiere version l'ecrivait sans, et la carte affichait le mot
    estropie. */
-const pasDesVentes = range => PAS_DES_VENTES[range] || 'année';
+/* Une annee se lit par mois : douze barres nommees, la maille de « qu'est-ce qui
+   s'est passe en 2025 ». La table ne porte que les durees glissantes. */
+const pasDesVentes = range => estAnnee(range) ? 'mois' : (PAS_DES_VENTES[range] || 'année');
 
 /* Nommer chaque vente, ou regrouper : une seule fonction le decide.
 
@@ -4775,11 +4809,16 @@ function ventesParPeriode(ventes, pas) {
 }
 
 function salesStats(range) {
-  const seuil = rangeStart(range);
-  const ventes = (Store.state.sales || [])
-    .filter(v => !seuil || String(v.date) >= seuil);
+  const { debut, fin } = rangeBornes(range);
+  const ventes = (Store.state.sales || []).filter(v => {
+    const d = String(v.date || '');
+    return (!debut || d >= debut) && (!fin || d <= fin);
+  });
   return statsDesVentes(ventes);
 }
+
+/* Les annees ou une vente a eu lieu, pour le menu de la plage. */
+const anneesDesVentes = () => anneesPresentes((Store.state.sales || []).map(v => v.date));
 
 
 /* Cumul des plus-values réalisées, dans l'ordre chronologique. C'est la courbe
@@ -4803,7 +4842,10 @@ function latentPnl() {
   const value = ps.reduce((s, p) => s + posValue(p), 0);
   const invested = ps.reduce((s, p) => s + posInvested(p), 0);
   return { value, invested, pnl: value - invested,
-           pct: invested ? (value / invested - 1) * 100 : 0,
+           /* Meme regle que pour les ventes : pas de base, pas de pourcentage.
+              Des lignes saisies sans prix de revient donnaient « +0,00 % » a
+              cote d'un ecart en euros non nul, les deux se contredisant. */
+           pct: invested > 0 ? (value / invested - 1) * 100 : null,
            winners: ps.filter(p => posPerfEur(p) > 0).length, count: ps.length };
 }
 
@@ -5646,9 +5688,12 @@ function fmtDureeMois(mois) {
 }
 const fmtDuree = annees => fmtDureeMois(annees * 12);
 
-function portfolioPnl() {
-  const ps = Store.state.positions;
-  const value = ps.reduce((s, p) => s + posValue(p), 0);
-  const invested = ps.reduce((s, p) => s + posInvested(p), 0);
-  return { value, invested, pnl: value - invested, pct: invested ? (value / invested - 1) * 100 : 0 };
-}
+/* Le meme calcul que `latentPnl()`, au mot pres : valeur des positions, prix de
+   revient, ecart, pourcentage. Deux exemplaires d'une meme somme finissent par
+   dire deux choses — celui-ci rendait encore 0 % sur une base nulle quand
+   l'autre se taisait, et le meme ecran pouvait porter les deux. Le nom reste,
+   huit appelants le connaissent, mais il n'y a plus qu'un calcul.
+
+   Declaration de fonction et non `const` : une liaison lexicale ne se hisse pas
+   et ne se pose pas sur `window`, deux pieges que ce depot connait deja. */
+function portfolioPnl() { return latentPnl(); }

@@ -1601,10 +1601,14 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
    Toute la ligne est le bouton. */
 .liste-mobile { display: none; }
 
-/* La liste des releves, sur tous les ecrans. `.liste-mobile` s'efface au-dela de
-   768 px ; celle-ci non, parce qu'elle n'est pas un repli de la grille mais la
-   lecture principale — la grille est devenue l'exception, pas l'inverse. */
-.liste-releves { display: block; }
+/* Une liste qui est la lecture principale, sur tous les ecrans. `.liste-mobile`
+   s'efface au-dela de 768 px, parce qu'elle est le repli d'une grille ; celle-ci
+   non, parce qu'aucune grille ne l'attend au-dessus — la liste EST l'affichage.
+   Les relevés et le journal des ventes la portent. Le nom ne dit plus « releves »
+   pour cette raison : la deuxieme carte a en avoir besoin s'est retrouvee devant
+   une classe qui parlait de la premiere, et a repris `.liste-mobile`, invisible
+   sur un ecran large. */
+.liste-principale { display: block; }
 /* Une ligne qui porte un dessin sous ses chiffres : le bouton passe en colonne,
    et sa premiere rangee garde la mise en page d'une ligne ordinaire. */
 .mlist.mlist-empile { flex-direction: column; align-items: stretch; gap: 9px; }

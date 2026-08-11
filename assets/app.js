@@ -289,6 +289,18 @@ function dureeSortieModal() {
   const s = parseFloat(v);
   return (Number.isFinite(s) && s > 0 ? s * 1000 : 260) + 30;
 }
+/* Un panneau ne survit pas a ce qu'il decrit.
+
+   Le detail d'une vente porte le bouton qui la retire : sans cette fermeture, le
+   panneau restait ouvert sur une vente qui n'existe plus, et son rafraichissement
+   sortait en silence faute de la retrouver — donc un ecran fige, avec des
+   montants justes la seconde d'avant. */
+function fermerApercuSi(cle) {
+  if (apercuOuvert !== cle) return;
+  apercuOuvert = null;
+  masquerModal($('#modal'));
+}
+
 function masquerModal(m) {
   if (m.dataset.gele === '1') { delete m.dataset.gele; degelerFond(); }
   const gen = generationSuivante(m);
@@ -1165,7 +1177,7 @@ function viewOverview() {
           <button type="button" class="mlist" data-action="apercu" data-apercu="pnlLatent">
             <span class="ml-nom">${trad('Plus-value latente')}<span class="sub">${trad('tant que tu ne vends pas')}</span></span>
             <span class="ml-chiffres"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
-              <span class="${cls(pnl.pnl)}">${fmtSignedPct(pnl.pct)}</span></span>
+              ${pnl.pct == null ? '' : `<span class="${cls(pnl.pnl)}">${fmtSignedPct(pnl.pct)}</span>`}</span>
             <span class="ml-chev" aria-hidden="true">›</span>
           </button>
         </div>
@@ -1251,15 +1263,35 @@ function mountOverview() {
 
    La liste deroulante « ⋯ » a disparu avec les durees calculees. Un selecteur
    ne se justifiait que pour des crans en nombre variable. */
-function rangeControl(action, courant) {
+/* La plage, et les annees quand on en fournit.
+
+   Une seule valeur, deux facons de l'exprimer : les crans disent une duree qui
+   court jusqu'a aujourd'hui, le menu dit une annee civile. C'est le motif des
+   deux portes sur un meme champ — ce qui serait fautif, ce sont deux valeurs
+   rangees separement, et c'est exactement ce qu'il y avait ici : la plage
+   reglait les graphiques pendant qu'un second menu d'annee reglait le journal,
+   et rien n'empechait l'un de dire 2025 et l'autre 2026.
+
+   Le menu ne liste que les annees ou quelque chose s'est passe, et il disparait
+   sous deux : choisir entre une seule annee n'est pas un choix. Quand une annee
+   est active, aucun cran n'est allume — sinon deux contrôles se prevaudraient de
+   la meme valeur. */
+function rangeControl(action, courant, annees = []) {
+  const surAnnee = estAnnee(courant);
   const connu = HISTORY_RANGES.some(r => r.id === courant);
   return `
     <div class="plage">
       <div class="segmented">
         ${HISTORY_RANGES.map(r => `<button data-action="${action}" data-range="${r.id}"
-          class="${r.id === courant || (!connu && r.id === 'all') ? 'on' : ''}"
+          class="${!surAnnee && (r.id === courant || (!connu && r.id === 'all')) ? 'on' : ''}"
           >${esc(r.label)}</button>`).join('')}
       </div>
+      ${annees.length > 1 ? `
+      <select data-action-change="${action}" class="annee" title="${trad('Année affichée')}">
+        <option value="">${trad('Par année')}</option>
+        ${annees.map(y => `<option value="${esc(y)}" ${String(y) === String(courant) ? 'selected' : ''}
+          >${esc(y)}</option>`).join('')}
+      </select>` : ''}
     </div>`;
 }
 
@@ -1600,61 +1632,91 @@ function viewPerformance() {
   const st = salesStats(salesRange);
   const tout = salesStats('all');
   const total = lat.pnl + tout.realised;
+  /* La plage se nomme ici, dans les en-tetes des graphiques ; le contrôle qui la
+     change vit sur la carte du journal, au-dessus, et lui seul. */
   const libellePlage = rangeLabel(salesRange);
-  const plages = rangeControl('sales-range', salesRange);
+
+  /* Une page de plus-values pour quelqu'un qui ne detient rien et n'a rien
+     vendu : des tuiles a zero, deux graphiques vides et un journal vide. La page
+     voisine explique deja ou vivent les titres cotes et comment en poser un ;
+     celle-ci dit de quoi une plus-value est faite, et y renvoie. */
+  if (!lat.count && !tout.count) return `
+  <div class="card">
+    <p class="empty" style="margin:0 0 12px">${trad('Une plus-value se mesure sur des lignes que tu détiens : '
+      + 'la latente vient de leur prix de revient, l’encaissée du journal de tes ventes. '
+      + 'Pose une première ligne et cette page se remplit toute seule.')}</p>
+    <button type="button" class="btn" data-action="sous-onglet" data-route="positions">${trad('Aller à Positions')}</button>
+  </div>`;
 
   return `
-  <!-- Ces quatre tuiles ne parlent que des depenses du quotidien : les charges
-       fixes ont leur propre carte, et elles pesent plus lourd. « Total 2026 »
-       se lisait comme tout ce qui a ete depense dans l'annee, alors qu'il en
-       manquait le principal. Chaque intitule dit desormais son perimetre. -->
-  <div class="grid g-4 g-tuiles">
-    <button type="button" class="tile tile-link" style="--tile-color:${lat.pnl >= 0 ? 'var(--good)' : 'var(--critical)'}"
+  <!-- La plus-value latente vaut ce que les cours disent : la page porte donc
+       leur anciennete, en haut, avant les chiffres qu'elle date. Elle ne la
+       portait pas, et le grand chiffre s'affichait sans une heure. Rien a dater
+       en revanche pour qui n'a que des ventes au journal, dont chaque ligne
+       porte sa propre date. -->
+  ${lat.count ? barreEtatCours() : ''}
+
+  <!-- Les deux plus-values, et leur somme seulement quand il y a quelque chose a
+       sommer.
+
+       Elles etaient quatre pour trois chiffres. La quatrieme comptait les lignes
+       en gain, un taux de reussite sur cinq lignes qu'une ligne a 0,1 % fait
+       basculer, et son « ... » ouvrait l'apercu de sa voisine : deux tuiles pour
+       une porte. Le compte des lignes gagnantes vit dans cet apercu, ou il etait
+       deja. Et le total repetait la latente mot pour mot tant qu'aucune vente
+       n'existait, ce qui est l'etat de presque tout le monde : il n'apparait donc
+       qu'a la premiere vente, quand il devient une somme et non un echo.
+
+       Les tuiles portent toutes la meme borne de temps, depuis le debut. Celle du
+       realise suivait la plage choisie pendant que le total prenait tout : deux
+       bornes cote a cote sur une rangee qui pretend s'additionner. La plage garde
+       les graphiques, ou son selecteur se voit. -->
+  <div class="grid ${tout.count ? 'g-3' : 'g-2'} g-tuiles">
+    <button type="button" class="tile tile-link" style="--tile-color:${
+      !lat.count ? 'var(--series-2)' : lat.pnl >= 0 ? 'var(--good)' : 'var(--critical)'}"
             data-action="apercu" data-apercu="perfLatente">
       <span class="t-label">${trad('Plus-value latente')}</span>
-      <span class="t-value ${cls(lat.pnl)}">${fmtSigned(lat.pnl)}</span>
-      <span class="t-meta"><span class="tag">${fmtSignedPct(lat.pct)}</span>${trad('pas encore vendue')}</span>
+      <!-- Meme regle que la tuile voisine : qui a tout vendu ne detient plus rien,
+           et « +0 € » annoncerait un gain nul au lieu d'une absence de ligne. -->
+      <span class="t-value ${lat.count ? cls(lat.pnl) : ''}">${
+        lat.count ? fmtSigned(lat.pnl) : fmtEUR0(0)}</span>
+      <!-- Le pourcentage se tait sans prix de revient : sa base serait nulle. -->
+      <span class="t-meta">${lat.pct == null ? '' : `<span class="tag">${fmtSignedPct(lat.pct)}</span>`}${
+        lat.count ? trad('pas encore vendue') : trad('aucune ligne détenue')}</span>
       <span class="t-go">⋯</span>
     </button>
-    <button type="button" class="tile tile-link" style="--tile-color:${st.realised >= 0 ? 'var(--good)' : 'var(--critical)'}"
-            data-action="apercu" data-apercu="perfRealisee">
-      <span class="t-label">Réalisée · ${esc(libellePlage)}</span>
-      <span class="t-value ${cls(st.realised)}">${fmtSigned(st.realised)}</span>
-      <span class="t-meta"><span class="tag">${fmtSignedPct(st.pct)}</span>${st.count} vente${st.count > 1 ? 's' : ''}</span>
+    <button type="button" class="tile tile-link" style="--tile-color:${
+      !tout.count ? 'var(--series-2)' : tout.realised >= 0 ? 'var(--good)' : 'var(--critical)'}"
+            data-action="apercu" data-apercu="perfRealisee" data-arg="all">
+      <span class="t-label">${trad('Plus-value encaissée')}</span>
+      <!-- Sans une seule vente, « +0 € » annonce un gain nul la ou il n'y a rien
+           eu : le zero se dit sans signe, et la meta dit pourquoi. -->
+      <span class="t-value ${tout.count ? cls(tout.realised) : ''}">${
+        tout.count ? fmtSigned(tout.realised) : fmtEUR0(0)}</span>
+      <span class="t-meta">${tout.count
+        ? `${tout.pct == null ? '' : `<span class="tag">${fmtSignedPct(tout.pct)}</span>`}${
+            tout.wins}/${tout.count} ${tout.count > 1 ? trad('ventes gagnantes') : trad('vente gagnante')}`
+        : trad('aucune vente encore')}</span>
       <span class="t-go">⋯</span>
     </button>
+    ${tout.count ? `
     <button type="button" class="tile tile-link" style="--tile-color:${total >= 0 ? 'var(--good)' : 'var(--critical)'}"
             data-action="apercu" data-apercu="perfTotale">
-      <span class="t-label">${trad('Résultat total')}</span>
+      <span class="t-label">${trad('Résultat de tes positions')}</span>
       <span class="t-value ${cls(total)}">${fmtSigned(total)}</span>
-      <span class="t-meta">${trad('latente + réalisée depuis le début')}</span>
+      <span class="t-meta">${trad('latente et encaissée, depuis le début')}</span>
       <span class="t-go">⋯</span>
-    </button>
-    <button type="button" class="tile tile-link" style="--tile-color:var(--series-2)"
-            data-action="apercu" data-apercu="perfLatente">
-      <span class="t-label">${trad('Lignes en gain')}</span>
-      <span class="t-value">${lat.winners} / ${lat.count}</span>
-      <span class="t-meta">${tout.count ? `${tout.wins}/${tout.count} ${trad('ventes gagnantes')}` : trad('aucune vente encore')}</span>
-      <span class="t-go">⋯</span>
-    </button>
+    </button>` : ''}
   </div>
 
-  <!-- La courbe du gain latent, mois par mois, et rien du tout tant qu'elle ne
-       peut pas se tracer.
+  <!-- Le journal avant les graphiques, et non en pied de page.
 
-       Un pave de cinq lignes tenait cette place : il expliquait qu'un releve note
-       la valeur et non le prix de revient, donc que le gain latent d'avant n'est
-       pas reconstituable. C'etait juste, et ce n'etait pas la question. Une carte
-       dont le seul contenu explique ce qu'elle ne peut pas montrer occupe un
-       ecran entier pour dire « pas encore », et rien dans ce texte ne se fait :
-       la courbe arrive d'elle-meme au deuxieme releve, que l'application reclame
-       deja par ailleurs. -->
-  ${latentSeries().length >= 2 ? `
-  <div class="card">
-    <div class="card-head"><h2>${trad('Plus-value latente dans le temps')}</h2>
-      <span class="hint">${latentSeries().length} relevés</span></div>
-    <div class="chart" id="perfLatentTemps"></div>
-  </div>` : ''}
+       C'est la carte qu'on vient lire : elle porte des faits datés et nommés,
+       quand les deux graphiques en dessous en donnent la forme. Elle porte aussi
+       la borne de temps de toute la page, qui se trouve donc au-dessus de ce
+       qu'elle commande — un contrôle range en bas d'ecran agirait sur des
+       graphiques qu'on ne voit plus. -->
+  ${salesCard()}
 
   <div class="grid g-1-2">
     <div class="card">
@@ -1699,15 +1761,18 @@ function viewPerformance() {
       <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
            « vente par vente » au-dessus de barres trimestrielles annoncerait la
            mauvaise lecture. -->
+      <!-- Pas de selecteur de plage ici : le journal, juste au-dessus, porte
+           celui de la page. Deux exemplaires du meme contrôle a deux cents pixels
+           d'ecart se lisent comme deux reglages, et l'un des deux passe pour
+           inerte. Il est en haut parce que c'est la que la borne se choisit, et
+           ces graphiques la suivent. -->
       <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
-        ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>${tout.count ? plages : ''}</div>
-      <!-- La phrase donnait l'itineraire vers Marches pour y trouver le bouton
-           « Vendre une ligne ». Il est maintenant dans le journal, deux cartes
-           plus bas, sur la page ou l'on se trouve deja. -->
+        ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>
+        <span class="hint">${esc(libellePlage)}</span></div>
       ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
         <p class="empty">${tout.count
           ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
-          : trad('Aucune vente enregistrée. Le journal, plus bas, porte le bouton pour en saisir une.')}</p>`}
+          : trad('Aucune vente enregistrée. Le journal, plus haut, porte le bouton pour en saisir une.')}</p>`}
     </div>
   </div>
 
@@ -1716,21 +1781,15 @@ function viewPerformance() {
     <div class="card-head"><h2>${trad('Cumul des plus-values encaissées')}</h2>
       <span class="hint">${esc(libellePlage)} · ${st.count} vente${st.count > 1 ? 's' : ''}, dans l'ordre</span></div>
     <div class="chart" id="perfCumul"></div>
-  </div>` : ''}
-
-  ${salesCard()}`;
+  </div>` : ''}`;
 }
 
 function mountPerformance() {
-  /* Même langage visuel que la courbe des ventes juste en dessous : des barres
-     signées, vertes au-dessus de zéro, rouges en dessous. */
-  const suite = latentSeries();
-  if (suite.length >= 2) {
-    Charts.deltaBars($('#perfLatentTemps'), {
-      height: 260,
-      items: suite.map(p => ({ label: p.label, value: p.value })),
-    });
-  }
+  /* Le pli du journal se retient sans passer par `render()` : le rappeler ici
+     rendrait la page a chaque ouverture, donc detruirait le `<details>` qu'on
+     vient d'ouvrir, donc annulerait le geste. */
+  const pli = $('#pliVentes');
+  if (pli) pli.ontoggle = () => { journalDeroule = pli.open; };
 
   /* L'indice voyage avec la barre. Il se retrouvait par le nom, `findIndex(p =>
      p.name === it.label)`, et deux titres homonymes sur deux comptes ouvraient
@@ -2624,7 +2683,14 @@ let salesRange = '1y';       // les deux graphiques de Performance
 
    `null` = l'annee courante, decidee au rendu : la figer ici la rendrait fausse
    au 1er janvier. */
-let salesYear = null;
+/* `salesYear` est parti : le journal se borne comme les graphiques, par
+   `salesRange`, qui accepte desormais une annee civile autant qu'une duree. */
+
+/* Le depliant du journal se souvient. Un `<details>` est recree a chaque rendu,
+   et cette page se rend a chaque arrivee de cours : sans memoire, il se refermait
+   sous les yeux de qui venait de l'ouvrir. Ouvert par defaut — la carte n'a plus
+   de tuiles au-dessus, donc replie elle ne montrerait qu'un titre. */
+let journalDeroule = true;
 let posSort = null;
 /* Filtre de role sur le portefeuille : « tous », « core » ou « satellite ».
    Il agit sur la liste des lignes et sur le graphique de performance ligne a
@@ -2859,16 +2925,7 @@ function viewPositions() {
   }
 
   return `
-  <!-- L'etat des cours commande tout ce qui suit : il se lit en premier,
-       avant les chiffres qu'il date. -->
-  <div class="barre-etat">
-    <!-- Le ↻ manquait : « • il y a 2 min » se lit comme une étiquette d'état,
-         et rien ne disait qu'on pouvait cliquer dessus pour relancer une
-         récupération qui a échoué. L'icône tourne pendant l'appel. -->
-    <button class="etat-cours" id="btnQuotes" type="button" data-action="refresh-quotes"
-            title="${trad('Récupérer les cours de bourse')}"><i class="pt"></i><span id="coursQuand">Cours</span><span
-            class="etat-maj" aria-hidden="true">↻</span></button>
-  </div>
+  ${barreEtatCours()}
 
   <!-- Ou en est la journee, avant de regarder ses propres lignes : deux
        indices americains, deux europeens, la parite qui pese sur toutes les
@@ -3094,7 +3151,7 @@ function viewPositions() {
       <dt><b>${trad('Plus / moins-value latente')}</b></dt>
         <dd><button type="button" class="mois-lien ${cls(pnl.pnl)}" data-action="apercu" data-apercu="pnlLatent"
                     title="${trad('Voir le détail par ligne')}"><b>${fmtSigned(pnl.pnl)}</b>
-              <span class="muted">·</span> ${fmtSignedPct(pnl.pct)}</button></dd>
+              ${pnl.pct == null ? '' : `<span class="muted">·</span> ${fmtSignedPct(pnl.pct)}`}</button></dd>
     </dl>
   </div>`;
   })()}
@@ -3190,7 +3247,7 @@ function viewPositions() {
           <td class="sticky-col">Total</td><td colspan="3"></td>
           <td>${fmtEUR(pnl.value)}</td><td>${fmtEUR(pnl.invested)}</td>
           <td class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</td>
-          <td class="${cls(pnl.pnl)}">${fmtSignedPct(pnl.pct)}</td>
+          <td class="${cls(pnl.pnl)}">${pnl.pct == null ? '' : fmtSignedPct(pnl.pct)}</td>
           <td colspan="2"></td>
         </tr></tfoot>
       </table>
@@ -3232,30 +3289,27 @@ function salesCard() {
   const toutes = Store.state.sales || [];
   const aVendre = (Store.state.positions || []).length;
 
-  /* Deux bornes, et elles ne font pas double emploi.
+  /* Une seule borne de temps sur cette page, celle des graphiques au-dessus.
 
-     L'annee borne **combien** de lignes existent, le depliant borne **quand** on
-     les voit. C'est le raisonnement deja tranche pour le journal des apports, et
-     il vaut mot pour mot ici : le depliant seul cacherait cinq cents lignes
-     derriere un bouton sans en reduire une, le selecteur seul montrerait une
-     annee de ventes en permanence.
+     Il y en avait deux : la plage glissante reglait les courbes, un menu d'annee
+     reglait ce journal, et rien n'empechait l'un de dire 2025 et l'autre 2026.
+     Deux contrôles jumeaux sur un ecran, chacun se prevalant de sa moitie, c'est
+     le motif que ce projet corrige sans arret. Le menu des annees a donc rejoint
+     les crans, dans un contrôle unique qui porte les deux facons de dire une
+     borne : une duree qui court jusqu'a aujourd'hui, ou une annee civile.
 
-     La plage glissante a quitte cette carte. Elle regle les deux graphiques de
-     Performance, plus haut, et deux bornes de temps differentes sur un meme
-     ecran demandent de se souvenir laquelle commande quoi. Un journal se lit par
-     annee, une courbe par duree. */
-  const annees = [...new Set(toutes.map(v => String(v.date).slice(0, 4)))]
-    .filter(Boolean).sort().reverse();
-  const courante = String(new Date().getFullYear());
-  if (salesYear === 'all') salesYear = null;   // le cran a quitte le selecteur
-  const an = salesYear ?? (annees.includes(courante) ? courante : annees[0]);
-  const retenues = an === 'all' ? toutes : toutes.filter(v => String(v.date).startsWith(an));
-
-  /* Les totaux portent sur ce que la carte montre. Les calculer sur la plage
-     glissante pendant que le tableau liste une annee aurait donne trois tuiles
-     qui ne sont la somme d'aucune des lignes en dessous — le defaut que ce
-     projet corrige partout : un total egale la somme de ses parts. */
-  const st = statsDesVentes(retenues);
+     Le depliant reste, et il ne fait pas double emploi avec la borne : celle-ci
+     dit **combien** de lignes existent, celui-la **quand** on les voit. Sur une
+     annee chargee, cinq cents ventes restent cinq cents lignes. */
+  const st = salesStats(salesRange);
+  /* Le contrôle est ici aussi, et c'est la meme valeur qu'en haut : deux portes
+     sur un champ unique, jamais deux champs. C'est ce qui separe ce montage du
+     precedent — deux menus d'annee rangeaient deux etats, et l'un pouvait dire
+     2025 pendant que l'autre disait 2026. Ils affichent desormais tous les deux
+     la borne active, donc ils ne peuvent plus se contredire.
+     Il se voit ici parce que c'est ici qu'on cherche une annee : un contrôle
+     range deux cartes plus haut agirait sur ce qu'on lit sans etre sous les yeux. */
+  const plages = rangeControl('sales-range', salesRange, anneesDesVentes());
 
   /* La carte porte le bouton qui l'alimente, et elle se rend même vide.
 
@@ -3278,7 +3332,8 @@ function salesCard() {
     <div class="card-head">
       <h2>${trad('Journal des ventes')}</h2>
       ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
-        an === 'all' ? '' : ` ${trad('en')} ${an}`} ${trad('sur.investis', 'sur')} ${toutes.length}</span>` : ''}
+        st.count === toutes.length ? '' : ` ${trad('sur.investis', 'sur')} ${toutes.length}`}</span>
+      ${plages}` : ''}
       <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
               title="${aVendre ? trad('Enregistrer une vente et sa plus-value')
                                : trad('Aucune ligne de titres à vendre')}">− ${trad('Vendre')}</button>
@@ -3289,67 +3344,65 @@ function salesCard() {
       <button class="btn sm ghost" data-action="declarer-vente"
               title="${trad('Noter une vente d\'avant l\'application, pour mémoire : rien d\'autre ne bouge')}">${trad('+ Vente passée')}</button>
     </div>
-    ${toutes.length && annees.length > 1
-      ? `<div class="row" style="margin:0 0 12px">${yearControl('sales-year', annees, an)}</div>` : ''}
     ${!toutes.length ? `<p class="empty">${trad('Aucune vente enregistrée.')} ${aVendre
       ? trad('Le bouton « Vendre » enregistre la vente, sa plus-value, et crédite le compte de ton choix.')
       : trad('Il faut une ligne de titres avant de pouvoir en vendre une.')}</p>` : `
-    <div class="grid g-3 g-tuiles" style="margin-bottom:12px">
-      ${tile(trad('Produit des ventes'), st.gross, null, 'var(--series-1)', `${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}`, 'ventesRealisees')}
-      ${tile('Prix de revient vendu', st.invested, null, 'var(--series-7)', 'Coût des titres cédés')}
-      <div class="tile" style="--tile-color:var(--series-2)">
-        <span class="t-label">${trad('Ventes gagnantes')}</span>
-        <span class="t-value">${st.wins} / ${st.count}</span>
-        <span class="t-meta">${st.count ? fmtPct(st.wins / st.count * 100, 0) : ''} de réussite</span>
-      </div>
-    </div>
-    <!-- Le tableau se replie. L'annee borne combien de lignes existent, ce
-         depliant borne quand on les voit : sur une annee active, cinq cents
-         ventes restent cinq cents lignes, et personne n'ouvre cette page pour
-         les derouler toutes. Les trois tuiles au-dessus disent l'essentiel sans
-         qu'on ait a ouvrir.
+    <!-- Une liste de ventes, chacune sa porte, et plus trois tuiles au-dessus.
 
-         Un depliant natif plutot qu'un apercu en fenetre : les lignes gardent
-         ainsi leur bouton d'annulation, qu'un panneau de lecture aurait perdu.
-         Meme motif que le journal des apports. -->
-    ${st.count ? `<details class="data-view">
+         Les tuiles disaient le produit encaisse, le prix de revient cede et le
+         taux de reussite : trois totaux de page pour des faits qui appartiennent
+         a chaque vente, et dont deux se relisaient deja ailleurs — la plus-value
+         encaissee est en tete de page avec son pourcentage, et le taux de
+         reussite y tenait sa meta. Ils vivent maintenant dans le detail de la
+         vente concernee, ou l'on va quand on veut savoir.
+
+         Une liste et non un tableau, a toutes les largeurs. Celui-ci portait dix
+         colonnes, donc un defilement lateral sous 768 px alors que la regle de la
+         maison l'interdit au-dela de trois : le motif etait deja ecrit, dans
+         ligneListe, et la seule carte qui l'ignorait etait celle-ci. Le nom qu'on
+         lit est le bouton qu'on clique.
+
+         L'annulation part avec le tableau et rejoint le panneau : un ↺ de 24 px
+         colle contre une ligne cliquable, c'est un geste irreversible a portee de
+         pouce du geste de lecture. -->
+    ${st.count ? `<details class="data-view" id="pliVentes" ${journalDeroule ? 'open' : ''}>
       <summary>${trad('Voir les')} ${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}</summary>
-      <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Date</th><th>${trad('Ligne')}</th><th>${trad('Qté')}</th>
-          <th>${trad('Prix vente')} <span class="u">${trad('dev.')}</span></th><th>${trad('Prix revient')} <span class="u">${trad('dev.')}</span></th>
-          <th>Encaissé <span class="u">€</span></th><th>Résultat <span class="u">€</span></th>
-          <th>%</th><th>Note</th><th></th>
-        </tr></thead>
-        <tbody>${st.sales.map(v => {
-          const i = toutes.indexOf(v);
-          const dev = v.currency || 'EUR';
-          /* Une vente declaree n'a ni quantite ni prix : ses colonnes se
-             taisent au lieu d'ecrire des zeros, et sa ligne dit d'ou elle
-             vient — sans la mention, un « Encaissé » sans prix se lirait
-             comme une saisie amputee. L'annulation change de sens aussi :
-             il n'y a rien a rendre, seulement une ligne a retirer. */
-          return `<tr>
-            <td class="muted">${esc(fmtDate(v.date))}</td>
-            <td class="name">${esc(v.name)}${v.declaree
-              ? '<span class="sub">déclarée, pour mémoire</span>' : ''}</td>
-            <td>${v.declaree ? '' : num(v.qty)}</td>
-            <td>${v.declaree ? '' : fmtCurEur(v.price, dev, v.fxSell)}</td>
-            <td class="muted">${v.declaree ? '' : fmtCurEur(v.buyPrice, dev, v.fxBuy)}</td>
-            <td>${fmtEUR(num(v.gross))}</td>
-            <td class="${cls(v.realised)}"><b>${fmtSigned(v.realised)}</b></td>
-            <td class="${cls(v.realised)}">${fmtSignedPct(num(v.invested) ? num(v.realised) / num(v.invested) * 100 : 0)}</td>
-            <td class="muted" style="min-width:200px">${esc(v.note || '')}</td>
-            <td><button class="btn icon" data-action="del-sale" data-i="${i}"
-                        title="${v.declaree
-                          ? 'Retirer cette ligne du journal : elle n’avait rien écrit d’autre'
-                          : 'Annuler cette vente : les titres reviennent, les espèces repartent'}">↺</button></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
+      <div class="liste-principale" style="margin-top:4px">
+        ${(() => {
+          /* L'ampleur de chaque plus-value, en barre, relative a la plus grosse de
+             la periode affichee. Le journal reste dans l'ordre du temps — c'est ce
+             qu'un journal est — et la barre donne ce que l'ordre chronologique ne
+             donne pas : laquelle a porte la periode. Sans elle, trois montants
+             alignes demandent de les comparer de tete.
+
+             La base est la plus grande valeur absolue, gains et pertes sur la meme
+             echelle : deux echelles separees feraient paraitre une perte de 40 EUR
+             aussi grave qu'un gain de 700. Un plancher de 2 % pour qu'une petite
+             vente ne disparaisse pas, et aucune barre du tout si rien ne depasse
+             zero — comparer des riens n'apprend rien. */
+          const plusGrand = Math.max(...st.sales.map(v => Math.abs(num(v.realised))), 0);
+          return st.sales.map(v => {
+            const dev = v.currency || 'EUR';
+            const pct = num(v.invested) ? num(v.realised) / num(v.invested) * 100 : null;
+            const part = plusGrand ? Math.abs(num(v.realised)) / plusGrand * 100 : 0;
+            const teinte = num(v.realised) >= 0 ? 'var(--good)' : 'var(--critical)';
+            /* Une vente declaree n'a ni quantite ni prix : son sous-titre dit d'ou
+               elle vient plutot que d'afficher « 0 × 0 € ». */
+            return ligneListe({
+              action: 'open-sale', index: toutes.indexOf(v),
+              titre: v.name,
+              sous: [fmtDate(v.date), v.declaree ? trad('déclarée, pour mémoire')
+                       : `${num(v.qty)} × ${fmtCur(v.price, dev)}`].filter(Boolean).join(' · '),
+              valeur: `<span class="${cls(v.realised)}">${fmtSigned(v.realised)}</span>`,
+              second: pct == null ? '' : fmtSignedPct(pct),
+              classeSecond: cls(v.realised),
+              barre: plusGrand ? `<span class="repart-barre"><i style="width:${
+                Math.max(2, part).toFixed(1)}%;background:${teinte}"></i></span>` : '',
+            });
+          }).join('');
+        })()}
       </div>
-    </details>` : `<p class="empty">Aucune vente en ${esc(an)}.</p>`}
+    </details>` : `<p class="empty">${trad('Aucune vente sur cette période.')}</p>`}
     <p class="hint" style="margin-top:12px">
       Résultat brut, avant frais et fiscalité : le traitement fiscal dépend de
       l'enveloppe (PEA, CTO) et de ta situation.
@@ -3575,6 +3628,28 @@ function fmtWhen(iso) {
   if (mins < 60) return `il y a ${mins} min`;
   if (mins < 1440) return `il y a ${Math.round(mins / 60)} h`;
   return d.toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/* L'etat des cours, ecrit une fois pour les deux pages qui en vivent.
+
+   Il datait les chiffres de Positions et pas ceux de Performance, ou la
+   plus-value latente vaut exactement ce que les cours disent : le grand chiffre
+   s'affichait sans une heure, et « depuis le debut » ne datait rien non plus.
+   L'anciennete se dit une fois par page, en haut, avant les chiffres qu'elle
+   date — la repeter dans chaque carte donnait « cours de il y a 1 min ».
+
+   Une seule declaration : deux exemplaires de cette barre auraient porte deux
+   boutons, et c'est arrive assez souvent dans ce depot pour qu'on n'essaie pas. */
+function barreEtatCours() {
+  return `
+  <div class="barre-etat">
+    <!-- Le ↻ manquait : « • il y a 2 min » se lit comme une étiquette d'état,
+         et rien ne disait qu'on pouvait cliquer dessus pour relancer une
+         récupération qui a échoué. L'icône tourne pendant l'appel. -->
+    <button class="etat-cours" id="btnQuotes" type="button" data-action="refresh-quotes"
+            title="${trad('Récupérer les cours de bourse')}"><i class="pt"></i><span id="coursQuand">Cours</span><span
+            class="etat-maj" aria-hidden="true">↻</span></button>
+  </div>`;
 }
 
 /* --- pastille d'etat des cours, dans la barre du haut ---
@@ -4802,7 +4877,7 @@ function viewHistory() {
          La grille reste, derriere un depliant, pour la correction manuelle rare
          et pour comparer douze mois sur treize axes — c'est la seule chose
          qu'une grille fait mieux que tout le reste. -->
-    <div class="liste-releves">
+    <div class="liste-principale">
       ${lignes.map(({ r, i, g, total, dlt }) => {
         const courant = r.date === currentMonthKey();
         /* La barre ne se dessine que si le mois porte quelque chose : douze
@@ -7682,7 +7757,7 @@ function sheetPositions() {
     ]),
     total: ['Total', '', '', '', '', null, null, null, '', null,
       round2(pnl.value), round2(pnl.invested), round2(pnl.pnl),
-      pnl.pct / 100, base ? pnl.value / base : 0],
+      pnl.pct == null ? null : pnl.pct / 100, base ? pnl.value / base : 0],
   };
 }
 
@@ -7872,12 +7947,14 @@ function sheetSales() {
       num(v.qty), round2(num(v.price)), v.currency || 'EUR', num(v.fxSell) || 1,
       round2(num(v.buyPrice)), round2(num(v.gross)), round2(num(v.invested)),
       round2(num(v.realised)),
-      num(v.invested) ? round2(num(v.realised) / num(v.invested) * 100) : 0,
+      num(v.invested) ? round2(num(v.realised) / num(v.invested) * 100) : null,
       ACC[v.cashAccount]?.label || '', v.note || '',
     ]),
+    /* Une cellule vide, et non un zero, quand il n'y a pas de base : dans un
+       tableur un 0 se moyenne, se trie et se recopie comme un resultat. */
     total: ['Total', `${st.count} vente${st.count > 1 ? 's' : ''}`, '', '', null, null, '', null,
             null, round2(st.gross), round2(st.invested), round2(st.realised),
-            round2(st.pct), '', ''],
+            st.pct == null ? null : round2(st.pct), '', ''],
   };
 }
 
@@ -8100,7 +8177,15 @@ function creditsRattachables(sien = null) {
 }
 
 const ACTIONS = {
-  'sales-range'(btn) { salesRange = btn.dataset.range; render(); },
+  /* Les crans et le menu d'annees ecrivent la meme valeur : un bouton porte sa
+     plage en `data-range`, le menu la porte en `value`. Le cran vide du menu
+     (« Par année ») ramene a la derniere plage glissante plutot qu'a rien —
+     sortir d'une annee sans rien choisir laisserait la page sans borne. */
+  'sales-range'(btn) {
+    const v = btn.dataset.range ?? btn.value;
+    salesRange = v || '1y';
+    render();
+  },
   'go-performance'() { location.hash = '#/performance'; },
   /* Annuler une vente, pour de bon. Ce bouton ne retirait que la ligne du
      journal, en annonçant que ni les titres ni le cash ne bougeaient : un geste
@@ -8118,6 +8203,7 @@ const ACTIONS = {
         { ok: 'Retirer du journal', danger: true })) return;
       Store.addBackup('avant retrait d’une vente déclarée');
       annulerVente(i);
+      fermerApercuSi('vente');
       Store.save(); render();
       toast(trad('Vente retirée du journal'));
       return;
@@ -8133,6 +8219,7 @@ const ACTIONS = {
       + `cours du jour. Réversible avec Ctrl+Z.`, { ok: 'Annuler la vente', danger: true })) return;
     Store.addBackup('avant annulation de vente');
     annulerVente(i);
+    fermerApercuSi('vente');
     refreshAccounts();
     Store.save(); render();
     toast(`${trad('Vente annulée,')} ${num(v.qty)} ${trad('titres rendus')}`);
@@ -9698,7 +9785,9 @@ const ACTIONS = {
   /* L'annee du journal des ventes. Elle ne survit pas au rechargement, comme
      celle du graphique d'evolution : c'est une question du moment, pas un
      reglage — on revient toujours a l'annee en cours. */
-  'sales-year'(btn) { salesYear = btn.value ?? btn.dataset.year; render(); },
+  /* Le journal n'a plus de borne propre : elle est celle de la page, et le menu
+     des annees a rejoint les crans de la plage. `sales-year` est parti avec. */
+  'open-sale'(btn) { openApercu('vente', btn.dataset.i); },
   /* Modifier un compte existant. Son identifiant ne bouge jamais : les
      montants déjà saisis, l'historique et les positions restent rattachés. */
   /* Fiche d'une ligne de titres, ouvrable depuis le tableau, la brique du
@@ -10399,12 +10488,8 @@ const ACTIONS = {
     const values = {};
     for (const a of ACCOUNTS) { const v = nowValue(a.id); if (v) values[a.id] = round2(v); }
     row.v = values;
-    /* Le prix de revient du portefeuille est note en meme temps que sa valeur.
-       Sans lui, on connait la valeur passee mais pas le gain latent d'alors :
-       impossible de tracer sa courbe apres coup. */
-    row.inv = round2(portfolioPnl().invested);
-    /* Le capital restant du, pour la meme raison : c'est ce qui fait monter
-       la part nette d'un bien immobilier mois apres mois. */
+    /* Le capital restant du : c'est ce qui fait monter la part nette d'un bien
+       immobilier mois apres mois. */
     row.dettes = round2(patrimoine().dettes);
     Store.save(); render();
     toast(`${fmtMonth(row.date)} · ${fmtEUR0(t.total)} ${trad('enregistré')}`, porteDeSortie());
@@ -12030,10 +12115,8 @@ function askExpenseMonth(index) {
    Le bouton de photo remplit les champs sans rien enregistrer : c'est le ⤒
    du tableau, mais relu avant d'être écrit, donc sans confirmation à donner. */
 /* L'ecriture d'un releve, appelee par « Enregistrer » de la fenetre : elle
-   ecrit et la fenetre reste, comme sa jumelle des depenses. Les dettes du
-   mois viennent du champ — ce qui s'affiche est ce qui s'enregistre — et le
-   prix de revient (`inv`) seulement d'une photo : un investi d'aujourd'hui
-   colle sur des montants saisis a la main inventerait un gain. */
+   ecrit et la fenetre reste, comme sa jumelle des depenses. Les dettes du mois
+   viennent du champ : ce qui s'affiche est ce qui s'enregistre. */
 function appliquerReleve(index, saisi) {
   const row = Store.state.monthly[index];
   if (!row) return false;
@@ -12041,7 +12124,6 @@ function appliquerReleve(index, saisi) {
   row.v = saisi.v;
   row.comment = saisi.comment;
   row.dettes = round2(num(saisi.dettes));
-  if (saisi.photo) row.inv = round2(portfolioPnl().invested);
   Store.save(); render();
   return true;
 }
@@ -12181,9 +12263,8 @@ function askMonthlySnapshot(index) {
     if ($('#relPhoto')) $('#relPhoto').focus({ preventScroll: true });
     else focusChamp(champs[0]);
 
-    /* Le prix de revient n'est noté qu'après une photo : sans lui la courbe
-       de plus-value latente n'a pas de point, mais un investi d'aujourd'hui
-       collé sur des montants saisis à la main inventerait un gain. */
+    /* La photo se retient : c'est le seul geste qui remplace douze champs d'un
+       coup, donc le seul qui ait un ecrasement a confirmer. */
     let photoPrise = false;
     if ($('#relPhoto')) $('#relPhoto').onclick = () => {
       for (const c of champs) {
@@ -12237,7 +12318,7 @@ function askMonthlySnapshot(index) {
           { ok: 'Remplacer' })) return false;
 
       appliquerReleve(index, { v, comment: $('#relNote').value,
-                               dettes: $('#relDettes').value, photo: photoPrise });
+                               dettes: $('#relDettes').value });
       sale = false;
       photoPrise = false;
       toast(`${fmtMonth(r.date)} · ${fmtEUR0(rowTotal(Store.state.monthly[index]))} ${trad('enregistré')}`);
@@ -12868,15 +12949,56 @@ const APERCUS = {
   },
 
   /* --- Performance ----------------------------------------------------- */
-  ventesRealisees: () => {
-    const st = salesStats(salesRange);
+  /* Le detail d'une vente.
+
+     Ce que trois tuiles disaient pour toute la page — produit encaisse, prix de
+     revient cede, taux de reussite — appartient a chaque vente : ce sont des
+     faits de celle-la, pas des totaux d'ecran. Deux d'entre eux se relisaient
+     deja en tete de page, ou la plus-value encaissee porte son pourcentage et son
+     compte de ventes gagnantes.
+
+     Le panneau porte aussi l'annulation, qui vivait au bout d'une ligne de
+     tableau. Ici le geste a la place de dire ce qu'il emporte, et il n'est plus a
+     portee de pouce de la lecture.
+
+     `ventesRealisees` a disparu avec la tuile qui l'ouvrait : une fonction sans
+     appelant est la moitie qu'on oublie en retirant un affichage. */
+  vente: (i) => {
+    const idx = Number(i);
+    const v = (Store.state.sales || [])[idx];
+    if (!v) return null;
+    const dev = v.currency || 'EUR';
+    const pct = num(v.invested) ? num(v.realised) / num(v.invested) * 100 : null;
+    const depuis = v.account ? (ACC[v.account]?.label || '') : '';
+    const vers = v.cashAccount ? (ACC[v.cashAccount]?.label || '') : '';
     return {
-      titre: trad('Ventes réalisées'), sous: rangeLabel(salesRange),
-      total: st.gross, totalNote: `${fmtSigned(st.realised)} ${trad('de plus-value')}`,
-      lignes: st.sales.map(v => ({
-        label: v.name, meta: `${fmtDate(v.date)} · ${num(v.qty)} × ${fmtCur(v.price, v.currency)}`,
-        valeur: v.realised })),
-      vue: 'performance', ancre: 'ventes', cta: trad('Voir le journal'),
+      titre: v.name || trad('Vente'),
+      sous: [fmtDate(v.date), v.declaree ? trad('déclarée, pour mémoire') : '']
+            .filter(Boolean).join(' · '),
+      total: num(v.realised),
+      totalNote: pct == null ? trad('prix de revient non renseigné')
+        : `${fmtSignedPct(pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(v.invested)} ${trad('investis')}`,
+      /* Une vente declaree n'a ni quantite ni prix : ces trois lignes se taisent
+         plutot que d'ecrire des zeros qui se liraient comme une saisie amputee. */
+      html: `
+        <dl class="kv">
+          ${v.declaree ? '' : `
+          <dt>${trad('Quantité vendue')}</dt><dd>${num(v.qty)}</dd>
+          <dt>${trad('Prix de vente')}</dt><dd>${fmtCurEur(v.price, dev, v.fxSell)}</dd>
+          <dt>${trad('Prix de revient unitaire')}</dt><dd>${fmtCurEur(v.buyPrice, dev, v.fxBuy)}</dd>`}
+          <dt>${trad('Produit encaissé')}</dt><dd>${fmtEUR(num(v.gross))}</dd>
+          <dt>${trad('Prix de revient vendu')}</dt><dd>${fmtEUR(num(v.invested))}</dd>
+          <dt>${trad('Plus-value')}</dt>
+            <dd class="${cls(v.realised)}"><b>${fmtSigned(v.realised)}</b></dd>
+          ${depuis ? `<dt>${trad('Ligne vendue sur')}</dt><dd>${esc(depuis)}</dd>` : ''}
+          ${vers ? `<dt>${trad('Encaissé sur')}</dt><dd>${esc(vers)}</dd>` : ''}
+          ${v.note ? `<dt>Note</dt><dd>${esc(v.note)}</dd>` : ''}
+        </dl>
+        <div class="row" style="margin-top:12px">
+          <button class="btn ghost" data-action="del-sale" data-i="${idx}">${
+            v.declaree ? trad('Retirer du journal') : trad('Annuler cette vente')}</button>
+        </div>`,
+      vue: 'performance', ancre: 'ventes', cta: trad('Rester ici'),
     };
   },
 
@@ -12885,7 +13007,11 @@ const APERCUS = {
     const lat = latentPnl();
     return {
       titre: trad('Plus-value latente'), sous: `${lat.winners} ${trad('lignes en gain sur')} ${lat.count}`,
-      total: lat.pnl, totalNote: `${fmtSignedPct(lat.pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(lat.invested)} ${trad('investis')}`,
+      /* Sans prix de revient saisi, il n'y a pas de base : la note se contente
+         alors de nommer ce qui manque, plutot que d'annoncer 0,00 %. */
+      total: lat.pnl, totalNote: lat.pct == null
+        ? trad('prix de revient non renseigné')
+        : `${fmtSignedPct(lat.pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(lat.invested)} ${trad('investis')}`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
@@ -12893,11 +13019,24 @@ const APERCUS = {
       vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
     };
   },
-  perfRealisee: () => {
-    const st = salesStats(salesRange);
+  /* La plage se passe en argument. La tuile parle depuis le debut, la carte des
+     ventes suit le selecteur : un apercu qui deciderait seul de sa borne
+     mentirait a l'une des deux. Le titre ne bouge pas, la borne va dans le
+     sous-titre, ou elle se lit avec ce qu'elle qualifie. */
+  perfRealisee: (range) => {
+    const r = range || salesRange;
+    const st = salesStats(r);
     return {
-      titre: `${trad('Réalisée')} · ${rangeLabel(salesRange)}`,
-      sous: st.count ? `${st.wins} ${trad('ventes gagnantes sur')} ${st.count}` : trad('aucune vente sur la période'),
+      titre: trad('Plus-value encaissée'),
+      /* Sans une seule vente, la borne n'a rien a qualifier : « depuis le debut,
+         aucune vente sur la periode » dit deux fois la meme absence, et la
+         seconde moitie nomme une periode qui est tout le temps. */
+      sous: !st.count
+        ? (r === 'all' ? trad('aucune vente encore')
+                       : `${rangeLabel(r)} · ${trad('aucune vente sur la période')}`)
+        : [r === 'all' ? trad('depuis le début') : rangeLabel(r),
+           `${st.wins} ${st.wins > 1 ? trad('ventes gagnantes sur') : trad('vente gagnante sur')} ${st.count}`
+          ].join(' · '),
       total: st.realised, totalNote: `${fmtEUR0(st.gross)} ${trad('encaissés')}`,
       lignes: st.sales.map(v => ({ label: v.name, meta: fmtDate(v.date), valeur: v.realised })),
       vue: 'performance', ancre: 'ventes', cta: trad('Voir le journal'),
@@ -12905,12 +13044,27 @@ const APERCUS = {
   },
   perfTotale: () => {
     const lat = latentPnl(), tout = salesStats('all');
+    /* « Depuis le debut » ne datait rien, et le grand chiffre n'avait aucune
+       heure. Chaque part porte donc la date de ce qui la fixe : un cours pour le
+       latent, les ventes elles-memes pour l'encaisse. Aucune des deux n'est
+       devinee — l'une vient de la place, l'autre du journal. */
+    const jours = (tout.sales || []).map(v => String(v.date || '')).filter(Boolean).sort();
+    const bornes = !jours.length ? ''
+      : jours[0] === jours[jours.length - 1] ? fmtDate(jours[0])
+      : `${trad('de')} ${fmtDate(jours[0])} ${trad('à')} ${fmtDate(jours[jours.length - 1])}`;
     return {
-      titre: trad('Résultat total'), sous: trad('Latent et encaissé depuis le début'),
+      titre: trad('Résultat de tes positions'), sous: trad('Latent et encaissé depuis le début'),
       total: lat.pnl + tout.realised,
       lignes: [
-        { label: trad('Plus-value latente'), meta: `${lat.count} ${trad('lignes détenues')}`, valeur: lat.pnl },
-        { label: trad('Plus-value encaissée'), meta: `${tout.count} ${tout.count > 1 ? trad('ventes') : trad('vente')}`, valeur: tout.realised },
+        { label: trad('Plus-value latente'),
+          meta: [`${lat.count} ${lat.count > 1 ? trad('lignes détenues') : trad('ligne détenue')}`,
+                 coursAsOf() ? `${trad('cours')} ${fmtCoursQuand(coursAsOf())}` : '']
+                .filter(Boolean).join(' · '),
+          valeur: lat.pnl },
+        { label: trad('Plus-value encaissée'),
+          meta: [`${tout.count} ${tout.count > 1 ? trad('ventes') : trad('vente')}`, bornes]
+                .filter(Boolean).join(' · '),
+          valeur: tout.realised },
       ],
       vue: 'performance', ancre: '', cta: trad('Rester ici'),
     };
@@ -13024,7 +13178,9 @@ const APERCUS = {
     const pnl = portfolioPnl();
     return {
       titre: trad('Valeur du portefeuille'), sous: `${Store.state.positions.length} ${trad('lignes de titres')}`,
-      total: pnl.value, totalNote: `${fmtSignedPct(pnl.pct)} ${trad('sur le prix de revient')}`,
+      total: pnl.value, totalNote: pnl.pct == null
+        ? trad('prix de revient non renseigné')
+        : `${fmtSignedPct(pnl.pct)} ${trad('sur le prix de revient')}`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${num(p.qty)} × ${fmtCur(p.price, p.currency)}`,
                      valeur: posValue(p), perf: posPerfPct(p) }))
@@ -13049,7 +13205,8 @@ const APERCUS = {
     const j = dayPerformance();
     return {
       titre: trad('Plus / moins-value latente'),
-      sous: `${fmtSignedPct(pnl.pct)} · ${j.lignes.length ? `${fmtSigned(j.eur)} ${trad('aujourd’hui')}` : trad('pas de cours du jour')}`,
+      sous: [pnl.pct == null ? trad('prix de revient non renseigné') : fmtSignedPct(pnl.pct),
+             j.lignes.length ? `${fmtSigned(j.eur)} ${trad('aujourd’hui')}` : trad('pas de cours du jour')].join(' · '),
       total: pnl.pnl, totalNote: `${trad('sur.investis', 'sur')} ${fmtEUR0(pnl.invested)} ${trad('investis')}`,
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
