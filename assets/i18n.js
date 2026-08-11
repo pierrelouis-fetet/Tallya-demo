@@ -414,6 +414,7 @@ const I18N = {
     "Capital emprunté (€)": "Amount borrowed (€)",
     "Capital restant dû": "Outstanding balance",
     "Ce que ce bien rapporte": "What this asset yields",
+    "Ce que ce bien rapporte, et ce qu’il coûte": "What this asset yields, and what it costs",
     "Ce que la ligne pèse chaque mois, quelle que soit sa périodicité": "What the line weighs each month, whatever its period",
     "Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est une prévision tirée de tes saisies, pas un montant constaté sur un compte.": "What your budget leaves each month once fixed costs and your average spending are taken out. It is a forecast drawn from your entries, not an amount observed on an account.",
     "Ce que tu as déjà et ce que tu verses": "What you already have and what you pay in",
@@ -1442,6 +1443,7 @@ const I18N = {
     "Sur ta part, comme le reste de ton patrimoine.": "On your share, like the rest of your wealth.",
 
     "Ce que ce logement te coûte": "What this home costs you",
+    "Ce que ce logement te coûte, et ce qu’il rapporte": "What this home costs you, and what it brings in",
     "Sortie du compte": "Leaving your account",
     "Dont capital remboursé": "Of which capital repaid",
     "Cette part de la mensualité ne part pas : elle passe de ton compte à tes murs. C'est de l'épargne forcée, et c'est pour ça que ton patrimoine monte le mois même où ta trésorerie baisse.": "This part of the instalment does not leave: it moves from your account into your walls. It is forced saving, and that is why your wealth rises in the very month your cash falls.",

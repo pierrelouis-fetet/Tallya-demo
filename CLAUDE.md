@@ -92,6 +92,13 @@ n'a pas, remplacer `Store.state` par un `structuredClone` modifié, appeler
 appelé, rien n'est écrit. Mettre tout de même le contenu de `localStorage` de
 côté avant, et le remettre après.
 
+**Cliquer un bouton, c'est appeler `Store.save()`.** Garder `Store.state` de
+côté ne suffit alors plus : le clic a déjà réécrit le `localStorage`, et l'état
+simulé y reste. Avant tout clic sur une action, mettre **la chaîne brute** de
+côté (`localStorage.getItem('wealth-dashboard:v1')`) et la remettre telle quelle
+à la fin, `savedAt` compris. Une longueur en octets identique avant et après le
+prouve.
+
 ## Où l'on écrit, et ce qui le confirme
 
 Deux régimes, et le choix n'est pas décoratif.

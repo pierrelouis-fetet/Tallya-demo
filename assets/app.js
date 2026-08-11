@@ -5399,7 +5399,7 @@ function carteExploitation(c, idx) {
 
   if (rien) return `
   <div class="card">
-    <div class="card-head"><h2>${trad('Ce que ce bien rapporte')}</h2>
+    <div class="card-head"><h2>${trad('Ce que ce bien rapporte, et ce qu’il coûte')}</h2>
       <span class="hint">${trad('loyer, charges, cash-flow')}</span>
       ${boutonsRattachement(c)}</div>
     <!-- Classe « empty » et non « small muted » : c'est un ecran vide, pas une
@@ -5431,7 +5431,7 @@ function carteExploitation(c, idx) {
     const reel = cf.capitalMois == null ? null : sortie - cf.capitalMois;
     return `
   <div class="card">
-    <div class="card-head"><h2>${trad('Ce que ce logement te coûte')}</h2>
+    <div class="card-head"><h2>${trad('Ce que ce logement te coûte, et ce qu’il rapporte')}</h2>
       <span class="hint">${esc(trad(USAGE_BIEN_LABEL[usage]).toLowerCase())}</span>
       ${boutonsRattachement(c)}</div>
     <dl class="kv">
@@ -5465,7 +5465,7 @@ function carteExploitation(c, idx) {
   const baseDite = cf.surAchat ? trad('le prix payé') : trad('la valeur actuelle');
   return `
   <div class="card">
-    <div class="card-head"><h2>${trad('Ce que ce bien rapporte')}</h2>
+    <div class="card-head"><h2>${trad('Ce que ce bien rapporte, et ce qu’il coûte')}</h2>
       <span class="hint">${fmtEUR0(cf.loyers)} ${trad('de loyer par mois')}</span>
       ${boutonsRattachement(c)}</div>
     <dl class="kv">
@@ -5723,15 +5723,20 @@ function espaceBien(c, idx, t) {
    rien a l'ecriture — elle a deja eu lieu, champ par champ, avec le lisere vert
    de `marquerEcrit()`.
 
-   Il ne promet rien de faux : ce qu'il enregistre est deja enregistre, et le
-   message le dit avec ses mots plutot que de laisser croire le contraire. */
+   Il ecrit et il reste, comme dans une fenetre de saisie en serie : une fiche de
+   bien porte une dizaine de champs et trois cartes de chiffres derives, et on
+   vient justement voir ce que la saisie a change. « Enregistrer et fermer »
+   emportait l'ecran avant qu'on ait pu relire les comptes, et il fallait
+   revenir. Le depart, lui, se fait par la navigation, qui ne perd rien.
+
+   « Annuler » reste, et rend la fiche telle qu'elle etait au dernier point
+   connu — l'ouverture, ou le dernier « Enregistrer ». */
 function boutonEnregistrerFiche(retour = 'accounts') {
   return `
       <div class="fiche-valider">
         <button class="btn ghost" data-action="annuler-fiche"
                 data-view="${esc(retour)}">${trad('Annuler')}</button>
-        <button class="btn primary" data-action="enregistrer-fiche"
-                data-view="${esc(retour)}">${trad('Enregistrer et fermer')}</button>
+        <button class="btn primary" data-action="enregistrer-fiche">${trad('Enregistrer')}</button>
       </div>`;
 }
 
@@ -8951,15 +8956,23 @@ const ACTIONS = {
     retour();
   },
 
-  'enregistrer-fiche'(btn) {
+  'enregistrer-fiche'() {
     /* Le blur d'abord : sur iOS, un champ encore actif peut n'avoir pas emis son
        dernier `input`, et l'ecriture se ferait sans lui. */
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     retourHaptique();
     Store.save();
     toast(trad('Enregistré ✓'));
+    /* L'instantane se reprend au lieu de disparaitre : « Annuler » ne peut pas
+       defaire ce qui vient d'etre enregistre, sinon il promettrait un point de
+       retour qui n'existe plus. Vide, il se repose au rendu suivant sur l'etat
+       du moment — `memoriserFiche()` ne le reprend que dans ce cas.
+       La position dans la page est gardee : la fiche est longue, et remonter en
+       haut apres un enregistrement ferait perdre la ligne qu'on relisait. */
     ficheAvant = null;
-    ACTIONS.goto({ dataset: { view: btn?.dataset?.view || 'accounts', anchor: '' } });
+    const y = window.scrollY;
+    refreshAccounts(); render();
+    window.scrollTo(0, y);
   },
 
   async 'supprimer-compte'(btn) {

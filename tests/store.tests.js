@@ -9507,14 +9507,29 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
       'un compte qui porte aussi des espèces n’est pas réductible à sa ligne');
   });
 
-  test('la fiche porte un bouton qui enregistre et ferme', () => {
+  test('la fiche porte un bouton qui enregistre et reste', () => {
     /* Tout y est deja ecrit a la frappe : ce bouton apporte la confirmation, pas
        l'ecriture. Il ne doit donc surtout pas remplacer l'ecriture continue —
        un champ saisi puis quitte sans clic serait perdu, et c'est precisement
-       ce que la regle du projet interdit. */
+       ce que la regle du projet interdit.
+       Il reste sur place, comme dans une fenetre de saisie en serie : on vient
+       relire les comptes que la saisie vient de changer, et « Enregistrer et
+       fermer » emportait l'ecran avant qu'on ait pu les lire. */
     const src = lireSource('assets/app.js');
     vrai(/function boutonEnregistrerFiche/.test(src), 'le bouton a une seule source');
-    vrai(/Enregistrer et fermer/.test(src), 'il dit ce qu’il fait');
+    const fn = src.slice(src.indexOf('function boutonEnregistrerFiche'),
+                         src.indexOf("/* L'etat d'une fiche a son ouverture"));
+    vrai(/data-action="enregistrer-fiche">\$\{trad\('Enregistrer'\)\}/.test(fn),
+      'il dit ce qu’il fait, et ne promet plus de fermer');
+    const action = src.slice(src.indexOf("'enregistrer-fiche'()"),
+                             src.indexOf("async 'supprimer-compte'"));
+    vrai(action.length > 200, 'l’action doit être trouvable');
+    vrai(!/ACTIONS\.goto/.test(action),
+      'elle ne renvoie plus ailleurs : la navigation s’en charge, et elle ne perd rien');
+    vrai(/ficheAvant = null/.test(action),
+      '« Annuler » ne peut pas défaire ce qui vient d’être enregistré');
+    vrai(/window\.scrollY[\s\S]{0,120}window\.scrollTo\(0, y\)/.test(action),
+      'et la position dans la page est gardée : la fiche est longue');
     eq((src.match(/boutonEnregistrerFiche\(/g) || []).length, 3,
       'une déclaration et deux appels : la fiche d’un compte et celle d’un établissement');
     /* L'ecriture a la frappe reste la regle : l'ecouteur `input` continue
