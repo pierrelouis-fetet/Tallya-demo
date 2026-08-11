@@ -212,6 +212,86 @@ const SEED_POSITIONS = [
   { id:'p10', name:'Bitcoin ETP',     isin:'DE000A27Z304', symbol:'',        currency:'EUR', qty:46,  buyPrice:31.5, price:56.45,  fx:1,     fxBuy:1,     assetClass:'crypto',        role:'satellite', account:'crypto', manual:false },
 ];
 
+/* Le journal des ventes.
+
+   Il etait vide, et c'est la fonction qu'une demonstration doit le moins laisser
+   vide : la plus-value encaissee, le rythme des ventes, la courbe de cumul et le
+   detail d'une vente n'ont rien a montrer sans elles. Un ecran vide bien redige
+   convient a qui demarre, pas a qui vient voir ce que l'application sait faire.
+
+   Onze ventes sur dix-huit mois, neuf gagnantes et deux perdantes : c'est la
+   proportion d'un portefeuille qui a tenu, et deux lignes rouges suffisent a
+   montrer que l'application les dit sans les cacher. Elles s'etalent sur 2025 et
+   2026 pour que le menu des annees ait deux crans, et sur assez de mois pour que
+   les barres par mois, par trimestre et par annee se distinguent selon la plage.
+
+   Quatre noms ne figurent pas dans les positions : ces lignes ont ete soldees en
+   entier, et c'est exactement ce que le journal sert a garder — une plus-value
+   encaissee survit a la ligne qui l'a produite.
+
+   Chaque montant se verifie de tete : gross = qte x prix (x change), invested =
+   qte x prix de revient (x change), realised etant leur difference. Les ajouter
+   ne deplace aucun total du patrimoine — le journal est une trace, l'argent est
+   deja sur les comptes — donc les sommes des relevés restent celles qu'elles
+   etaient. Le tout fait +1 519 EUR encaisses.
+
+   Ordre du plus recent au plus ancien, celui que produit une vraie vente. */
+const SEED_SALES = [
+  { id:'v11', date:'2026-07-21', name:'Fonds prudent 30/70', isin:'LU0227384020', symbol:'',
+    assetClass:'diversifie', role:'core', account:'cto', cashAccount:'cashCto',
+    qty:60, price:18.1, currency:'EUR', fxSell:1, buyPrice:17.1, fxBuy:1,
+    gross:1086, invested:1026, realised:60, note:'' },
+  { id:'v10', date:'2026-06-08', name:'Or', isin:'IE00B4ND3602', symbol:'',
+    assetClass:'metaux', role:'satellite', account:'cto', cashAccount:'cashCto',
+    qty:10, price:82, currency:'EUR', fxSell:1, buyPrice:64.2, fxBuy:1,
+    gross:820, invested:642, realised:178, note:'allégé après la hausse' },
+  { id:'v9', date:'2026-04-30', name:'ASML', isin:'NL0010273215', symbol:'ASML.AS',
+    assetClass:'actions', role:'satellite', account:'pea', cashAccount:'cashPea',
+    qty:1, price:1450, currency:'EUR', fxSell:1, buyPrice:1290, fxBuy:1,
+    gross:1450, invested:1290, realised:160, note:'' },
+  /* Perdante, et sur une ligne encore detenue : la fiche de la position montre
+     une moins-value latente pendant que le journal montre une perte encaissee.
+     Les deux coexistent, et ne s'additionnent jamais. */
+  { id:'v8', date:'2026-03-12', name:'Foncières européennes', isin:'IE00B0M63284', symbol:'',
+    assetClass:'immobilierCote', role:'satellite', account:'cto', cashAccount:'cashCto',
+    qty:25, price:26.6, currency:'EUR', fxSell:1, buyPrice:28.4, fxBuy:1,
+    gross:665, invested:710, realised:-45, note:'' },
+  { id:'v7', date:'2026-01-27', name:'Bitcoin ETP', isin:'DE000A27Z304', symbol:'',
+    assetClass:'crypto', role:'satellite', account:'crypto', cashAccount:'cashCto',
+    qty:12, price:48, currency:'EUR', fxSell:1, buyPrice:31.5, fxBuy:1,
+    gross:576, invested:378, realised:198, note:'retour à la cible de 5 %' },
+  { id:'v6', date:'2025-11-18', name:'MSCI World', isin:'FR001400U5Q4', symbol:'DCAM.PA',
+    assetClass:'actions', role:'core', account:'pea', cashAccount:'cashPea',
+    qty:200, price:5.9, currency:'EUR', fxSell:1, buyPrice:5.42, fxBuy:1,
+    gross:1180, invested:1084, realised:96, note:'' },
+  { id:'v5', date:'2025-09-05', name:'Orange', isin:'', symbol:'',
+    assetClass:'actions', role:'satellite', account:'pea', cashAccount:'cashPea',
+    qty:40, price:11.5, currency:'EUR', fxSell:1, buyPrice:13.25, fxBuy:1,
+    gross:460, invested:530, realised:-70, note:'soldée, thèse abandonnée' },
+  /* En devise : le change se fige a l'achat comme sur une position, sinon le
+     prix de revient d'une vente passee bougerait avec l'EUR/USD du jour. */
+  { id:'v4', date:'2025-06-10', name:'Alphabet', isin:'', symbol:'',
+    assetClass:'actions', role:'satellite', account:'cto', cashAccount:'cashCto',
+    qty:4, price:200, currency:'USD', fxSell:0.9, buyPrice:150, fxBuy:0.9,
+    gross:720, invested:540, realised:180, note:'' },
+  { id:'v3', date:'2025-04-22', name:'Nasdaq 100', isin:'', symbol:'',
+    assetClass:'actions', role:'core', account:'cto', cashAccount:'cashCto',
+    qty:6, price:92, currency:'EUR', fxSell:1, buyPrice:71, fxBuy:1,
+    gross:552, invested:426, realised:126, note:'' },
+  { id:'v2', date:'2025-02-14', name:'Air Liquide', isin:'', symbol:'',
+    assetClass:'actions', role:'satellite', account:'pea', cashAccount:'cashPea',
+    qty:12, price:168, currency:'EUR', fxSell:1, buyPrice:140, fxBuy:1,
+    gross:2016, invested:1680, realised:336, note:'' },
+  /* Une vente d'avant l'application, entree pour memoire : elle n'a ni quantite
+     ni prix, et l'ecran doit taire ces champs au lieu d'ecrire des zeros. C'est
+     le seul moyen de montrer ce cas, qui est celui de tout nouveau venu. */
+  { id:'v1', date:'2024-11-15', name:'Ancien fonds en euros', isin:'', symbol:'',
+    assetClass:'', role:'', account:'', cashAccount:'',
+    qty:null, price:null, currency:'EUR', fxSell:1, buyPrice:null, fxBuy:1,
+    gross:3200, invested:2900, realised:300, note:'avant l’application',
+    declaree:true },
+];
+
 /* Fiches comptes (dates d'ouverture, dépôts / retraits) */
 const SEED_ACCOUNT_INFO = {
   pea:          { opened:'2023-06-01', liquidity:'illiquid', deposit:null, withdrawal:0 },
@@ -335,11 +415,15 @@ function blankState() {
 const SEED = {
   version: 1,
   meta: {
-    /* L'objectif suit l'echelle du jeu : le net vaut environ 100 000 EUR une
-       fois le pret retranche, viser 30 000 aurait affiche « atteint » et la
-       carte n'aurait rien montre de sa mecanique. 120 000 a fin 2027 laisse une
-       marche a franchir, et donc une jauge a lire. */
-    objective: 120000,
+    /* L'objectif se place au-dessus du net du jeu, et de peu. A 120 000 il etait
+       deja depasse : la jauge affichait une barre pleine, et la carte ne montrait
+       plus rien de sa mecanique — ni le reste a faire, ni le rythme necessaire.
+       150 000 a fin 2027 laisse une marche a franchir, assez basse pour que ce
+       rythme reste credible.
+
+       Il se relit chaque fois que les valeurs de la graine bougent : un objectif
+       deja atteint ne demontre rien, et c'est le net qui decide, pas ce nombre. */
+    objective: 150000,
     objectiveYear: 2027,
     expectedInflow: 600,    // cash attendu d'ici le mois prochain
     modelCapital: 100000,   // base des modèles d'allocation
@@ -387,7 +471,7 @@ const SEED = {
     projHorizon: 20,     // horizon affiche par la vue Objectif
   },
   quotes: { lastRun: null, fx: {}, changes: [] },
-  sales: [],
+  sales: SEED_SALES,
   now: SEED_NOW,
   seedVersion: SEED_VERSION,
   monthly: SEED_MONTHLY,

@@ -12,6 +12,8 @@ how much do I have, where does it sit, and where is it going?</p>
 
 <p align="center"><a href="https://tallya-demo.pages.dev"><b>Live demo</b></a> — fictional data, nothing to install.</p>
 
+<p align="center">Designed and built by <b>Pierre-Louis FETET</b>.</p>
+
 [![Tallya, overview on desktop](docs/desktop-overview.png)](https://tallya-demo.pages.dev)
 
 <p align="center">
@@ -172,6 +174,12 @@ can be believed.
 Cloudflare Pages on the free tier: a dozen requests per visit against a
 hundred-thousand-per-day cap.
 
+## Author
+
+Tallya is designed, built and maintained by **Pierre-Louis FETET** — the data
+model, the engineering rules above, and every product decision behind them.
+
 ## License
 
-AGPL-3.0. Any modified version served to users must publish its source.
+AGPL-3.0, copyright © 2026 Pierre-Louis FETET. Any modified version served to
+users must publish its source.
