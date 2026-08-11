@@ -129,6 +129,20 @@ Deux régimes, et le choix n'est pas décoratif.
   `lignes[].champ` ou dans son propre `html`, et c'est ce troisième cas qui
   portait les liquidités.
 
+- **Le cloud reçoit tout de suite, sauf pendant une frappe.** `Store.save()`
+  pousse immédiatement ; `Store.save({ differe: true })` regroupe, et un seul
+  appelant le demande — l'écouteur `input`, où cinq caractères valent cinq
+  écritures sur une clé qui n'en accepte qu'une par seconde. C'était l'inverse :
+  un clic sur « Enregistrer » attendait comme une frappe, et c'est dans cette
+  attente que l'écran se verrouillait.
+  Trois autres pièces, chacune fermant un trou : le flush écoute
+  `visibilitychange` vers `hidden` en plus de `pagehide` — sur téléphone la page
+  est gelée, pas déchargée, et un onglet gelé n'exécute aucun minuteur ; un seul
+  envoi est en vol à la fois, sinon deux `PUT` concurrents laissent le plus lent
+  écrire en dernier ; un échec est réessayé une fois, puis sur l'événement
+  `online`. Ce qui reste sans garantie, et qu'il faut dire : deux appareils
+  modifiés hors ligne demandent un arbitrage, il n'y a pas de fusion.
+
 ## Relier deux faits plutôt que les saisir deux fois
 
 Le motif le plus utile de cette base de code, appliqué quatre fois : une charge
@@ -200,6 +214,30 @@ bien (`bienId`).
   `.data-view > table` : même spécificité, c'est l'ordre qui tranche.
 - Pas de grille de tuiles pour des chiffres qui ne composent rien. La liste à
   barres de l'accueil (`.card.repart`) dit mieux la même chose.
+- **Dans une grille, un champ remplit sa cellule.** Les plafonds de `.field`
+  (9 em pour un nombre, largeur naturelle pour un menu) ont leur raison hors
+  grille, mais dans une rangée ils donnaient quatre largeurs sur une même fiche —
+  117, 160, 299 et 364 px — et rien ne s'alignait. C'est la grille qui décide de
+  la largeur, le champ l'occupe.
+- **Une rangée de boutons a la géométrie de sa voisine.** Deux rangées dans une
+  même carte, l'une en `btn` justifiée à droite et l'autre en `btn sm` à gauche,
+  se lisent comme un oubli. La hiérarchie se dit par le remplissage — plein,
+  fantôme, rouge — jamais par la taille.
+- **Un pied de fenêtre tient sur une ligne à 375 px.** Ses boutons se partagent
+  la largeur à parts égales : trois font 107 px chacun, et un libellé trop long
+  s'y plie en trois lignes — la hauteur double et le bouton voisin paraît énorme.
+  Un test refuse tout pied dont les libellés dépassent 36 caractères au total.
+- **Une page qui ne peut rien montrer dit ce qui la remplirait**, et ne montre
+  rien d'autre. Allocation répartissait 0 € entre sept classes, Projection étalait
+  des zéros sur cinquante ans : commenter chaque carte aurait remplacé six zéros
+  par six phrases. `pageAvantDonnees()` et `invitePremierPas()` portent la forme,
+  `PREMIERS_PAS` les textes. Corollaire : `mount()` de `charts.js` sort en silence
+  quand son conteneur n'a pas été rendu, sinon masquer une carte lève une
+  exception jusqu'à `render()`.
+- **Une réserve se dit une fois, là où elle porte.** Trois lignes réservaient
+  l'écart du jour sous la carte de la plus-value latente, qui ne dépend d'aucune
+  date d'achat. Elle est dite dans l'aide de la colonne concernée, là où le
+  chiffre se lit.
 
 ## Pièges de cette base de code
 
@@ -226,6 +264,18 @@ bien (`bienId`).
 - **Un `’` peut être écrit littéralement dans la source**, sous forme
   d'échappement JavaScript et non de caractère. Une recherche portant sur
   l'apostrophe typographique ne le trouve alors pas.
+- **Un commentaire HTML n'est pas du JavaScript.** Écrit *avant* le backtick
+  d'ouverture d'un littéral, `<!-- … -->` casse le fichier entier. Le piège se
+  double du précédent : dedans, un backtick ferme la chaîne. Deux fautes commises
+  le même jour, chacune détectée par la suite qui parse chaque fichier — mais
+  seulement après un rechargement, donc plusieurs minutes perdues. La règle
+  tient en deux mots : **dans** le gabarit, `<!-- -->` sans backtick ; **hors**
+  du gabarit, `/* */`.
+- **Une f-string Python ne s'étend pas à la ligne suivante.** Dans une
+  concaténation implicite, seule la ligne préfixée `f` interprète ses accolades :
+  `f"{{ a "` `"}}"` produit `{ a }}`. Le JavaScript généré reçoit alors une
+  accolade de trop. Écrire le code injecté d'un seul tenant, ou passer les
+  valeurs par `json.dumps()`.
 
 ## Données personnelles
 
