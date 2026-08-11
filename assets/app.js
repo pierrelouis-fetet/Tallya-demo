@@ -2458,7 +2458,7 @@ const classeDuType = t => {
    deroulante : une action ou un ETF ne se proposent que sur un CTO ou un PEA,
    une crypto que sur un portefeuille de cryptomonnaies. */
 const comptesPourListe = cat => comptesPourCategorie(cat)
-  .map(c => [c.id, `${nomCompteV2(c)} · ${nomEtabDe(c)}`]);
+  .map(c => [c.id, sousNom('', nomCompteV2(c), nomEtabDe(c))]);
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'CAD', 'JPY'];
 
 /* Places de cotation, par suffixe Yahoo. Ce réglage sert à départager un ISIN
@@ -5340,6 +5340,168 @@ function creditsDuCompte(c) {
   return { idxEtab, etab, dettes, total: dettes.reduce((s, x) => s + num(x.d.montant), 0) };
 }
 
+/* Les trois reglages d'exploitation : ce qu'on a mis, ce qu'on encaisse
+   vraiment, ce que l'impot prend. Ils vivent sur le compte et non sur la ligne,
+   au meme niveau que les loyers et les charges qui s'y rattachent — un compte
+   qui tiendrait deux lots n'aurait pas deux vacances ni deux taux. */
+function reglagesExploitation(c, idx, { apport = true } = {}) {
+  return `
+    <div class="grid g-3" style="margin-top:12px">
+      ${apport ? `
+      <div class="field"><label>${trad('Apport à l\'achat (€)')}${aide(trad("Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris. Il sert de base au rendement sur apport, le seul qui ne bouge pas tout seul avec le temps."))}</label>
+        <input type="number" step="any" class="champ-large"
+               data-path="comptes.${idx}.apport" value="${num(c.apport) || ''}"
+               placeholder="${trad('facultatif')}"></div>` : ''}
+      <div class="field"><label>${trad('Mois loués par an')}${aide(trad("Douze si le locataire ne part jamais. Un mois de vacance entre deux baux coûte 8 % du loyer annuel, et le rendement calculé sur douze mois pleins ne le voit pas."))}</label>
+        <input type="number" step="1" min="0" max="12" class="champ-large"
+               data-path="comptes.${idx}.moisLoues" value="${num(c.moisLoues) || ''}"
+               placeholder="12"></div>
+      <div class="field"><label>${trad('Impôt sur ce loyer (%)')}${aide(trad("Ton taux à toi, celui que tu constates sur ta déclaration. L'application ne devine aucun régime fiscal : micro-foncier, réel, meublé, les règles changent et une estimation automatique finirait par mentir. Le taux s'applique au loyer moins les charges."))}</label>
+        <input type="number" step="0.1" min="0" max="100" class="champ-large"
+               data-path="comptes.${idx}.tauxImpot" value="${num(c.tauxImpot) || ''}"
+               placeholder="${trad('facultatif')}"></div>
+    </div>`;
+}
+
+/* Les deux boutons qui rattachent, communs aux deux visages de la carte.
+
+   Ils font, ils ne renvoient pas : la carte Financement montrait deja la bonne
+   forme avec « + Credit ». Le rattachement se fait tout seul puisqu'on part du
+   bien ; la fenetre generique reste, pour rattacher un loyer deja saisi. */
+function boutonsRattachement(c) {
+  return `
+      <button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
+              title="${trad('Créer un loyer déjà rattaché à ce bien')}">+ ${trad('Loyer')}</button>
+      <!-- L'infobulle se derive de la table des postes : elle les listait a la
+           main, si bien qu'ajouter un poste demandait de penser a deux endroits
+           et que celui qu'on oubliait disait le contraire de l'autre. -->
+      <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
+              title="${esc(chargesProposees(c).map(([l]) => trad(l)).join(', '))}">${trad('+ Charge')}</button>`;
+}
+
+/* Ce que ce bien fait chaque mois : il rapporte, ou il coute.
+
+   Le meme logement ne pose pas la meme question selon son usage, et la carte
+   n'en posait qu'une. Rattacher sa taxe fonciere a sa propre maison suffisait a
+   declencher « Rendement brut 0,00 % » : le garde-fou testait l'absence de
+   loyer ET de charge, or une residence principale a des charges.
+
+   Deux chiffres separes et jamais un seul agrege pour dire le mois : la
+   tresorerie baisse pendant que le patrimoine monte, les deux sont vrais, et
+   leur somme ne veut rien dire — elle melangerait de l'argent disponible avec
+   de l'argent immobilise dans des murs. */
+function carteExploitation(c, idx) {
+  const cf = cashFlowBien(c);
+  if (!cf) return '';
+  const usage = usageBien(c);
+  const habite = usage === 'principale' || usage === 'secondaire';
+  const rien = !cf.loyers && !cf.charges && !cf.mensualite;
+
+  if (rien) return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Ce que ce bien rapporte')}</h2>
+      <span class="hint">${trad('loyer, charges, cash-flow')}</span>
+      ${boutonsRattachement(c)}</div>
+    <!-- Classe « empty » et non « small muted » : c'est un ecran vide, pas une
+         note en bas de carte. La classe le dit, et la regle des 35 mots
+         l'exempte pour cette raison, quand il n'y a aucun chiffre a montrer le
+         texte est le contenu.
+         (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
+         gabarit, un backtick y fermerait la chaine.) -->
+    <p class="empty" style="margin:0">${trad('Aucun loyer ni charge rattaché à ce bien. '
+      + '« + Loyer » et « + Charge » les créent déjà rattachés ; un loyer déjà saisi dans le '
+      + 'budget se rattache par sa liste « Bien ». Le cash-flow et le rendement se calculent '
+      + 'alors tout seuls. Une provision pour travaux se déclare de la même façon, en charge '
+      + 'annuelle : c\'est la dépense que tout le monde oublie et qui décide du vrai rendement.')}</p>
+  </div>`;
+
+  /* Ce que le logement coute pour de bon. La mensualite sort du compte en
+     entier, mais sa part de capital revient a son proprietaire : c'est de
+     l'epargne forcee, pas une depense, et confondre les deux fait passer un
+     achat pour deux fois plus lourd qu'il ne l'est. */
+  if (habite) {
+    /* La sortie compte l'impot, parce qu'il sort vraiment du compte. Il ne
+       s'affichait pas ici alors qu'un logement partiellement loue peut en
+       porter un : le total aurait ete plus petit que la somme de ses lignes. */
+    const sortie = cf.charges + cf.mensualite + cf.impot - cf.loyers;
+    const interets = cf.capitalMois == null ? null : Math.max(0, cf.mensualite - cf.capitalMois);
+    /* Signe et non moins force : une chambre bien louee peut couvrir plus que la
+       mensualite. Borner a zero aurait affiche « −0 € » sur un logement qui
+       rapporte, et c'est l'intitule qui aurait menti. */
+    const reel = cf.capitalMois == null ? null : sortie - cf.capitalMois;
+    return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Ce que ce logement te coûte')}</h2>
+      <span class="hint">${esc(trad(USAGE_BIEN_LABEL[usage]).toLowerCase())}</span>
+      ${boutonsRattachement(c)}</div>
+    <dl class="kv">
+      ${cf.loyers ? `<dt>${trad('Loyer perçu')}${aide(trad("Une chambre louée, un garage, un bail partiel : ce qui rentre vient en déduction de ce que le logement te coûte."))}
+        ${cf.vacance ? `<span class="sub">${fmtEUR0(cf.loyersPleins)} ${trad('sur')} ${fmtNombre(cf.moisLoues)} ${trad('mois loués')}</span>` : ''}</dt>
+        <dd class="up">+${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>` : ''}
+      ${cf.charges ? `<dt>${trad('Charges rattachées')}${aide(trad("Taxe foncière, copropriété, assurance : les charges fixes que tu as rattachées à ce bien, ramenées au mois."))}</dt>
+        <dd class="dette">−${fmtEUR(cf.charges)} ${trad('/ mois')}</dd>` : ''}
+      ${cf.impot ? `<dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée."))}
+        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
+        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : ''}
+      ${cf.mensualite ? `<dt>${trad('Mensualité du crédit')}</dt>
+        <dd class="dette">−${fmtEUR(cf.mensualite)} ${trad('/ mois')}</dd>` : ''}
+      <dt><b>${trad('Sortie du compte')}</b></dt>
+        <dd class="${cls(-sortie)}"><b>${fmtSigned(-sortie)} ${trad('/ mois')}</b></dd>
+      ${reel != null ? `
+      <dt>${trad('Dont capital remboursé')}${aide(trad("Cette part de la mensualité ne part pas : elle passe de ton compte à tes murs. C'est de l'épargne forcée, et c'est pour ça que ton patrimoine monte le mois même où ta trésorerie baisse."))}</dt>
+        <dd class="up">+${fmtEUR(cf.capitalMois)} ${trad('en patrimoine')}</dd>
+      <dt><b>${trad('Coût réel du mois')}</b>${aide(trad("La sortie du compte moins le capital que tu te rembourses à toi-même. C'est ce que ce logement te prend vraiment, et c'est ce chiffre qui se compare à un loyer."))}</dt>
+        <dd class="${cls(-reel)}"><b>${fmtSigned(-reel)} ${trad('/ mois')}</b></dd>
+      ${interets ? `<dt>${trad('Dont intérêts')}</dt>
+        <dd class="muted">−${fmtEUR(interets)} ${trad('/ mois')}</dd>` : ''}` : ''}
+    </dl>
+    <!-- Les reglages suivent le loyer, pas l'usage : declares sur un locatif puis
+         bascules en residence principale, la vacance et l'impot continueraient
+         d'agir sans qu'aucun champ ne permette de les corriger. -->
+    ${cf.loyersPleins ? reglagesExploitation(c, idx, { apport: false }) : ''}
+  </div>`;
+  }
+
+  const baseDite = cf.surAchat ? trad('le prix payé') : trad('la valeur actuelle');
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Ce que ce bien rapporte')}</h2>
+      <span class="hint">${fmtEUR0(cf.loyers)} ${trad('de loyer par mois')}</span>
+      ${boutonsRattachement(c)}</div>
+    <dl class="kv">
+      <dt>${trad('Loyer perçu')}${cf.vacance ? aide(trad("Lissé sur l'année : le loyer plein multiplié par tes mois loués, divisé par douze.")) : ''}
+        ${cf.vacance ? `<span class="sub">${fmtEUR0(cf.loyersPleins)} ${trad('sur')} ${fmtNombre(cf.moisLoues)} ${trad('mois loués')}</span>` : ''}</dt>
+        <dd class="up">+${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>
+      ${cf.charges ? `<dt>${trad('Charges rattachées')}${aide(trad("Taxe foncière, copropriété, assurance propriétaire non occupant : les charges fixes que tu as rattachées à ce bien, ramenées au mois."))}</dt>
+        <dd class="dette">−${fmtEUR(cf.charges)} ${trad('/ mois')}</dd>` : ''}
+      ${cf.impot ? `<dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée."))}
+        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
+        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : ''}
+      ${cf.mensualite ? `<dt>${trad('Mensualité du crédit')}</dt>
+        <dd class="dette">−${fmtEUR(cf.mensualite)} ${trad('/ mois')}</dd>` : ''}
+      <!-- Negatif est normal les premieres annees d'un credit, et c'est justement
+           ce qu'il faut savoir : la couleur le dit sans le juger. -->
+      <dt><b>${trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
+        <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
+      ${cf.capitalMois ? `<dt>${trad('En patrimoine, le même mois')}${aide(trad("La part de capital de ta mensualité : elle quitte ta trésorerie et rejoint tes murs. Les deux lignes ne s'additionnent pas, elles répondent à deux questions différentes."))}</dt>
+        <dd class="up"><b>+${fmtEUR(cf.capitalMois)} ${trad('/ mois')}</b></dd>` : ''}
+    </dl>
+    <dl class="kv" style="margin-top:12px">
+      <dt>${trad('Rendement brut')}${aide(trad('Loyer annuel rapporté à la base indiquée. C’est la convention du marché : un rendement calculé sur une estimation du jour n’est pas le même chiffre, et il baisse quand le bien prend de la valeur.'))}
+        <span class="sub">${trad('sur')} ${baseDite}, ${fmtEUR0(cf.base)}</span></dt>
+        <dd>${fmtPct(cf.rendementBrut, 2)}</dd>
+      ${cf.charges ? `<dt>${trad('Rendement net de charges')}</dt>
+        <dd>${fmtPct(cf.rendementNet, 2)}</dd>` : ''}
+      ${cf.rendementNetNet != null ? `<dt>${trad('Net d\'impôt')}${aide(trad("Le seul des trois qui dise ce qui te reste. Il n'apparaît que si tu as déclaré ton taux."))}</dt>
+        <dd><b>${fmtPct(cf.rendementNetNet, 2)}</b></dd>` : ''}
+      ${cf.cashOnCash != null ? `<dt>${trad('Sur ton apport')}${aide(trad("Le cash-flow annuel rapporté à ce que tu as sorti de ta poche. C'est le chiffre qui répond à « ce montage vaut-il mieux qu'un livret », parce qu'il tient compte du levier du crédit. Il se calcule sur ton apport, qui ne bouge pas : le rapporter au capital déjà remboursé le ferait baisser tout seul à mesure que tu rembourses, alors que rien ne se dégrade."))}
+        <span class="sub">${fmtEUR0(cf.apport)} ${trad('engagés')}</span></dt>
+        <dd class="${cls(cf.cashOnCash)}">${fmtSignedPct(cf.cashOnCash, 1)}</dd>` : ''}
+    </dl>
+    ${reglagesExploitation(c, idx)}
+  </div>`;
+}
+
 /* L'espace d'un bien : ce qu'il vaut, ce qu'il a coûté, et où en est le prêt.
    « 150 000 € » tout seul ne dit pas ce qu'on possède — le capital restant dû
    change la réponse du tout au tout. */
@@ -5348,8 +5510,14 @@ function espaceBien(c, idx, t) {
   const biens = (c.lignes || []).map((l, i) => ({ l, i }))
     .filter(({ l }) => (l.classe || 'immobilier') === 'immobilier');
   const { idxEtab, dettes, total: credit } = creditsDuCompte(c);
-  const valeur = biens.reduce((s, { l }) => s + num(l.valeur), 0);
-  const achat = biens.reduce((s, { l }) => s + num(l.prixDeRevient), 0);
+  /* Deux valeurs, et l'ecran dit laquelle : celle du bien entier, qui se compare
+     a une annonce, et la part qu'on en detient, qui seule entre au patrimoine.
+     Sans quote-part saisie les deux se confondent, et rien ne s'affiche en plus. */
+  const entiere = biens.reduce((s, { l }) => s + num(l.valeur), 0);
+  const achatEntier = biens.reduce((s, { l }) => s + num(l.prixDeRevient), 0);
+  const valeur = biens.reduce((s, { l }) => s + num(l.valeur) * partDetention(l), 0);
+  const achat = biens.reduce((s, { l }) => s + num(l.prixDeRevient) * partDetention(l), 0);
+  const partagee = Math.abs(entiere - valeur) > 0.005;
   const gain = achat ? valeur - achat : null;
 
   return `
@@ -5381,6 +5549,26 @@ function espaceBien(c, idx, t) {
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>
         </div>
+        <div class="grid g-2">
+          <!-- L'usage se declare : la fiche d'une residence principale n'a pas
+               les memes questions que celle d'un locatif, et rien ne permet de
+               le deviner. Un bien sans loyer saisi peut etre en travaux. -->
+          <div class="field"><label>${trad('Usage')}${aide(trad("Il décide de ce que la fiche te montre : un logement mis en location a un rendement, celui que tu habites a un coût. Ta résidence principale sort aussi des avoirs mobilisables en quelques mois, parce que la vendre veut dire te reloger."))}</label>
+            <select data-path="comptes.${idx}.lignes.${i}.usage" class="annee">
+              <option value="">${trad('à préciser')}</option>
+              ${USAGES_BIEN.map(([cle, label]) => `<option value="${cle}"
+                ${usageLigne(l) === cle ? 'selected' : ''}>${trad(label)}</option>`).join('')}
+            </select></div>
+          <div class="field"><label>${trad('Ta part (%)')}${aide(trad("À remplir seulement si tu détiens ce bien à plusieurs : indivision, SCI, achat en couple sur deux tableaux de bord. Ton patrimoine ne compte alors que ta part. La valeur ci-dessus reste celle du bien entier, c'est elle que tu compares aux annonces. Le crédit, lui, se saisit tel que tu le dois."))}</label>
+            <input type="number" step="any" min="0" max="100" class="champ-large"
+                   data-path="comptes.${idx}.lignes.${i}.part" value="${num(l.part) || ''}"
+                   placeholder="100">
+            <!-- Une saisie hors bornes vaut le bien entier, et le taire laisserait
+                 croire qu'elle a ete prise en compte : le champ garde le chiffre
+                 tape, seul ce mot dit ce que le calcul en fait. -->
+            ${num(l.part) && (num(l.part) < 0 || num(l.part) > 100) ? `<p class="hint" style="margin:4px 0 0">${
+              trad('Une part va de 0 à 100. Au-delà, le bien compte en entier.')}</p>` : ''}</div>
+        </div>
         <div class="field"><label>Adresse</label>
           <input data-path="comptes.${idx}.lignes.${i}.adresse" value="${esc(l.adresse || '')}"
                  placeholder="facultatif" style="text-align:left"></div>
@@ -5392,16 +5580,22 @@ function espaceBien(c, idx, t) {
          à l'époque quand on le connaît — l'écart entre les deux est
          l'histoire du bien en une ligne. */
       const surface = biens.reduce((s, { l }) => s + num(l.surface), 0);
-      if (!surface || !valeur) return '';
+      if (!surface || !entiere) return '';
+      /* Le prix au metre carre est celui du bien entier, quote-part ou pas :
+         c'est le chiffre des annonces, et le diviser par deux ne se comparerait
+         a rien. */
       return `<dl class="kv" style="margin-top:12px">
         <dt>Prix au m²<span class="sub">${fmtNombre(surface)} m² au total</span></dt>
-        <dd><b>${fmtEUR0(valeur / surface)}</b> / m²${achat ? `
-          <span class="muted">acheté ${fmtEUR0(achat / surface)}</span>` : ''}</dd>
+        <dd><b>${fmtEUR0(entiere / surface)}</b> / m²${achatEntier ? `
+          <span class="muted">acheté ${fmtEUR0(achatEntier / surface)}</span>` : ''}</dd>
       </dl>`;
     })()}
     <dl class="kv" style="margin-top:12px">
-      <dt>${trad('Valeur du bien')}</dt><dd><b>${fmtEUR(valeur)}</b></dd>
-      ${gain != null ? `<dt>${trad('Plus-value latente')}</dt>
+      <dt>${trad('Valeur du bien')}</dt><dd><b>${fmtEUR(entiere)}</b></dd>
+      ${partagee ? `<dt>${trad('Ta part')}${aide(trad("Ton patrimoine ne compte que cette fraction. La ligne au-dessus reste la valeur du bien entier."))}
+        <span class="sub">${biens.map(({ l }) => fmtPct(partDetention(l) * 100, 0)).join(', ')}</span></dt>
+        <dd><b>${fmtEUR(valeur)}</b></dd>` : ''}
+      ${gain != null ? `<dt>${trad('Plus-value latente')}${partagee ? aide(trad("Sur ta part, comme le reste de ton patrimoine.")) : ''}</dt>
         <dd class="${cls(gain)}">${fmtSigned(gain)}
           <span class="muted">${fmtSignedPct((valeur / achat - 1) * 100, 1)}</span></dd>` : ''}
       ${credit ? `<dt>${trad('Capital restant dû')}</dt><dd class="dette">−${fmtEUR(credit)}</dd>
@@ -5410,75 +5604,7 @@ function espaceBien(c, idx, t) {
     </dl>
   </div>
 
-  ${(() => {
-    /* Ce que ce bien rapporte.
-
-       Un proprietaire ne vit pas sur la valeur de son bien : il vit sur le loyer
-       moins la mensualite moins les charges. C'est le chiffre que l'application
-       ne savait pas dire, faute de relier le loyer et la taxe fonciere au
-       logement — ils vivaient dans le budget, sans rattachement.
-
-       La carte ne s'affiche que si quelque chose y est rattache. Un bien de
-       residence principale n'a ni loyer ni rendement, et une carte de rendement a
-       zero sur son propre logement serait une question mal posee. Le bouton, lui,
-       reste : c'est par la qu'on rattache le premier loyer. */
-    const cf = cashFlowBien(c);
-    if (!cf) return '';
-    const rien = !cf.loyers && !cf.charges;
-    return `
-  <div class="card">
-    <div class="card-head"><h2>${trad('Ce que ce bien rapporte')}</h2>
-      <span class="hint">${rien ? 'loyer, charges, cash-flow'
-        : `${fmtEUR0(cf.loyers)} de loyer par mois`}</span>
-      <!-- Deux boutons qui font, et non un qui renvoie.
-
-           La carte « Financement », juste en dessous, montrait deja la bonne
-           forme : « + Credit » cree le credit rattache a ce bien, sans detour.
-           Les deux boutons ici font pareil, et le rattachement se fait tout seul
-           puisqu'on part du bien. La fenetre generique reste, elle sert a
-           rattacher un loyer deja saisi. -->
-      <button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
-              title="${trad('Créer un loyer déjà rattaché à ce bien')}">+ Loyer</button>
-      <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
-              title="${trad('Taxe foncière, copropriété, assurance PNO')}">${trad('+ Charge')}</button></div>
-    ${rien ? `
-    <!-- Classe « empty » et non « small muted » : c'est un ecran vide, pas une
-         note en bas de carte. La classe le dit, et la regle des 35 mots
-         l'exempte pour cette raison — quand il n'y a aucun chiffre a montrer,
-         le texte est le contenu.
-         (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
-         gabarit, un backtick y fermerait la chaine.) -->
-    <p class="empty" style="margin:0">Aucun loyer ni charge rattaché à ce bien.
-      « + Loyer » et « + Charge » les créent déjà rattachés ; un loyer déjà saisi
-      dans le budget se rattache par sa liste « Bien ». Le cash-flow et le
-      rendement se calculent alors tout seuls.</p>`
-    : `
-    <dl class="kv">
-      <dt>${trad('Loyer perçu')}</dt><dd class="up">+${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>
-      ${cf.charges ? `<dt>Charges rattachées${aide(trad("Taxe foncière, copropriété, assurance propriétaire non occupant : les charges fixes que tu as rattachées à ce bien, ramenées au mois."))}</dt>
-        <dd class="dette">−${fmtEUR(cf.charges)} ${trad('/ mois')}</dd>` : ''}
-      ${cf.mensualite ? `<dt>${trad('Mensualité du crédit')}</dt>
-        <dd class="dette">−${fmtEUR(cf.mensualite)} ${trad('/ mois')}</dd>` : ''}
-      <!-- Negatif est normal les premieres annees d'un credit, et c'est justement
-           ce qu'il faut savoir : la couleur le dit sans le juger. -->
-      <dt><b>Cash-flow</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
-        <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
-      <dt>Rendement brut${aide(`Loyer annuel rapporté ${cf.surAchat
-        ? 'au prix d’acquisition' : 'à la valeur actuelle, faute de prix d’acquisition connu'}`
-        + `, soit ${fmtEUR0(cf.base)}. C’est la convention du marché : un rendement calculé `
-        + `sur une estimation du jour n’est pas le même chiffre, et il baisse quand le bien `
-        + `prend de la valeur.`)}
-        <span class="sub">sur ${cf.surAchat ? 'le prix payé' : 'la valeur actuelle'}, ${fmtEUR0(cf.base)}</span></dt>
-        <dd>${fmtPct(cf.rendementBrut, 2)}</dd>
-      ${cf.charges ? `<dt>${trad('Rendement net de charges')}</dt>
-        <dd>${fmtPct(cf.rendementNet, 2)}</dd>` : ''}
-      ${cf.rendementFondsPropres != null ? `
-      <dt>Sur tes fonds propres${aide(trad("Le cash-flow annuel rapporté à ce que tu as vraiment mis : le prix payé moins le capital qu’il te reste à rembourser. C’est le seul chiffre qui réponde à « ce montage vaut-il mieux qu’un livret », parce qu’il tient compte du levier du crédit."))}
-        <span class="sub">${fmtEUR0(cf.fondsPropres)} engagés</span></dt>
-        <dd class="${cls(cf.rendementFondsPropres)}">${fmtSignedPct(cf.rendementFondsPropres, 1)}</dd>` : ''}
-    </dl>`}
-  </div>`;
-  })()}
+  ${carteExploitation(c, idx)}
 
   <div class="card">
     <div class="card-head"><h2>Financement</h2>
@@ -5516,11 +5642,31 @@ function espaceBien(c, idx, t) {
           <div class="goal-bar"><div class="goal-fill"
                style="width:${pct.toFixed(1)}%; background:var(--good)"></div></div>
           <div class="goal-foot">
-            <span>Remboursé <b class="up">${fmtEUR0(paye)}</b> · ${fmtPct(pct, 0)}</span>
-            <span>Reste <b>${fmtEUR0(restant)}</b> sur ${fmtEUR0(initial)}</span>
+            <span>${trad('Remboursé')} <b class="up">${fmtEUR0(paye)}</b> · ${fmtPct(pct, 0)}</span>
+            <span>${trad('Reste')} <b>${fmtEUR0(restant)}</b> ${trad('sur')} ${fmtEUR0(initial)}</span>
           </div>`
-        : `<p class="hint" style="margin:8px 0 0">Renseignez le capital emprunté au départ
-             pour voir ce qui est déjà remboursé.</p>`}
+        : `<p class="hint" style="margin:8px 0 0">${trad('Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé.')}</p>`}
+        ${(() => {
+          /* Quand ce sera paye, et ce que ca coutera d'ici la. La question que
+             tout emprunteur se pose, et les trois pieces necessaires etaient
+             deja saisies. Rien a voir avec la projection de patrimoine, gelee a
+             dessein : ici on ne lit qu'un contrat, sans le rapporter a la valeur
+             du bien. */
+          const f = finCredit(d);
+          if (!f) return num(d.taux) || !restant ? '' : `
+            <p class="hint" style="margin:12px 0 0">${trad('Renseigne le taux et la mensualité : l’application dira alors quand ce crédit sera soldé et ce qu’il te reste à payer d’intérêts.')}</p>`;
+          return `
+          <dl class="kv" style="margin-top:12px">
+            <dt>${trad('Soldé en')}${aide(trad("Calculé depuis ton capital restant dû, ta mensualité et ton taux. Un remboursement anticipé ou une renégociation avance cette date : elle se recalcule dès que tu corriges le capital."))}
+              <span class="sub">${fmtDureeMois(f.mois)}</span></dt>
+              <dd><b>${esc(fmtMoisAn(f.finLe))}</b></dd>
+            <dt>${trad('Intérêts restants')}${aide(trad("Ce que ce crédit te coûtera encore, du premier au dernier mois. Ce n'est pas une dette de plus : c'est le prix du temps, déjà compris dans tes mensualités."))}</dt>
+              <dd class="dette">−${fmtEUR0(f.interets)}</dd>
+            ${f.derniere < mensualiteCredit(d) - 1 ? `
+            <dt>${trad('Dernière échéance')}${aide(trad("Elle solde le reliquat, elle est donc plus petite que les autres."))}</dt>
+              <dd class="muted">${fmtEUR(f.derniere)}</dd>` : ''}
+          </dl>`;
+        })()}
         <div class="grid g-3" style="margin-top:12px">
           <div class="field"><label>${trad('Capital emprunté (€)')}</label>
             <input type="number" step="any" class="champ-large"
@@ -5528,14 +5674,26 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Capital restant dû (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.montant" value="${restant}"></div>
+          <!-- La mensualite n'a qu'un porteur, et le lien decide lequel : quand
+               une charge fixe rembourse ce credit, c'est elle qui la detient, et
+               la lecture va la chercher chez elle. Offrir le champ ici en ferait
+               une seconde surface d'edition, et la perdante : on y ecrirait un
+               montant que rien ne relirait. La regle vaut deja pour la fenetre
+               du credit ; elle valait pour cette fiche aussi.
+               (Aucun backtick dans ce commentaire : il vit dans un litteral de
+               gabarit, et fermerait la chaine.) -->
+          ${chargeDuCredit(d.id) ? `
+          <div class="field"><label>${trad('Mensualité (€)')}${aide(trad("Elle se règle dans la charge fixe qui rembourse ce crédit, pour n'exister qu'à un seul endroit. Un second champ ici laisserait les deux diverger, et c'est celui-ci que rien ne relirait."))}</label>
+            <p class="hint" style="margin:0">${fmtEUR(mensualiteCredit(d))} ${trad('par mois, depuis la charge')}
+              <b>${esc(chargeDuCredit(d.id).charge.label || trad('Charge fixe'))}</b></p></div>`
+          : `
           <div class="field"><label>${trad('Mensualité (€)')}</label>
             <input type="number" step="any" class="champ-large"
-                   data-path="etabs.${idxEtab}.dettes.${i}.mensualite" value="${num(d.mensualite) || ''}"></div>
-          <!-- Le taux est noté, pas exploité : aucune projection, aucun
-               amortissement automatique. C'est une information qu'on veut
-               retrouver sans ouvrir son contrat, et le capital restant dû
-               reste ce que dit le relevé de la banque. -->
-          <div class="field"><label>Taux annuel (%)${aide(trad("Noté pour mémoire, avec le reste du crédit. L'application n'en tire aucun calcul : ton capital restant dû est celui que tu saisis, jamais un montant projeté."))}</label>
+                   data-path="etabs.${idxEtab}.dettes.${i}.mensualite" value="${num(d.mensualite) || ''}"></div>`}
+          <!-- Le taux sert a lire le contrat : date de fin, interets restants,
+               part de capital de la mensualite. Il n'ecrit jamais le capital
+               restant du, qui reste ce que dit le releve de la banque. -->
+          <div class="field"><label>Taux annuel (%)${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.taux" value="${num(d.taux) || ''}"></div>
           <!-- Qui prête. Le contenant porte le nom du bien, « Appartement », pas
@@ -8574,6 +8732,13 @@ const ACTIONS = {
            saisit ce qu'on vient d'estimer. */
         { cle: 'estimeLe', label: trad('Estimée le'), type: 'date', valeur: todayISO(),
           aide: trad('la cloche te rappellera de la revoir dans un an') },
+        /* L'usage se demande a la creation, la ou on le sait : pose plus tard
+           dans une fiche, il resterait vide chez presque tout le monde, et la
+           fiche d'une residence principale continuerait de parler rendement.
+           Reserve a l'immobilier — une montre ne s'habite pas. */
+        ...(classeDuBien === 'immobilier' ? [{ cle: 'usageBien', label: trad('Usage'),
+          type: 'liste', options: [['', trad('à préciser')], ...USAGES_BIEN],
+          aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }] : []),
         /* Le credit se saisit ici, pas plus tard : un bien finance a credit
            sans sa dette affiche un patrimoine net faux des la creation.
 
@@ -8640,7 +8805,8 @@ const ACTIONS = {
       lignes.push({ id: 'l' + Date.now().toString(36), classe: classeDuBien,
         libelle: String(e3.nom || '').trim() || nomContenant() || t.label,
         valeur: num(e3.valeur), prixDeRevient: num(e3.revient),
-        dateAcquisition: e3.ouvertLe || '', estimeLe: e3.estimeLe || todayISO() });
+        dateAcquisition: e3.ouvertLe || '', estimeLe: e3.estimeLe || todayISO(),
+        ...(e3.usageBien ? { usage: e3.usageBien } : {}) });
       /* La dette se pose sur le contenant du bien, pas sur la banque qui
          prete : c'est la que la valeur nette se lit — le bien a son prix
          plein dans la repartition, le credit s'en deduit au niveau du
@@ -8971,15 +9137,26 @@ const ACTIONS = {
   async 'ajouter-charge-bien'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
+    /* Les postes d'un bien sont proposes, pas imposes : taxe fonciere,
+       copropriete, travaux, plus l'assurance qui va avec son usage. Un champ
+       vide obligeait a se souvenir de ce qu'un logement coute, et la provision
+       pour travaux est justement celle qu'on oublie. Ceux deja nommes sur un
+       autre bien suivent, sans doublon. */
+    const proposes = chargesProposees(c);
     const v = await askForm({
       titre: `Charge de ${nomCompteV2(c)}`,
       sous: trad('Le montant se saisit tel qu’il est facturé, le budget ramène au mois'),
       ok: 'Ajouter',
       champs: [
         { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
-          exemple: 'ex. Taxe foncière' },
+          exemple: `ex. ${proposes[0][0]}`,
+          suggestions: [...proposes.map(([l]) => l), ...valeursConnues('posteBien')]
+            .filter((l, i, t) => t.findIndex(x => x.toLowerCase() === l.toLowerCase()) === i) },
         { cle: 'amount', label: 'Montant', type: 'nombre', exemple: '0' },
-        { cle: 'period', label: 'Facturé', type: 'liste', options: CHARGE_PERIODES, valeur: 'an' },
+        /* La periode du premier poste propose : la taxe fonciere ouvre la liste,
+           et c'est elle qu'on saisit en premier sur un bien qui vient d'entrer. */
+        { cle: 'period', label: 'Facturé', type: 'liste', options: CHARGE_PERIODES,
+          valeur: proposes[0][1] },
         { cle: 'provider', label: 'Organisme', type: 'texte', exemple: 'ex. Trésor public',
           suggestions: valeursConnues('organisme') },
       ],
@@ -10496,7 +10673,7 @@ function askSale(indexInitial) {
       const cibles = cashTargets();
       const defaut = defaultCashTarget(p.account);
       $('#veCash').innerHTML = cibles.map(c =>
-        `<option value="${c.id}" ${c.id === defaut ? 'selected' : ''}>${esc([nomCompteV2(c), nomEtabDe(c)].filter(Boolean).join(' · '))}</option>`).join('')
+        `<option value="${c.id}" ${c.id === defaut ? 'selected' : ''}>${esc(sousNom('', nomCompteV2(c), nomEtabDe(c)))}</option>`).join('')
         + `<option value="">Ne rien créditer</option>`;
       majApercuVente();
     };
@@ -11053,7 +11230,7 @@ function askBuy(index) {
           valeur: num(p.price) || '', aide: trad('pré-rempli avec le dernier cours') },
         ...(comptesCash.length ? [{
           cle: 'cash', label: trad('Payé depuis'), type: 'liste',
-          options: [...comptesCash.map(c => [c.id, [nomCompteV2(c), nomEtabDe(c)].filter(Boolean).join(' · ')]),
+          options: [...comptesCash.map(c => [c.id, sousNom('', nomCompteV2(c), nomEtabDe(c))]),
                     ['', 'Aucun compte, ne pas toucher aux espèces']],
           valeur: cashParDefaut?.id || '',
         }] : []),
@@ -11773,12 +11950,14 @@ const APERCUS = {
               <span>${esc(g.label)}</span>
               <b data-live="${esc(g.aff)}">${sommes()[g.aff]}</b><span class="cpt-chev">⌄</span></button>
             <div class="cpt-pli ouvert"><div class="liq-corps">
-              ${g.entrees.map(x => `
+              ${g.entrees.map(x => {
+                const etab = sousNom(nomCompteV2(x.c), nomEtabDe(x.c));
+                return `
                 <div class="liq-ligne">
-                  <span class="cpt-nom">${esc(nomCompteV2(x.c))}<span class="sub">${esc(nomEtabDe(x.c))}</span></span>
+                  <span class="cpt-nom">${esc(nomCompteV2(x.c))}${etab ? `<span class="sub">${esc(etab)}</span>` : ''}</span>
                   <input type="number" step="any" class="champ-inline"
                          data-path="comptes.${x.ic}.cash.${x.j}.montant" value="${num(x.e.montant)}">
-                </div>`).join('')}
+                </div>`; }).join('')}
             </div></div>
           </section>`).join('')}`,
         vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
@@ -11821,21 +12000,30 @@ const APERCUS = {
         html: biens.map((b, k) => {
           const gain = b.l.prixDeRevient ? b.l.valeur - b.l.prixDeRevient : null;
           const pct = b.l.prixDeRevient ? (b.l.valeur / b.l.prixDeRevient - 1) * 100 : null;
+          const meta = sousNom(b.l.libelle, nomCompteV2(b.c), nomEtabDe(b.c));
           return `
           <div class="bien">
             <div class="bien-tete">
               <span class="cpt-nom">${esc(b.l.libelle)}
-                <span class="sub">${esc([nomCompteV2(b.c), nomEtabDe(b.c)].filter(Boolean).join(' · '))}</span></span>
+                ${meta ? `<span class="sub">${esc(meta)}</span>` : ''}</span>
               <b>${fmtEUR(b.l.valeur)}</b>
             </div>
             <dl class="kv">
+              ${b.l.part ? `
+                <!-- Le montant en tete est deja la part : sans cette ligne, il
+                     paraitrait simplement faux a qui connait son bien. -->
+                <dt>${trad('Ta part')}</dt>
+                  <dd>${fmtPct(b.l.part, 0)} ${trad('de')} ${fmtEUR0(b.l.valeurEntiere)}</dd>` : ''}
               ${gain != null ? `
                 <dt>${trad('Prix d\'acquisition')}</dt><dd>${fmtEUR0(b.l.prixDeRevient)}</dd>
                 <dt>${trad('Plus-value latente')}</dt>
                   <dd class="${cls(gain)}">${fmtSigned(gain)} <span class="muted">${fmtSignedPct(pct, 1)}</span></dd>`
                 : `<dt>${trad('Prix d\'acquisition')}</dt><dd class="muted">${trad('non renseigné')}</dd>`}
               ${b.l.dateAcquisition ? `<dt>${trad('Acquis le')}</dt><dd>${fmtDate(b.l.dateAcquisition)}</dd>` : ''}
-              <dt>Disponibilité</dt><dd>${esc(MOBILISABLE_LABEL[mobiliteLigne(b.l, b.c)])}</dd>
+              ${usageLigne(b.l) ? `<dt>${trad('Usage')}</dt>
+                <dd>${trad(USAGE_BIEN_LABEL[usageLigne(b.l)])}</dd>` : ''}
+              <dt>${trad('Disponibilité')}</dt>
+                <dd>${esc(trad(MOBILISABLE_LABEL[mobiliteLigne(b.l, b.c)]))}</dd>
             </dl>
             ${b.dettes.length ? `
               <div class="pret-vif">
@@ -11881,8 +12069,7 @@ const APERCUS = {
              par un point median suivi de rien. */
           const nomL = nomLignePlacement(l, c);
           lignes.push({ label: nomL,
-                        meta: [nomCompteV2(c), nomEtabDe(c)]
-                          .filter(x => x && x !== nomL).join(' · '),
+                        meta: sousNom(nomL, nomCompteV2(c), nomEtabDe(c)),
                         valeur: l.valeur,
                         ...(i >= 0 ? { ouvre: { action: 'open-position', i } }
                                    : { route: `#/compte/${encodeURIComponent(c.id)}` }) });
@@ -12525,8 +12712,11 @@ const APERCUS = {
            emprunte. Ce panneau ne porte que le solde ; le reste ne change qu'une
            fois, et il faut pouvoir y aller sans passer par la page Comptes. */
         ouvre: { action: 'editer-credit', donnees: { etab: c.etabId, i: c.index } },
+        /* La date de solde figure ici comme sur la fiche du bien : le meme fait
+           lu au meme endroit du modele, jamais recalcule a cote. */
         meta: [c.etabNom, c.preteur, c.taux ? `${fmtNombre(c.taux)} % ${trad('l’an')}` : '',
-               c.mensualite ? `${fmtEUR0(c.mensualite)} ${trad('par mois')}` : ''].filter(Boolean).join(' · '),
+               c.mensualite ? `${fmtEUR0(c.mensualite)} ${trad('par mois')}` : '',
+               c.fin ? `${trad('soldé')} ${fmtMoisAn(c.fin.finLe)}` : ''].filter(Boolean).join(' · '),
         /* Le chemin d'ecriture passe par l'index de l'etablissement et celui de la
            dette chez lui : c'est le meme couple que la fenetre d'edition, et le
            tri par montant de la liste ne le decale pas. */
@@ -12607,7 +12797,7 @@ const APERCUS = {
     sous: trad('Pas mobilisables à court terme'),
     total: nowByGroup().pe,
     lignes: comptesOuverts()
-      .map(c => ({ label: nomCompteV2(c), meta: nomEtabDe(c),
+      .map(c => ({ label: nomCompteV2(c), meta: sousNom(nomCompteV2(c), nomEtabDe(c)),
                    valeur: lignesDe(c).filter(l => l.classe === 'nonCote')
                      .reduce((s, l) => s + l.valeur, 0) }))
       .filter(r => r.valeur > 0.005),

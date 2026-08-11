@@ -6417,15 +6417,21 @@ suite('Un bien locatif dit son cash-flow et son rendement', () => {
     pres(cf.base, 120000, 'faute de mieux, la valeur actuelle');
   });
 
-  test('le rendement sur fonds propres tient compte du levier', () => {
-    Fixture.poser(LOCATIF);
+  test('le rendement sur apport tient compte du levier', () => {
+    /* La base est l'apport declare, et non le prix paye moins le capital restant
+       du : ce dernier grossissait a chaque mensualite, et le rendement baissait
+       tout seul pendant que l'operation s'ameliorait. */
+    Fixture.poser(e => {
+      LOCATIF(e);
+      e.comptes.find(c => c.id === 'c_immo').apport = 25000;
+    });
     const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.fondsPropres, 70000, '110 000 payés moins 40 000 restant dus');
-    pres(cf.rendementFondsPropres, 40 * 12 / 70000 * 100,
+    pres(cf.apport, 25000, 'ce qui est sorti de la poche à l’achat');
+    pres(cf.cashOnCash, 40 * 12 / 25000 * 100,
       'le cash-flow annuel sur ce qui est vraiment engagé');
   });
 
-  test('sans prêt, pas de rendement sur fonds propres inventé', () => {
+  test('sans prêt, le cash-flow monte de la mensualité entière', () => {
     Fixture.poser(e => {
       LOCATIF(e);
       e.etabs.find(x => x.id === 'e_bien').dettes = [];
@@ -6433,11 +6439,7 @@ suite('Un bien locatif dit son cash-flow et son rendement', () => {
     const cf = cashFlowBien(compteById('c_immo'));
     pres(cf.mensualite, 0, 'aucune mensualité');
     pres(cf.cashFlow, 560, 'le cash-flow monte d’autant');
-    /* Les fonds propres valent alors tout le prix payé : le levier est nul, et le
-       rendement sur fonds propres rejoint le rendement net. C'est cohérent, donc
-       on le calcule. */
-    pres(cf.fondsPropres, 110000);
-    pres(cf.rendementFondsPropres, 560 * 12 / 110000 * 100);
+    eq(cf.capitalMois, null, 'et plus aucun capital ne se rembourse');
   });
 
   test('la liste des biens se dérive des types de compte', () => {
@@ -9490,7 +9492,7 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
       'un nom vraiment saisi n’est jamais écrasé');
     vrai(/const nomL = nomLignePlacement\(l, c\);/.test(src),
       'la fenêtre d’aperçu s’en sert aussi');
-    vrai(/\.filter\(x => x && x !== nomL\)/.test(src),
+    vrai(/meta: sousNom\(nomL, /.test(src),
       'et son sous-titre ne répète ni le nom au-dessus ni un point médian '
       + 'suivi de rien : « Moto / Moto » se lisait deux fois');
 
@@ -10421,12 +10423,18 @@ suite('Un loyer se rattache depuis le bien, pas depuis une liste', () => {
     /* Une taxe fonciere se paie une fois l'an, une copropriete par trimestre :
        c'est ce qu'on lit sur l'avis, et le budget ramene au mois tout seul.
        Proposer « mois » par defaut ferait saisir 1 200 la ou il faut 100. */
+    Fixture.poser();
     const src = lireSource('assets/app.js');
     const charge = src.slice(src.indexOf("async 'ajouter-charge-bien'"),
                              src.indexOf("async 'ajouter-credit'"));
     vrai(charge.length > 200, 'l’action doit être trouvable');
-    vrai(/cle: 'period'[\s\S]{0,120}?valeur: 'an'/.test(charge),
-      'la période part sur l’année');
+    /* Elle se derive du premier poste propose au lieu d'etre ecrite ici : la
+       table dit deja qu'une taxe fonciere se paie a l'annee, et le redire en dur
+       laisserait les deux diverger. */
+    vrai(/cle: 'period'[\s\S]{0,160}?valeur: proposes\[0\]\[1\]/.test(charge),
+      'la période vient du premier poste proposé');
+    eq(chargesProposees(compteById('c_immo'))[0][1], 'an',
+      'et ce premier poste, la taxe foncière, se facture à l’année');
     vrai(/options: CHARGE_PERIODES/.test(charge),
       'et les autres restent offertes, dérivées de la même table qu’ailleurs');
 
@@ -11196,6 +11204,583 @@ suite('Le dictionnaire anglais ne laisse pas de trou', () => {
     const copiees = Object.keys(FR).filter(c =>
       I18N.en[c] === FR[c] && String(FR[c]).trim().split(/\s+/).length > 2);
     eq(copiees.join(', '), '', 'ces phrases sont restées en français');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un nom ne s ecrit pas trois fois
+   ------------------------------------------------------------------ */
+suite('Un nom ne s’écrit pas trois fois', () => {
+
+  /* La carte Immobilier affichait « Flat » puis « Flat · Flat » : la ligne, le
+     compte et l etablissement portaient le meme mot, ce que la creation
+     propose d elle-meme quand on saisit un bien d un seul geste. La meta se
+     derive du nom affiche au lieu de le redire. */
+
+  test('la meta laisse tomber ce que le nom dit déjà', () => {
+    eq(sousNom('Flat', 'Flat', 'Flat'), '',
+      'trois fois le même mot n’en laisse aucun à répéter');
+    eq(sousNom('Studio', 'Compte titres', 'Courtier'), 'Compte titres · Courtier',
+      'deux parts distinctes se joignent, comme avant');
+    eq(sousNom('Studio', 'Studio', 'Banque'), 'Banque',
+      'seule la redite tombe, le reste passe');
+    eq(sousNom('Apt lyon', 'apt  lyon', 'Apt Lyon'), '',
+      'la casse et les espaces ne font pas une différence');
+    eq(sousNom('Studio', 'Banque', 'Banque'), 'Banque',
+      'deux parts égales entre elles ne comptent qu’une fois');
+    eq(sousNom('Studio', 'Banque', ''), 'Banque',
+      'un établissement vide ne laisse pas pendre le séparateur');
+  });
+
+  test('les écrans dérivent cette meta au lieu de la recomposer', () => {
+    /* Le defaut aurait repousse par le point d appel oublie : quatre listes
+       assemblaient nom de compte et etablissement chacune de son cote. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    /* Un « || » entre les deux n'est pas une composition mais une disjonction :
+       la recherche interroge les deux noms, elle n'en affiche aucun. */
+    const voisins = src.match(/[^\n]{0,60}nomCompteV2\([^)]*\)[^\n|]{0,40}nomEtabDe\(/g) || [];
+    eq(voisins.filter(s => !/sousNom\(/.test(s)).join('\n'), '',
+      'un écran recompose la meta à la main : il redira le nom un jour');
+    vrai((src.match(/sousNom\(/g) || []).length >= 6,
+      'chaque point d’affichage passe par la même dérivation');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un bien detenu a plusieurs ne compte que pour sa part
+   ------------------------------------------------------------------ */
+suite('Un bien détenu à plusieurs ne compte que pour sa part', () => {
+
+  /* L'application partageait deja une charge fixe entre deux contributeurs, mais
+     jamais un actif : un logement achete a deux entrait entier au patrimoine.
+     Un faux total, et rien ne le signalait. */
+
+  const aMoitie = () => Fixture.poser(s => {
+    s.comptes.find(c => c.id === 'c_immo').lignes[0].part = 50;
+  });
+
+  test('la valeur, le prix payé et le patrimoine suivent la quote-part', () => {
+    aMoitie();
+    const c = compteById('c_immo');
+    const l = lignesDe(c)[0];
+    pres(l.valeur, 60000, 'la moitié de 120 000 €');
+    pres(l.prixDeRevient, 55000, 'et la moitié des 110 000 € payés');
+    pres(l.valeurEntiere, 120000, 'la valeur du bien entier reste lisible, pour la comparer à une annonce');
+    pres(valeurCompte(c), 60000, 'le compte ne vaut que la part');
+    pres(patrimoine().classes.immobilier, 60000, 'et la classe immobilier avec lui');
+  });
+
+  test('le total reste la somme de ses parts', () => {
+    aMoitie();
+    const p = patrimoine();
+    pres(Object.values(p.classes).reduce((s, v) => s + v, 0), p.brut,
+      'le brut est la somme des classes, quote-part comprise');
+    pres(Object.values(p.mobilisable).reduce((s, v) => s + v, 0), p.brut,
+      'et les paliers de disponibilité aussi');
+    pres(p.brut, Fixture.BRUT - 60000, 'le brut a baissé d’exactement la moitié du studio');
+  });
+
+  test('la donnée saisie n’est jamais divisée, seule la lecture l’est', () => {
+    const s = aMoitie();
+    pres(num(s.comptes.find(c => c.id === 'c_immo').lignes[0].valeur), 120000,
+      'le champ garde la valeur du bien entier');
+    /* Lire deux fois ne divise pas deux fois : le defaut classique d'une part
+       appliquee a l'ecriture plutot qu'a la derivation. */
+    pres(lignesDe(compteById('c_immo'))[0].valeur, 60000, 'première lecture');
+    pres(lignesDe(compteById('c_immo'))[0].valeur, 60000, 'seconde lecture, identique');
+  });
+
+  test('une part absente, nulle ou aberrante vaut le bien entier', () => {
+    Fixture.poser();
+    pres(partDetention({}), 1, 'absente');
+    pres(partDetention({ part: 0 }), 1, 'zéro ne veut pas dire « je ne possède rien »');
+    pres(partDetention({ part: 100 }), 1, 'cent pour cent');
+    pres(partDetention({ part: 140 }), 1, 'au-delà de cent, la saisie est fausse : le tout, plutôt qu’un total gonflé');
+    pres(partDetention({ part: -20 }), 1, 'négative aussi');
+    pres(partDetention({ part: 33.5 }), 0.335, 'une part décimale passe');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le logement qu on habite n est pas une reserve
+   ------------------------------------------------------------------ */
+suite('Le logement qu’on habite n’est pas une réserve', () => {
+
+  const enRP = () => Fixture.poser(s => {
+    s.comptes.find(c => c.id === 'c_immo').lignes[0].usage = 'principale';
+  });
+
+  test('une résidence principale quitte les avoirs mobilisables en quelques mois', () => {
+    enRP();
+    const c = compteById('c_immo');
+    eq(mobiliteLigne(lignesDe(c)[0], c), 'habite',
+      'son palier lui est propre : ni « en quelques mois », ni « bloqué jusqu’à son échéance »');
+    const m = poches().mobilisable;
+    pres(m.habite, 120000, 'le studio y est en entier');
+    pres(m.lent, 2000, 'et seul le non coté reste dans « quelques mois »');
+  });
+
+  test('elle reste du patrimoine, mais hors du cumul d’autonomie', () => {
+    enRP();
+    const p = patrimoine();
+    pres(Object.values(p.mobilisable).reduce((s, v) => s + v, 0), p.brut,
+      'aucun euro ne se perd en chemin');
+    const r = runway();
+    const palier = r.tiers.find(t => t.value === 120000);
+    vrai(palier && palier.horsCumul === true,
+      'le toit ne prolonge aucune autonomie : le vendre veut dire se reloger');
+    const cumules = r.tiers.filter(t => !t.horsCumul).reduce((s, t) => s + t.value, 0);
+    pres(cumules, p.brut - 120000, 'il sort du cumul, et lui seul');
+  });
+
+  test('sans usage déclaré, rien ne change', () => {
+    Fixture.poser();
+    const c = compteById('c_immo');
+    eq(mobiliteLigne(lignesDe(c)[0], c), 'lent',
+      'un bien sans usage déclaré reste lent : il n’est pas deviné habité');
+    eq(usageBien(c), '', 'et son compte ne déclare rien');
+  });
+
+  test('un réglage posé à la main garde le dernier mot', () => {
+    Fixture.poser(s => {
+      const l = s.comptes.find(c => c.id === 'c_immo').lignes[0];
+      l.usage = 'principale';
+      l.mobilite = 'lent';
+    });
+    const c = compteById('c_immo');
+    eq(mobiliteLigne(lignesDe(c)[0], c), 'lent',
+      'celui qui vend et loue ensuite le déclare, et l’application le croit');
+  });
+
+  test('les paliers se dérivent de leur table, ils ne se recopient pas', () => {
+    Fixture.poser();
+    eq(Object.keys(poches().mobilisable).join(','), Object.keys(MOBILISABLE_LABEL).join(','),
+      'un palier ajouté à la table entre tout seul, sinon il resterait à undefined');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un credit dit quand il sera paye
+   ------------------------------------------------------------------ */
+suite('Un crédit dit quand il sera payé', () => {
+
+  test('l’amortissement se rejoue, capital plus intérêts font le total versé', () => {
+    Fixture.poser();
+    /* 100 000 EUR a 3 % sur une mensualite de 600 EUR : la reponse ne se
+       devine pas de tete, mais l'identite qui la verifie, si. */
+    const f = finCredit({ montant: 100000, mensualite: 600, taux: 3 });
+    vrai(f && f.mois > 0, 'un crédit qui s’amortit a une fin');
+    /* Toutes les echeances pleines sauf la derniere, qui solde le reliquat. */
+    const verse = (f.mois - 1) * 600 + f.derniere;
+    pres(verse, 100000 + f.interets,
+      'ce qu’on verse en tout fait le capital plus les intérêts, sinon un euro se perd');
+    vrai(f.derniere > 0 && f.derniere <= 600, 'la dernière échéance ne dépasse pas les autres');
+  });
+
+  test('sans taux, le crédit s’amortit tout droit', () => {
+    Fixture.poser();
+    const f = finCredit({ montant: 12000, mensualite: 1000, taux: 0 });
+    eq(f.mois, 12, 'douze mensualités de mille euros soldent douze mille');
+    pres(f.interets, 0, 'et rien ne se paie en intérêts');
+  });
+
+  test('une mensualité qui ne couvre pas les intérêts n’annonce aucune date', () => {
+    Fixture.poser();
+    /* 100 EUR par mois sur 100 000 EUR a 5 % : les interets seuls font 416 EUR.
+       La dette monte, et promettre une fin serait un mensonge. */
+    eq(finCredit({ montant: 100000, mensualite: 100, taux: 5 }), null,
+      'la dette monte : pas de date de fin');
+    eq(finCredit({ montant: 100000, mensualite: 0, taux: 3 }), null,
+      'sans mensualité non plus');
+    eq(finCredit({ montant: 0, mensualite: 600, taux: 3 }), null,
+      'ni sur un crédit déjà soldé');
+  });
+
+  test('la mensualité lue est celle de la charge qui rembourse, pas une seconde', () => {
+    /* Le meme fait a un seul porteur : quand une charge fixe rembourse le
+       credit, c'est elle qui detient la mensualite, et la date de fin doit la
+       lire — sinon deux ecrans donneraient deux dates. */
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].taux = 3;
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = null;
+      s.budget.fixedCharges.push({ label: 'Prêt', amount: 600, period: 'mois',
+                                   shares: {}, creditId: 'd_pret' });
+    });
+    const d = ETABS().find(e => e.id === 'e_bien').dettes[0];
+    const f = finCredit(d);
+    vrai(f && f.mois > 0, 'la date se calcule depuis la charge');
+    pres(mensualiteCredit(d), 600, 'et la mensualité vient bien d’elle');
+  });
+
+  test('la date de fin tombe le bon nombre de mois plus tard', () => {
+    Fixture.poser();
+    const f = finCredit({ montant: 12000, mensualite: 1000, taux: 0 });
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + f.mois);
+    eq(f.finLe, `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      'douze mois d’ici, et l’année tourne avec le mois');
+  });
+
+  test('chaque crédit de la liste porte sa fin', () => {
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].taux = 3;
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 600;
+    });
+    const l = creditsEnCours().lignes.find(x => x.id === 'd_pret');
+    vrai(l.fin && l.fin.mois > 0, 'la carte des crédits lit la même fonction que la fiche');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Ce qu un bien rapporte, sans embellir
+   ------------------------------------------------------------------ */
+suite('Ce qu’un bien rapporte, sans embellir', () => {
+
+  /* Trois manques tiraient tous les rendements du meme cote, le flatteur :
+     la periode du loyer ignoree, douze mois supposes pleins, aucun impot. */
+
+  const loue = (modif) => Fixture.poser(s => {
+    s.budget.income.push({ label: 'Loyer studio', amount: 600, period: 'mois', bienId: 'c_immo' });
+    if (modif) modif(s);
+  });
+
+  test('un loyer annuel pèse un douzième, ici comme dans le budget', () => {
+    Fixture.poser(s => {
+      s.budget.income.push({ label: 'Loyer garage', amount: 7200, period: 'an', bienId: 'c_immo' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.loyers, 600, 'sept mille deux cents par an font six cents par mois');
+    /* Le meme libelle donne le meme montant sur les deux ecrans : c'est la
+       regle que ce calcul violait en lisant le montant brut. */
+    pres(incomeTotal() - 3000, cf.loyers, 'et le budget dit exactement la même chose');
+  });
+
+  test('la vacance retire ce qu’elle retire, au rendement comme au cash-flow', () => {
+    loue(s => { s.comptes.find(c => c.id === 'c_immo').moisLoues = 11; });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.loyersPleins, 600, 'le loyer plein reste dit');
+    pres(cf.loyers, 550, 'onze mois sur douze');
+    vrai(cf.vacance, 'et l’écran peut l’annoncer');
+    pres(cf.rendementBrut, 550 * 12 / 110000 * 100, 'le rendement suit, sur le prix payé');
+  });
+
+  test('l’impôt déclaré s’applique au loyer moins les charges, jamais en dessous de zéro', () => {
+    loue(s => {
+      s.comptes.find(c => c.id === 'c_immo').tauxImpot = 30;
+      s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 1200, period: 'an',
+                                   shares: {}, bienId: 'c_immo' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.charges, 100, 'la taxe annuelle ramenée au mois');
+    pres(cf.impot, (600 - 100) * 0.30, 'trente pour cent de ce que le bien dégage');
+    pres(cf.rendementNetNet, (600 - 100 - cf.impot) * 12 / 110000 * 100,
+      'le rendement net d’impôt est le seul qui dise ce qui reste');
+    vrai(cf.rendementNetNet < cf.rendementNet && cf.rendementNet < cf.rendementBrut,
+      'les trois rendements se rangent dans cet ordre, toujours');
+  });
+
+  test('la mensualité rattachée au bien ne se soustrait qu’une fois', () => {
+    /* Rien n'interdit de rattacher au bien la charge qui rembourse son credit,
+       et c'est meme tentant. Elle etait alors comptee deux fois : une en charge,
+       une en mensualite lue depuis cette meme charge. */
+    loue(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = null;
+      s.budget.fixedCharges.push({ label: 'Prêt studio', amount: 400, period: 'mois',
+                                   shares: {}, creditId: 'd_pret', bienId: 'c_immo' });
+      s.budget.fixedCharges.push({ label: 'Copropriété', amount: 100, period: 'mois',
+                                   shares: {}, bienId: 'c_immo' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.mensualite, 400, 'la mensualité vient de la charge qui rembourse');
+    pres(cf.charges, 100, 'et cette charge ne compte plus une seconde fois');
+    pres(cf.cashFlow, 600 - 100 - 400, 'le cash-flow ne perd plus 400 € en double');
+  });
+
+  test('un crédit d’un autre établissement reste une charge comme les autres', () => {
+    /* Sa mensualite n'entre pas dans le total du bien : l'ecarter des charges la
+       ferait disparaitre du calcul sans que rien ne le dise. */
+    loue(s => {
+      s.etabs.find(e => e.id === 'e_courtier').dettes.push(
+        { id: 'd_conso', libelle: 'Crédit travaux', montant: 8000, note: '' });
+      s.budget.fixedCharges.push({ label: 'Crédit travaux', amount: 150, period: 'mois',
+                                   shares: {}, creditId: 'd_conso', bienId: 'c_immo' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.charges, 150, 'elle sort du budget pour ce bien, elle compte');
+  });
+
+  test('des charges plus lourdes que le loyer ne créent pas d’impôt négatif', () => {
+    loue(s => {
+      s.comptes.find(c => c.id === 'c_immo').tauxImpot = 30;
+      s.budget.fixedCharges.push({ label: 'Travaux', amount: 900, period: 'mois',
+                                   shares: {}, bienId: 'c_immo' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.impot, 0, 'un déficit ne se taxe pas, et l’application ne connaît pas tes autres revenus');
+  });
+
+  test('sans taux déclaré, le net d’impôt n’existe pas plutôt que de valoir le net', () => {
+    loue();
+    const cf = cashFlowBien(compteById('c_immo'));
+    eq(cf.rendementNetNet, null, 'aucun chiffre inventé');
+    eq(cf.impot, 0, 'et rien de retiré');
+  });
+
+  test('le cash-flow retire tout ce qui sort, impôt compris', () => {
+    loue(s => {
+      s.comptes.find(c => c.id === 'c_immo').tauxImpot = 30;
+      s.comptes.find(c => c.id === 'c_immo').moisLoues = 11;
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 400;
+      s.budget.fixedCharges.push({ label: 'Copropriété', amount: 100, period: 'mois',
+                                   shares: {}, bienId: 'c_immo' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.cashFlow, cf.loyers - cf.charges - cf.mensualite - cf.impot,
+      'le solde est la somme de ses termes, tous affichés');
+    pres(cf.cashFlow, 550 - 100 - 400 - (550 - 100) * 0.30, 'et vaut ce qu’on calcule à la main');
+  });
+
+  test('le rendement sur apport ne baisse plus tout seul à mesure qu’on rembourse', () => {
+    /* Le denominateur d'avant, prix paye moins capital restant, grossissait a
+       chaque mensualite : a cash-flow egal le rendement affiche baissait alors
+       que rien ne se degradait. L'apport, lui, ne bouge pas. */
+    const avec = (reste) => {
+      loue(s => {
+        s.comptes.find(c => c.id === 'c_immo').apport = 30000;
+        s.etabs.find(e => e.id === 'e_bien').dettes[0].montant = reste;
+      });
+      return cashFlowBien(compteById('c_immo'));
+    };
+    const debut = avec(40000), plusTard = avec(20000);
+    pres(debut.cashOnCash, plusTard.cashOnCash,
+      'vingt mille euros remboursés plus tard, le chiffre est le même');
+    pres(debut.cashOnCash, 600 * 12 / 30000 * 100, 'le cash-flow annuel sur l’apport');
+  });
+
+  test('sans apport déclaré, aucun rendement sur apport', () => {
+    loue();
+    const cf = cashFlowBien(compteById('c_immo'));
+    eq(cf.cashOnCash, null, 'plutôt qu’un chiffre sur une base inventée');
+    eq(cf.apport, null, 'et la base non plus');
+  });
+
+  test('la part de capital de la mensualité se tait quand le taux manque', () => {
+    loue(s => { s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 600; });
+    eq(cashFlowBien(compteById('c_immo')).capitalMois, null,
+      'sans taux, on ne sait pas départager capital et intérêts : mieux vaut rien que zéro');
+    loue(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 600;
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].taux = 3;
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.capitalMois, 600 - 40000 * 0.03 / 12, 'la mensualité moins les intérêts du mois');
+  });
+
+  test('le rendement dit toujours sur quelle base il se calcule', () => {
+    /* Prix d'acquisition connu : c'est lui. Sinon la valeur du jour, et l'ecran
+       l'annonce — deux bases donnent deux chiffres pour la meme ligne. */
+    loue();
+    eq(cashFlowBien(compteById('c_immo')).surAchat, true, 'le prix payé est connu');
+    pres(cashFlowBien(compteById('c_immo')).base, 110000, 'donc la base, c’est lui');
+    loue(s => { s.comptes.find(c => c.id === 'c_immo').lignes[0].prixDeRevient = 0; });
+    const sans = cashFlowBien(compteById('c_immo'));
+    eq(sans.surAchat, false, 'sans prix payé, la base change');
+    pres(sans.base, 120000, 'et c’est la valeur du jour');
+  });
+
+  test('une quote-part rétrécit la base du rendement, comme le patrimoine', () => {
+    loue(s => { s.comptes.find(c => c.id === 'c_immo').lignes[0].part = 50; });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.base, 55000, 'la moitié du prix payé : on ne rapporte pas son loyer au bien du voisin');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La fiche pose la question de l usage, pas une seule pour tous
+   ------------------------------------------------------------------ */
+suite('La fiche pose la question de l’usage', () => {
+
+  test('une résidence principale ne s’entend plus dire « rendement 0,00 % »', () => {
+    /* Le garde-fou testait l'absence de loyer ET de charge. Rattacher sa taxe
+       fonciere a sa propre maison suffisait donc a basculer la carte en mode
+       rendement, sur un bien qui n'en a pas. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const bloc = src.slice(src.indexOf('function carteExploitation'),
+                           src.indexOf('function espaceBien'));
+    vrai(bloc.length > 500, 'la carte doit être trouvable');
+    vrai(/const habite = usage === 'principale' \|\| usage === 'secondaire'/.test(bloc),
+      'l’usage déclaré décide de la carte affichée');
+    const versant = bloc.slice(bloc.indexOf('if (habite)'), bloc.indexOf('const baseDite'));
+    vrai(!/[Rr]endement/.test(versant),
+      'le versant habité ne parle jamais de rendement');
+    vrai(/Coût réel du mois/.test(versant) && /Dont capital remboursé/.test(versant),
+      'il répond à sa question à lui : ce que ce logement coûte, capital mis à part');
+  });
+
+  test('les deux chiffres du mois ne s’additionnent jamais', () => {
+    /* Tresorerie et patrimoine repondent a deux questions ; leur somme
+       melangerait de l'argent disponible et des murs. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function carteExploitation'),
+                           src.indexOf('function espaceBien'));
+    vrai(/En patrimoine, le même mois/.test(bloc), 'le second chiffre est dit');
+    vrai(!/cashFlow \+ .*capitalMois|capitalMois \+ .*cashFlow/.test(bloc),
+      'et jamais agrégé au premier');
+  });
+
+  test('la liste des usages se dérive de sa table', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/USAGES_BIEN\.map/.test(src),
+      'la fiche parcourt la table : un usage ajouté demain apparaît sans qu’on y pense');
+    eq(Object.keys(USAGE_BIEN_LABEL).join(','), USAGES_BIEN.map(([c]) => c).join(','),
+      'et le dictionnaire des libellés en vient aussi');
+    eq(usageLigne({ usage: 'colocation' }), '',
+      'un usage inconnu ne se propage pas : il vaut « à préciser »');
+  });
+
+  test('l’usage se demande dès la création, là où on le sait', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/cle: 'usageBien'/.test(src),
+      'posé plus tard dans une fiche, il resterait vide chez presque tout le monde');
+    vrai(/\.\.\.\(e3\.usageBien \? \{ usage: e3\.usageBien \} : \{\}\)/.test(src),
+      'et ce qui est répondu s’écrit sur la ligne');
+  });
+
+  test('sur un logement habité, le total égale encore la somme de ses lignes', () => {
+    /* L'impot n'etait pas affiche sur ce versant alors qu'il sort du compte : le
+       total aurait ete plus petit que ce que la carte montre. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function carteExploitation'),
+                           src.indexOf('function espaceBien'));
+    const versant = bloc.slice(bloc.indexOf('if (habite)'), bloc.indexOf('const baseDite'));
+    vrai(/const sortie = cf\.charges \+ cf\.mensualite \+ cf\.impot - cf\.loyers/.test(versant),
+      'la sortie du compte compte l’impôt, parce qu’il en sort');
+    vrai(/Impôt déclaré/.test(versant),
+      'et il s’affiche : un terme du total ne peut pas rester invisible');
+  });
+
+  test('un logement qui rapporte ne s’entend pas dire qu’il coûte zéro', () => {
+    /* Une chambre bien louee peut couvrir plus que la mensualite. Le montant
+       etait borne a zero, donc l'intitule mentait sur un chiffre positif. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function carteExploitation'),
+                           src.indexOf('function espaceBien'));
+    vrai(!/Math\.max\(0, sortie/.test(bloc),
+      'plus de plancher à zéro sur le coût réel');
+    vrai(/fmtSigned\(-reel\)/.test(bloc) && /cls\(-reel\)/.test(bloc),
+      'le signe et la couleur suivent le sens réel du mois');
+  });
+
+  test('les réglages qui agissent restent modifiables, quel que soit l’usage', () => {
+    /* Declares sur un locatif puis bascules en residence principale, la vacance
+       et l'impot continuaient d'agir sans qu'aucun champ ne les montre. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function carteExploitation'),
+                           src.indexOf('function espaceBien'));
+    const versant = bloc.slice(bloc.indexOf('if (habite)'), bloc.indexOf('const baseDite'));
+    vrai(/cf\.loyersPleins \? reglagesExploitation\(c, idx, \{ apport: false \}\)/.test(versant),
+      'dès qu’un loyer est rattaché, ses réglages sont offerts ici aussi');
+    /* Sans loyer, ils n'auraient aucun effet : les offrir serait du bruit. */
+    vrai(/function reglagesExploitation\(c, idx, \{ apport = true \} = \{\}\)/.test(src),
+      'et l’apport reste au seul écran où il sert, celui du rendement');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un montant n a qu un porteur, et l ecran ne propose que celui-la
+   ------------------------------------------------------------------ */
+suite('Un montant n’a qu’un porteur', () => {
+
+  test('la fiche du bien n’offre plus un second champ de mensualité', () => {
+    /* Quand une charge fixe rembourse le credit, c'est elle qui detient la
+       mensualite et `mensualiteCredit()` la lit chez elle : ecrire dans le champ
+       de la fiche n'avait aucun effet, sans que rien ne le dise. La regle
+       existait deja pour la fenetre du credit. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function espaceBien'),
+                           src.indexOf('function boutonEnregistrerFiche'));
+    vrai(bloc.length > 500, 'la fiche du bien doit être trouvable');
+    const i = bloc.indexOf('dettes.${i}.mensualite');
+    vrai(i > 0, 'le champ existe encore, pour le crédit qui porte lui-même sa mensualité');
+    vrai(/\$\{chargeDuCredit\(d\.id\) \?/.test(bloc.slice(Math.max(0, i - 900), i)),
+      'mais il est derrière la question : une charge rembourse-t-elle ce crédit ?');
+    vrai(/par mois, depuis la charge/.test(bloc),
+      'et l’écran dit alors où le montant se règle, au lieu de se taire');
+  });
+
+  test('la date de solde se lit au même endroit sur les deux écrans', () => {
+    /* `fin` etait calcule dans creditsEnCours() sans que personne ne le lise :
+       du code mort d'un cote, et la carte des credits muette de l'autre. */
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].taux = 3;
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 600;
+    });
+    const ligne = creditsEnCours().lignes.find(x => x.id === 'd_pret');
+    const src = lireSource('assets/app.js');
+    vrai(/c\.fin \? `\$\{trad\('soldé'\)\} \$\{fmtMoisAn\(c\.fin\.finLe\)\}`/.test(src),
+      'la carte des crédits affiche la fin, sans la recalculer de son côté');
+    eq(ligne.fin.finLe, finCredit(ETABS().find(e => e.id === 'e_bien').dettes[0]).finLe,
+      'et c’est la même date que la fiche du bien');
+  });
+
+  test('les postes d’un bien se proposent, et suivent son usage', () => {
+    /* La taxe fonciere ouvre la liste : elle est due par tout proprietaire, et
+       c'est la periode du premier poste que la fenetre prend par defaut. */
+    Fixture.poser();
+    const c = compteById('c_immo');
+    const noms = chargesProposees(c).map(([l]) => l);
+    eq(noms[0], 'Taxe foncière', 'le poste que tout propriétaire paie vient en premier');
+    eq(chargesProposees(c)[0][1], 'an', 'et elle se facture à l’année');
+    vrai(noms.includes('Provision pour travaux'),
+      'la dépense que tout le monde oublie est proposée, c’est elle qui décide du vrai rendement');
+    /* L'assurance ne porte pas le meme nom selon qu'on habite ou qu'on loue. */
+    Fixture.poser(s => { s.comptes.find(x => x.id === 'c_immo').lignes[0].usage = 'locative'; });
+    const loue = chargesProposees(compteById('c_immo')).map(([l]) => l);
+    vrai(loue.includes('Assurance propriétaire non occupant'),
+      'un logement loué porte une assurance de propriétaire non occupant');
+    vrai(!loue.includes('Assurance habitation'), 'et pas celle de qui l’habite');
+    Fixture.poser(s => { s.comptes.find(x => x.id === 'c_immo').lignes[0].usage = 'principale'; });
+    const habite = chargesProposees(compteById('c_immo')).map(([l]) => l);
+    vrai(habite.includes('Assurance habitation') && !habite.includes('Assurance propriétaire non occupant'),
+      'et l’inverse pour qui l’habite');
+    /* Les postes communs restent en tete dans les deux cas : ils ne se recopient
+       pas d'une branche a l'autre. */
+    eq(habite.slice(0, 3).join('|'), loue.slice(0, 3).join('|'),
+      'ce qui vaut pour tous est écrit une fois');
+  });
+
+  test('l’infobulle du bouton se dérive de cette table', () => {
+    /* Elle listait les postes a la main : ajouter un poste demandait de penser a
+       deux endroits, et celui qu'on oubliait disait le contraire de l'autre. */
+    const src = lireSource('assets/app.js');
+    vrai(/title="\$\{esc\(chargesProposees\(c\)\.map\(\(\[l\]\) => trad\(l\)\)\.join\(', '\)\)\}"/.test(src),
+      'un poste ajouté à la table apparaît dans l’infobulle sans qu’on y pense');
+    vrai(!/Taxe foncière, copropriété, assurance PNO/.test(src),
+      'et la liste écrite à la main a disparu');
+  });
+
+  test('un poste déjà nommé sur un bien se propose sur le suivant', () => {
+    Fixture.poser(s => {
+      s.budget.fixedCharges.push({ label: 'Ravalement 2027', amount: 300, period: 'an',
+                                   shares: {}, bienId: 'c_immo' });
+      /* Une charge sans bien n'a rien a faire dans cette liste : un abonnement
+         telephonique n'est pas un poste de logement. */
+      s.budget.fixedCharges.push({ label: 'Téléphone', amount: 30, period: 'mois', shares: {} });
+    });
+    const connus = valeursConnues('posteBien');
+    vrai(connus.includes('Ravalement 2027'), 'ce qui a été tapé sur un bien revient');
+    vrai(!connus.includes('Téléphone'), 'ce qui n’est pas rattaché à un bien reste dehors');
+  });
+
+  test('une part hors bornes le dit au lieu d’être ignorée en silence', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/Une part va de 0 à 100\. Au-delà, le bien compte en entier\./.test(src),
+      'le champ garde la saisie, et un mot dit ce que le calcul en fait');
+    vrai(/num\(l\.part\) && \(num\(l\.part\) < 0 \|\| num\(l\.part\) > 100\)/.test(src),
+      'et ce mot n’apparaît que pour une valeur vraiment hors bornes, jamais sur 100');
   });
 });
 

@@ -180,10 +180,15 @@ const CLASSES_ACTIFS = {
    retraite. Les additionner donnait à l'autonomie financière un dernier palier
    qui comptait des euros récupérables avec d'autres qui ne le sont pas, et
    c'était le chiffre le plus rassurant de la carte. */
+/* L'ordre compte : les paliers se cumulent dans celui-ci, du plus liquide au
+   moins. Les deux derniers restent hors cumul, pour deux raisons differentes
+   qu'il ne faut pas confondre — l'un n'arrivera pas avant son terme, l'autre
+   n'arrivera qu'en echange d'un demenagement. */
 const MOBILISABLE_LABEL = {
   immediat: 'Disponible immédiatement',
   differe:  'Disponible sous quelques jours',
   lent:     'Disponible en quelques mois',
+  habite:   'Le logement que tu habites',
   bloque:   'Inaccessible avant l’échéance',
 };
 
@@ -413,6 +418,24 @@ const nomLignePlacement = (l, compte) =>
   String(l.libelle || '').trim() === typeCompte(compte.type).label
     ? nomCompteV2(compte) : l.libelle;
 
+/* La meta sous un nom ne redit jamais ce nom.
+
+   Un bien saisi d'un seul mot le porte trois fois — la ligne, le compte et
+   l'etablissement prennent le meme —, et la carte affichait « Flat » puis
+   « Flat · Flat ». La casse et les espaces ne font pas une difference, et deux
+   parts egales entre elles ne comptent qu'une fois. Rend une chaine vide quand
+   il ne reste rien : au point d'appel de decider s'il pose la ligne. */
+const sousNom = (nom, ...parts) => {
+  const cle = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const vus = new Set([cle(nom)]);
+  return parts.filter(p => {
+    const k = cle(p);
+    if (!k || vus.has(k)) return false;
+    vus.add(k);
+    return true;
+  }).join(' · ');
+};
+
 /* L'etablissement d'un compte s'affiche partout ou son nom s'affiche, sur sa
    propre ligne, et sans condition.
 
@@ -528,6 +551,53 @@ const CLASSE_DE_POCHE = {
 };
 const classeDePoche = poche => CLASSE_DE_POCHE[poche] || null;
 
+/* --- ce qu'on detient vraiment d'une ligne -------------------------------
+   Un bien achete a deux comptait pour un. L'application savait deja partager
+   une charge fixe entre deux contributeurs, mais pas un actif : le total
+   affichait le logement entier a qui n'en detient que la moitie, et c'est le
+   pire genre d'erreur — un faux total que rien ne signale.
+
+   La part vit sur la ligne, parce que c'est le bien qui se detient a plusieurs,
+   pas le compte qui le porte : une SCI peut tenir deux lots aux quotes-parts
+   differentes. Absente, elle vaut le tout : un etat d'avant ne change pas de
+   valeur en arrivant ici.
+
+   Le credit, lui, se saisit tel qu'on le doit. Rien ne le divise, et l'aide du
+   champ le dit : la banque ne prete pas une fraction de mensualite, chaque
+   emprunteur connait la sienne. */
+const partDetention = l => {
+  const p = num(l?.part);
+  return (p > 0 && p <= 100) ? p / 100 : 1;
+};
+
+/* --- a quoi sert un bien -------------------------------------------------
+   Le meme appartement ne se lit pas de la meme facon selon qu'on l'habite ou
+   qu'on le loue, et rien ne permettait de le dire. Consequence visible : la
+   fiche d'une residence principale annonçait « Rendement brut 0,00 % » des
+   qu'on lui rattachait sa taxe fonciere, et l'ecran des delais comptait le toit
+   sous lequel on vit comme mobilisable en quelques mois.
+
+   Declare, jamais devine. Un bien sans loyer rattache n'est pas forcement une
+   residence principale : il peut etre en travaux, entre deux locataires, ou
+   loue a un proche sans que le loyer soit saisi. */
+const USAGES_BIEN = [
+  ['locative',   'Mis en location'],
+  ['principale', 'Résidence principale'],
+  ['secondaire', 'Résidence secondaire'],
+];
+const USAGE_BIEN_LABEL = Object.fromEntries(USAGES_BIEN);
+const usageLigne = l => USAGE_BIEN_LABEL[l?.usage] ? l.usage : '';
+
+/* L'usage d'un compte immobilier : celui de ses lignes, quand elles s'accordent.
+   Derive des lignes et non d'un second champ sur le compte — deux endroits ou
+   declarer le meme fait finiraient par se contredire. */
+function usageBien(compte) {
+  const dits = [...new Set((compte?.lignes || [])
+    .filter(l => (l.classe || 'immobilier') === 'immobilier')
+    .map(usageLigne).filter(Boolean))];
+  return dits.length === 1 ? dits[0] : '';
+}
+
 /* Placements d'un compte : lignes cotées (positions, valorisées au cours)
    puis lignes manuelles (non coté, immobilier). */
 function lignesDe(compte) {
@@ -540,9 +610,16 @@ function lignesDe(compte) {
   /* `ref` : le rang de la ligne dans son compte. La vue en a besoin pour ouvrir
      la bonne fenetre d'edition, et l'index de cette liste-ci ne le donne pas —
      les lignes de marche passent devant. */
-  const manuelles = (compte.lignes || []).map((l, i) =>
-    ({ ...l, ref: i, valeur: num(l.valeur), prixDeRevient: num(l.prixDeRevient),
-       refMobilite: `comptes.${Store.state.comptes.indexOf(compte)}.lignes.${i}.mobilite` }));
+  /* La quote-part s'applique ici, une seule fois : treize ecrans lisent cette
+     fonction, et la valeur saisie reste celle du bien entier — c'est elle qu'on
+     compare a une annonce, et elle ne se divise pas dans le champ. */
+  const manuelles = (compte.lignes || []).map((l, i) => {
+    const q = partDetention(l);
+    return { ...l, ref: i, part: q < 1 ? num(l.part) : null,
+             valeur: num(l.valeur) * q, prixDeRevient: num(l.prixDeRevient) * q,
+             valeurEntiere: num(l.valeur), prixEntier: num(l.prixDeRevient),
+             refMobilite: `comptes.${Store.state.comptes.indexOf(compte)}.lignes.${i}.mobilite` };
+  });
   return [...marche, ...manuelles];
 }
 
@@ -553,6 +630,11 @@ function lignesDe(compte) {
    sans affaiblir le défaut pour tous les autres. */
 function mobiliteLigne(l, compte) {
   if (l.mobilite && l.mobilite !== 'auto') return l.mobilite;
+  /* Le logement qu'on habite n'est pas un actif mobilisable : le vendre veut
+     dire se reloger, donc racheter ou payer un loyer. Le compter dans « en
+     quelques mois » promettait une reserve qui n'existe pas. Le reglage par
+     ligne reste au-dessus, pour qui vend vraiment et loue ensuite. */
+  if (usageLigne(l) === 'principale') return 'habite';
   return mobilisabilite(l.classe, compte.type, compte.ouvertLe);
 }
 
@@ -730,7 +812,11 @@ function poches() {
      moitie. */
   const p = { courant: 0, precaution: 0, projet: 0, investir: 0,
               classes: Object.fromEntries(Object.keys(CLASSES_ACTIFS).map(k => [k, 0])),
-              mobilisable: { immediat: 0, differe: 0, lent: 0, bloque: 0 } };
+              /* Derive de la table des paliers : en ecrire la liste ici a la
+                 main laissait un palier ajoute a `undefined`, et le total
+                 cessait d'egaler la somme de ses parts sans un mot. */
+              mobilisable: Object.fromEntries(
+                Object.keys(MOBILISABLE_LABEL).map(k => [k, 0])) };
   for (const c of comptesOuverts()) {
     for (const e of (c.cash || [])) {
       const m = num(e.montant);
@@ -844,6 +930,51 @@ function projectionCredit(d) {
            sens: capital > reste ? 'monte' : capital < reste ? 'baisse' : 'stable' };
 }
 
+/* --- quand le credit sera paye, et ce qu'il coutera d'ici la -------------
+   La premiere question d'un emprunteur, et l'application ne savait pas y
+   repondre alors qu'elle en avait toutes les pieces : capital restant,
+   mensualite, taux. Aucun champ de plus a saisir.
+
+   Ce n'est pas la projection de patrimoine, gelee a dessein : celle-la melerait
+   un contrat certain a un pari sur la valeur du bien. Ici on ne lit que le
+   contrat, et on ne le rapporte a aucun patrimoine.
+
+   L'amortissement se rejoue mois par mois plutot que par la formule fermee
+   n = -ln(1 - rC/M) / ln(1+r) : la boucle donne les interets exacts, formule
+   comprise, et la derniere echeance partielle avec. Trois cent soixante tours
+   pour un pret de trente ans, le cout est nul.
+
+   Sans taux, un pret s'amortit tout droit : c'est le pret familial ou le
+   differe sans interets, et le refuser priverait de reponse le cas le plus
+   simple. */
+function finCredit(d) {
+  const reste = num(d.montant);
+  const mens = mensualiteCredit(d);
+  const taux = num(d.taux) / 100 / 12;
+  if (!(reste > 0) || !(mens > 0)) return null;
+  /* Une mensualite qui ne couvre pas les interets du mois ne rembourse rien :
+     la dette monte, et annoncer une date de fin serait un mensonge. */
+  if (mens <= reste * taux) return null;
+  let capital = reste, mois = 0, interets = 0;
+  while (capital > 0 && mois < 1200) {
+    const i = capital * taux;
+    interets += i;
+    capital = capital + i - mens;
+    mois++;
+  }
+  if (capital > 0) return null;
+  const fin = new Date();
+  fin.setDate(1);
+  fin.setMonth(fin.getMonth() + mois);
+  return {
+    mois, interets,
+    /* La derniere echeance solde ce qui reste : elle est plus petite que les
+       autres, et l'annoncer evite de croire a un mois de trop. */
+    derniere: mens + capital,
+    finLe: `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`,
+  };
+}
+
 /* --- les crédits, tous ensemble ----------------------------------------
    Une dette vit sur l'etablissement qui l'a consentie, et se lisait donc un
    etablissement a la fois : la fiche du bien, celle du courtier, le groupe de la
@@ -896,6 +1027,7 @@ function creditsEnCours() {
           ? Math.max(0, mensualiteCredit(d) - reste * num(d.taux) / 100 / 12) : null,
         verifieLe: d.verifieLe || null,
         ...projectionCredit(d),
+        fin: finCredit(d),
       });
     });
   }
@@ -1126,6 +1258,15 @@ function fmtMonth(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   if (d > 20) return enAnglais() ? `End ${y}` : `Fin ${y}`;   // ligne de cloture
   return `${moisCourts()[m - 1]} ${String(y).slice(2)}`;
+}
+
+/* « avr. 2040 » : l'annee en entier, contrairement au ruban des releves. Une
+   echeance a quinze ans d'ici avec « 40 » pour toute annee se lit mal, et rien
+   ici n'oblige a la colonne etroite qui a impose l'abrege ailleurs. */
+function fmtMoisAn(iso) {
+  if (!iso) return '';
+  const [y, m] = iso.split('-').map(Number);
+  return `${moisCourts()[m - 1]} ${y}`;
 }
 
 /* Aucune date numerique en anglais : « 03/04/2026 » se lit 3 avril a Londres
@@ -3437,6 +3578,10 @@ const VALEURS_CONNUES = {
   ],
   organisme: () => (B().fixedCharges || []).map(c => c.provider),
   source: () => (B().income || []).map(r => r.label),
+  /* Les postes deja nommes sur un bien, quel qu'il soit : deux appartements
+     portent la meme taxe fonciere, et retaper le mot au second n'apprend rien
+     a personne. Ils viennent apres les postes proposes. */
+  posteBien: () => (B().fixedCharges || []).filter(c => c.bienId).map(c => c.label),
 };
 
 function valeursConnues(cle) {
@@ -3876,44 +4021,120 @@ function encoursAProbleme() {
    Le rendement se calcule sur le prix d'acquisition quand on le connait — c'est
    la convention, et c'est ce que la fiche annonce. A defaut, sur la valeur
    actuelle, en le disant : un rendement sur une estimation du jour n'est pas le
-   meme chiffre, et le taire serait la faute que ce projet corrige sans arret. */
+   meme chiffre, et le taire serait la faute que ce projet corrige sans arret.
+
+   Trois manques rendaient tous les rendements trop beaux, et tous du meme cote :
+   douze mois de loyer supposes pleins, aucun impot, et la periode du loyer
+   ignoree. Un outil imprecis se trompe des deux cotes ; celui-la se trompait
+   toujours du cote flatteur.
+
+   La vacance et l'impot se **declarent**. L'application n'applique aucune regle
+   fiscale : micro-foncier, reel, meuble, les regimes changent et le droit avec,
+   et une application qui les devinerait mentirait un jour sans le savoir. Elle
+   applique le taux que son detenteur annonce, sur une base qu'elle nomme. */
 function cashFlowBien(compte) {
   if (!compte) return null;
-  const loyers = B().income
+  /* `revenuMensuel` et non le montant brut : la source porte sa periode, et un
+     loyer saisi a l'annee valait douze fois trop ici pendant que le budget
+     affichait le bon chiffre. Le meme libelle doit donner le meme montant sur
+     tous les ecrans. */
+  const loyersPleins = B().income
     .filter(i => i.bienId === compte.id)
-    .reduce((s, i) => s + num(i.amount), 0);
-  const charges = B().fixedCharges
-    .filter(c => c.bienId === compte.id)
-    .reduce((s, c) => s + chargeMensuelle(c), 0);
+    .reduce((s, i) => s + revenuMensuel(i), 0);
   /* Les credits de l'etablissement qui tient le bien : c'est la que la dette
      immobiliere vit, et un bien finance a credit a le sien. */
   const credits = (etabById(compte.etabId)?.dettes || []);
+  /* Une charge qui rembourse un de ces credits est deja lue plus bas comme
+     mensualite : la compter ici aussi la soustrairait deux fois du cash-flow.
+     Rien n'interdit les deux rattachements, et ils sont meme tentants — cette
+     mensualite concerne bien ce logement. C'est le lien vers le credit qui
+     tranche, parce que c'est lui qui porte le montant.
+     Un credit d'un autre etablissement n'est pas concerne : sa mensualite
+     n'entre pas dans le total ci-dessous, donc elle reste une charge. */
+  const rembourses = new Set(credits.map(d => d.id));
+  const charges = B().fixedCharges
+    .filter(c => c.bienId === compte.id && !rembourses.has(c.creditId))
+    .reduce((s, c) => s + chargeMensuelle(c), 0);
   const mensualite = credits.reduce((s, d) => s + mensualiteCredit(d), 0);
   const reste = credits.reduce((s, d) => s + num(d.montant), 0);
+  /* La part de capital de la prochaine mensualite : ce que le mois ajoute au
+     patrimoine pendant que la tresorerie baisse. Meme approximation du premier
+     mois que la carte des credits, et pour la meme raison. */
+  /* `null` et non zero quand aucun taux n'est connu : sans taux on ne sait pas
+     departager le capital des interets, et annoncer « zero de capital » sur une
+     mensualite de 620 EUR serait faux dans l'autre sens. */
+  const amortis = credits.filter(d => mensualiteCredit(d) && num(d.taux));
+  const capitalMois = amortis.length ? amortis.reduce((s, d) =>
+    s + Math.max(0, mensualiteCredit(d) - num(d.montant) * num(d.taux) / 100 / 12), 0) : null;
 
   const valeur = valeurCompte(compte);
   const achat = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
   const base = achat || valeur;
   const surAchat = achat > 0;
 
-  const annuelBrut = loyers * 12;
-  const annuelNet = (loyers - charges) * 12;
+  /* Douze mois pleins etaient supposes. Un bien reloue une fois l'an perd un
+     mois de loyer en etat des lieux, travaux et annonce, et le rendement
+     affiche ignorait cette perte-la. */
+  const moisLoues = Math.min(12, Math.max(0, num(compte.moisLoues) || 12));
+  const loyers = loyersPleins * moisLoues / 12;
+  const vacance = moisLoues < 12;
+
+  /* L'impot porte sur ce que le bien degage avant credit : loyers moins charges.
+     Une base negative ne se taxe pas, et l'annoncer en credit d'impot
+     supposerait des revenus a cote que cette application ne connait pas. */
+  const tauxImpot = Math.min(100, Math.max(0, num(compte.tauxImpot)));
+  const impot = tauxImpot ? Math.max(0, loyers - charges) * tauxImpot / 100 : 0;
+
+  const cashFlow = loyers - charges - mensualite - impot;
+  /* L'apport se saisit : c'est le seul denominateur stable. Le prix paye moins
+     le capital restant du grossissait a chaque mensualite, si bien que le
+     rendement baissait mecaniquement pendant que l'operation s'ameliorait —
+     un signal exactement inverse. */
+  const apport = num(compte.apport) || null;
   return {
-    loyers, charges, mensualite, reste, valeur, achat, base, surAchat,
+    loyers, loyersPleins, moisLoues, vacance, charges, mensualite, impot, tauxImpot,
+    reste, valeur, achat, base, surAchat, capitalMois,
     /* Le cash-flow : ce qui reste sur le compte en fin de mois, une fois le
        credit paye. Negatif est normal les premieres annees, et c'est justement
        le chiffre qu'il faut connaitre. */
-    cashFlow: loyers - charges - mensualite,
-    rendementBrut: base ? annuelBrut / base * 100 : 0,
-    rendementNet: base ? annuelNet / base * 100 : 0,
-    /* Ce que le bien rapporte rapporte a ce qu'on y a vraiment mis, credit
-       deduit : c'est le rendement sur fonds propres, le seul qui reponde a
-       « est-ce que ce montage vaut mieux qu'un livret ». Sans apport connu, il
-       n'a pas de sens et vaut null. */
-    fondsPropres: surAchat && achat > reste ? achat - reste : null,
-    rendementFondsPropres: (surAchat && achat > reste)
-      ? (loyers - charges - mensualite) * 12 / (achat - reste) * 100 : null,
+    cashFlow,
+    rendementBrut: base ? loyers * 12 / base * 100 : 0,
+    rendementNet: base ? (loyers - charges) * 12 / base * 100 : 0,
+    /* Net d'impot : le seul des trois qui dise ce qui reste vraiment, et il
+       n'existe que si le taux est declare. */
+    rendementNetNet: (base && tauxImpot) ? (loyers - charges - impot) * 12 / base * 100 : null,
+    apport,
+    cashOnCash: apport ? cashFlow * 12 / apport * 100 : null,
   };
+}
+
+/* --- ce qu'un bien coute, poste par poste --------------------------------
+   La taxe fonciere est due par tout proprietaire, la copropriete par qui detient
+   un lot, et la provision pour travaux est celle que tout le monde oublie — or
+   c'est elle qui decide du vrai rendement. Les proposer evite la page blanche
+   d'un champ « Poste » vide, sans rien imposer : un `datalist` suggere, il ne
+   ferme pas la liste.
+
+   Une liste par usage, parce que l'assurance ne porte pas le meme nom selon
+   qu'on habite ou qu'on loue : proposer « proprietaire non occupant » a qui vit
+   dans son logement serait du bruit. Ce qui vaut pour tous vient d'abord, dans
+   l'ordre ou on y pense.
+
+   La periode accompagne le poste : une taxe fonciere se paie a l'annee, des
+   frais de gestion au mois. Le premier poste donne la periode par defaut de la
+   fenetre, et c'est pour ca que la taxe fonciere ouvre la liste. */
+const CHARGES_BIEN = {
+  '':           [['Taxe foncière', 'an'], ['Charges de copropriété', 'trimestre'],
+                 ['Provision pour travaux', 'an']],
+  locative:     [['Assurance propriétaire non occupant', 'an'],
+                 ['Frais de gestion locative', 'mois']],
+  principale:   [['Assurance habitation', 'an']],
+  secondaire:   [['Assurance habitation', 'an'], ['Taxe d’habitation', 'an']],
+};
+
+function chargesProposees(compte) {
+  const propres = CHARGES_BIEN[usageBien(compte)] || [];
+  return [...CHARGES_BIEN[''], ...propres];
 }
 
 /* Les comptes qui portent un bien immobilier : la liste que proposent les
@@ -4016,6 +4237,7 @@ function runway() {
   const immediate  = p.mobilisable.immediat;
   const differe    = p.mobilisable.differe;
   const lent       = p.mobilisable.lent;
+  const habite     = p.mobilisable.habite;
   const bloque     = p.mobilisable.bloque;
 
   /* Notes tenues courtes : elles s'affichent sous l'intitule, sur un ecran
@@ -4034,6 +4256,11 @@ function runway() {
     { label: trad('En quelques jours'), value: differe,
       note: trad('liquidités chez un courtier ; un titre se vend en séance, le virement prend 2 à 3 jours') },
     { label: trad('En quelques mois'), value: lent, note: trad('immobilier, non coté, à vendre avec décote si pressé') },
+    /* Hors cumul, et pour une raison qui n'est pas celle du PER : ce bien-la se
+       vend, mais le vendre oblige a se reloger. Compter le toit dans les mois
+       tenus promettait une reserve qui n'existe pas. */
+    ...(habite > 0.005 ? [{ label: trad('Le logement que tu habites'), value: habite,
+        note: trad('le vendre veut dire te reloger'), horsCumul: true }] : []),
     /* Hors cumul : un PER ne prolonge aucune autonomie. Il reste affiché,
        c'est du patrimoine, mais l'ajouter aux mois tenus serait un mensonge —
        cet argent n'arrivera pas, quoi qu'il se passe demain. */
@@ -5110,13 +5337,18 @@ function healthChecks() {
    `dateAchat` reste, et sert toujours : c'est elle qui empêche l'écart du jour
    de compter une baisse d'avant l'achat. */
 
-/* « 2 ans et 3 mois », pas « 2,25 ans ». */
-function fmtDuree(annees) {
-  const mois = Math.round(annees * 12);
-  const a = Math.floor(mois / 12), m = mois % 12;
-  if (!a) return `${m} mois`;
-  return `${a} an${a > 1 ? 's' : ''}${m ? ` et ${m} mois` : ''}`;
+/* « 2 ans et 3 mois », pas « 2,25 ans ». Une seule implementation pour les deux
+   entrees : les annees decimales d'une detention et les mois entiers d'une
+   echeance de credit tombent sur la meme phrase. */
+function fmtDureeMois(mois) {
+  const n = Math.max(0, Math.round(mois));
+  const a = Math.floor(n / 12), m = n % 12;
+  const lesMois = `${m} ${trad('mois')}`;
+  if (!a) return lesMois;
+  const lesAns = `${a} ${a > 1 ? trad('ans') : trad('an')}`;
+  return m ? `${lesAns} ${trad('et')} ${lesMois}` : lesAns;
 }
+const fmtDuree = annees => fmtDureeMois(annees * 12);
 
 function portfolioPnl() {
   const ps = Store.state.positions;

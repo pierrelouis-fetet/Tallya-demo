@@ -58,6 +58,17 @@ rien ne se voie à l'écran.
   négative retourne le signe, et une base qui traverse zéro rend le rapport
   arbitrairement grand : un crédit saisi sans son bien affichait « −475,5 % ».
   `deltas()` rend `pct: null` dans ces cas, et l'écran se contente de l'euro.
+- **Une base qui bouge toute seule inverse le signal.** Le rendement immobilier
+  se calculait sur « prix payé moins capital restant dû », un dénominateur qui
+  grossit à chaque mensualité : à cash-flow égal le pourcentage baissait pendant
+  que l'opération s'améliorait. Un ratio dont la base dérive avec le temps ne se
+  compare pas à lui-même d'une année sur l'autre, et c'est pourtant l'usage
+  qu'on en fait. Préférer une base que le détenteur déclare une fois — l'apport.
+- **Quand plusieurs approximations manquent, vérifier si elles tirent du même
+  côté.** L'immobilier ignorait la période du loyer, la vacance et l'impôt : les
+  trois gonflaient le rendement. Un outil imprécis se trompe des deux côtés ;
+  celui qui se trompe toujours du côté flatteur est biaisé, et ça ne se voit
+  jamais sur un seul chiffre.
 - **Un état se déclare, il ne se déduit pas.** Une échéance dépassée ne veut pas
   dire « en retard » : le virement arrive souvent avec quelques jours de retard,
   et peindre la ligne en rouge le lendemain crierait au loup à chaque fois.
