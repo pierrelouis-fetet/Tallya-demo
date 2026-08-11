@@ -10803,6 +10803,27 @@ suite('Enregistrer : une règle, deux familles', () => {
      depenses, mais Enregistrer fermait et « Annuler » jetait la saisie sans
      une question. */
 
+  test('toute fenêtre de saisie en série porte la paire, sans exception', () => {
+    /* Le balayage qui manquait : la regle etait ecrite, mais verifiee sur un seul
+       cas — le releve mensuel. La fenetre des revenus est restee transfuge des
+       mois, douze champs sous les yeux et « Fermer » pour seul bouton.
+       La detection se fait sur les pieds de fenetre : chaque `#modalFoot` qui
+       porte « Fermer » doit porter « Enregistrer » a cote, sauf ceux d'un acte
+       ou d'une simple lecture. */
+    const src = lireSource('assets/app.js');
+    const pieds = src.match(/\$\('#modalFoot'\)\.innerHTML =[\s\S]{0,700}?`;/g) || [];
+    vrai(pieds.length >= 4, `au moins quatre pieds de fenêtre attendus, ${pieds.length} trouvés`);
+    for (const pied of pieds) {
+      if (!/trad\('Fermer'\)/.test(pied)) continue;
+      vrai(/trad\('Enregistrer'\)/.test(pied),
+        'un pied porte « Fermer » sans « Enregistrer » :\n  ' + pied.slice(0, 200));
+    }
+    /* Et celui des revenus nommement, puisque c'est lui qui manquait. */
+    vrai(/id="revOk"[^>]*>\$\{trad\('Enregistrer'\)\}</.test(src),
+      'la fenêtre des revenus porte enfin Enregistrer');
+    vrai(/\$\('#revOk'\)\.onclick/.test(src), 'et il est câblé');
+  });
+
   test('le relevé mensuel rejoint la famille de sa jumelle', () => {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
@@ -11822,6 +11843,106 @@ suite('Un patrimoine net négatif a deux causes', () => {
     vrai(i > 0, 'le champ doit être trouvable');
     vrai(/frais de notaire exclus/.test(src.slice(i, i + 400)),
       'son aide dit ce qu’elle exclut, comme celle du prix d’acquisition dit ce qu’elle inclut');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Une application vide dit quoi faire, et se tait sur le reste
+   ------------------------------------------------------------------ */
+suite('Une application vide dit quoi faire', () => {
+
+  /* Chaque ecran portait son texte d'ecran vide, mais l'accueil — le premier
+     ouvert — ne disait rien, et rien ne donnait l'ordre. La forme retenue est
+     celle qui existait deja pour le revenu : un bouton, une phrase, dans la
+     carte qui manque de la donnee. Pas de panneau central qui renverrait
+     ailleurs. */
+  const vide = () => Fixture.poser(s => {
+    s.comptes = []; s.etabs = []; s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = []; s.budget.expenses = [];
+  });
+
+  test('les trois pas se dérivent des données, jamais d’un drapeau', () => {
+    vide();
+    for (const cle of ['comptes', 'revenus', 'depenses']) {
+      vrai(pasAFaire(cle), `« ${cle} » reste à faire sur une application vide`);
+    }
+    /* Un drapeau « premiers pas termines » aurait menti des le premier import. */
+    Fixture.poser();
+    for (const cle of ['comptes', 'revenus', 'depenses']) {
+      vrai(!pasAFaire(cle), `« ${cle} » est fait dès que la donnée existe`);
+    }
+    eq(pasAFaire('inconnu'), false, 'un pas qui n’existe pas ne reste pas à faire');
+  });
+
+  test('chaque pas porte son bouton, son action et sa raison', () => {
+    for (const p of PREMIERS_PAS) {
+      vrai(p.bouton && p.action && p.quoi, `« ${p.cle} » doit porter les trois`);
+      vrai(p.quoi.length > 40, `« ${p.cle} » doit dire pourquoi, pas seulement quoi`);
+    }
+    eq(Object.keys(PAS_PAR_CLE).join(','), PREMIERS_PAS.map(p => p.cle).join(','),
+      'l’index se dérive de la table, il ne se recopie pas');
+  });
+
+  test('les invites viennent de la table, elles ne se réécrivent pas', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/function invitePremierPas\(cle\)/.test(src), 'une seule fonction les rend');
+    for (const cle of ['comptes', 'revenus', 'depenses']) {
+      vrai(new RegExp(`invitePremierPas\\('${cle}'\\)`).test(src),
+        `l’invite « ${cle} » est posée quelque part`);
+    }
+    /* Le texte du revenu vivait dans la vue : il a rejoint la table, et la vue
+       ne doit plus le porter en double. */
+    vrai(!/Sans revenu déclaré, cette carte\s*\n?\s*n'a pas de total/.test(src),
+      'le texte du revenu a quitté la vue pour la table');
+  });
+
+  test('la cloche ne réclame rien qui n’ait de sens sur une application vide', () => {
+    /* « Épargne de précaution : 0 mois, 0 € pour 0 € de coût mensuel » etait la
+       caricature de la regle : la cloche ne parle que de ce qui existe chez
+       celui qui la regarde. */
+    vide();
+    const titres = healthChecks().map(n => n.title).join(' | ');
+    vrai(!/Épargne de précaution/.test(titres),
+      `un coût mensuel nul ne se compare à rien : ${titres}`);
+    vrai(!/à enregistrer/.test(titres),
+      `rien à relever sans un seul compte : ${titres}`);
+    vrai(!/à saisir/.test(titres),
+      `ni de dépenses à réclamer sans revenu ni charge : ${titres}`);
+  });
+
+  test('mais elle reparle dès que la donnée existe', () => {
+    /* La garde ne doit pas eteindre le controle pour de bon : c'est une alerte
+       utile des qu'il y a de quoi la calculer. Le fixture tient 3,3 mois, donc
+       au-dessus du seuil : on lui retire du cash pour passer dessous. */
+    Fixture.poser(s => {
+      s.budget.fixedCharges.push({ label: 'Loyer', amount: 1200, period: 'mois', shares: {} });
+    });
+    const rw = runway();
+    vrai(rw.burn > 0, 'le fixture a un coût mensuel');
+    vrai(rw.immediateMonths < 3, `et moins de trois mois de coussin (${rw.immediateMonths})`);
+    vrai(healthChecks().some(n => /Épargne de précaution/.test(n.title)),
+      'donc l’alerte revient');
+    vrai(comptesOuverts().length > 0 && healthChecks().some(n => /à enregistrer/.test(n.title)),
+      'et le relevé se réclame de nouveau');
+  });
+
+  test('un titre coté demande d’abord un compte qui puisse le porter', () => {
+    /* Sans compte eligible, la fenetre d'ajout n'offrait qu'une liste deroulante
+       vide : le titre n'avait nulle part ou aller, et rien ne disait pourquoi. */
+    vide();
+    /* Aucun compte ouvert, donc aucun ne peut porter de titre : la liste que la
+       fenetre d'ajout propose vit dans app.js, que le harnais ne charge pas, mais
+       elle se derive de ces comptes-la. */
+    eq(comptesOuverts().length, 0, 'aucun compte ne peut porter un titre');
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf("trad('Aucun titre coté')"),
+                           src.indexOf("trad('Aucun titre coté')") + 2200);
+    vrai(/Un titre se pose sur le compte qui le détient/.test(bloc),
+      'l’écran dit le prérequis, pas seulement la frontière avec Actifs');
+    vrai(/data-action="ajouter-compte"/.test(bloc), 'et offre le geste');
+    /* Les types eligibles se derivent de leur table : celui qu'on ajoutera
+       demain entrera dans la phrase sans qu'on y pense. */
+    vrai(/TYPES_COMPTE\.filter/.test(bloc), 'la liste des types se dérive');
   });
 });
 

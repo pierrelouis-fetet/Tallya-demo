@@ -829,6 +829,11 @@ function viewOverview() {
       <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>
       ${!evoNet && patrimoine().dettes ? `<div class="hero-sous muted">
         dont ${fmtEUR0(patrimoine().dettes)} de crédits à rembourser</div>` : ''}
+      <!-- Le premier ecran ouvert ne disait rien : « 0,00 € » et deux ecarts a
+           zero, sans un mot sur le geste qui les remplirait. Les autres pages
+           portaient bien leur texte d'ecran vide, mais aucune ne s'ouvrait la
+           premiere. L'invite s'efface d'elle-meme au premier compte saisi. -->
+      ${invitePremierPas('comptes')}
     </div>
     <div class="hero-deltas">
       <!-- La comparaison au mois dernier ne dit rien : elle se mesure sur le
@@ -2752,10 +2757,32 @@ function viewPositions() {
       tes liquidités se déclarent dans Actifs, où c'est toi qui en donnes la valeur :
       ils comptent dans ton patrimoine, ta répartition et ton autonomie exactement
       comme le reste.</p>
+    ${(() => {
+      /* Le prerequis, et il manquait : un titre se pose sur le compte qui le
+         detient, et sans compte eligible la fenetre d'ajout n'offrait qu'une
+         liste deroulante vide — le titre n'avait nulle part ou aller, et rien ne
+         disait pourquoi. L'ecran expliquait la frontiere avec Actifs, ce qui est
+         utile, mais pas le geste a faire avant.
+
+         Les types sont derives de leur table : celui qu'on ajoutera demain
+         entrera dans cette phrase sans qu'on y pense. */
+      const porteurs = TYPES_COMPTE.filter(t =>
+        (t.classes || []).some(c => ['actions', 'obligations', 'crypto'].includes(c)));
+      const eligibles = comptesOuverts().filter(c =>
+        porteurs.some(t => t.id === c.type));
+      if (eligibles.length) return `
     <div class="row" style="gap:8px">
       <button class="btn" data-action="goto" data-view="accounts" data-anchor="">${trad('Aller à Actifs')}</button>
       <button class="btn ghost" data-action="ajouter-ligne">${trad('+ Un titre coté')}</button>
+    </div>`;
+      return `
+    <div class="row" style="gap:8px">
+      <button class="btn" data-action="ajouter-compte">${trad('Créer un compte-titres')}</button>
+      <button class="btn ghost" data-action="goto" data-view="accounts" data-anchor="">${trad('Aller à Actifs')}</button>
     </div>
+    <p class="small muted" style="margin:12px 0 0">${trad('Un titre se pose sur le compte qui le détient : commence par en créer un.')}
+      ${trad('Ceux qui peuvent en porter :')} ${esc(porteurs.map(t => trad(t.label)).join(', '))}.</p>`;
+    })()}
   </div>`;
   }
 
@@ -5340,6 +5367,25 @@ function creditsDuCompte(c) {
   return { idxEtab, etab, dettes, total: dettes.reduce((s, x) => s + num(x.d.montant), 0) };
 }
 
+/* L'invite d'un premier pas : un bouton, et la phrase qui dit pourquoi.
+
+   La forme vient de la carte des flux, qui portait deja « Déclarer tes revenus »
+   suivi d'une ligne d'explication. Elle est reprise telle quelle plutot
+   qu'inventee a cote : trois invites de trois formes differentes auraient donne
+   trois apprentissages au lieu d'un.
+
+   Le texte et l'action viennent de `PREMIERS_PAS`, pas de l'appelant : les
+   ecrans vides de cette application se sont deja contredits pour avoir ete
+   ecrits chacun de son cote. */
+function invitePremierPas(cle) {
+  const p = PAS_PAR_CLE[cle];
+  if (!p || !pasAFaire(cle)) return '';
+  return `
+      <button type="button" class="btn sm" data-action="${esc(p.action)}"
+              style="margin:4px 0 0">${trad(p.bouton)}</button>
+      <p class="small muted" style="margin:12px 0 0">${trad(p.quoi)}</p>`;
+}
+
 /* Les trois reglages d'exploitation : ce qu'on a mis, ce qu'on encaisse
    vraiment, ce que l'impot prend. Ils vivent sur le compte et non sur la ligne,
    au meme niveau que les loyers et les charges qui s'y rattachent — un compte
@@ -6577,11 +6623,9 @@ function viewBudget(section = 'depenses') {
         ];
         /* Sans revenu declare, il n'y a pas de tout a decouper : la carte le dit
            et mene la ou on le declare, au lieu d'afficher une piste vide. */
-        if (!f.income) return `
-        <button type="button" class="btn sm" data-action="toggle-revenus"
-                style="margin:4px 0 0">${trad('Déclarer tes revenus')}</button>
-        <p class="small muted" style="margin:12px 0 0">Sans revenu déclaré, cette carte
-          n'a pas de total à partager.</p>`;
+        /* Le motif vient de `PREMIERS_PAS` : il est ne ici, et les deux autres
+           invites le reprennent depuis la meme table plutot que de le recopier. */
+        if (!f.income) return invitePremierPas('revenus');
         /*    Le chevron n'est pas un ornement. Un grand montant ressemble a un titre,
    pas a un bouton, et c'est pourtant la seule porte vers les sources de
    revenus. Le nombre de sources annonce la liste, le chevron dit qu'elle
@@ -6951,10 +6995,12 @@ function viewBudget(section = 'depenses') {
         .map(c => ({ nom: c.label || 'Sans nom', v: chargeMensuelle(c) }))
         .filter(x => x.v > 0)
         .sort((a, x) => x.v - a.v);
-      if (!postes.length) return `
-      <p class="empty" style="margin:0">${trad('Aucune charge fixe déclarée. Ajoute tes loyers, '
-        + 'assurances et abonnements ci-dessous : ce sont eux qui décident de ce qu’il te '
-        + 'reste à vivre chaque mois.')}</p>`;
+      /* Le texte vit dans `PREMIERS_PAS` : c'est le meme que celui de l'invite,
+         et l'ecrire ici en plus les aurait laisses diverger. Le repli sert au cas
+         ou des charges existent mais toutes a zero — le pas est franchi, il n'y a
+         pourtant rien a montrer. */
+      if (!postes.length) return invitePremierPas('depenses')
+        || `<p class="empty" style="margin:0">${trad('Aucune charge fixe déclarée.')}</p>`;
       /* `haut` ne sert plus aux barres, qui valent desormais la part. Il reste
          la parce que le total, lui, doit venir des postes affiches et non de
          `f.fixed` : les deux sont egaux aujourd'hui, et le jour ou ils
@@ -10431,7 +10477,15 @@ function fenetreRevenus() {
     <div class="row" style="margin-top:12px">
       <button class="btn sm ghost" data-action="add-income">${trad('+ Ajouter une source de revenu')}</button>
     </div>`;
-  $('#modalFoot').innerHTML = `<button class="btn" id="revClose" type="button">${trad('Fermer')}</button>`;
+  /* La paire de la famille « saisie en serie », comme la fenetre des depenses, le
+     releve mensuel, la fiche d'une ligne et les apercus modifiables. Celle-ci
+     etait la derniere a ne porter que « Fermer » : douze champs sous les yeux,
+     tous ecrits a la frappe, et rien qui confirme que c'est bien parti.
+     « Enregistrer » n'ajoute pas l'ecriture — elle a deja eu lieu — il ajoute le
+     temoin, et il reste sur place pour qu'on relise le total. */
+  $('#modalFoot').innerHTML =
+    `<button class="btn" id="revOk" type="button">${trad('Enregistrer')}</button>
+     <button class="btn ghost" id="revClose" type="button">${trad('Fermer')}</button>`;
   montrerModal(m);
 
   const fermer = () => {
@@ -10440,6 +10494,13 @@ function fenetreRevenus() {
     render();
   };
   revenusOuvert = true;
+  $('#revOk').onclick = () => {
+    /* Le blur d'abord, comme ailleurs : sur iOS un champ encore actif peut
+       n'avoir pas emis son dernier `input`. */
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    Store.save();
+    toast(`${trad('Enregistré ✓')} · ${fmtEUR(incomeTotal())} ${trad('/ mois')}`);
+  };
   $('#revClose').onclick = fermer;
   $('#modalClose').onclick = fermer;
 }

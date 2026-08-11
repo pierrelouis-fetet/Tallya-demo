@@ -4144,6 +4144,58 @@ function cashFlowBien(compte) {
   };
 }
 
+/* --- les premiers pas ----------------------------------------------------
+   Une application vide ne se devine pas. Chaque ecran portait bien son texte
+   d'ecran vide, mais aucun ne disait l'ORDRE, et c'est l'ordre qui manquait :
+   l'accueil, premier ecran ouvert, ne disait rien du tout, et un nouveau venu
+   pouvait tomber sur Projection avant d'avoir un seul compte, ou tenter de
+   saisir des depenses avant d'avoir un revenu a decouper.
+
+   Trois pas, dans cet ordre, et la raison de l'ordre :
+   - les comptes d'abord, parce qu'ils font le patrimoine, la repartition et
+     l'autonomie, soit la moitie des ecrans ;
+   - le revenu ensuite, parce que le budget n'a rien a partager sans lui — la
+     carte des flux le dit deja de son cote ;
+   - les depenses en dernier, parce qu'elles se comparent au revenu et qu'un
+     reste a vivre sans revenu ne veut rien dire.
+
+   L'etat de chaque pas se **derive des donnees**, jamais d'un drapeau pose a
+   part : un drapeau « premiers pas termines » aurait menti des le premier import
+   ou la premiere restauration de sauvegarde. Et l'invite disparait d'elle-meme
+   le jour ou le pas est franchi, sans que rien ne l'eteigne.
+
+   La forme, elle, est celle qui existait deja pour le revenu : un bouton et une
+   phrase courte, posee dans la carte qui manque de la donnee. Pas de panneau
+   d'accueil central — il renverrait ailleurs, quand cette application fait
+   plutot que de renvoyer, et il doublerait les textes d'ecran vide deja ecrits.
+   Chaque ecran ne reclame que ce qui lui manque, et l'ordre se lit alors tout
+   seul : l'accueil demande les comptes, le budget le revenu puis les charges. */
+const PREMIERS_PAS = [
+  { cle: 'comptes',
+    quoi: 'Ajoute un compte pour commencer : une banque, un livret, un compte de '
+        + 'courtage ou un bien. C’est d’eux que viennent ton patrimoine, ta '
+        + 'répartition et ton autonomie.',
+    bouton: 'Entrer tes comptes', action: 'ajouter-compte',
+    fait: () => comptesOuverts().length > 0 },
+  { cle: 'revenus',
+    quoi: 'Sans revenu déclaré, cette carte n’a pas de total à partager.',
+    bouton: 'Entrer ton salaire', action: 'toggle-revenus',
+    fait: () => (B().income || []).length > 0 },
+  /* Le texte est celui que l'ecran vide des charges fixes portait deja, et qui
+     etait le mieux ecrit des trois : il vient ici pour n'exister qu'une fois. */
+  { cle: 'depenses',
+    quoi: 'Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident '
+        + 'de ce qu’il te reste à vivre chaque mois.',
+    bouton: 'Entrer tes dépenses', action: 'add-charge',
+    fait: () => (B().fixedCharges || []).length > 0 || (B().expenses || []).length > 0 },
+];
+const PAS_PAR_CLE = Object.fromEntries(PREMIERS_PAS.map(p => [p.cle, p]));
+
+/* Le pas reste-t-il a faire ? La vue s'en sert pour n'afficher son invite que
+   la ou la donnee manque vraiment, et l'invite disparait d'elle-meme des que le
+   pas est franchi, sans que rien ne l'eteigne. */
+const pasAFaire = cle => !!PAS_PAR_CLE[cle] && !PAS_PAR_CLE[cle].fait();
+
 /* --- ce qu'un bien coute, poste par poste --------------------------------
    La taxe fonciere est due par tout proprietaire, la copropriete par qui detient
    un lot, et la provision pour travaux est celle que tout le monde oublie — or
@@ -5307,7 +5359,9 @@ function healthChecks() {
   const sum = sommeCibles();
   /* Aucune cible posée n'est pas une incohérence, c'est un réglage jamais
      fait : on ne réclame 100 % qu'à qui a commencé à en fixer. */
-  if (sum > 0 && Math.abs(sum - 100) > 0.05)
+  /* Et rien a repartir n'est pas non plus une incoherence : les cibles posees
+     par defaut ne concernent personne tant qu'aucun euro n'est place. */
+  if (sum > 0 && Math.abs(sum - 100) > 0.05 && patrimoine().brut > 0.005)
     add('warn', `Cibles d'allocation à ${fmtPct(sum, 1)}`,
       'La somme devrait faire 100 % pour que les montants cibles aient un sens', 'rebalance');
 
@@ -5352,8 +5406,12 @@ function healthChecks() {
      Le bouton « Snapshot du mois » n'existe plus : c'est le ⤒ de la ligne,
      allume sur le mois qui attend. Une consigne qui nomme un bouton absent est
      pire qu'une consigne vague. */
+  /* Rien a relever tant qu'il n'y a pas un compte : le releve reprend les
+     montants du jour, et un mois de zeros n'apprend rien a personne. Reclamer
+     une saisie a qui n'a encore rien saisi, c'est accueillir quelqu'un par une
+     liste de retards. */
   const relEnAttente = currentMonthPending();
-  if (relEnAttente.missing) {
+  if (relEnAttente.missing && comptesOuverts().length) {
     add('action', `${trad('Relevé de')} ${relEnAttente.label} ${trad('à enregistrer')}`,
       trad('Le bouton ⤒ de sa ligne y reprend tous les montants actuels'), 'history');
   }
@@ -5365,20 +5423,35 @@ function healthChecks() {
      2 aout, personne ne sait ce qu'aout coutera. `depensesEnAttente` porte cette
      regle, et le report avec. Ce controle visait le mois courant, et allumait
      donc une alerte du 1er au 31 sur un mois qu'on ne peut pas encore saisir. */
+  /* Meme garde, sur le revenu et non sur les charges : c'est lui qui donne un
+     cadre au mois — un montant depense ne veut rien dire sans un total a
+     comparer. Garder sur les charges aurait eteint le rappel chez quelqu'un qui
+     a un salaire et pas encore d'abonnements, ce qui est un cas courant et pas
+     un demarrage. */
   const depEnAttente = depensesEnAttente();
-  if (depEnAttente.missing)
+  if (depEnAttente.missing && !pasAFaire('revenus'))
     add('action', `Dépenses de ${depEnAttente.label} à saisir`,
       trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
 
   const f = budgetFrame();
-  if (f.available < f.target)
+  /* Sans revenu declare, « 1 000 € visés pour 0 € disponibles » compare un
+     objectif a un vide : le reste a vivre n'existe pas encore. */
+  if (f.income > 0 && f.available < f.target)
     add('error', 'Objectif de dépenses au-dessus du reste pour vivre',
       `${fmtEUR0(f.target)} visés pour ${fmtEUR0(f.available)} disponibles`, 'budget');
 
   sujet = 'budget';
   // --- épargne de précaution ---
+  /* « 0 mois d'autonomie, 0 € pour 0 € de coût mensuel » etait la caricature de
+     la regle que ce projet s'est donnee : la cloche ne parle que de ce qui existe
+     chez celui qui la regarde.
+
+     La garde ne porte pas sur `burn` : celui-ci retombe sur l'objectif de
+     depenses, pose par defaut, et vaut donc 1 000 EUR chez quelqu'un qui n'a
+     rien saisi. Elle porte sur le revenu declare, comme le rappel des depenses
+     et pour la meme raison — c'est lui qui donne un cadre aux mois. */
   const rw = runway();
-  if (rw.immediateMonths < 3)
+  if (!pasAFaire('revenus') && rw.burn > 0.005 && rw.immediateMonths < 3)
     /* Le montant cité est celui qui sert au calcul — le palier « disponible
        tout de suite ». Le message affichait `nowByGroup().cash`, qui compte
        aussi le cash posé chez un courtier : il annonçait donc une somme dont

@@ -1513,6 +1513,16 @@ const I18N = {
     "Loyer d’un bien immobilier ?": "Rent from a property?",
     "il entrera dans le cash-flow et le rendement de ce bien": "it will feed that asset's cash flow and yield",
     "Source supprimée": "Source deleted",
+
+    /* --- les premiers pas, et le prerequis des titres cotes --- */
+    "Entrer tes comptes": "Enter your accounts",
+    "Entrer ton salaire": "Enter your salary",
+    "Entrer tes dépenses": "Enter your spending",
+    "Ajoute un compte pour commencer : une banque, un livret, un compte de courtage ou un bien. C’est d’eux que viennent ton patrimoine, ta répartition et ton autonomie.": "Add an account to begin: a bank, a savings account, a brokerage account or an asset. They are where your wealth, your allocation and your runway come from.",
+    "Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident de ce qu’il te reste à vivre chaque mois.": "Add your rent, insurance and subscriptions: they are what decides how much you have left to live on each month.",
+    "Créer un compte-titres": "Create a brokerage account",
+    "Un titre se pose sur le compte qui le détient : commence par en créer un.": "A security sits on the account that holds it: start by creating one.",
+    "Ceux qui peuvent en porter :": "Those that can hold one:",
     "aucun, ce n’est pas lié à un bien": "none, this is not tied to an asset",
     "Le cash-flow et le rendement de": "The cash flow and yield of",
     "ne la compteront plus.": "will no longer count it.",
