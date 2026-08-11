@@ -5524,7 +5524,11 @@ function carteExploitation(c, idx) {
   return `
   <div class="card">
     <div class="card-head"><h2>${trad('Ce que ce bien rapporte, et ce qu’il coûte')}</h2>
-      <span class="hint">${fmtEUR0(cf.loyers)} ${trad('de loyer par mois')}</span>
+      <!-- Le loyer plein, celui que le locataire verse et que le budget compte,
+           et non le montant lisse par la vacance : le meme libelle donnait deux
+           chiffres sur le meme ecran, 688 en tete et 750 sur la ligne juste en
+           dessous. La vacance a sa propre ligne, c'est la qu'elle se lit. -->
+      <span class="hint">${fmtEUR0(cf.loyersPleins)} ${trad('de loyer par mois')}</span>
       ${boutonsRattachement(c)}</div>
     <dl class="kv">
       ${lignesDuMois(cf)}

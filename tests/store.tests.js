@@ -11482,6 +11482,27 @@ suite('Ce qu’un bien rapporte, sans embellir', () => {
     if (modif) modif(s);
   });
 
+  test('le même loyer donne le même montant sur les deux écrans', () => {
+    /* La regle du projet : « Liquidités » a deja valu deux choses differentes sur
+       deux pages, les deux totaux justes. Le loyer a failli refaire la faute deux
+       fois — la ligne de la carte affichait le montant lisse par la vacance,
+       l'en-tete aussi, quand le budget compte le loyer plein. La vacance a sa
+       propre ligne desormais, et c'est la qu'elle se lit. */
+    loue(s => { s.comptes.find(c => c.id === 'c_immo').moisLoues = 11; });
+    const cf = cashFlowBien(compteById('c_immo'));
+    const source = Store.state.budget.income.find(r => r.bienId === 'c_immo');
+    pres(cf.sourcesLoyer[0].mensuel, revenuMensuel(source),
+      'la ligne de la carte porte le montant du budget, pas un montant lissé');
+    pres(cf.loyersPleins, revenuMensuel(source), 'et le total des sources aussi');
+    pres(incomeTotal(), 3000 + revenuMensuel(source),
+      'le budget le compte une fois, rattaché à un bien ou pas');
+    const src = lireSource('assets/app.js');
+    const tete = src.slice(src.indexOf("trad('Ce que ce bien rapporte, et ce qu’il coûte')"),
+                           src.indexOf("trad('de loyer par mois')"));
+    vrai(/fmtEUR0\(cf\.loyersPleins\)/.test(tete),
+      'l’en-tête aussi : deux chiffres pour le loyer sur un même écran, c’est un de trop');
+  });
+
   test('un loyer annuel pèse un douzième, ici comme dans le budget', () => {
     Fixture.poser(s => {
       s.budget.income.push({ label: 'Loyer garage', amount: 7200, period: 'an', bienId: 'c_immo' });
