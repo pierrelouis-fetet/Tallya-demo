@@ -6235,11 +6235,32 @@ suite('Un patrimoine net négatif se dit, et ne se divise pas', () => {
   });
 
   test('l’application nomme la cause probable', () => {
+    /* Ce credit-ci est porte par l'etablissement qui tient le studio : il a donc
+       un bien en face, et la cause probable n'est pas un oubli mais un achat
+       finance a credit. Le detail de la distinction est teste dans « Un
+       patrimoine net négatif a deux causes » ; ici on verifie seulement qu'une
+       cause est nommee et qu'elle vise la bonne. */
     Fixture.poser(GROS_CREDIT);
     const n = healthChecks().find(x => /net négatif/.test(x.title));
     vrai(n, 'une alerte existe');
+    vrai(/après un achat/.test(n.title), 'et elle nomme la cause');
+    vrai(!/déclare ce bien/.test(n.detail),
+      'sans demander de déclarer un bien qui l’est déjà');
+  });
+
+  test('un crédit sans bien en face garde le ton de l’erreur', () => {
+    Fixture.poser(e => {
+      GROS_CREDIT(e);
+      /* Le meme montant, mais chez le courtier : plus rien en face. */
+      e.etabs.find(x => x.id === 'e_bien').dettes = [];
+      e.etabs.find(x => x.id === 'e_courtier').dettes = [
+        { id: 'd_maison', libelle: 'Crédit maison', montant: 400000, verifieLe: '2026-08-04' },
+      ];
+    });
+    const n = healthChecks().find(x => /net négatif/.test(x.title));
+    vrai(n, 'une alerte existe');
     eq(n.level, 'error', 'c’est une incohérence, pas une simple information');
-    vrai(/Crédit maison/.test(n.detail), 'elle nomme le plus gros crédit');
+    vrai(/Crédit maison/.test(n.detail), 'elle nomme le crédit');
     vrai(/déclare ce bien/.test(n.detail), 'et dit quoi faire');
   });
 
@@ -11673,8 +11694,12 @@ suite('La fiche pose la question de l’usage', () => {
     const versant = bloc.slice(bloc.indexOf('if (habite)'), bloc.indexOf('const baseDite'));
     vrai(/const sortie = cf\.charges \+ cf\.mensualite \+ cf\.impot - cf\.loyers/.test(versant),
       'la sortie du compte compte l’impôt, parce qu’il en sort');
-    vrai(/Impôt déclaré/.test(versant),
-      'et il s’affiche : un terme du total ne peut pas rester invisible');
+    /* Il s'affiche parmi les lignes du mois, partagees par les deux versants :
+       un terme du total ne peut pas rester invisible, et les deux cotes le
+       montrent par la meme fonction plutot que chacun de son cote. */
+    vrai(/\$\{lignesDuMois\(cf\)\}/.test(versant), 'le versant habité liste les mêmes pièces');
+    const pieces = src.slice(src.indexOf('function lignesDuMois'), src.indexOf('function ligneSource'));
+    vrai(/Impôt déclaré/.test(pieces), 'et l’impôt y figure');
   });
 
   test('un logement qui rapporte ne s’entend pas dire qu’il coûte zéro', () => {
@@ -11701,6 +11726,110 @@ suite('La fiche pose la question de l’usage', () => {
     /* Sans loyer, ils n'auraient aucun effet : les offrir serait du bruit. */
     vrai(/function reglagesExploitation\(c, idx, \{ apport = true \} = \{\}\)/.test(src),
       'et l’apport reste au seul écran où il sert, celui du rendement');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un patrimoine net negatif a deux causes, pas une
+   ------------------------------------------------------------------ */
+suite('Un patrimoine net négatif a deux causes', () => {
+
+  /* Neuf fois sur dix c'est une dette saisie sans son bien. Mais un achat
+     recent finance a 110 % donne le meme signe sans que rien ne soit faux, et
+     envoyer « declare ce bien » a qui vient de le declarer est faux. */
+
+  const alerte = () => healthChecks().find(n => /net négatif/i.test(n.title || ''));
+
+  test('un crédit sans bien en face reste une erreur, et nomme le crédit', () => {
+    Fixture.poser(s => {
+      /* La dette est portee par le courtier, qui n'heberge aucun bien. */
+      s.etabs.find(e => e.id === 'e_courtier').dettes.push(
+        { id: 'd_gros', libelle: 'Prêt sans bien', montant: 300000, note: '' });
+      s.etabs.find(e => e.id === 'e_bien').dettes = [];
+    });
+    vrai(patrimoine().net < 0, 'le fixture est bien en négatif');
+    const a = alerte();
+    vrai(a, 'l’alerte existe');
+    eq(a.level, 'error', 'et c’est une erreur : il manque une valeur');
+    vrai(/Prêt sans bien/.test(a.detail),
+      'elle nomme le crédit sans bien en face, pas simplement le plus gros');
+  });
+
+  test('un achat récent, bien déclaré, n’est plus peint en rouge', () => {
+    /* Le credit a finance les frais de notaire : 130 000 EUR dus sur un bien qui
+       en vaut 120 000. L'ecart est exact, et il se resorbe chaque mois. */
+    Fixture.poser(s => {
+      const d = s.etabs.find(e => e.id === 'e_bien').dettes[0];
+      d.montant = 260000;
+      d.mensualite = 1000;
+      d.taux = 3;
+    });
+    vrai(patrimoine().net < 0, 'le net est négatif');
+    const a = alerte();
+    vrai(a, 'l’alerte existe toujours : le chiffre ne se cache pas');
+    eq(a.level, 'info',
+      'mais ce n’est pas une erreur : crier au loup à chaque ouverture ne sert personne');
+    const txt = a.detail;
+    vrai(/normal après un achat/.test(a.title), 'le titre dit la cause probable');
+    vrai(!/déclare ce bien/.test(txt),
+      'et ne demande pas de déclarer un bien déjà déclaré');
+    /* Ce que le mois fait, sans annoncer de date : une date demanderait de parier
+       sur la valeur du bien. */
+    vrai(/de capital, et ton patrimoine net remonte d'autant/.test(txt),
+      'elle dit ce que chaque mensualité rembourse');
+    vrai(!/mois|ans/.test(txt.replace(/mensualité|premières années/g, '')),
+      'aucune date de retour à l’équilibre : elle serait un pari sur la valeur');
+  });
+
+  test('sans taux, elle demande le taux au lieu de compter zéro', () => {
+    Fixture.poser(s => {
+      const d = s.etabs.find(e => e.id === 'e_bien').dettes[0];
+      d.montant = 260000;
+      d.mensualite = 1000;
+      d.taux = null;
+    });
+    const txt = alerte().detail;
+    vrai(/Renseigne le taux/.test(txt),
+      'sans taux on ne sait pas départager capital et intérêts : mieux vaut le demander');
+  });
+
+  test('la valeur estimée dit ce qu’elle exclut', () => {
+    /* Deux champs voisins, l'un frais compris et l'autre pas : saisir ici le prix
+       paye frais compris surevalue le bien de ses frais de notaire. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("trad('Valeur estimée aujourd\\'hui (€)')");
+    vrai(i > 0, 'le champ doit être trouvable');
+    vrai(/frais de notaire exclus/.test(src.slice(i, i + 400)),
+      'son aide dit ce qu’elle exclut, comme celle du prix d’acquisition dit ce qu’elle inclut');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un seul signe moins dans toute l application
+   ------------------------------------------------------------------ */
+suite('Un seul signe moins', () => {
+
+  test('les formateurs rendent le signe moins, jamais le trait d’union', () => {
+    /* `Intl` rend « -13 500,00 € » avec un trait d'union ASCII, alors que
+       l'application ecrit ses negatifs a la main avec U+2212 : le meme ecran
+       portait les deux, le grand chiffre en tete et les dettes en dessous. */
+    Fixture.poser();
+    for (const [nom, txt] of [['fmtEUR', fmtEUR(-13500)], ['fmtEUR0', fmtEUR0(-13500)],
+                              ['fmtPct', fmtPct(-4.2)], ['fmtNombre', fmtNombre(-7)],
+                              ['fmtCur', fmtCur(-99, 'USD')]]) {
+      vrai(!txt.includes('-'), `${nom} rend un trait d’union : « ${txt} »`);
+      vrai(txt.includes('−'), `${nom} doit porter le signe moins : « ${txt} »`);
+    }
+    /* Les positifs ne gagnent pas de signe au passage. */
+    vrai(!/[-−]/.test(fmtEUR(13500)), 'et un montant positif reste sans signe');
+  });
+
+  test('le signe des formateurs est celui que les écrans écrivent à la main', () => {
+    const src = lireSource('assets/app.js');
+    /* Les dettes et les deltas s'ecrivent « −${fmtEUR(...)} » : le meme
+       caractere, sinon la coherence ne tient qu'a la chance. */
+    vrai(/−\$\{fmtEUR/.test(src), 'les écrans écrivent bien U+2212 devant leurs montants');
+    eq(fmtSigned(-100).charCodeAt(0), 8722, 'et fmtSigned aussi');
   });
 });
 
@@ -11788,6 +11917,148 @@ suite('Un montant n’a qu’un porteur', () => {
     const connus = valeursConnues('posteBien');
     vrai(connus.includes('Ravalement 2027'), 'ce qui a été tapé sur un bien revient');
     vrai(!connus.includes('Téléphone'), 'ce qui n’est pas rattaché à un bien reste dehors');
+  });
+
+  test('chaque ligne du mois porte sa source, et rien ne s’affiche sans porte', () => {
+    /* Un montant qui s'affiche sans porte pour le corriger oblige a chercher sa
+       source ailleurs, et rien a l'ecran ne dit ou : le loyer vit dans les
+       revenus, la taxe fonciere dans les charges fixes, la mensualite chez le
+       preteur. Le rang dans le budget voyage avec le montant. */
+    Fixture.poser(s => {
+      s.budget.income.push({ label: 'Loyer studio', amount: 7200, period: 'an', bienId: 'c_immo' });
+      s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 1200, period: 'an',
+                                   shares: {}, bienId: 'c_immo' });
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 400;
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    eq(cf.sourcesLoyer.length, 1, 'la source de loyer est listée, pas seulement sommée');
+    eq(cf.sourcesLoyer[0].i, Store.state.budget.income.length - 1,
+      'et elle porte son rang dans le budget : c’est lui qui ouvre la bonne fenêtre');
+    pres(cf.sourcesLoyer[0].mensuel, 600, 'au mois, comme partout ailleurs');
+    pres(cf.sourcesLoyer[0].montant, 7200, 'et le montant tel qu’il est saisi, pour le rappeler');
+    eq(cf.postesCharge.length, 1, 'la charge aussi');
+    eq(cf.postesCharge[0].i, Store.state.budget.fixedCharges.length - 1, 'avec son rang');
+    eq(cf.creditsListe.length, 1, 'et le crédit');
+    eq(cf.creditsListe[0].index, 0, 'avec son rang chez son établissement');
+    eq(cf.creditsListe[0].chargeIndex, null,
+      'sa mensualité se règle chez lui : aucune charge ne le rembourse');
+  });
+
+  test('la somme des lignes affichées fait le solde, vacance comprise', () => {
+    /* La regle du projet, appliquee a cette carte : un total egale la somme de
+       ses parts. La vacance etait la seule part a agir sans se montrer. */
+    Fixture.poser(s => {
+      s.budget.income.push({ label: 'Loyer', amount: 600, period: 'mois', bienId: 'c_immo' });
+      s.budget.fixedCharges.push({ label: 'Copropriété', amount: 100, period: 'mois',
+                                   shares: {}, bienId: 'c_immo' });
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = 400;
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.moisLoues = 11;
+      c.tauxImpot = 30;
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    const lignes = cf.sourcesLoyer.reduce((s, x) => s + x.mensuel, 0)
+      - cf.vacanceEuros
+      - cf.postesCharge.reduce((s, x) => s + x.mensuel, 0)
+      - cf.impot
+      - cf.creditsListe.reduce((s, x) => s + x.mensualite, 0);
+    pres(lignes, cf.cashFlow, 'à l’euro : rien ne se retire en coulisse');
+    pres(cf.vacanceEuros, 600 / 12, 'un mois de vacance sur douze');
+  });
+
+  test('la mensualité s’ouvre là où son montant se règle', () => {
+    /* Quand une charge fixe rembourse le credit, c'est elle qui detient le
+       montant : cliquer la ligne doit mener a la charge, pas au credit, sinon on
+       atterrit sur une fenetre qui n'offre plus ce champ. */
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes[0].mensualite = null;
+      s.budget.fixedCharges.push({ label: 'Prêt studio', amount: 400, period: 'mois',
+                                   shares: {}, creditId: 'd_pret' });
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    eq(cf.creditsListe[0].chargeIndex, Store.state.budget.fixedCharges.length - 1,
+      'la ligne pointe la charge qui porte la mensualité');
+    const src = lireSource('assets/app.js');
+    vrai(/action: x\.chargeIndex != null \? 'edit-charge' : 'editer-credit'/.test(src),
+      'et la vue choisit la fenêtre selon ce lien');
+  });
+
+  test('un loyer se modifie et se supprime depuis le bien qui le porte', () => {
+    /* Il ne s'editait qu'en place dans la page Budget : affiche sur la fiche de
+       son bien, il n'avait aucune porte. La fenetre est la seconde porte sur le
+       meme champ, pas un second champ. */
+    const src = lireSource('assets/app.js');
+    vrai(/async 'edit-income'\(btn\)/.test(src), 'la fenêtre existe');
+    const fn = src.slice(src.indexOf("async 'edit-income'"), src.indexOf("async 'del-income'"));
+    vrai(/budget\.income\.splice\(i, 1\)/.test(fn), 'elle supprime');
+    vrai(/cle: 'period'/.test(fn), 'elle porte la période, comme sa jumelle des charges');
+    vrai(/cle: 'bienId'/.test(fn), 'et le rattachement au bien');
+    vrai(/r\.label = v\.label/.test(fn) && /r\.amount = num\(v\.amount\)/.test(fn),
+      'elle écrit dans budget.income, la même case que les champs de la page');
+    /* La page Budget garde ses champs en place : c'est sa nature, on y saisit en
+       serie, et la fenetre ne doit pas les remplacer. */
+    vrai(/data-path="budget\.income\.\$\{i\}\.amount"/.test(src),
+      'les champs en place de la page Budget restent');
+  });
+
+  test('un crédit se renomme et se supprime depuis la fiche du bien', () => {
+    const src = lireSource('assets/app.js');
+    const fiche = src.slice(src.indexOf('function espaceBien'),
+                            src.indexOf('function boutonEnregistrerFiche'));
+    vrai(/data-action="editer-credit" data-etab=/.test(fiche),
+      'son nom ouvre sa fenêtre : renommer ne se faisait que depuis l’établissement');
+    const fn = src.slice(src.indexOf("async 'editer-credit'"), src.indexOf("async 'retirer-credit'"));
+    vrai(/cle: 'supprimer'/.test(fn), 'et la fenêtre porte la suppression');
+    vrai(/e\.dettes\.splice\(i, 1\)/.test(fn), 'qui retire vraiment la dette');
+    vrai(/patrimoine net/.test(fn),
+      'le toast dit la conséquence : une dette qui part fait monter le net');
+  });
+
+  test('aucune ligne de la carte n’affiche un montant sans porte', () => {
+    /* Le balayage qui compte : toute ligne de montant passe par `ligneSource`,
+       ou bien porte une aide qui dit ou le regler. Les deux exceptions sont
+       nommees ici, et ce sont des champs de la meme carte. */
+    const src = lireSource('assets/app.js');
+    /* La borne haute est `ligneSource` et non `carteExploitation` : c'est elle
+       qui pose le <dt> porteur du bouton, et l'inclure ferait compter la porte
+       elle-meme comme une ligne sans porte. */
+    const bloc = src.slice(src.indexOf('function lignesDuMois'),
+                           src.indexOf('function ligneSource'));
+    vrai(bloc.length > 400, 'la fonction doit être trouvable');
+    const litteraux = bloc.match(/<dt>[^\n]*/g) || [];
+    eq(litteraux.length, 2,
+      'deux lignes seulement s’écrivent à la main : les autres passent par ligneSource');
+    vrai(litteraux.every(l => /Vacance locative|Impôt déclaré/.test(l)),
+      'et ce sont la vacance et l’impôt, réglés par des champs de la même carte');
+    vrai(/Se règle par « Mois loués par an »/.test(bloc)
+      && /Se règle par « Impôt sur ce loyer »/.test(bloc),
+      'et elles le disent toutes les deux');
+  });
+
+  test('supprimer une ligne rattachée dit ce que ça emporte ailleurs', () => {
+    /* Un loyer supprime depuis la page Budget fait tomber le cash-flow et les
+       trois rendements de son bien, sur un ecran qu'on ne regarde pas a ce
+       moment-la. Une consequence a deux ecrans de distance se lit avant. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function makeDeleter'), src.indexOf('function optionsBiens'));
+    vrai(/item\.bienId \? compteById\(item\.bienId\) : null/.test(fn),
+      'la confirmation regarde si la ligne est rattachée à un bien');
+    vrai(/Le cash-flow et le rendement de/.test(fn), 'et nomme ce qui va tomber');
+    vrai(/item\.creditId/.test(fn) && /n’aura plus de mensualité/.test(fn),
+      'une charge qui rembourse un crédit le dit aussi : sa date de fin en dépend');
+  });
+
+  test('la liste des biens à rattacher porte ses accents', () => {
+    /* « aucun, ce n'est pas lie a un bien » s'affichait tel quel dans deux
+       fenetres. Les commentaires s'ecrivent sans accents, le texte affiche
+       jamais. `optionsBiens` vit dans app.js, que le harnais ne charge pas :
+       le controle se fait sur la source, comme les autres de cette famille. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function optionsBiens'), src.indexOf('function optionsBiens') + 260);
+    vrai(/lié à un bien/.test(fn), 'la première option porte ses accents');
+    vrai(!/lie a un bien/.test(src), 'et la version nue a disparu du fichier');
+    vrai(/trad\('aucun, ce n’est pas lié à un bien'\)/.test(fn),
+      'elle passe par trad, comme toute chaîne affichée');
   });
 
   test('une part hors bornes le dit au lieu d’être ignorée en silence', () => {

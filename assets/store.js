@@ -1208,10 +1208,22 @@ const masque = devise => `${OEIL_MASQUE} ${symboleDevise(devise)}`;
    l'objectif mensuel. Tout montant pose dans un attribut passe donc par ici. */
 const masqueTexte = devise => '••• ' + symboleDevise(devise);
 
+/* --- un seul signe moins dans toute l'application -----------------------
+   `Intl` rend « -13 500,00 € » avec un trait d'union ASCII, alors que
+   l'application ecrit ses negatifs a la main avec le vrai signe moins :
+   « −96 000,00 € » pour une dette, « −37 610 € » pour un ecart. Le meme ecran
+   portait donc les deux, le grand chiffre en tete avec le trait d'union et les
+   lignes en dessous avec le signe. L'ecart se voit : le trait d'union est plus
+   court, plus haut, et il ne s'aligne pas sur la barre du plus.
+
+   Le remplacement ne s'applique qu'aux formateurs de nombres, ou aucun tiret
+   n'est legitime — une date ou un identifiant passe par d'autres chemins. */
+const moinsTypographique = s => String(s).replace(/-/g, '−');
+
 const fmtEUR = (v, dec = 2) => montantsMasques ? masque('EUR')
-  : new Intl.NumberFormat(locale(), {
+  : moinsTypographique(new Intl.NumberFormat(locale(), {
       style: 'currency', currency: 'EUR', minimumFractionDigits: dec, maximumFractionDigits: dec,
-    }).format(num(v));
+    }).format(num(v)));
 
 const fmtEUR0 = v => fmtEUR(v, 0);
 
@@ -1224,10 +1236,10 @@ const fmtEUR0Texte = v => montantsMasques ? masqueTexte('EUR') : fmtEUR0(v);
 /* Un prix unitaire est libellé dans la devise de cotation, pas en euros.
    L'afficher avec un « € » revient à mentir sur le montant. */
 const fmtCur = (v, devise = 'EUR', dec = 2) => montantsMasques ? masque(devise)
-  : new Intl.NumberFormat(locale(), {
+  : moinsTypographique(new Intl.NumberFormat(locale(), {
       style: 'currency', currency: devise || 'EUR',
       minimumFractionDigits: dec, maximumFractionDigits: dec,
-    }).format(num(v));
+    }).format(num(v)));
 
 /* Le prix dans sa devise, suivi de sa contre-valeur si ce n'est pas l'euro. */
 function fmtCurEur(v, devise, taux) {
@@ -1237,14 +1249,14 @@ function fmtCurEur(v, devise, taux) {
 
 /* L'espace devant le signe est une regle typographique francaise. L'anglais
    le colle au nombre : « 12.50% ». */
-const fmtPct = (v, dec = 2) => new Intl.NumberFormat(locale(), {
+const fmtPct = (v, dec = 2) => moinsTypographique(new Intl.NumberFormat(locale(), {
   minimumFractionDigits: dec, maximumFractionDigits: dec,
-}).format(num(v)) + (enAnglais() ? '%' : ' %');
+}).format(num(v))) + (enAnglais() ? '%' : ' %');
 
 /* Un nombre sans unite, aux separateurs de la langue : « 1 250 » en francais,
    « 1,250 » en anglais, jamais « 1250 ». Les decimales ne s'affichent que si
    elles existent, une surface de 42 m2 ne s'ecrivant pas « 42,00 ». */
-const fmtNombre = v => num(v).toLocaleString(locale(), { maximumFractionDigits: 2 });
+const fmtNombre = v => moinsTypographique(num(v).toLocaleString(locale(), { maximumFractionDigits: 2 }));
 const fmtSigned = v => (v >= 0 ? '+' : '−') + fmtEUR(Math.abs(v), 0);
 const fmtSignedPct = (v, dec = 2) => (v >= 0 ? '+' : '−') + fmtPct(Math.abs(v), dec);
 
@@ -4038,9 +4050,16 @@ function cashFlowBien(compte) {
      loyer saisi a l'annee valait douze fois trop ici pendant que le budget
      affichait le bon chiffre. Le meme libelle doit donner le meme montant sur
      tous les ecrans. */
-  const loyersPleins = B().income
-    .filter(i => i.bienId === compte.id)
-    .reduce((s, i) => s + revenuMensuel(i), 0);
+  /* Les pieces, avec leur rang dans le budget, et pas seulement leur somme : une
+     ligne qui s'affiche sans porte pour la corriger oblige a chercher la source
+     ailleurs, et rien a l'ecran ne dit ou. Le rang est celui du budget, c'est lui
+     qui ouvre la bonne fenetre. */
+  const sourcesLoyer = B().income
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.bienId === compte.id)
+    .map(({ r, i }) => ({ i, label: r.label || trad('Loyer'), mensuel: revenuMensuel(r),
+                          periode: chargePeriode(r), montant: num(r.amount), estime: !!r.estime }));
+  const loyersPleins = sourcesLoyer.reduce((s, x) => s + x.mensuel, 0);
   /* Les credits de l'etablissement qui tient le bien : c'est la que la dette
      immobiliere vit, et un bien finance a credit a le sien. */
   const credits = (etabById(compte.etabId)?.dettes || []);
@@ -4052,9 +4071,22 @@ function cashFlowBien(compte) {
      Un credit d'un autre etablissement n'est pas concerne : sa mensualite
      n'entre pas dans le total ci-dessous, donc elle reste une charge. */
   const rembourses = new Set(credits.map(d => d.id));
-  const charges = B().fixedCharges
-    .filter(c => c.bienId === compte.id && !rembourses.has(c.creditId))
-    .reduce((s, c) => s + chargeMensuelle(c), 0);
+  const postesCharge = B().fixedCharges
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c.bienId === compte.id && !rembourses.has(c.creditId))
+    .map(({ c, i }) => ({ i, label: c.label || trad('Charge fixe'), mensuel: chargeMensuelle(c),
+                          periode: chargePeriode(c), montant: num(c.amount) }));
+  const charges = postesCharge.reduce((s, x) => s + x.mensuel, 0);
+  /* Chaque credit avec de quoi l'ouvrir, et l'endroit ou sa mensualite se regle :
+     chez la charge qui le rembourse quand il y en a une, sinon chez lui. Deux
+     portes sur un meme montant sont saines, deux montants ne le sont pas. */
+  const idxEtab = ETABS().findIndex(e => e.id === compte.etabId);
+  const creditsListe = credits.map((d, index) => {
+    const lien = chargeDuCredit(d.id);
+    return { etabId: compte.etabId, idxEtab, index, id: d.id,
+             libelle: d.libelle || trad('Crédit'), mensualite: mensualiteCredit(d),
+             reste: num(d.montant), chargeIndex: lien ? lien.index : null };
+  });
   const mensualite = credits.reduce((s, d) => s + mensualiteCredit(d), 0);
   const reste = credits.reduce((s, d) => s + num(d.montant), 0);
   /* La part de capital de la prochaine mensualite : ce que le mois ajoute au
@@ -4094,6 +4126,10 @@ function cashFlowBien(compte) {
   return {
     loyers, loyersPleins, moisLoues, vacance, charges, mensualite, impot, tauxImpot,
     reste, valeur, achat, base, surAchat, capitalMois,
+    sourcesLoyer, postesCharge, creditsListe,
+    /* Ce que la vacance retire, en euros : l'ecran additionne des lignes, et une
+       part invisible casserait l'egalite entre le total et la somme des parts. */
+    vacanceEuros: loyersPleins - loyers,
     /* Le cash-flow : ce qui reste sur le compte en fin de mois, une fois le
        credit paye. Negatif est normal les premieres annees, et c'est justement
        le chiffre qu'il faut connaitre. */
@@ -5151,17 +5187,54 @@ function healthChecks() {
 
      Elle ne triche pas avec le chiffre : il reste ce qu'il est. Elle nomme la
      cause la plus probable, et l'écart exact à combler. */
+  /* Deux causes, deux messages, et le niveau suit.
+
+     Un achat recent finance souvent les frais de notaire par le credit : le
+     capital emprunte depasse alors la valeur du bien, et le net est negatif
+     pendant des mois sans que rien ne soit faux. Envoyer « declare ce bien » a
+     quelqu'un qui vient de le declarer est faux et inquietant, et le peindre en
+     rouge a chaque ouverture, c'est crier au loup — la meme faute que peindre
+     une echeance en retard le lendemain de sa date.
+
+     Le partage se fait sur un fait verifiable : le credit a-t-il un bien en
+     face, chez le meme etablissement ? C'est la ou le modele range la dette
+     immobiliere, donc c'est la que la question se pose.
+
+     Aucune projection ici. On dit ce que le mois fait — la part de capital
+     remboursee fait remonter le net d'autant — sans annoncer de date : elle
+     demanderait de parier sur la valeur du bien, et ce projet s'y refuse. */
   {
     const p = patrimoine();
     if (p.net < 0 && p.dettes > 0) {
-      const cr = creditsEnCours().lignes.sort((a, b) => b.reste - a.reste)[0];
-      add('error', 'Patrimoine net négatif',
-        `Tes crédits (${fmtEUR0(p.dettes)}) dépassent tes avoirs (${fmtEUR0(p.brut)}) `
-        + `de ${fmtEUR0(-p.net)}. Si l'un d'eux finance un bien`
-        + (cr ? ` (le plus gros est « ${cr.libelle} », ${fmtEUR0(cr.reste)})` : '')
-        + `, déclare ce bien : sa valeur doit figurer dans tes avoirs, sinon seule `
-        + `la dette compte. Un crédit immobilier sans son logement fait plonger le net.`,
-        'accounts');
+      const lignes = creditsEnCours().lignes.slice().sort((a, b) => b.reste - a.reste);
+      const adosse = cr => comptesBiens().some(c => c.etabId === cr.etabId);
+      const orphelins = lignes.filter(cr => !adosse(cr));
+      if (orphelins.length) {
+        const cr = orphelins[0];
+        add('error', 'Patrimoine net négatif',
+          `Tes crédits (${fmtEUR0(p.dettes)}) dépassent tes avoirs (${fmtEUR0(p.brut)}) `
+          + `de ${fmtEUR0(-p.net)}. Si l'un d'eux finance un bien`
+          + ` (le plus gros sans bien en face est « ${cr.libelle} », ${fmtEUR0(cr.reste)})`
+          + `, déclare ce bien : sa valeur doit figurer dans tes avoirs, sinon seule `
+          + `la dette compte. Un crédit immobilier sans son logement fait plonger le net.`,
+          'accounts');
+      } else {
+        /* Somme des parts de capital des prochaines echeances : ce que le mois
+           ajoute vraiment au net. `capital` vaut null sans taux connu, et le
+           message le dit alors autrement plutot que de compter zero. */
+        const capital = lignes.reduce((s, cr) => s + (cr.capital || 0), 0);
+        add('info', 'Patrimoine net négatif, et c’est normal après un achat',
+          `Tes biens valent ${fmtEUR0(p.brut)} et il te reste ${fmtEUR0(p.dettes)} à `
+          + `rembourser : l'écart fait ${fmtEUR0(-p.net)}. C'est l'état ordinaire des `
+          + `premières années d'un achat à crédit, surtout quand le prêt a financé les `
+          + `frais de notaire, qui ne se revendent pas.`
+          + (capital > 0.005
+            ? ` Chaque mensualité rembourse ${fmtEUR0(capital)} de capital, et ton `
+              + `patrimoine net remonte d'autant.`
+            : ` Renseigne le taux de tes crédits pour voir ce que chaque mensualité `
+              + `rembourse en capital : c'est ce montant qui fait remonter ton net.`),
+          'accounts');
+      }
     }
   }
 

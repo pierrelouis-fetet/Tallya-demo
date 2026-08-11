@@ -5379,12 +5379,79 @@ function boutonsRattachement(c) {
               title="${esc(chargesProposees(c).map(([l]) => trad(l)).join(', '))}">${trad('+ Charge')}</button>`;
 }
 
+/* Une ligne de la carte d'exploitation, avec la porte vers sa source.
+
+   Le nom porte l'action plutot qu'un crayon a cote : c'est le nom qu'on lit et
+   qu'on veut corriger, et un second element a viser sur un telephone est un
+   second element a manquer. `.lien-nu` existe pour ca — un vrai bouton, puisque
+   ce n'est pas une navigation, qui n'en garde que le souligne.
+
+   Un montant qui s'affiche sans porte pour le corriger oblige a chercher sa
+   source ailleurs, et rien a l'ecran ne dit ou : le loyer vit dans les revenus
+   du budget, la taxe fonciere dans les charges fixes, la mensualite chez le
+   preteur. La fenetre ouverte est celle du budget, la meme : deux portes sur un
+   meme champ sont saines, deux champs pour un meme montant ne le sont pas. */
+/* Les lignes du mois, communes aux deux versants : leur somme fait le solde, et
+   ce solde est le meme nombre des deux cotes — « Cash-flow » ou « Sortie du
+   compte » selon la question posee, jamais deux calculs. */
+function lignesDuMois(cf) {
+  const periodeDite = p => p !== 'mois' ? trad(CHARGE_PERIODE_LABEL[p]) : '';
+  return [
+    ...cf.sourcesLoyer.map(s => ligneSource({
+      nom: s.label, montant: s.mensuel, signe: 1,
+      action: 'edit-income', donnees: { i: s.i },
+      sub: [s.periode !== 'mois' ? `${fmtEUR0(s.montant)} ${periodeDite(s.periode)}` : '',
+            s.estime ? trad('estimé') : ''].filter(Boolean).join(' · '),
+    })),
+    /* La vacance n'a pas de source a ouvrir : elle se regle par « Mois loues par
+       an », au bas de cette carte. Elle s'affiche quand meme, parce qu'elle
+       retire des euros et qu'une part invisible casserait l'egalite entre le
+       total et la somme de ses parts. */
+    cf.vacanceEuros > 0.005 ? `
+      <dt>${trad('Vacance locative')}${aide(trad("Les mois où le bien n'est pas loué, lissés sur l'année. Se règle par « Mois loués par an », au bas de cette carte."))}
+        <span class="sub">${fmtNombre(cf.moisLoues)} ${trad('mois loués sur 12')}</span></dt>
+        <dd class="dette">−${fmtEUR(cf.vacanceEuros)} ${trad('/ mois')}</dd>` : '',
+    ...cf.postesCharge.map(p => ligneSource({
+      nom: p.label, montant: p.mensuel, signe: -1,
+      action: 'edit-charge', donnees: { i: p.i },
+      sub: p.periode !== 'mois' ? `${fmtEUR0(p.montant)} ${periodeDite(p.periode)}` : '',
+    })),
+    cf.impot ? `
+      <dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte."))}
+        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
+        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : '',
+    /* La mensualite s'ouvre la ou son montant se regle : chez la charge qui
+       rembourse le credit quand il y en a une, sinon chez le credit. */
+    ...cf.creditsListe.filter(x => x.mensualite > 0.005).map(x => ligneSource({
+      nom: x.libelle, montant: x.mensualite, signe: -1,
+      action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
+      donnees: x.chargeIndex != null ? { i: x.chargeIndex } : { etab: x.etabId, i: x.index },
+      sub: trad('mensualité du crédit'),
+    })),
+  ].filter(Boolean).join('');
+}
+
+function ligneSource({ nom, montant, signe, action, donnees, sub = '', aideTxt = '' }) {
+  const attrs = Object.entries(donnees).map(([k, v]) => `data-${k}="${esc(String(v))}"`).join(' ');
+  return `
+      <dt><button type="button" class="lien-nu" data-action="${esc(action)}" ${attrs}
+                  title="${trad('Modifier ou supprimer')}">${esc(nom)}</button>${aideTxt ? aide(aideTxt) : ''}
+        ${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</dt>
+        <dd class="${signe > 0 ? 'up' : 'dette'}">${signe > 0 ? '+' : '−'}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
+}
+
 /* Ce que ce bien fait chaque mois : il rapporte, ou il coute.
 
    Le meme logement ne pose pas la meme question selon son usage, et la carte
    n'en posait qu'une. Rattacher sa taxe fonciere a sa propre maison suffisait a
    declencher « Rendement brut 0,00 % » : le garde-fou testait l'absence de
    loyer ET de charge, or une residence principale a des charges.
+
+   Les pieces se listent nommees, au lieu d'un « Loyer perçu » et d'un « Charges
+   rattachees » qui sommaient sans dire quoi. Deux raisons : le nom qu'on a donne
+   en dit plus que la categorie, et chaque ligne porte alors sa propre porte. La
+   somme des lignes affichees fait le cash-flow, a l'euro — la vacance comprise,
+   qui etait la seule part a agir sans se montrer.
 
    Deux chiffres separes et jamais un seul agrege pour dire le mois : la
    tresorerie baisse pendant que le patrimoine monte, les deux sont vrais, et
@@ -5435,17 +5502,8 @@ function carteExploitation(c, idx) {
       <span class="hint">${esc(trad(USAGE_BIEN_LABEL[usage]).toLowerCase())}</span>
       ${boutonsRattachement(c)}</div>
     <dl class="kv">
-      ${cf.loyers ? `<dt>${trad('Loyer perçu')}${aide(trad("Une chambre louée, un garage, un bail partiel : ce qui rentre vient en déduction de ce que le logement te coûte."))}
-        ${cf.vacance ? `<span class="sub">${fmtEUR0(cf.loyersPleins)} ${trad('sur')} ${fmtNombre(cf.moisLoues)} ${trad('mois loués')}</span>` : ''}</dt>
-        <dd class="up">+${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>` : ''}
-      ${cf.charges ? `<dt>${trad('Charges rattachées')}${aide(trad("Taxe foncière, copropriété, assurance : les charges fixes que tu as rattachées à ce bien, ramenées au mois."))}</dt>
-        <dd class="dette">−${fmtEUR(cf.charges)} ${trad('/ mois')}</dd>` : ''}
-      ${cf.impot ? `<dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée."))}
-        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
-        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : ''}
-      ${cf.mensualite ? `<dt>${trad('Mensualité du crédit')}</dt>
-        <dd class="dette">−${fmtEUR(cf.mensualite)} ${trad('/ mois')}</dd>` : ''}
-      <dt><b>${trad('Sortie du compte')}</b></dt>
+      ${lignesDuMois(cf)}
+      <dt><b>${trad('Sortie du compte')}</b>${aide(trad("La somme des lignes au-dessus. Chacune s'ouvre par son nom, pour la corriger ou la supprimer."))}</dt>
         <dd class="${cls(-sortie)}"><b>${fmtSigned(-sortie)} ${trad('/ mois')}</b></dd>
       ${reel != null ? `
       <dt>${trad('Dont capital remboursé')}${aide(trad("Cette part de la mensualité ne part pas : elle passe de ton compte à tes murs. C'est de l'épargne forcée, et c'est pour ça que ton patrimoine monte le mois même où ta trésorerie baisse."))}</dt>
@@ -5469,19 +5527,10 @@ function carteExploitation(c, idx) {
       <span class="hint">${fmtEUR0(cf.loyers)} ${trad('de loyer par mois')}</span>
       ${boutonsRattachement(c)}</div>
     <dl class="kv">
-      <dt>${trad('Loyer perçu')}${cf.vacance ? aide(trad("Lissé sur l'année : le loyer plein multiplié par tes mois loués, divisé par douze.")) : ''}
-        ${cf.vacance ? `<span class="sub">${fmtEUR0(cf.loyersPleins)} ${trad('sur')} ${fmtNombre(cf.moisLoues)} ${trad('mois loués')}</span>` : ''}</dt>
-        <dd class="up">+${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>
-      ${cf.charges ? `<dt>${trad('Charges rattachées')}${aide(trad("Taxe foncière, copropriété, assurance propriétaire non occupant : les charges fixes que tu as rattachées à ce bien, ramenées au mois."))}</dt>
-        <dd class="dette">−${fmtEUR(cf.charges)} ${trad('/ mois')}</dd>` : ''}
-      ${cf.impot ? `<dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée."))}
-        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
-        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : ''}
-      ${cf.mensualite ? `<dt>${trad('Mensualité du crédit')}</dt>
-        <dd class="dette">−${fmtEUR(cf.mensualite)} ${trad('/ mois')}</dd>` : ''}
+      ${lignesDuMois(cf)}
       <!-- Negatif est normal les premieres annees d'un credit, et c'est justement
            ce qu'il faut savoir : la couleur le dit sans le juger. -->
-      <dt><b>${trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
+      <dt><b>${trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
         <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
       ${cf.capitalMois ? `<dt>${trad('En patrimoine, le même mois')}${aide(trad("La part de capital de ta mensualité : elle quitte ta trésorerie et rejoint tes murs. Les deux lignes ne s'additionnent pas, elles répondent à deux questions différentes."))}</dt>
         <dd class="up"><b>+${fmtEUR(cf.capitalMois)} ${trad('/ mois')}</b></dd>` : ''}
@@ -5534,7 +5583,12 @@ function espaceBien(c, idx, t) {
           <input data-action-change="renommer-bien" data-compte="${esc(c.id)}"
                  value="${esc(l.libelle || '')}" placeholder="${trad('ex. Studio Lyon 3e')}"></div>
         <div class="grid g-2">
-          <div class="field"><label>${trad('Valeur estimée aujourd\'hui (€)')}</label>
+          <!-- Deux champs voisins, l'un frais compris et l'autre pas, et un seul
+               le disait. La confusion a une consequence chiffree : saisir ici le
+               prix paye frais compris surevalue le bien de ses frais de notaire,
+               qui sont partis en taxes et ne se revendent pas. C'est aussi ce qui
+               explique qu'un achat recent affiche un patrimoine net negatif. -->
+          <div class="field"><label>${trad('Valeur estimée aujourd\'hui (€)')}${aide(trad("Ce qu'un acheteur te paierait aujourd'hui, frais de notaire exclus : ceux-là sont partis en taxes le jour de l'achat et ne se revendent pas. C'est pour ça qu'un achat récent financé à crédit peut afficher un patrimoine net négatif, sans que rien ne soit faux."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.valeur" value="${num(l.valeur)}"></div>
           <div class="field"><label>Prix d'acquisition (€)${aide(trad("Frais de notaire et travaux compris si tu veux que la plus-value affichée soit la vraie."))}</label>
@@ -5625,7 +5679,13 @@ function espaceBien(c, idx, t) {
       return `
       <div class="pret">
         <div class="bien-tete">
-          <span class="cpt-nom">${esc(d.libelle)}
+          <!-- Le nom ouvre la fenetre du credit : renommer et supprimer ne se
+               faisaient que depuis la fiche de l'etablissement, un ecran qu'on
+               n'ouvre pas quand on regarde son bien. Les champs de montant
+               restent en place juste dessous, ils se corrigent chaque mois. -->
+          <span class="cpt-nom"><button type="button" class="lien-nu"
+                  data-action="editer-credit" data-etab="${esc(c.etabId)}" data-i="${i}"
+                  title="${trad('Renommer, corriger ou supprimer')}">${esc(d.libelle)}</button>
             ${(() => {
               /* L'organisme prêteur rejoint la mensualité sous le libellé :
                  « Crédit Agricole · 1 186 € par mois ». Les deux sont
@@ -7746,7 +7806,29 @@ function makeDeleter(listKey, what, nameOf) {
     const item = list[i];
     if (!item) return;
     const nom = String(nameOf(item) || '').trim();
+    /* Ce que la suppression emporte ailleurs.
+
+       Un loyer rattache a un bien alimente son cash-flow et ses trois
+       rendements ; une charge qui rembourse un credit lui donne sa mensualite,
+       donc sa date de fin et sa part de capital. Supprimer la ligne fait tomber
+       tout cela, sur un ecran qu'on ne regarde pas a ce moment-la : une
+       consequence a deux ecrans de distance doit se lire avant, pas se
+       decouvrir apres. */
+    const suites = [];
+    const bien = item.bienId ? compteById(item.bienId) : null;
+    if (bien) {
+      suites.push(`${trad('Le cash-flow et le rendement de')} « ${nomCompteV2(bien)} » ${
+        trad('ne la compteront plus.')}`);
+    }
+    if (item.creditId) {
+      const cr = creditsEnCours().lignes.find(x => x.id === item.creditId);
+      if (cr) {
+        suites.push(`« ${cr.libelle} » ${trad('n’aura plus de mensualité : sa date de fin '
+          + 'et la part de capital de chaque échéance cesseront de se calculer.')}`);
+      }
+    }
     if (!await askConfirm(`Supprimer ${what}${nom ? ` « ${nom} »` : ', qui n’a pas de nom'} ?\n\n`
+      + (suites.length ? `${suites.join(' ')}\n\n` : '')
       + `Cette action est réversible avec Ctrl+Z, et une sauvegarde du jour existe dans l'onglet Données.`)) return;
     list.splice(i, 1);
     Store.save(); render(); toast(trad('Ligne supprimée'));
@@ -7766,7 +7848,7 @@ function makeDeleter(listKey, what, nameOf) {
    charges peuvent viser le meme bien — une taxe fonciere et une copropriete le
    font — donc pas de garde d'unicite ici, contrairement aux credits. */
 function optionsBiens() {
-  return [['', 'aucun, ce n’est pas lie a un bien'],
+  return [['', trad('aucun, ce n’est pas lié à un bien')],
     ...comptesBiens().map(c => [c.id, nomCompteV2(c)])];
 }
 
@@ -9292,9 +9374,24 @@ const ACTIONS = {
           type: 'case', valeur: true,
           aide: trad('seulement si une mensualité est renseignée : elle entrera dans ton ')
               + 'budget sous ce nom, et suivra le capital restant dû' }]),
+        /* La suppression vit ici, avec la modification : le credit ne s'effaçait
+           que depuis la fiche de l'etablissement qui le porte, un ecran qu'on
+           n'ouvre pas quand on regarde son bien. Meme case que chez les charges
+           fixes, meme phrase. */
+        { cle: 'supprimer', label: trad('Supprimer ce crédit'), type: 'case',
+          aide: `${trad('Le patrimoine net remontera de')} ${fmtEUR0(num(d.montant))}. ${
+            trad('Réversible avec Ctrl+Z.')}` },
       ],
     });
     if (!v) return;
+    if (v.supprimer) {
+      const nom = d.libelle || trad('Crédit');
+      const rendu = num(d.montant);
+      e.dettes.splice(i, 1);
+      Store.save(); render();
+      toast(`« ${nom} » ${trad('supprimé')} · ${trad('patrimoine net')} +${fmtEUR0(rendu)}`);
+      return;
+    }
     const avant = num(d.montant);
     d.libelle = v.libelle || d.libelle;
     d.montant = num(v.montant);
@@ -9828,6 +9925,58 @@ const ACTIONS = {
     Store.save(); render(); rafraichirRevenus();
     toast(`« ${v.label} » ${trad('ajoutée aux revenus')}`);
   },
+  /* Une source de revenu, modifiable depuis ailleurs que la page Budget.
+
+     Elle ne s'editait qu'en place, dans la liste des revenus : un loyer affiche
+     sur la fiche de son bien n'avait donc aucune porte, et rien a l'ecran ne
+     disait ou aller le corriger. La page Budget garde ses champs en place, c'est
+     sa nature — on y saisit en serie. Cette fenetre est la seconde porte sur le
+     meme champ, pas un second champ : les deux ecrivent `budget.income[i]`.
+
+     Meme forme que sa jumelle des charges fixes, case de suppression comprise :
+     deux fenetres qui font le meme geste sur deux listes voisines n'ont pas de
+     raison de se ressembler a moitie. */
+  async 'edit-income'(btn) {
+    const i = +btn.dataset.i;
+    const r = Store.state.budget.income[i];
+    if (!r) return;
+    const v = await askForm({
+      titre: r.label || trad('Source de revenu'),
+      sous: chargePeriode(r) === 'mois'
+        ? trad('Le montant se saisit tel qu’il est perçu')
+        : `${trad('Perçu')} ${trad(CHARGE_PERIODE_LABEL[chargePeriode(r)])}, ${trad('soit')} ${
+            fmtEUR(revenuMensuel(r))} ${trad('par mois dans le budget')}`,
+      ok: 'Enregistrer',
+      champs: [
+        { cle: 'label', label: 'Source', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
+          valeur: r.label || '', suggestions: valeursConnues('source') },
+        { cle: 'amount', label: 'Montant', type: 'nombre', valeur: num(r.amount) },
+        { cle: 'period', label: 'Perçu', type: 'liste', options: CHARGE_PERIODES,
+          valeur: chargePeriode(r) },
+        ...(comptesBiens().length || r.bienId ? [{ cle: 'bienId', type: 'liste',
+          label: trad('Loyer d’un bien immobilier ?'), options: optionsBiens(),
+          valeur: r.bienId || '',
+          aide: trad('il entrera dans le cash-flow et le rendement de ce bien') }] : []),
+        { cle: 'estime', label: trad(' montant estimé'), type: 'case', valeur: !!r.estime,
+          aide: trad('un revenu variable déclaré en moyenne : les écrans qui s’en servent le diront') },
+        { cle: 'supprimer', label: trad('Supprimer cette source'), type: 'case',
+          aide: trad('La ligne disparaît en validant. Réversible avec Ctrl+Z') },
+      ],
+    });
+    if (!v) return;
+    if (v.supprimer) {
+      Store.state.budget.income.splice(i, 1);
+      Store.save(); render();
+      toast(r.label ? `« ${r.label} » ${trad('supprimée')}` : trad('Source supprimée'));
+      return;
+    }
+    r.label = v.label; r.amount = num(v.amount); r.period = v.period;
+    r.estime = !!v.estime;
+    if (v.bienId !== undefined) r.bienId = v.bienId || null;
+    Store.save(); render();
+    toast(`« ${r.label} » · ${fmtEUR(revenuMensuel(r))} ${trad('/ mois')}`);
+  },
+
   /* Meme retour que pour l'ajout : la demande de confirmation ferme la
      fenetre des revenus, on la rouvre une fois la reponse donnee. */
   async 'del-income'(btn) {
