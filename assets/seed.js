@@ -300,18 +300,27 @@ function blankState() {
     targets: { coreEtf: 70, satellites: 20, gold: 5, cashToInvest: 5 },
     strategy: structuredClone(SEED_STRATEGY),
     accountTypes: structuredClone(SEED_ACCOUNT_TYPES),
-    accounts: [
-      { id: 'compteCourant', label: 'Current account', short: 'Current',
-        group: 'cash', type: 'banque', broker: '' },
-      { id: 'livret', label: 'Livret', short: 'Livret',
-        group: 'cash', type: 'banque', broker: '' },
-    ],
+    /* Aucune ligne de donnee, et c'est tout le sujet de cet etat.
+
+       Il posait un compte courant, un livret, un « Salaire 0 € » et un
+       « Loyer 0 € » : des exemples deguises en donnees. Personne ne saisit
+       « Salaire 0 € » — on saisit son salaire — et le cout se payait ailleurs.
+       Ces quatre lignes vides faisaient croire a l'application qu'elle etait
+       configuree : les invites de premiers pas ne s'affichaient donc jamais, les
+       rappels reclamaient un releve et des depenses a quelqu'un qui n'avait
+       aucun compte, et la page Actifs ouvrait sur deux comptes a zero rattaches
+       a rien.
+
+       Ce qui reste est de la structure, pas de la donnee : les douze mois du
+       calendrier, les categories de depenses, les types de compte, les cibles.
+       Un tableau vide se remplit ; un exemple a zero se confond avec un fait. */
+    accounts: [],
     budget: {
       monthlyTarget: 0,
       categories: [...EXPENSE_CATEGORIES],
-      income: [{ label: 'Salaire', amount: 0 }],
+      income: [],
       contributors: [],
-      fixedCharges: [{ label: 'Loyer', amount: 0, shares: {}, provider: '' }],
+      fixedCharges: [],
       toReview: [],
       supplements: [],
       /* Le journal des rentrees exceptionnelles : un heritage, une prime, la

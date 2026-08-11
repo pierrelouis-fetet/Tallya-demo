@@ -4129,9 +4129,13 @@ suite('Un cours dit de quand il date', () => {
 suite('Ce que la cloche annonce', () => {
 
   /* Un état qui réclame les deux saisies : aucun relevé, aucune dépense. */
+  /* L'historique du fixture reste : il s'arrete en fevrier, donc le mois courant
+     et le mois clos manquent deja et les deux rappels s'allument d'eux-memes.
+     Le vider serait simuler un premier lancement — et depuis que les rappels se
+     taisent sur une application qui n'a jamais servi, c'est ce qui se passait :
+     ces trois controles-ci portent sur le report et l'expiration, pas sur
+     l'accueil d'un nouveau venu. */
   const enRetard = () => Fixture.poser(e => {
-    e.monthly = [];
-    e.budget.expenses = [];
     e.meta.rappelsMasques = {};
     e.meta.notifsMasquees = [];
     e.meta.notifsReglages = {};
@@ -4305,7 +4309,7 @@ suite('Rappels de saisie', () => {
   });
 
   test('les deux rappels sont indépendants', () => {
-    Fixture.poser(e => { e.monthly = []; e.budget.expenses = []; });
+    Fixture.poser();
     masquerRappel('releve', moisCourant());
     eq(currentMonthPending().missing, false, 'le relevé se tait');
     eq(depensesEnAttente().missing, true, 'les dépenses continuent de réclamer');
@@ -4349,7 +4353,7 @@ suite('Rappels de saisie', () => {
     /* Un etat ecrit avant le report ne porte que des cles de mois : il doit
        continuer de se taire, sinon la mise a jour rallume tous les rappels
        que l'on avait eteints. */
-    Fixture.poser(e => { e.monthly = []; e.budget.expenses = []; });
+    Fixture.poser();
     masquerRappel('releve', currentMonthKey());
     auJour('2026-08-04', () => reporterRappel('depenses'));
     auJour('2026-08-04', () => {
@@ -11861,6 +11865,34 @@ suite('Une application vide dit quoi faire', () => {
     s.budget.income = []; s.budget.fixedCharges = []; s.budget.expenses = [];
   });
 
+  test('un premier lancement ne pose aucune ligne de données', () => {
+    /* Il posait un compte courant, un livret, un « Salaire 0 € » et un
+       « Loyer 0 € » : des exemples deguises en donnees, qui faisaient croire a
+       l'application qu'elle etait configuree. Aucune invite ne s'affichait, les
+       rappels reclamaient un releve a qui n'avait aucun compte, et la page Actifs
+       ouvrait sur deux comptes a zero rattaches a rien. */
+    Store.state = blankState();
+    Store.migrate();
+    refreshAccounts();
+    eq(Store.state.budget.income.length, 0, 'aucun revenu d’exemple');
+    eq(Store.state.budget.fixedCharges.length, 0, 'aucune charge d’exemple');
+    eq(comptesOuverts().filter(c => !typeCompte(c.type).interne).length, 0,
+      'aucun compte que personne n’a créé');
+    /* Ce qui reste est de la structure : le calendrier, les categories. */
+    eq(Store.state.budget.expenses.length, 12, 'les douze mois du calendrier restent');
+    vrai(Store.state.budget.categories.length > 0, 'et les catégories de dépenses');
+    /* Les trois pas restent donc a faire, et les rappels se taisent. */
+    for (const cle of ['comptes', 'revenus', 'depenses']) {
+      vrai(pasAFaire(cle), `« ${cle} » reste à faire sur un premier lancement`);
+    }
+    /* Le releve, lui, ne se reclame pas encore : sans compte, il n'y a rien a
+       photographier, et l'annoncer enverrait vers un geste impossible. */
+    vrai(!pasAFaire('releves'), 'le relevé attend qu’un compte existe');
+    eq(currentMonthPending().missing, false, 'aucun relevé réclamé sans un compte');
+    eq(depensesEnAttente().missing, false, 'aucun mois clos réclamé le premier jour');
+    eq(healthChecks().length, 0, 'et pas une seule alerte pour accueillir');
+  });
+
   test('les trois pas se dérivent des données, jamais d’un drapeau', () => {
     vide();
     for (const cle of ['comptes', 'revenus', 'depenses']) {
@@ -11872,6 +11904,59 @@ suite('Une application vide dit quoi faire', () => {
       vrai(!pasAFaire(cle), `« ${cle} » est fait dès que la donnée existe`);
     }
     eq(pasAFaire('inconnu'), false, 'un pas qui n’existe pas ne reste pas à faire');
+  });
+
+  test('le relevé se demande dès qu’un compte le rend possible, et pas avant', () => {
+    /* L'ordre des pas est un ordre de faisabilite, pas une preference : la courbe
+       et le rythme n'ont que le releve a demander, et le releve n'a de sens
+       qu'apres le premier compte. */
+    Store.state = blankState(); Store.migrate(); refreshAccounts();
+    vrai(!pasAFaire('releves'), 'rien à photographier sans compte');
+    Store.state.comptes.push({ id: 'c1', etabId: null, type: 'courant', statut: 'ouvert',
+      libelle: 'Courant', cash: [{ montant: 500, affectation: 'courant' }], lignes: [] });
+    refreshAccounts();
+    vrai(pasAFaire('releves'), 'un compte créé, le relevé devient le pas suivant');
+    /* Et il s'efface au premier releve enregistre. */
+    Store.state.monthly = [{ date: '2026-08-01', comment: '', v: { c1: 500 } }];
+    refreshAccounts();
+    vrai(!pasAFaire('releves'), 'le premier relevé le franchit');
+  });
+
+  test('un graphique sans conteneur ne casse pas l’écran', () => {
+    /* Des que l'accueil masque ses cartes vides, les graphiques recoivent `null` :
+       `el.clientWidth` levait, et l'exception remontait jusqu'a `render()`. Un
+       ecran a moitie peint au premier lancement, soit le seul moment ou l'on
+       n'a pas encore la moindre raison de faire confiance a l'application. */
+    const src = lireSource('assets/charts.js');
+    const fn = src.slice(src.indexOf('function mount(el, render)'),
+                         src.indexOf('function mount(el, render)') + 200);
+    vrai(/if \(!el\) return;/.test(fn),
+      'le montage sort en silence quand la carte n’a pas été rendue');
+    /* La garde est dans `mount`, pas chez les appelants : il y en a une douzaine,
+       donc douze occasions d'oublier. */
+    vrai((src.match(/mount\(/g) || []).length >= 7,
+      'et elle profite à tous les graphiques d’un coup');
+  });
+
+  test('l’accueil d’un premier lancement ne montre pas six cartes de zéros', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/\$\{pasAFaire\('comptes'\) \? `/.test(src),
+      'la suite de la page attend le premier compte');
+    vrai(/Le reste de cette page se remplit tout seul/.test(src),
+      'et une phrase dit ce qui viendra, plutôt que six cartes muettes');
+  });
+
+  test('les cartes qui ne peuvent rien montrer disent ce qui les remplirait', () => {
+    const src = lireSource('assets/app.js');
+    /* La courbe : le graphique est monte apres le rendu, il ne connait pas ce qui
+       le remplirait — c'est donc la carte qui le dit. */
+    const evo = src.slice(src.indexOf('<div class="chart" id="chartEvo">'),
+                          src.indexOf('<div class="chart" id="chartEvo">') + 700);
+    vrai(/invitePremierPas\('releves'\)/.test(evo),
+      'la carte d’évolution demande le relevé qui lui manque');
+    /* L'autonomie : un rapport entre deux vides n'accuse personne de rien. */
+    vrai(/if \(!ep && !r\.burn\) return/.test(src),
+      '« 0,0 mois » en rouge sur 0 € et 0 € de coût laisse place à une phrase');
   });
 
   test('chaque pas porte son bouton, son action et sa raison', () => {

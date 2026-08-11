@@ -654,6 +654,11 @@ function carteEvolution(avecDetail = false) {
         </span>
         ${rangeControl('evo-range', evoRange)}</div>
       <div class="chart" id="chartEvo"></div>
+      <!-- Une courbe vide se contentait d'un axe a zero. Elle ne peut rien
+           montrer avant deux releves, et c'est elle qui doit le dire : le
+           graphique est monte apres le rendu, il ne connait pas ce qui le
+           remplirait. L'invite s'efface au premier releve enregistre. -->
+      ${invitePremierPas('releves')}
       <div class="legend">${legendeSeries(seriesUtiles(pts), true)}</div>
       ${avecDetail ? detailEvolution() : ''}
     </div>`;
@@ -924,6 +929,24 @@ function viewOverview() {
     })()}
   </div>
 
+  ${pasAFaire('comptes') ? `
+  <!-- Un premier lancement s'arrete ici.
+
+       Ce qui suivait etait six cartes de zeros : une courbe plate, un rythme
+       « pas assez d'historique », une autonomie de 0 mois, un portefeuille a
+       0,00 €. Aucune ne pouvait rien dire, et les commenter toutes aurait
+       remplace six zeros par six phrases — du bruit a la place du vide.
+
+       Elles reviennent d'elles-memes des le premier compte saisi, et c'est la
+       forme la plus simple d'un accueil : montrer ce qui existe, et une seule
+       porte vers la suite. Ce n'est pas un ecran ampute, c'est un ecran qui n'a
+       pas encore commence. -->
+  <div class="card">
+    <p class="empty" style="margin:0">${trad('Le reste de cette page se remplit tout seul : '
+      + 'la courbe de ton patrimoine, ton rythme d’épargne, ce que tu tiendrais sans '
+      + 'revenus, ton portefeuille. Tout part des comptes que tu déclares.')}</p>
+  </div>`
+  : `
   <!-- Cette carte occupait la colonne large d'une grille en deux parts ; la
        petite portait « Allocation par actif », partie le jour ou l'accueil a
        cesse de dupliquer la page Allocation. La grille est restee, avec une
@@ -1002,6 +1025,13 @@ function viewOverview() {
       const ep = pk.precaution + pk.courant;
       const cover = r.burn ? ep / r.burn : 0;
       const state = cover >= 3 ? 'up' : cover >= 1.5 ? '' : 'down';
+      /* « 0,0 mois » en rouge sur un coussin de 0 € et un cout de 0 € n'accuse
+         personne de rien : c'est un rapport entre deux vides. La carte dit alors
+         ce qui lui manque, au lieu de peindre en rouge une absence de donnee. */
+      if (!ep && !r.burn) return `
+        <p class="empty" style="margin:0">${trad('Ce chiffre compare ton argent disponible '
+          + 'à ce que te coûte un mois. Il attend donc deux choses : un compte avec du '
+          + 'cash, et tes charges fixes.')}</p>`;
       return `
         <div class="goal-top goal-top-empile" style="margin-bottom:8px">
           <b class="${state}">${fmtMois(cover)} ${trad('mois')}</b>
@@ -1173,7 +1203,7 @@ function viewOverview() {
            (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
            gabarit, un backtick y fermerait la chaine.) -->
   </div>
-
+`}
 `;
 }
 
@@ -5122,9 +5152,13 @@ function viewAccounts() {
       <h3 class="cpt-section">${esc(trad(t))}<span class="sub">${esc(trad(sous))}</span></h3>`;
 
   let corps = '';
-  if (!COMPTES().length || (!ouverts.length && !filtre)) {
-    corps = `<div class="card"><p class="empty">Aucun compte pour l’instant.
-      Ajoutes-en un pour commencer : une banque, un livret ou un compte de courtage.</p></div>`;
+  /* Le compte des especes existe pour tout le monde, pose par le modele : la page
+     n'etait donc jamais « vide » a ses yeux, et son texte d'accueil ne s'affichait
+     pas. C'est un compte que personne n'a cree, il ne peut pas tenir lieu de
+     premier pas. */
+  if (!ouverts.some(c => !typeCompte(c.type).interne) && !filtre) {
+    corps = `<div class="card">${invitePremierPas('comptes')
+      || `<p class="empty">${trad('Aucun compte pour l’instant.')}</p>`}</div>`;
   } else if (!ouverts.length) {
     corps = `<div class="card"><p class="empty">Rien ne correspond à « ${esc(compteRecherche)} ».
       Essaie avec le nom de la banque ou du placement.</p></div>`;

@@ -1516,6 +1516,11 @@ const I18N = {
 
     /* --- les premiers pas, et le prerequis des titres cotes --- */
     "Entrer tes comptes": "Enter your accounts",
+    "Enregistrer un relevé": "Record a statement",
+    "Le reste de cette page se remplit tout seul : la courbe de ton patrimoine, ton rythme d’épargne, ce que tu tiendrais sans revenus, ton portefeuille. Tout part des comptes que tu déclares.": "The rest of this page fills itself in: the curve of your wealth, your saving pace, how long you would last without income, your portfolio. It all starts from the accounts you declare.",
+    "Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à une date. Il en faut deux pour que la courbe et le rythme d’accumulation aient une pente à montrer.": "Record your first monthly statement: it is a snapshot of your accounts on a date. Two are needed before the curve and the accumulation pace have a slope to show.",
+    "Aucun compte pour l’instant.": "No account yet.",
+    "Ce chiffre compare ton argent disponible à ce que te coûte un mois. Il attend donc deux choses : un compte avec du cash, et tes charges fixes.": "This figure compares the money you can reach with what a month costs you. So it waits on two things: an account with cash in it, and your fixed costs.",
     "Entrer ton salaire": "Enter your salary",
     "Entrer tes dépenses": "Enter your spending",
     "Ajoute un compte pour commencer : une banque, un livret, un compte de courtage ou un bien. C’est d’eux que viennent ton patrimoine, ta répartition et ton autonomie.": "Add an account to begin: a bank, a savings account, a brokerage account or an asset. They are where your wealth, your allocation and your runway come from.",

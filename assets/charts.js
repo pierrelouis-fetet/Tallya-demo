@@ -21,7 +21,18 @@ const Charts = (() => {
 
   const registry = new Map();     // el -> render fn
 
+  /* Un conteneur absent n'est pas une erreur, c'est une carte que la vue a
+     choisi de ne pas rendre. Sans cette garde, chaque graphique lisait
+     `el.clientWidth` sur `null` et l'exception remontait jusqu'a `render()` :
+     l'ecran restait a moitie peint. Le cas se produit des qu'une vue masque une
+     carte selon l'etat — un premier lancement, par exemple, ou aucune des six
+     cartes de l'accueil n'a de quoi tracer quoi que ce soit.
+
+     Un montage silencieux plutot qu'un appelant qui verifie : il y a une
+     douzaine d'appels, donc douze occasions d'oublier la verification, et l'oubli
+     ne se voit qu'a l'ecran blanc. */
   function mount(el, render) {
+    if (!el) return;
     registry.set(el, render);
     render();
   }

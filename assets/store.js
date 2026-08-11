@@ -2429,6 +2429,27 @@ function jourRappelAtteint() {
   return Number(todayISO().slice(8, 10)) >= jourRappel();
 }
 
+/* --- y a-t-il de quoi reclamer une saisie ? -------------------------------
+   Les gardes vivent ici, dans la source, et non chez les quinze appelants :
+   la cloche avait recu la sienne pendant que les deux bandeaux de l'accueil
+   continuaient de crier, faute de passer par elle. Un fait se regle a un seul
+   endroit.
+
+   Un compte declare, c'est un compte que le detenteur a cree. Les especes ne
+   comptent pas : leur compte existe pour tout le monde, pose par le modele, et
+   « Enregistre 0 € dans tes donnees mensuelles » sur ce seul compte n'a aucun
+   sens. */
+const aUnComptePropre = () =>
+  comptesOuverts().some(c => !typeCompte(c.type).interne);
+
+/* L'application a-t-elle deja servi ? Un mois de depenses saisi, ou un releve
+   enregistre. Sans cela, reclamer le mois clos revient a demander de remplir un
+   passe que l'application n'a pas vecu : quelqu'un qui arrive en aout ne va pas
+   saisir juillet. */
+const aDejaServi = () =>
+  (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0))
+  || (Store.state.monthly || []).some(r => !rowIsEmpty(r));
+
 function currentMonthPending() {
   const key = currentMonthKey();
   const i = Store.state.monthly.findIndex(r => r.date === key);
@@ -2438,7 +2459,8 @@ function currentMonthPending() {
            /* `vide` reste vrai avant le jour dit : c'est un fait sur les
               donnees, et la page des releves s'en sert pour marquer la ligne.
               Seul `missing`, qui commande la cloche et les bandeaux, attend. */
-           missing: vide && jourRappelAtteint() && !rappelMasque('releve', key) };
+           missing: vide && aUnComptePropre()
+                    && jourRappelAtteint() && !rappelMasque('releve', key) };
 }
 
 /*    La relance des dépenses vise le mois clos, pas le mois en cours. Elle porte
@@ -2455,8 +2477,11 @@ function depensesEnAttente() {
   const i = Store.state.budget.expenses.findIndex(r => r.month === key);
   const row = i >= 0 ? Store.state.budget.expenses[i] : null;
   const vide = !row || !Object.values(row.v || {}).some(v => num(v) !== 0);
+  /* Le mois clos ne se reclame qu'a qui a deja saisi quelque chose : le premier
+     mois d'utilisation n'a pas de passe a rattraper. */
   return { key, index: i, label: fmtMonth(key), vide,
-           missing: vide && jourRappelAtteint() && !rappelMasque('depenses', key) };
+           missing: vide && aDejaServi()
+                    && jourRappelAtteint() && !rappelMasque('depenses', key) };
 }
 
 /* Les mois restés vides derrière soi, dans n'importe quelle table mensuelle.
@@ -4175,19 +4200,36 @@ const PREMIERS_PAS = [
     quoi: 'Ajoute un compte pour commencer : une banque, un livret, un compte de '
         + 'courtage ou un bien. C’est d’eux que viennent ton patrimoine, ta '
         + 'répartition et ton autonomie.',
+    /* `aUnComptePropre` et non le simple compte des comptes : celui des especes
+       est pose par le modele pour tout le monde, et un compte que personne n'a
+       cree ne peut pas tenir lieu de premier pas. */
     bouton: 'Entrer tes comptes', action: 'ajouter-compte',
-    fait: () => comptesOuverts().length > 0 },
+    fait: () => aUnComptePropre() },
   { cle: 'revenus',
     quoi: 'Sans revenu déclaré, cette carte n’a pas de total à partager.',
     bouton: 'Entrer ton salaire', action: 'toggle-revenus',
     fait: () => (B().income || []).length > 0 },
+  /* Le releve arrive apres les comptes, et il n'est « a faire » que lorsqu'il
+     devient faisable : sans un compte, il n'y a rien a photographier, et
+     l'annoncer serait envoyer quelqu'un vers un geste impossible. Les cartes qui
+     dependent d'une serie — l'evolution, le rythme — n'ont que lui a demander. */
+  { cle: 'releves',
+    quoi: 'Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à '
+        + 'une date. Il en faut deux pour que la courbe et le rythme d’accumulation '
+        + 'aient une pente à montrer.',
+    bouton: 'Enregistrer un relevé', action: 'go-snapshot',
+    fait: () => !aUnComptePropre() || aDejaServi() },
   /* Le texte est celui que l'ecran vide des charges fixes portait deja, et qui
      etait le mieux ecrit des trois : il vient ici pour n'exister qu'une fois. */
   { cle: 'depenses',
     quoi: 'Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident '
         + 'de ce qu’il te reste à vivre chaque mois.',
+    /* Les douze mois du calendrier existent des le premier lancement, vides :
+       compter les lignes aurait declare le pas franchi avant le premier euro.
+       Ce sont les montants qui disent qu'une depense a ete saisie. */
     bouton: 'Entrer tes dépenses', action: 'add-charge',
-    fait: () => (B().fixedCharges || []).length > 0 || (B().expenses || []).length > 0 },
+    fait: () => (B().fixedCharges || []).length > 0
+      || (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0)) },
 ];
 const PAS_PAR_CLE = Object.fromEntries(PREMIERS_PAS.map(p => [p.cle, p]));
 
@@ -5406,12 +5448,10 @@ function healthChecks() {
      Le bouton « Snapshot du mois » n'existe plus : c'est le ⤒ de la ligne,
      allume sur le mois qui attend. Une consigne qui nomme un bouton absent est
      pire qu'une consigne vague. */
-  /* Rien a relever tant qu'il n'y a pas un compte : le releve reprend les
-     montants du jour, et un mois de zeros n'apprend rien a personne. Reclamer
-     une saisie a qui n'a encore rien saisi, c'est accueillir quelqu'un par une
-     liste de retards. */
+  /* La garde vit dans `currentMonthPending()`, avec les bandeaux de l'accueil :
+     la poser ici aussi l'aurait laissee diverger de l'autre. */
   const relEnAttente = currentMonthPending();
-  if (relEnAttente.missing && comptesOuverts().length) {
+  if (relEnAttente.missing) {
     add('action', `${trad('Relevé de')} ${relEnAttente.label} ${trad('à enregistrer')}`,
       trad('Le bouton ⤒ de sa ligne y reprend tous les montants actuels'), 'history');
   }
@@ -5423,13 +5463,10 @@ function healthChecks() {
      2 aout, personne ne sait ce qu'aout coutera. `depensesEnAttente` porte cette
      regle, et le report avec. Ce controle visait le mois courant, et allumait
      donc une alerte du 1er au 31 sur un mois qu'on ne peut pas encore saisir. */
-  /* Meme garde, sur le revenu et non sur les charges : c'est lui qui donne un
-     cadre au mois — un montant depense ne veut rien dire sans un total a
-     comparer. Garder sur les charges aurait eteint le rappel chez quelqu'un qui
-     a un salaire et pas encore d'abonnements, ce qui est un cas courant et pas
-     un demarrage. */
+  /* Meme raison : la garde est dans `depensesEnAttente()`, partagee avec le
+     bandeau de l'accueil et la pastille du menu. */
   const depEnAttente = depensesEnAttente();
-  if (depEnAttente.missing && !pasAFaire('revenus'))
+  if (depEnAttente.missing)
     add('action', `Dépenses de ${depEnAttente.label} à saisir`,
       trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
 
