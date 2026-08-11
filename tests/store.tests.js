@@ -12207,6 +12207,107 @@ suite('L’écart du non coté se dit, sans se mêler aux cours', () => {
 });
 
 /* ------------------------------------------------------------------
+   Le versement mensuel dit ou il va
+   ------------------------------------------------------------------ */
+suite('Le versement mensuel dit où il va', () => {
+
+  /* Il partait toujours dans le marche, capitalise a son taux, et rien a l'ecran
+     ne le disait : « on ne voit pas tout de suite que c'est la dessus ».
+     L'hypothese est juste pour le cas courant — on investit son epargne — mais
+     fausse pour qui epargne sans investir. */
+
+  const projeter = (vers, ans = 10) => {
+    Fixture.poser(s => {
+      s.meta.projMonthly = 300;
+      s.meta.projRate = 8;
+      s.meta.projRateAutres = 0;
+      s.meta.projVersementVers = vers;
+    });
+    return capitalisation({ years: ans });
+  };
+
+  test('le marché reste le défaut, et rien ne change pour les états existants', () => {
+    Fixture.poser(s => { delete s.meta.projVersementVers; });
+    eq(projectionSettings().versementVers, 'marche',
+      'un état sans ce réglage se comporte comme avant');
+    /* Une valeur inconnue retombe sur le marche plutot que de vider la poche. */
+    Fixture.poser(s => { s.meta.projVersementVers = 'nimporte'; });
+    const c = capitalisation({ years: 5 });
+    vrai(c.points[5].gains > 0, 'une destination inconnue ne gèle pas la projection');
+  });
+
+  test('un versement sur les liquidités ne produit aucun gain', () => {
+    /* Les liquidites sont portees a plat : 300 EUR par mois pendant dix ans font
+       36 000 EUR, pas un centime de plus. C'est exactement ce qu'un livret non
+       declare remunere fait, et c'est le seul chiffre honnete pour qui epargne
+       sans investir. */
+    const liq = projeter('liquidites');
+    const dernier = liq.points[10];
+    const verses = 300 * 12 * 10;
+    /* Le gain vient alors du seul capital de depart, jamais des versements. */
+    const marche = projeter('marche').points[10];
+    vrai(dernier.gains < marche.gains,
+      'le même versement rapporte moins sur un livret que sur le marché');
+    pres(dernier.contributed - liq.points[0].contributed, verses,
+      'les versements comptent pour ce qu’ils sont : de l’argent mis, pas gagné');
+  });
+
+  test('le total égale toujours ce qui est mis plus les gains', () => {
+    /* La regle qui gouverne toute l'application, et le point que ce changement
+       pouvait casser : les gains se calculaient par `capital - verse`, ce qui
+       supposait que le versement va au marche. Sur un livret, le gain du marche
+       devenait negatif et celui des liquidites comptait les versements. */
+    for (const vers of ['marche', 'nonCote', 'liquidites']) {
+      const c = projeter(vers);
+      for (const p of c.points) {
+        pres(p.total, p.contributed + p.gains,
+          `${vers} : total = mis + gains, année ${p.year}`);
+      }
+      /* Et aucun gain negatif ne doit apparaitre par construction. Le point de
+         depart est ecarte : il ne porte que le total et les versements acquis,
+         pas le detail par poche, qui n'aurait aucun sens a l'annee zero. */
+      const annees = c.points.filter(p => p.gainsMarche !== undefined);
+      vrai(annees.length > 0, 'des années projetées existent');
+      vrai(annees.every(p => p.gainsMarche >= -0.005),
+        `${vers} : le gain du marché ne devient jamais négatif`);
+      vrai(annees.every(p => p.gainsLiquidites >= -0.005),
+        `${vers} : celui des liquidités non plus`);
+    }
+  });
+
+  test('le non coté suit son propre taux, pas celui du marché', () => {
+    Fixture.poser(s => {
+      s.meta.projMonthly = 300;
+      s.meta.projRate = 8;
+      s.meta.projRateAutres = 3;
+      s.meta.projVersementVers = 'nonCote';
+    });
+    const c = capitalisation({ years: 10 });
+    const d = c.points[10];
+    vrai(d.gainsNonCote > 0, 'à 3 % le non coté produit quelque chose');
+    /* Et moins qu'a 8 % : le taux applique est bien le sien. */
+    Fixture.poser(s => {
+      s.meta.projMonthly = 300; s.meta.projRate = 8;
+      s.meta.projRateAutres = 3; s.meta.projVersementVers = 'marche';
+    });
+    const auMarche = capitalisation({ years: 10 }).points[10];
+    vrai(auMarche.gains > d.gains, 'le même versement à 8 % rapporte davantage');
+  });
+
+  test('l’écran le dit sans qu’on déplie, et le réglage existe', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/champText\('Versé sur', 'meta\.projVersementVers', VERSEMENT_VERS/.test(src),
+      'le champ existe, avec la table pour seule source de ses options');
+    /* Le resume replie porte l'hypothese : c'est la qu'on lit les reglages sans
+       ouvrir la carte. */
+    vrai(/VERSEMENT_VERS\)\[s\.versementVers\]/.test(src),
+      'et le résumé replié dit la destination');
+    eq(VERSEMENT_VERS.length, 3, 'trois destinations, les trois poches de la projection');
+    eq(VERSEMENT_VERS[0][0], 'marche', 'le marché en tête : c’est le défaut');
+  });
+});
+
+/* ------------------------------------------------------------------
    Un seul signe moins dans toute l application
    ------------------------------------------------------------------ */
 suite('Un seul signe moins', () => {

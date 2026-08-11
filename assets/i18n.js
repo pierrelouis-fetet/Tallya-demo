@@ -1520,6 +1520,8 @@ const I18N = {
     /* --- les premiers pas, et le prerequis des titres cotes --- */
     "Entrer tes comptes": "Enter your accounts",
     "Enregistrer un relevé": "Record a statement",
+    "Versé sur": "Paid into",
+    "Ces euros capitalisent au taux de la poche que tu choisis. Sur les liquidités, ils s’accumulent sans rendement : c’est ce que fait un livret que tu n’as pas déclaré rémunéré, et c’est le seul réglage honnête si tu épargnes sans investir. Si tu partages ton versement, garde un seul choix et ajuste le taux : moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.": "These euros compound at the rate of the pocket you pick. On cash they simply pile up with no return: that is what a savings account you have not declared as paying does, and it is the only honest setting if you save without investing. If you split your contribution, keep one choice and adjust the rate: half at 8% and half with no return comes to 4% on the whole.",
     "valeurs que tu déclares, pas des cours": "values you declare, not market prices",
     "pas mobilisables à court terme": "not available in the short term",
     "écart": "gap",

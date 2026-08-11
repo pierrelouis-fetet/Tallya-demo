@@ -1964,6 +1964,18 @@ function viewObjective() {
       </select>
     </div>`;
 
+  /* Le meme champ, pour une valeur qui n'est pas un nombre. `champ()` pose
+     `data-type="num"` et sa liste de paliers : une destination n'est ni l'un ni
+     l'autre, et l'y forcer aurait converti « marche » en zero. */
+  const champText = (label, path, options, valeur, aideTexte) => `
+    <div class="field">
+      <label>${esc(trad(label))}${aideTexte ? aide(aideTexte) : ''}</label>
+      <select data-path="${path}">
+        ${options.map(([v, l]) => `<option value="${esc(v)}" ${v === valeur ? 'selected' : ''}
+          >${esc(trad(l))}</option>`).join('')}
+      </select>
+    </div>`;
+
   const paliers = (max, pas, depuis = 0) =>
     Array.from({ length: Math.floor((max - depuis) / pas) + 1 }, (_, i) => depuis + i * pas);
 
@@ -2098,7 +2110,11 @@ function viewObjective() {
            et chevron a droite. -->
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
-          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} · ${trad('marché')} ${fmtPct(s.rate, 0)} ·
+          <!-- La destination du versement figure dans le resume : c'est une
+               hypothese, et le resume existe pour qu'on les lise sans deplier. -->
+          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} ${trad('sur')}
+            ${trad(Object.fromEntries(VERSEMENT_VERS)[s.versementVers]).toLowerCase()} ·
+            ${trad('marché')} ${fmtPct(s.rate, 0)} ·
             ${trad('non coté')} ${num(s.rateAutres) ? fmtPct(s.rateAutres, 0) : trad('à plat')} ·
             ${trad('inflation')} ${fmtPct(s.inflation, 0)}${num(s.target) ? ` · ${trad('cible')} ${fmtEUR0(s.target)}` : ''}</span>
           <span class="pli-action">${trad('Régler')}</span>
@@ -2114,9 +2130,28 @@ function viewObjective() {
                    « Versé sur » et non « Investis en » : l'imperatif se lisait
                    comme un conseil, et cette application n'en donne pas. */
                 num(Store.state.meta.projMonthly)
-                  ? `${trad('Ton budget dégage')} ${fmtEUR0(suggestedMonthly())} ${trad('par mois.')} ${trad('Versé chaque mois sur tes actifs de marché')}`
-                  : `${trad('Repris de ton budget ; choisis une valeur pour la figer.')} ${trad('Versé chaque mois sur tes actifs de marché')}`,
+                  ? `${trad('Ton budget dégage')} ${fmtEUR0(suggestedMonthly())} ${trad('par mois.')}`
+                  : trad('Repris de ton budget ; choisis une valeur pour la figer.'),
                 s.monthly)}
+        <!-- Ou va ce versement etait dit dans la bulle d'aide du champ au-dessus,
+             donc invisible tant qu'on ne la survolait pas, et surtout non
+             modifiable : les euros capitalisaient au taux du marche, code en dur.
+             Quelqu'un qui met 350 EUR par mois sur un livret lisait une courbe
+             calculee a 8 % l'an.
+             Un champ plutot qu'une mention, parce que la reponse depend de la
+             personne : on epargne aussi sans investir. -->
+        ${champText('Versé sur', 'meta.projVersementVers', VERSEMENT_VERS,
+                s.versementVers,
+                trad('Ces euros capitalisent au taux de la poche que tu choisis. '
+                  + 'Sur les liquidités, ils s’accumulent sans rendement : c’est ce que fait '
+                  + 'un livret que tu n’as pas déclaré rémunéré, et c’est le seul réglage '
+                  + 'honnête si tu épargnes sans investir. '
+                  /* Le partage se dit par le taux, pas par un second montant : trois
+                     champs de versement sur une page qui en a six auraient affine un
+                     chiffre dont l'incertitude du taux pese deja davantage — 24 300 EUR
+                     entre 6 et 10 % contre 21 000 entre les deux poches extremes. */
+                  + 'Si tu partages ton versement, garde un seul choix et ajuste le taux : '
+                  + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'))}
         <!-- Un seul taux s'appliquait a tout, et il ne decrivait qu'une partie
              de ce qu'il touchait. Deux champs maintenant, chacun nommant sa
              poche : « hors immobilier » ne suffisait plus, il disait ce que le

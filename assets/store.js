@@ -4870,10 +4870,27 @@ function projectionSettings() {
    calculateurs pour une page d'hypotheses, c'est deux de trop. Elles sont
    donc portees a plat, sans reglage — une constante n'a pas besoin d'un menu.*/
     rateAutres: num(m.projRateAutres),
+    /* Ou va le versement mensuel. Le marche par defaut, ce qui etait le
+       comportement code en dur : aucun etat existant ne change de courbe a la
+       mise a jour. */
+    versementVers: m.projVersementVers || 'marche',
     inflation: num(m.projInflation),
     target: num(m.projTarget),
   };
 }
+
+/* Les destinations offertes au versement mensuel, et ce que chacune produit.
+
+   Trois, pas plus : ce sont les trois poches que la projection distingue deja,
+   chacune avec son taux. Le libelle dit le taux applique, parce que c'est la
+   seule chose qui change vraiment d'une destination a l'autre — et parce qu'un
+   versement pose sur un livret non remunere ne doit pas se lire comme un
+   placement a 8 %. */
+const VERSEMENT_VERS = [
+  ['marche',     'Actifs de marché'],
+  ['nonCote',    'Non coté'],
+  ['liquidites', 'Liquidités'],
+];
 
 /* Versement mensuel proposé par défaut : l'épargne que ton budget dégage,
    sinon le rythme réellement observé sur tes relevés. */
@@ -5011,29 +5028,53 @@ function capitalisation(opts = {}) {
   let capital = departMarche, verse = departMarche;
   let nonCote = departNonCote, liquides = departLiquides;
 
+  /* Ou va le versement mensuel : une hypothese declaree, plus un choix code en
+     dur.
+
+     Il partait toujours dans le marche, capitalise au taux du marche, et rien a
+     l'ecran ne le disait : quelqu'un qui met 350 EUR par mois sur un livret
+     lisait une courbe calculee a 8 % l'an. L'hypothese etait juste pour le cas
+     courant — on investit son epargne — mais fausse pour qui epargne sans
+     investir, et c'est un cas trop repandu pour rester muet.
+
+     Les trois destinations existaient deja comme poches, chacune avec son taux :
+     le marche au sien, le non cote au sien (zero par defaut), les liquidites a
+     plat. Le versement rejoint donc celle qu'on nomme, et le total continue
+     d'egaler verse plus gains dans les trois cas. */
+  const vers = ['liquidites', 'nonCote'].includes(s.versementVers)
+    ? s.versementVers : 'marche';
   for (let mois = 1; mois <= annees * 12; mois++) {
-    capital = capital * (1 + rMois) + s.monthly;
+    capital = capital * (1 + rMois) + (vers === 'marche' ? s.monthly : 0);
     verse += s.monthly;
-    /* Les versements ne vont que dans le marche : on investit son epargne, on
-       ne la pose pas sur un compte courant ni dans du non cote a volonte. */
-    nonCote = nonCote * (1 + rMoisNonCote);
-    /* `liquides` ne bouge pas : les liquidites sont portees a plat. La variable
-       reste, parce qu'elle doit continuer d'entrer dans le total et dans ce qui
-       est declare acquis. */
+    nonCote = nonCote * (1 + rMoisNonCote) + (vers === 'nonCote' ? s.monthly : 0);
+    /* Les liquidites ne capitalisent jamais : pas de taux, pas de reglage. Un
+       versement s'y accumule donc a plat, ce qui est exactement ce qu'un livret
+       non remunere fait — et le seul endroit ou la projection dit la verite a
+       quelqu'un qui epargne sans investir. */
+    if (vers === 'liquidites') liquides += s.monthly;
     if (mois % 12) continue;
     const an = mois / 12;
     const autres = nonCote + liquides;
-    const gainsMarche = capital - verse;
-    const gainsAutres = autres - departAutres;
+    /* Ce qui a ete MIS dans chaque poche, depart compris : c'est la seule base
+       qui donne un gain juste quand le versement ne va pas au marche.
+       `capital - verse` supposait le contraire — un versement sur livret aurait
+       rendu le gain du marche negatif, et compte le versement lui-meme comme un
+       gain du cote des liquidites. */
+    const cumul = mois * s.monthly;
+    const misMarche = departMarche + (vers === 'marche' ? cumul : 0);
+    const misNonCote = departNonCote + (vers === 'nonCote' ? cumul : 0);
+    const misLiquides = departLiquides + (vers === 'liquidites' ? cumul : 0);
+    const gainsMarche = capital - misMarche;
+    const gainsAutres = autres - (misNonCote + misLiquides);
     points.push({
       year: anneeDebut + an, label: String(anneeDebut + an),
-      contributed: verse + departAutres + plat,
+      contributed: misMarche + misNonCote + misLiquides + plat,
       gains: gainsMarche + gainsAutres,
       gainsMarche, gainsAutres,
       /* Le detail par poche, pour que la fiche des hypotheses puisse dire ce que
          chaque taux a produit sans refaire le calcul a cote. */
-      gainsNonCote: nonCote - departNonCote,
-      gainsLiquidites: liquides - departLiquides,
+      gainsNonCote: nonCote - misNonCote,
+      gainsLiquidites: liquides - misLiquides,
       total: capital + autres + plat,
       // pouvoir d'achat d'aujourd'hui, une fois l'inflation retirée
       real: (capital + autres + plat) / Math.pow(1 + s.inflation / 100, an),
