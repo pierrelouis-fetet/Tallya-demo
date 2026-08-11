@@ -1843,6 +1843,15 @@ const selecteurHorizon = () => `
 let hypoOuvert = false;
 
 function viewObjective() {
+  /* Capitaliser zero pendant cinquante ans donne zero, sur dix horizons et deux
+     graphiques. Le versement mensuel compte autant que le capital : quelqu'un
+     qui part de rien mais versera 300 EUR par mois a une projection qui a du
+     sens, et cette page doit alors s'afficher. */
+  if (!(patrimoine().brut > 0.005) && !(num(Store.state.meta.projMonthly) > 0)) {
+    return pageAvantDonnees('Une projection part de ce que tu as et de ce que tu mets de '
+      + 'côté chaque mois. Sans l’un ni l’autre, elle ne peut que multiplier zéro par les '
+      + 'années. Déclare un compte, ou règle un versement mensuel dans tes hypothèses.');
+  }
   const g = objectiveStatus();
   /* La carte de l'objectif, arrivee de l'accueil : le cap d'abord, la
      trajectoire ensuite. */
@@ -3846,6 +3855,13 @@ const teinterParRang = items =>
 
 function viewAllocation() {
   const t = nowTotals();
+  /* Repartir zero entre sept classes donne sept fois zero, et trois tableaux
+     vides sous trois camemberts absents. */
+  if (!(patrimoine().brut > 0.005)) {
+    return pageAvantDonnees('Une répartition dit où est ton argent : dans quelles classes '
+      + 'd’actifs, chez quels intermédiaires. Elle attend donc que tu déclares au moins un '
+      + 'compte ou un placement.');
+  }
   const poches = pochesPatrimoine();
   /* Sans la ligne des credits : la carte compte en brut, comme son camembert.
      Le pied les porte, une fois, pour donner le net. */
@@ -3979,7 +3995,10 @@ function viewAllocation() {
        annoncee une fois. Les credits redescendent au pied, la ou ils ne
        concurrencent plus les parts qu'ils ne composent pas. -->
   <div class="card" data-anchor="actifs">
-    <div class="card-head"><h2>${trad('Dans quoi c’est réparti')}</h2>
+    <!-- Le titre nomme l'axe de la repartition, et non la question posee a voix
+         haute : « Dans quoi c'est reparti » redoublait « c'est » et sonnait
+         familier a cote du reste. Le sous-titre dit deja la base en euros. -->
+    <div class="card-head"><h2>${trad('Par classe d’actif')}</h2>
       <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
     <div class="chart" id="aMacro"></div>
     ${tbl(poches, BASES.avoirs.nom, t.brut)}
@@ -3996,7 +4015,7 @@ function viewAllocation() {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>${trad('Où c’est placé')}</h2>
+    <div class="card-head"><h2>${trad('Par compte')}</h2>
       <span class="hint">${mentionBase(BASES.place, t.invested)}</span></div>
     <div class="chart" id="aType"></div>
     ${tbl(byType, BASES.place.nom, byType.reduce((s, i) => s + i.value, 0))}
@@ -4729,6 +4748,16 @@ function viewHistory() {
       <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
       <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
     </div>
+    <!-- Douze lignes cliquables et pas un mot sur ce qu'on y met. Le calendrier
+         existe des le premier lancement, donc la carte n'a jamais l'air vide : sa
+         phrase ne peut pas dependre du nombre de lignes, seulement de ce qu'un
+         releve suppose — un compte a photographier. -->
+    ${pasAFaire('comptes') ? `
+    <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
+      + 'à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton '
+      + 'patrimoine et ton rythme d’épargne. Il attend donc un compte.')}</p>
+    ${invitePremierPas('comptes')}`
+    : invitePremierPas('releves')}
     <!-- La liste sur tous les ecrans, et non plus seulement sur telephone.
 
          Cette page portait une grille de treize colonnes sur le web et une liste
@@ -5418,6 +5447,25 @@ function invitePremierPas(cle) {
       <button type="button" class="btn sm" data-action="${esc(p.action)}"
               style="margin:4px 0 0">${trad(p.bouton)}</button>
       <p class="small muted" style="margin:12px 0 0">${trad(p.quoi)}</p>`;
+}
+
+/* Une page entiere qui n'a rien a montrer.
+
+   Trois pages restaient des murs de zeros : Allocation repartissait 0 € entre
+   sept classes, Projection etalait « 0 € » sur cinquante ans et dix horizons,
+   Releves ouvrait un tableau de douze mois vides. Un tableau de zeros n'est pas
+   un resultat, c'est une question mal posee — et sur une application qui va au
+   grand public, c'est la premiere impression.
+
+   Une carte, une phrase qui dit ce qui la remplira, la porte du pas manquant, et
+   rien d'autre. Le contenu revient de lui-meme des que la donnee existe : ce
+   n'est pas un ecran ampute, c'est un ecran qui n'a pas encore commence. */
+function pageAvantDonnees(phrase, cle = 'comptes') {
+  return `
+  <div class="card">
+    <p class="empty" style="margin:0 0 4px">${trad(phrase)}</p>
+    ${invitePremierPas(cle)}
+  </div>`;
 }
 
 /* Les trois reglages d'exploitation : ce qu'on a mis, ce qu'on encaisse

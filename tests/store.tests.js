@@ -11946,6 +11946,44 @@ suite('Une application vide dit quoi faire', () => {
       'et une phrase dit ce qui viendra, plutôt que six cartes muettes');
   });
 
+  test('aucune page n’étale de tableau de zéros', () => {
+    /* Allocation repartissait 0 € entre sept classes, Projection etalait « 0 € »
+       sur cinquante ans et dix horizons, Releves ouvrait douze mois vides sans un
+       mot. Un tableau de zeros n'est pas un resultat, c'est une question mal
+       posee — et c'est la premiere impression d'une application publique. */
+    const src = lireSource('assets/app.js');
+    vrai(/function pageAvantDonnees\(phrase, cle = 'comptes'\)/.test(src),
+      'un seul helper pour les trois, sinon trois formulations');
+    const alloc = src.slice(src.indexOf('function viewAllocation'),
+                            src.indexOf('function viewAllocation') + 600);
+    vrai(/if \(!\(patrimoine\(\)\.brut > 0\.005\)\)/.test(alloc)
+      && /pageAvantDonnees\(/.test(alloc), 'Allocation attend un premier euro');
+    const proj = src.slice(src.indexOf('function viewObjective'),
+                           src.indexOf('function viewObjective') + 800);
+    vrai(/pageAvantDonnees\(/.test(proj), 'Projection aussi');
+    /* Mais un versement mensuel suffit : quelqu'un qui part de rien et versera
+       300 EUR par mois a une projection qui a du sens. */
+    vrai(/num\(Store\.state\.meta\.projMonthly\) > 0/.test(proj),
+      'et elle s’affiche dès qu’un versement est réglé, même sans capital');
+    vrai(/Un relevé est la photo de tes comptes/.test(src),
+      'la page des relevés dit ce qu’un relevé est, et ce qu’il attend');
+  });
+
+  test('une projection sans capital mais avec versement reste affichée', () => {
+    /* Le garde-fou ne doit pas cacher la page a qui commence a epargner : c'est
+       precisement le moment ou une projection sert. */
+    Store.state = blankState(); Store.migrate(); refreshAccounts();
+    pres(patrimoine().brut, 0, 'rien en poche');
+    Store.state.meta.projMonthly = 300;
+    /* Le test porte sur la condition, verifiee sur le source : la vue n'est pas
+       chargee par le harnais. */
+    const src = lireSource('assets/app.js');
+    const proj = src.slice(src.indexOf('function viewObjective'),
+                           src.indexOf('function viewObjective') + 800);
+    vrai(/&& !\(num\(Store\.state\.meta\.projMonthly\) > 0\)/.test(proj),
+      'les deux conditions se cumulent : ni capital, ni versement');
+  });
+
   test('les cartes qui ne peuvent rien montrer disent ce qui les remplirait', () => {
     const src = lireSource('assets/app.js');
     /* La courbe : le graphique est monte apres le rendu, il ne connait pas ce qui

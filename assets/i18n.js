@@ -1381,6 +1381,8 @@ const I18N = {
     "cette ligne": "this holding",
     "pts": "pts",
     "Dans quoi c’est réparti": "How it is split",
+    "Par classe d’actif": "By asset class",
+    "Par compte": "By account",
     "Ligne par ligne": "Line by line",
     "Où c’est placé": "Where it is held",
     "Compte par compte": "Account by account",
@@ -1517,6 +1519,9 @@ const I18N = {
     /* --- les premiers pas, et le prerequis des titres cotes --- */
     "Entrer tes comptes": "Enter your accounts",
     "Enregistrer un relevé": "Record a statement",
+    "Une répartition dit où est ton argent : dans quelles classes d’actifs, chez quels intermédiaires. Elle attend donc que tu déclares au moins un compte ou un placement.": "A breakdown says where your money is: in which asset classes, with which intermediaries. So it waits for you to declare at least one account or holding.",
+    "Une projection part de ce que tu as et de ce que tu mets de côté chaque mois. Sans l’un ni l’autre, elle ne peut que multiplier zéro par les années. Déclare un compte, ou règle un versement mensuel dans tes hypothèses.": "A projection starts from what you have and what you set aside each month. With neither, all it can do is multiply zero by the years. Declare an account, or set a monthly contribution in your assumptions.",
+    "Un relevé est la photo de tes comptes à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton patrimoine et ton rythme d’épargne. Il attend donc un compte.": "A statement is a snapshot of your accounts on a date: their balance, month by month. It is what gives the curve of your wealth and your saving pace. So it waits for an account.",
     "Le reste de cette page se remplit tout seul : la courbe de ton patrimoine, ton rythme d’épargne, ce que tu tiendrais sans revenus, ton portefeuille. Tout part des comptes que tu déclares.": "The rest of this page fills itself in: the curve of your wealth, your saving pace, how long you would last without income, your portfolio. It all starts from the accounts you declare.",
     "Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à une date. Il en faut deux pour que la courbe et le rythme d’accumulation aient une pente à montrer.": "Record your first monthly statement: it is a snapshot of your accounts on a date. Two are needed before the curve and the accumulation pace have a slope to show.",
     "Aucun compte pour l’instant.": "No account yet.",
