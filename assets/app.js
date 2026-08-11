@@ -8444,20 +8444,18 @@ const ACTIONS = {
       + "Tes données ne sont pas touchées : elles restent enregistrées de leur côté, "
       + "et tu les retrouves en quittant le mode. Rien ne part en ligne pendant ce temps.",
       { ok: 'Charger la démonstration' })) return;
-    /* Le jeu de demonstration est la graine, pas un second fichier.
+    /* Le jeu de demonstration est la graine, et il n'en existe pas de second.
 
-       Il etait lu dans `assets/demo.json`, un instantane a part. Deux jeux de
-       donnees vivaient donc cote a cote, decrivant la meme personne fictive, et
-       il fallait se souvenir de les modifier tous les deux : c'est le motif que
-       ce projet defait partout ailleurs, deux ecritures d'une meme chose qui
-       finissent par divergent en silence. Et elles avaient deja diverge — le
-       fichier ne portait ni appartement, ni role sur ses positions.
+       Un instantane a part a vecu a cote d'elle, decrivant la meme personne
+       fictive : il fallait se souvenir de modifier les deux, c'est le motif que
+       ce projet defait partout ailleurs, et ils avaient deja diverge. La graine
+       est de toute facon ce qu'un visiteur voit au premier chargement, donc
+       c'est elle qui doit etre bonne.
 
-       La graine est de toute facon ce que voit un visiteur au premier
-       chargement, donc c'est elle qui doit etre bonne. Le mode demonstration
-       n'a plus qu'a la reposer, sous sa propre cle de stockage : il sert a
-       quelqu'un qui a deja saisi ses donnees et veut regarder sans y toucher.
-       Plus de requete, donc plus de « Demonstration indisponible » possible. */
+       Le mode demonstration n'a plus qu'a la reposer, sous sa propre cle de
+       stockage : il sert a quelqu'un qui a deja saisi ses donnees et veut
+       regarder sans y toucher. Aucune requete, donc aucune « Demonstration
+       indisponible » possible. */
     setModeDemo(true);
     Store.state = structuredClone(SEED);
     Store.migrate();

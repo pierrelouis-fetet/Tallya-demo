@@ -229,8 +229,15 @@ bien (`bienId`).
 
 ## Données personnelles
 
-Ce dépôt est public. `assets/seed.js`, `assets/seed-budget.js` et
-`assets/demo.json` sont entièrement fictifs et **doivent le rester** : aucun
-montant constaté, aucune personne réelle, aucune donnée de santé, jamais.
+Ce dépôt est public. `assets/seed.js` et `assets/seed-budget.js` sont
+entièrement fictifs et **doivent le rester** : aucun montant constaté, aucune
+personne réelle, aucune donnée de santé, jamais.
 Un chiffre réel commité ici part en ligne au push suivant, et un dépôt public
 ne se dépublie pas. Le fixture des tests est synthétique, et il doit le rester.
+
+**La graine est le jeu de démonstration**, et il n'en existe pas de second :
+`assets/demo.json` a vécu à côté d'elle, les deux ont divergé, le fichier est
+parti. C'est donc la graine qu'un visiteur voit au premier chargement, et
+`autoRefresh` y reste à `false` — une démonstration montre la même chose à tout
+le monde, sinon les captures du README se contredisent et le lecteur en conclut
+que l'application compte mal. Un test le garde.

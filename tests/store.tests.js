@@ -12491,3 +12491,50 @@ suite('La licence ne ment pas', () => {
       'le README annonce l’AGPL, le fichier LICENSE porte autre chose');
   });
 });
+
+/* ------------------------------------------------------------------
+   Une demonstration montre la meme chose a tout le monde
+   ------------------------------------------------------------------ */
+suite('Une démonstration montre la même chose à tout le monde', () => {
+
+  test('le jeu de démonstration ne va pas chercher de cours', () => {
+    /* `autoRefresh: true` faisait interroger la passerelle a chaque chargement :
+       les valeurs de marche bougeaient donc entre deux visites, et entre deux
+       captures d'ecran. Les quatre images du README se contredisaient a
+       918,83 EUR pres — cash, non cote et immobilier identiques a l'euro, seuls
+       actions, obligations et crypto differaient — et un lecteur attentif en
+       concluait que l'application compte mal.
+
+       Trois raisons de figer, et la premiere suffit : une demonstration doit
+       montrer la meme chose a tout le monde. Ensuite, un README dont les chiffres
+       vieillissent tout seuls devient faux sans que personne y touche. Enfin, une
+       demonstration qui depend d'une passerelle externe tombe avec elle.
+
+       Le bouton d'actualisation reste : la fonctionnalite se montre toujours,
+       elle ne se declenche simplement plus toute seule. */
+    /* Le jeu de demonstration est `SEED`, pas `assets/demo.json` : ce dernier
+       etait un second instantane de la meme personne fictive, les deux ont
+       diverge, et le mode demonstration repose desormais la graine. Le controle
+       porte donc sur la graine — celle qu'un visiteur voit au premier
+       chargement. */
+    eq(SEED.meta.autoRefresh, false,
+      'la démo ne doit pas rafraîchir les cours d’elle-même : deux visiteurs '
+      + 'verraient deux chiffres, et les captures du README se contrediraient');
+  });
+
+  test('ses totaux se recalculent à l’identique', () => {
+    /* Le controle qui vaut pour toute l'application, applique au jeu qu'un
+       visiteur voit : la somme des parts fait le total. S'il tombe ici, une
+       capture d'ecran montrera une incoherence a des inconnus. */
+    Store.state = structuredClone(SEED);
+    Store.migrate();
+    refreshAccounts();
+    const p = patrimoine();
+    pres(Object.values(p.classes).reduce((s, v) => s + v, 0), p.brut,
+      'le brut est la somme de ses classes');
+    pres(Object.values(p.mobilisable).reduce((s, v) => s + v, 0), p.brut,
+      'et la somme de ses paliers de disponibilité');
+    pres(p.net, p.brut - p.dettes, 'le net est le brut moins les crédits');
+    vrai(p.brut > 0, 'et le jeu porte bien des montants');
+  });
+});

@@ -343,7 +343,24 @@ const SEED = {
     objectiveYear: 2027,
     expectedInflow: 600,    // cash attendu d'ici le mois prochain
     modelCapital: 100000,   // base des modèles d'allocation
-    autoRefresh: true,      // aller chercher les cours au chargement si la passerelle tourne
+    /* Aucune requete de cours au chargement, et c'est ce qui rend cette
+       demonstration montrable.
+
+       Elle interrogeait la passerelle a chaque visite : les valeurs de marche
+       bougeaient donc entre deux visiteurs, et entre deux captures d'ecran. Les
+       quatre images du README se contredisaient a 918,83 EUR pres — cash, non
+       cote et immobilier identiques a l'euro, seuls actions, obligations et
+       crypto differaient — et un lecteur attentif en conclut que l'application
+       compte mal.
+
+       Trois raisons, la premiere suffit : une demonstration montre la meme chose
+       a tout le monde. Un README dont les chiffres vieillissent seuls devient
+       faux sans que personne y touche. Et une demonstration qui depend d'une
+       passerelle externe tombe avec elle.
+
+       Le bouton d'actualisation reste : la fonctionnalite se montre toujours,
+       elle ne se declenche simplement plus d'elle-meme. */
+    autoRefresh: false,
     preferredExchange: 'auto', // 'auto' = on suit la place de référence du titre
     // Hypothèses de la vue Objectif. Ce sont des valeurs de départ neutres,
     // à ajuster : rien ici ne prétend décrire un rendement futur.
