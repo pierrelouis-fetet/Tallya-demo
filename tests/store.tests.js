@@ -13295,6 +13295,34 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
       'et elle est appelée dans les deux branches de del-sale, déclarée comme annulée');
   });
 
+  test('la carte du journal n’a plus de phrase hors traduction', () => {
+    /* La reserve fiscale etait posee sans `trad()` : elle s'affichait en francais
+       dans les deux langues, et le rattrapage de traduction ne pouvait pas la
+       voir, faute d'appel a chercher. C'etait la derniere de cette carte.
+
+       Le controle porte sur la carte entiere plutot que sur cette phrase : toute
+       ligne de texte affiche qui porte un accent doit passer par `trad()`, sans
+       quoi la suivante repassera par le meme trou. */
+    const src = lireSource('assets/app.js');
+    const carte = src.match(/function salesCard\(\) \{[\s\S]*?\n\}/)[0];
+    const nu = carte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+    const dehors = nu.split('\n').filter(l =>
+      /[àâéèêëîïôùûç]/i.test(l) && !/trad\(/.test(l) && !/^\s*\+ '/.test(l));
+    eq(dehors.join(' | ').trim(), '',
+      'ces lignes affichent du français sans passer par trad()');
+    vrai(I18N.en['Résultat brut, avant frais et fiscalité : le traitement fiscal dépend de '
+      + 'l’enveloppe (PEA, CTO) et de ta situation.'],
+      'et la réserve fiscale a son anglais');
+
+    /* « 7 ventes sur 11 » compte une part d'un ensemble : « of ». La clef
+       `sur.investis` rend « on », juste devant un montant investi, et le journal
+       affichait « 7 sales on 11 ». Un homographe, une clef par sens. */
+    vrai(/trad\('sur\.total', 'sur'\)/.test(carte),
+      'le « sur » du décompte a sa propre clef');
+    eq(I18N.en['sur.total'], 'of', 'qui rend « of » et non « on »');
+    eq(I18N.en['sur.investis'], 'on', 'l’autre sens reste intact');
+  });
+
   test('les libellés nouveaux ont leur anglais, les anciens sont partis', () => {
     for (const cle of ['Résultat de tes positions', 'latente et encaissée, depuis le début',
                        'Aller à Positions', 'prix de revient non renseigné',

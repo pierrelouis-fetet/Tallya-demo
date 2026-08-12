@@ -225,6 +225,7 @@ const I18N = {
     "Rythme nécessaire": "Pace needed",
     "Réparti par enveloppe": "Split by wrapper",
     "Résultat de tes positions": "Result on your holdings",
+    "Résultat brut, avant frais et fiscalité : le traitement fiscal dépend de l’enveloppe (PEA, CTO) et de ta situation.": "Gross result, before fees and taxes: the tax treatment depends on the account wrapper (PEA, CTO) and on your own situation.",
     "Scinder : déclarer un second usage": "Split: declare a second purpose",
     "Seconde part": "Second share",
     "Suivre une classe": "Track a class",
@@ -1063,6 +1064,10 @@ const I18N = {
     "Aucune charge fixe déclarée.": "No fixed cost declared.",
     "de plus-value": "in capital gains",
     "sur.investis": "on",
+    /* « 7 ventes sur 11 » : ici « sur » compte une part d'un ensemble, donc
+       « of ». La clef `sur.investis` rendait « on », juste devant un montant
+       investi, et le journal affichait « 7 sales on 11 ». */
+    "sur.total": "of",
     "investis": "invested",
     "Réalisée": "Realised",
     "vente gagnante sur": "winning sale out of",

@@ -3332,7 +3332,7 @@ function salesCard() {
     <div class="card-head">
       <h2>${trad('Journal des ventes')}</h2>
       ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
-        st.count === toutes.length ? '' : ` ${trad('sur.investis', 'sur')} ${toutes.length}`}</span>
+        st.count === toutes.length ? '' : ` ${trad('sur.total', 'sur')} ${toutes.length}`}</span>
       ${plages}` : ''}
       <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
               title="${aVendre ? trad('Enregistrer une vente et sa plus-value')
@@ -3403,10 +3403,13 @@ function salesCard() {
         })()}
       </div>
     </details>` : `<p class="empty">${trad('Aucune vente sur cette période.')}</p>`}
-    <p class="hint" style="margin-top:12px">
-      Résultat brut, avant frais et fiscalité : le traitement fiscal dépend de
-      l'enveloppe (PEA, CTO) et de ta situation.
-    </p>`}
+    <!-- La reserve fiscale s'affichait en francais dans les deux langues : elle
+         etait posee sans passer par la traduction, donc invisible au rattrapage,
+         et c'est la seule phrase de cette carte qui l'etait. Les noms d'enveloppes
+         restent tels quels dans les deux versions : PEA et CTO sont des produits
+         francais, les traduire inventerait des noms qui n'existent pas. -->
+    <p class="hint" style="margin-top:12px">${trad('Résultat brut, avant frais et fiscalité : '
+      + 'le traitement fiscal dépend de l’enveloppe (PEA, CTO) et de ta situation.')}</p>`}
   </div>`;
 }
 
