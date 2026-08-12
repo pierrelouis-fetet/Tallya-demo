@@ -4819,8 +4819,10 @@ function viewHistory() {
            connu au moment ou l'on appuie, et le demander ensuite ferait repondre
            deux fois a la meme question. La fenetre de modification, elle, le
            propose — c'est le seul endroit ou l'on peut s'etre trompe. -->
-      <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
-      <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button></div>
+      <span class="paire-btn">
+        <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
+        <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button>
+      </span></div>
     ${!liste.length && !tout.length ? `
     <p class="small muted" style="margin:0">${trad('Rien pour l’instant. Une somme reçue ou dépensée '
       + 'une seule fois se note ici, avec sa date : le rythme d’accumulation sait alors que '
@@ -4962,7 +4964,14 @@ function viewHistory() {
          de gabarit, un backtick y fermerait la chaine.) -->
     ${poches.length ? `<div class="legend">${legendeSeries(poches)}</div>` : ''}
 
-    <details class="data-view" style="margin-top:12px">
+    <!-- Le tableau de correction ne se propose plus sous 767 px, et ce n'est pas
+         un renoncement : il porte quinze colonnes dans un conteneur qui defile,
+         quand la liste juste au-dessus ouvre le meme mois dans une fenetre qui
+         tient dans l'ecran. La fenetre offre tout ce que le tableau offre, la
+         reprise des montants actuels comprise, et desormais l'effacement de la
+         ligne. Deux surfaces pour la meme saisie, dont une inutilisable au
+         doigt : c'est la regle des trois colonnes. -->
+    <details class="data-view large-seulement" style="margin-top:12px">
       <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
       <p class="hint" style="margin:12px 0 0">Le ⤒ d’une ligne y reprend tous les
         montants actuels d’un clic. La saisie case par case ne sert qu’à corriger
@@ -10350,24 +10359,8 @@ const ACTIONS = {
     Store.save(); render();
     toast(`${trad('Année')} ${an} ${trad('ouverte, 12 mois à remplir')}`);
   },
-  /* Un mois du calendrier se vide ; seules les lignes hors calendrier
-     (une clôture au 31/12, par exemple) se suppriment vraiment. */
   async 'del-month'(btn) {
-    const i = +btn.dataset.i;
-    const r = Store.state.monthly[i];
-    if (!r) return;
-    const calendrier = isCalendarMonth(r.date);
-    if (!await askConfirm(calendrier
-      ? `Effacer les montants de ${fmtMonth(r.date)} ?\n\n`
-        + `La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.\n\n`
-        + `Réversible avec Ctrl+Z.`
-      : `Supprimer la ligne du ${fmtDate(r.date)} ?\n\n`
-        + `Ce n'est pas un mois du calendrier : la ligne disparaîtra du tableau.\n\n`
-        + `Réversible avec Ctrl+Z.`)) return;
-    if (calendrier) clearMonthRow(r, 'comment');
-    else Store.state.monthly.splice(i, 1);
-    Store.save(); render();
-    toast(calendrier ? `${fmtMonth(r.date)} ${trad('vidé')}` : trad('Ligne supprimée'));
+    if (await viderOuSupprimerMois(+btn.dataset.i)) render();
   },
   async 'resolve-row'(btn) {
     const p = Store.state.positions[+btn.dataset.i];
@@ -12056,6 +12049,36 @@ function appliquerReleve(index, saisi) {
   return true;
 }
 
+/* Un mois du calendrier se vide ; seules les lignes hors calendrier (une clôture
+   au 31/12, par exemple) se suppriment vraiment.
+
+   Deux portes appellent ceci, le ✕ du tableau de correction et le bouton rouge de
+   la fenêtre du mois, et la nuance entre les deux cas ne se redit pas à chaque
+   fois : la question est un fait, elle se règle à un seul endroit. Rend vrai si
+   quelque chose a changé, et ne rafraîchit pas, l'appelant seul sachant s'il a
+   une fenêtre à fermer d'abord. */
+async function viderOuSupprimerMois(index) {
+  const r = Store.state.monthly[index];
+  if (!r) return false;
+  const calendrier = isCalendarMonth(r.date);
+  if (!await askConfirm(calendrier
+    ? `Effacer les montants de ${fmtMonth(r.date)} ?\n\n`
+      + `La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.\n\n`
+      + `Réversible avec Ctrl+Z.`
+    : `Supprimer la ligne du ${fmtDate(r.date)} ?\n\n`
+      + `Ce n'est pas un mois du calendrier : la ligne disparaîtra du tableau.\n\n`
+      + `Réversible avec Ctrl+Z.`)) return false;
+  if (calendrier) clearMonthRow(r, 'comment');
+  else Store.state.monthly.splice(index, 1);
+  Store.save();
+  /* Clef pointée : « Ligne supprimée » dit « Holding deleted » en anglais, une
+     ligne du portefeuille, et ce n'en est pas une. Un homographe se résout par
+     une clef, jamais en changeant celle du voisin. */
+  toast(calendrier ? `${fmtMonth(r.date)} ${trad('vidé')}`
+                   : trad('releve.ligneSupprimee', 'Ligne supprimée'));
+  return true;
+}
+
 function askMonthlySnapshot(index) {
   return new Promise(resolve => {
     const r = Store.state.monthly[index];
@@ -12143,6 +12166,24 @@ function askMonthlySnapshot(index) {
       <div class="field" style="margin-top:12px">
         <label>${trad('Commentaire du mois')}</label>
         <input id="relNote" value="${esc(r.comment || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
+      </div>
+      <!-- Effacer le mois, en bas, a part et rouge : la meme place que sur la
+           fiche d'une ligne, et pour la meme raison. Ce n'est pas ici qu'on
+           l'ecrit sous le pied de la fenetre, ou un troisieme bouton serait
+           voisin d'« Enregistrer ».
+
+           Il ferme le seul manque du tableau de correction, qui ne se propose
+           plus au doigt : sans lui, un mois saisi par erreur ne s'effacerait
+           plus depuis un telephone. Le libelle suit la nature de la ligne,
+           puisque l'acte n'est pas le meme. -->
+      <div class="fiche-danger">
+        <button type="button" class="btn ghost danger" id="relVider">${
+          isCalendarMonth(r.date) ? trad('Effacer ce relevé')
+                                  : trad('releve.supprimerLigne', 'Supprimer cette ligne')}</button>
+        <p class="hint">${isCalendarMonth(r.date)
+          ? trad('Les montants partent, le mois reste dans la liste, vide : les douze mois '
+            + 'de l’année s’affichent toujours.')
+          : trad('Ce n’est pas un mois du calendrier : la ligne disparaît de la liste.')}</p>
       </div>`;
     /*    Le meme pied que la fenetre jumelle des depenses, et c'est le point. «
    Certaines cartes il faut enregistrer puis fermer. La regle vaut pour la
@@ -12268,6 +12309,15 @@ function askMonthlySnapshot(index) {
     };
     $('#relFermer').onclick = quitter;
     $('#modalClose').onclick = quitter;
+    /* La saisie sale ne se demande pas : la question qui vient de recevoir un oui
+       portait deja sur l'effacement de ce mois-la, et proposer ensuite de garder
+       douze champs serait la contredire. C'est le raisonnement de la fiche d'une
+       ligne, au meme endroit. */
+    $('#relVider').onclick = async () => {
+      if (!await viderOuSupprimerMois(index)) return;
+      fermer(null);
+      render();
+    };
   });
 }
 

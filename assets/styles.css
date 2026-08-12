@@ -1023,6 +1023,15 @@ table .field :is(input, select) { max-width: none; }
 }
 .card-head .hint { font-size: 12px; color: var(--muted); }
 
+/* Deux boutons du meme geste passent a la ligne ensemble, ou pas du tout.
+
+   En-tete de carte souple, ils tombaient un par un : « + Rentree » restait en
+   haut a droite contre le selecteur d'annee, « + Depense » descendait seul a
+   gauche sous le sous-titre, a l'autre bout de la rangee. Deux entrees de la
+   meme paire lues comme deux commandes sans rapport. Un seul element de flex,
+   donc un seul point de rupture. */
+.paire-btn { display: flex; gap: 8px; }
+
 /* Le second etage d'une carte : le meme sujet vu de plus pres.
 
    Plus discret que le titre de la carte, et volontairement : ce n'est pas une

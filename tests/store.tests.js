@@ -13322,6 +13322,75 @@ suite('Une catégorie porte un total, et rien d’autre', () => {
   });
 });
 
+suite('Un mois se corrige au doigt, ou dans un tableau', () => {
+
+  test('la paire de boutons passe à la ligne d’un seul bloc', () => {
+    /* En-tete de carte souple, les deux boutons tombaient un par un : « + Rentree »
+       restait en haut a droite contre le selecteur d'annee, « + Depense » descendait
+       seul a gauche sous le sous-titre. Deux entrees de la meme paire lues comme
+       deux commandes sans rapport. Un seul element de flex, donc un seul point de
+       rupture. */
+    const src = lireSource('assets/app.js');
+    const css = lireSource('assets/styles.css');
+    const i = src.indexOf('class="paire-btn"');
+    vrai(i > 0, 'la paire existe');
+    const paire = src.slice(i, src.indexOf('</span>', i));
+    eq((paire.match(/data-action="ajouter-apport"/g) || []).length, 2,
+      'les deux boutons sont dans le même élément');
+    const regle = (css.match(/\.paire-btn \{[^}]*\}/) || [''])[0];
+    vrai(/display: flex/.test(regle), 'la paire est une rangée');
+    vrai(!/wrap/.test(regle),
+      'et rien n’y passe à la ligne : c’est tout le point de la mettre ensemble');
+  });
+
+  test('le tableau de correction ne se propose plus sous 767 px', () => {
+    /* Quinze colonnes dans un conteneur qui defile, quand la liste juste au-dessus
+       ouvre le meme mois dans une fenetre qui tient dans l'ecran : deux surfaces
+       pour la meme saisie, dont une inutilisable au doigt. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("trad('Corriger mois par mois");
+    vrai(i > 0, 'le dépliant existe');
+    const ouverture = src.lastIndexOf('<details', i);
+    vrai(/large-seulement/.test(src.slice(ouverture, i)),
+      'le dépliant est réservé aux grands écrans');
+  });
+
+  test('rien ne devient inatteignable : la fenêtre du mois efface aussi', () => {
+    /* Le tableau portait le seul ✕ de l'application sur un releve. Le cacher sans
+       rendre le geste ailleurs aurait retire d'un telephone la seule facon d'effacer
+       un mois saisi par erreur. */
+    const src = lireSource('assets/app.js');
+    vrai(/id="relVider"/.test(src), 'la fenêtre porte le bouton');
+    vrai(/\$\('#relVider'\)\.onclick/.test(src), 'et il est câblé');
+    vrai(/class="fiche-danger"[\s\S]{0,200}id="relVider"/.test(src),
+      'en bas, à part et rouge, comme sur la fiche d’une ligne');
+
+    /* La question se regle a un seul endroit : deux portes, un seul texte. */
+    eq((src.match(/Effacer les montants de \$\{fmtMonth/g) || []).length, 1,
+      'la question ne s’écrit qu’une fois');
+    const j = src.indexOf("async 'del-month'(btn)");
+    const action = src.slice(j, src.indexOf('},', j));
+    vrai(/viderOuSupprimerMois/.test(action), 'le ✕ du tableau appelle la même fonction');
+    vrai(!/askConfirm/.test(action), 'et ne repose pas la question à sa façon');
+  });
+
+  test('« Ligne supprimée » ne dit pas « Holding deleted » pour un mois', () => {
+    /* La clef-phrase etait deja prise par le portefeuille, ou une ligne est une
+       position. Reutiliser la clef aurait fait dire « Holding deleted » a la
+       suppression d'un releve ; changer sa traduction aurait casse l'autre. */
+    enLangue('en', () => {
+      eq(trad('releve.ligneSupprimee', 'Ligne supprimée'), 'Row deleted',
+        'un relevé supprimé est une ligne, pas une position');
+      eq(trad('releve.supprimerLigne', 'Supprimer cette ligne'), 'Delete this row',
+        'et le bouton de même');
+      eq(trad('Ligne supprimée'), 'Holding deleted',
+        'la clef du portefeuille garde son sens');
+    });
+    enLangue('fr', () => eq(trad('releve.ligneSupprimee', 'Ligne supprimée'), 'Ligne supprimée',
+      'et le français passe par le repli'));
+  });
+});
+
 suite('La licence ne ment pas', () => {
   test('le fichier LICENSE porte la licence que le README annonce', () => {
     /* La regle se derive du README : c'est lui qui annonce la licence au
