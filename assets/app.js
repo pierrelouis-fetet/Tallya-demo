@@ -3359,23 +3359,22 @@ function salesCard() {
       ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
         st.count === toutes.length ? '' : ` ${trad('sur.total', 'sur')} ${toutes.length}`}</span>
       ${plages}` : ''}
-      <!-- Les deux entrees du journal sont une paire : elles tombent a la ligne
-           ensemble et mesurent pareil. Separees, elles descendaient une par une
-           dans l'en-tete souple, et la longueur du libelle decidait de leur
-           largeur : 77 px pour l'une, 120 pour l'autre, l'une au-dessus de
-           l'autre. Deux commandes du meme geste ne se lisent pas comme ca.
+      <!-- Un seul bouton, et la nature se choisit dans la fenetre.
 
-           La vente d'avant l'application entre au journal telle qu'on s'en
-           souvient, et n'ecrit rien d'autre : ni cash, ni position, ni
-           patrimoine. C'est le chemin pour un PEA cloture, sans avoir a recreer
-           le compte, la ligne, vendre, puis archiver. -->
-      <span class="paire-btn">
-        <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
-                title="${aVendre ? trad('Enregistrer une vente et sa plus-value')
-                                 : trad('Aucune ligne de titres à vendre')}">− ${trad('Vendre')}</button>
-        <button class="btn sm ghost" data-action="declarer-vente"
-                title="${trad('Noter une vente d\'avant l\'application, pour mémoire : rien d\'autre ne bouge')}">${trad('+ Vente passée')}</button>
-      </span>
+           Ils etaient deux : « Vendre », grise faute de ligne a vendre, et
+           « Vente passee ». Deux entrees pour un seul geste — j'ai vendu quelque
+           chose — dont une souvent inerte, avec une infobulle que personne ne lit
+           au doigt. Le menu qui demande quoi vendre porte donc les lignes du
+           portefeuille, puis « une vente passee, pour memoire » : la meme
+           question, un seul controle.
+
+           Plus d'etat desactive : sans aucune ligne, la fenetre s'ouvre sur ce
+           repli. Un bouton qui a l'air disponible et se derobe est pire qu'un
+           bouton qui dit ce qu'il peut.
+           (Aucun backtick dans ce commentaire : il vit dans un litteral de
+           gabarit, et fermerait la chaine.) -->
+      <button class="btn sm ghost" data-action="sell-position"
+              title="${trad('Enregistrer une vente et sa plus-value, ou en déclarer une passée')}">− ${trad('Vendre')}</button>
     </div>
     ${!toutes.length ? `<p class="empty">${trad('Aucune vente enregistrée.')} ${aVendre
       ? trad('Le bouton « Vendre » enregistre la vente, sa plus-value, et crédite le compte de ton choix.')
@@ -4796,6 +4795,126 @@ function viewHistory() {
        dessous, donne les memes montants mois par mois avec leur ecart. Cette
        page sert a saisir ; on relit ailleurs. -->
 
+  <!-- Le relevé ouvre la page, et c'est le sujet de la page.
+
+       Il venait après le journal des entrées exceptionnelles, donc après un écran
+       de défilement : on arrivait sur un journal d'événements rares pour trouver
+       le calendrier des douze mois, qui est ce qu'on vient remplir. Une page
+       s'ouvre sur son geste. -->
+  <div class="card">
+    <div class="card-head">
+      <!-- Ce tableau compte le meme total que le graphique de l'accueil, par
+           rowTotal(), donc lui aussi sans retirer les dettes. Il ne dit pas
+           « net », il ne dit pas « brut » non plus : « du patrimoine » suffit a
+           lever l'ambiguite qu'on lui reprochait, savoir de quoi ces euros
+           sont le releve. -->
+      <h2>${trad('Relevé mensuel du patrimoine')}</h2>
+      ${yearControl('history-year', annees, annee)}
+    </div>
+    <div class="row" style="margin:-4px 0 12px">
+      <span class="hint">${lignes.length} ${lignes.length > 1 ? trad('mois affichés') : trad('mois affiché')}</span>
+      <span class="spacer"></span>
+      <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
+      <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
+    </div>
+    <!-- Douze lignes cliquables et pas un mot sur ce qu'on y met. Le calendrier
+         existe des le premier lancement, donc la carte n'a jamais l'air vide : sa
+         phrase ne peut pas dependre du nombre de lignes, seulement de ce qu'un
+         releve suppose — un compte a photographier. -->
+    ${pasAFaire('comptes') ? `
+    <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
+      + 'à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton '
+      + 'patrimoine et ton rythme d’épargne. Il attend donc un compte.')}</p>
+    ${invitePremierPas('comptes')}`
+    : invitePremierPas('releves')}
+    <!-- La liste sur tous les ecrans, et non plus seulement sur telephone.
+
+         Cette page portait une grille de treize colonnes sur le web et une liste
+         cliquable sur le telephone. Or le ⤒ remplit une ligne entiere d'un clic :
+         la grille est une surface de saisie pour quelque chose qu'on ne saisit
+         presque jamais case par case. Ce qu'on vient chercher ici, c'est comment
+         le patrimoine a bouge et quelle poche a bouge — une lecture.
+
+         La grille reste, derriere un depliant, pour la correction manuelle rare
+         et pour comparer douze mois sur treize axes — c'est la seule chose
+         qu'une grille fait mieux que tout le reste. -->
+    <div class="liste-principale">
+      ${lignes.map(({ r, i, g, total, dlt }) => {
+        const courant = r.date === currentMonthKey();
+        /* La barre ne se dessine que si le mois porte quelque chose : douze
+           pistes vides sous douze lignes vides feraient un accordeon gris.
+
+           Sa LONGUEUR vaut le total, rapporte au plus gros mois affiche ; ses
+           segments valent la composition. Sans ce plafond commun, chaque mois
+           etait normalise sur lui-meme et remplissait toute la largeur : aout a
+           36 107 EUR faisait exactement la longueur de janvier a 24 110. On
+           lisait la repartition, jamais la taille — alors que douze barres
+           alignees sont precisement l'endroit ou la taille se compare.
+
+           C'est la troisieme fois que ce defaut se presente dans cette
+           application, apres les barres de role et celles des charges fixes.
+           La regle est devenue celle de la maison : une barre posee a cote d'un
+           montant ou d'un pourcentage doit valoir ce montant, sinon elle le
+           contredit. */
+        const barre = total ? `<span class="ml-poches" aria-hidden="true">
+          <span class="ml-part" style="width:${(total / maxTotal * 100).toFixed(2)}%">${
+          poches.map(p => {
+            const v = Math.abs(num(g[p.key]));
+            if (!v) return '';
+            return `<i style="width:${(v / total * 100).toFixed(2)}%;background:${p.color}"
+                       title="${esc(p.label)}"></i>`;
+          }).join('')}</span></span>` : '';
+        return ligneListe({
+          action: 'edit-month', index: i,
+          ancre: courant ? 'mois-courant' : '',
+          classe: courant ? 'mois-courant' : '',
+          titre: fmtMonth(r.date),
+          sous: r.comment || '',
+          marque: courant && rowIsEmpty(r)
+            ? `<span class="marque-attendu" title="${trad('Le relevé de ce mois n\'est pas encore pris')}">⤒</span>` : '',
+          valeur: total ? fmtEUR0(total) : '',
+          second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
+          barre,
+        });
+      }).join('') || `<p class="empty">${trad('Aucun mois sur cette année.')}</p>`}
+    </div>
+    <!-- La classe est celle du graphique juste au-dessus, et non un nom
+         invente : elle porte l'espacement, les pastilles de couleur et la
+         teinte du texte. Une premiere version employait un nom qui n'existe
+         pas, et les quatre libelles sortaient colles, sans pastille et dans la
+         mauvaise couleur. Meme legende que la courbe, memes mots, memes
+         teintes : c'est la meme decomposition.
+         (Aucun guillemet oblique dans ce commentaire : il vit dans un litteral
+         de gabarit, un backtick y fermerait la chaine.) -->
+    ${poches.length ? `<div class="legend">${legendeSeries(poches)}</div>` : ''}
+
+    <!-- Le tableau de correction ne se propose plus sous 767 px, et ce n'est pas
+         un renoncement : il porte quinze colonnes dans un conteneur qui defile,
+         quand la liste juste au-dessus ouvre le meme mois dans une fenetre qui
+         tient dans l'ecran. La fenetre offre tout ce que le tableau offre, la
+         reprise des montants actuels comprise, et desormais l'effacement de la
+         ligne. Deux surfaces pour la meme saisie, dont une inutilisable au
+         doigt : c'est la regle des trois colonnes. -->
+    <details class="data-view large-seulement" style="margin-top:12px">
+      <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
+      <p class="hint" style="margin:12px 0 0">${trad('Le ⤒ d’une ligne y reprend tous les '
+        + 'montants actuels d’un clic. La saisie case par case ne sert qu’à corriger un mois passé.')}</p>
+    <div class="table-wrap" style="max-height:70vh; overflow-y:auto">
+      <table class="editable">
+        <thead><tr>
+          <th title="${trad('Reprendre les montants actuels dans la ligne')}">⤒</th>
+          <th class="sticky-col">Date</th><th>Total</th><th>Δ</th>
+          ${poches.map(p => `<th>${esc(p.label)}</th>`).join('')}
+          ${cols.map(a => `<th title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
+            >${esc(a.short)}<span class="th-etab">${esc(a.broker || '')}</span></th>`).join('')}
+          <th>Commentaire</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    </details>
+  </div>
+
   <!-- Le journal des rentrees exceptionnelles.
 
        Ici, dans les releves, parce que c'est la page des evenements du passe : un
@@ -4908,120 +5027,6 @@ function viewHistory() {
     </dl>`}
   </div>`;
   })()}
-
-  <div class="card">
-    <div class="card-head">
-      <!-- Ce tableau compte le meme total que le graphique au-dessus, par
-           rowTotal(), donc lui aussi sans retirer les dettes. Il ne dit pas
-           « net », il ne dit pas « brut » non plus : « du patrimoine » suffit a
-           lever l'ambiguite qu'on lui reprochait, savoir de quoi ces euros
-           sont le releve. -->
-      <h2>${trad('Relevé mensuel du patrimoine')}</h2>
-      ${yearControl('history-year', annees, annee)}
-    </div>
-    <div class="row" style="margin:-4px 0 12px">
-      <span class="hint">${lignes.length} ${lignes.length > 1 ? trad('mois affichés') : trad('mois affiché')}</span>
-      <span class="spacer"></span>
-      <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
-      <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
-    </div>
-    <!-- Douze lignes cliquables et pas un mot sur ce qu'on y met. Le calendrier
-         existe des le premier lancement, donc la carte n'a jamais l'air vide : sa
-         phrase ne peut pas dependre du nombre de lignes, seulement de ce qu'un
-         releve suppose — un compte a photographier. -->
-    ${pasAFaire('comptes') ? `
-    <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
-      + 'à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton '
-      + 'patrimoine et ton rythme d’épargne. Il attend donc un compte.')}</p>
-    ${invitePremierPas('comptes')}`
-    : invitePremierPas('releves')}
-    <!-- La liste sur tous les ecrans, et non plus seulement sur telephone.
-
-         Cette page portait une grille de treize colonnes sur le web et une liste
-         cliquable sur le telephone. Or le ⤒ remplit une ligne entiere d'un clic :
-         la grille est une surface de saisie pour quelque chose qu'on ne saisit
-         presque jamais case par case. Ce qu'on vient chercher ici, c'est comment
-         le patrimoine a bouge et quelle poche a bouge — une lecture.
-
-         La grille reste, derriere un depliant, pour la correction manuelle rare
-         et pour comparer douze mois sur treize axes — c'est la seule chose
-         qu'une grille fait mieux que tout le reste. -->
-    <div class="liste-principale">
-      ${lignes.map(({ r, i, g, total, dlt }) => {
-        const courant = r.date === currentMonthKey();
-        /* La barre ne se dessine que si le mois porte quelque chose : douze
-           pistes vides sous douze lignes vides feraient un accordeon gris.
-
-           Sa LONGUEUR vaut le total, rapporte au plus gros mois affiche ; ses
-           segments valent la composition. Sans ce plafond commun, chaque mois
-           etait normalise sur lui-meme et remplissait toute la largeur : aout a
-           36 107 EUR faisait exactement la longueur de janvier a 24 110. On
-           lisait la repartition, jamais la taille — alors que douze barres
-           alignees sont precisement l'endroit ou la taille se compare.
-
-           C'est la troisieme fois que ce defaut se presente dans cette
-           application, apres les barres de role et celles des charges fixes.
-           La regle est devenue celle de la maison : une barre posee a cote d'un
-           montant ou d'un pourcentage doit valoir ce montant, sinon elle le
-           contredit. */
-        const barre = total ? `<span class="ml-poches" aria-hidden="true">
-          <span class="ml-part" style="width:${(total / maxTotal * 100).toFixed(2)}%">${
-          poches.map(p => {
-            const v = Math.abs(num(g[p.key]));
-            if (!v) return '';
-            return `<i style="width:${(v / total * 100).toFixed(2)}%;background:${p.color}"
-                       title="${esc(p.label)}"></i>`;
-          }).join('')}</span></span>` : '';
-        return ligneListe({
-          action: 'edit-month', index: i,
-          ancre: courant ? 'mois-courant' : '',
-          classe: courant ? 'mois-courant' : '',
-          titre: fmtMonth(r.date),
-          sous: r.comment || '',
-          marque: courant && rowIsEmpty(r)
-            ? `<span class="marque-attendu" title="${trad('Le relevé de ce mois n\'est pas encore pris')}">⤒</span>` : '',
-          valeur: total ? fmtEUR0(total) : '',
-          second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
-          barre,
-        });
-      }).join('') || `<p class="empty">${trad('Aucun mois sur cette année.')}</p>`}
-    </div>
-    <!-- La classe est celle du graphique juste au-dessus, et non un nom
-         invente : elle porte l'espacement, les pastilles de couleur et la
-         teinte du texte. Une premiere version employait un nom qui n'existe
-         pas, et les quatre libelles sortaient colles, sans pastille et dans la
-         mauvaise couleur. Meme legende que la courbe, memes mots, memes
-         teintes : c'est la meme decomposition.
-         (Aucun guillemet oblique dans ce commentaire : il vit dans un litteral
-         de gabarit, un backtick y fermerait la chaine.) -->
-    ${poches.length ? `<div class="legend">${legendeSeries(poches)}</div>` : ''}
-
-    <!-- Le tableau de correction ne se propose plus sous 767 px, et ce n'est pas
-         un renoncement : il porte quinze colonnes dans un conteneur qui defile,
-         quand la liste juste au-dessus ouvre le meme mois dans une fenetre qui
-         tient dans l'ecran. La fenetre offre tout ce que le tableau offre, la
-         reprise des montants actuels comprise, et desormais l'effacement de la
-         ligne. Deux surfaces pour la meme saisie, dont une inutilisable au
-         doigt : c'est la regle des trois colonnes. -->
-    <details class="data-view large-seulement" style="margin-top:12px">
-      <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
-      <p class="hint" style="margin:12px 0 0">${trad('Le ⤒ d’une ligne y reprend tous les '
-        + 'montants actuels d’un clic. La saisie case par case ne sert qu’à corriger un mois passé.')}</p>
-    <div class="table-wrap" style="max-height:70vh; overflow-y:auto">
-      <table class="editable">
-        <thead><tr>
-          <th title="${trad('Reprendre les montants actuels dans la ligne')}">⤒</th>
-          <th class="sticky-col">Date</th><th>Total</th><th>Δ</th>
-          ${poches.map(p => `<th>${esc(p.label)}</th>`).join('')}
-          ${cols.map(a => `<th title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
-            >${esc(a.short)}<span class="th-etab">${esc(a.broker || '')}</span></th>`).join('')}
-          <th>Commentaire</th><th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    </details>
-  </div>
 
   <div class="card">
     <div class="card-head"><h2>${trad('Notes de marché')}</h2>
@@ -8327,36 +8332,21 @@ const ACTIONS = {
   async 'sell-position'() {
     const v = await askSale();
     if (!v) return;
+    /* Le dernier choix du menu des lignes est « une vente passee » : la fenetre
+       rend alors ce que rendait sa jumelle, et c'est ici que les deux chemins se
+       separent — l'un touche le portefeuille, l'autre le seul journal. */
+    if (v.passee) {
+      declarerVente(v);
+      Store.save(); render();
+      toast(`${guill(v.name)} ${trad('ajoutée au journal')} · ${fmtSigned(num(v.realised))}`);
+      return;
+    }
     Store.addBackup('avant vente');
     const a = sellPosition(v);
     if (!a) { toast(trad('Vente impossible')); return; }
     Store.save(); render();
     const ou = v.cashAccount ? ` · encaissé sur ${ACC[v.cashAccount]?.short || 'le cash'}` : '';
     toast(`${a.realised >= 0 ? trad('Plus-value') : trad('Moins-value')} ${trad('de')} ${fmtSigned(a.realised)}${ou}`);
-  },
-  /*    La vente d'avant l'application. Elle entre au journal telle qu'on s'en
-   souvient — l'encaisse et le resultat, le prix de revient s'en derive — et
-   n'ecrit rien d'autre : ni cash, ni position, ni patrimoine.*/
-  async 'declarer-vente'() {
-    const v = await askForm({
-      titre: trad('Déclarer une vente passée'),
-      sous: trad('Pour mémoire : rien d’autre ne bouge, ni cash ni patrimoine'),
-      ok: 'Ajouter au journal',
-      champs: [
-        { cle: 'name', label: trad('Titre vendu'), type: 'texte', requis: true,
-          max: NOM_LIGNE_MAX, exemple: 'ex. Total, vendu sur l’ancien PEA' },
-        { cle: 'date', label: trad('Date de la vente'), type: 'date',
-          aide: trad('même approximative : elle range la vente dans son année') },
-        { cle: 'gross', label: trad('Montant encaissé (€)'), type: 'nombre', exemple: '0' },
-        { cle: 'realised', label: trad('Plus ou moins-value réalisée (€)'), type: 'nombre', exemple: '0',
-          aide: trad('négative si la vente a perdu : le prix de revient s’en déduit') },
-        { cle: 'note', label: 'Note', type: 'texte', exemple: trad('facultatif') },
-      ],
-    });
-    if (!v) return;
-    declarerVente(v);
-    Store.save(); render();
-    toast(`${guill(v.name)} ${trad('ajoutée au journal')} · ${fmtSigned(num(v.realised))}`);
   },
   /* Ajouter une ligne : un seul chemin, et c'est la recherche.
 
@@ -11247,12 +11237,34 @@ function askConfirm(texte, { danger = true, ok = 'Confirmer', refus = 'Annuler' 
 /* Formulaire d'ajout de compte. Résout avec les champs saisis, ou null. */
 /* Vendre une ligne. Le calcul s'affiche en direct pendant la saisie : on voit
    la plus-value avant de valider, pas après. */
+/* Vendre, et « pour mémoire » comme dernier choix de la même liste.
+
+   Deux boutons vivaient dans l'en-tete du journal : « Vendre », grise faute de
+   ligne a vendre, et « Vente passee ». Deux entrees pour un seul geste — j'ai
+   vendu quelque chose — et l'une des deux souvent inerte, avec une infobulle que
+   personne ne lit au doigt.
+
+   La nature se choisit donc dans le menu qui demande deja quoi vendre : les
+   lignes du portefeuille, puis « une vente passee ». C'est le meme controle
+   parce que c'est la meme question — de quoi parle-t-on — et elle se pose avant
+   les montants, ce qui compte : la nature change ce que les chiffres veulent
+   dire, la deviner apres sept champs remplis les jetterait.
+
+   L'asymetrie justifie ici ce qu'on a refuse ailleurs. « + Rentree » et
+   « + Depense » sont deux sens opposes du meme acte, connus au moment ou l'on
+   appuie : deux boutons, et pas de menu de nature. Une vente passee n'est pas
+   l'oppose d'une vente, c'en est la variante degradee — celle que l'application
+   n'a pas pu calculer et qu'on ne fait que declarer. Le repli se choisit apres
+   avoir cherche sa ligne, pas avant.
+
+   Sans aucune ligne de titres, la fenetre s'ouvre directement sur ce repli au
+   lieu de refuser de s'ouvrir. */
 function askSale(indexInitial) {
   return new Promise(resolve => {
     const m = $('#modal');
     apercuOuvert = null;
     const ps = Store.state.positions;
-    if (!ps.length) { toast(trad('Aucune ligne à vendre')); resolve(null); return; }
+    const sansLigne = !ps.length;
 
     $('#modalTitle').textContent = trad('Vendre une ligne');
     $('#modalSub').textContent = 'La plus-value est calculée sur ton prix de revient';
@@ -11260,19 +11272,29 @@ function askSale(indexInitial) {
       <div class="modal-champs">
         <div class="field"><label>Ligne</label>
           <select id="vePos">${ps.map((p, i) =>
-            `<option value="${i}" ${i === (indexInitial ?? 0) ? 'selected' : ''}>${esc(p.name)}, ${num(p.qty)} × ${fmtCur(num(p.price), p.currency)}</option>`).join('')}</select></div>
-        <div class="field"><label>${trad('Nombre d\'actions vendues')}</label>
+            `<option value="${i}" ${!sansLigne && i === (indexInitial ?? 0) ? 'selected' : ''}>${esc(p.name)}, ${num(p.qty)} × ${fmtCur(num(p.price), p.currency)}</option>`).join('')}<option
+            value="passee" ${sansLigne ? 'selected' : ''}>${trad('Une vente passée, pour mémoire')}</option></select></div>
+        <div class="field" data-vente="passee" hidden><label>${trad('Titre vendu')}</label>
+          <input id="vePasNom" maxlength="${NOM_LIGNE_MAX}" autocomplete="off"
+                 placeholder="${trad('ex. Total, vendu sur l’ancien PEA')}" style="text-align:left"></div>
+        <div class="field" data-vente="reelle"><label>${trad('Nombre d\'actions vendues')}</label>
           <input type="number" step="any" id="veQty" autocomplete="off">
           <span class="hint" id="veDispo"></span></div>
-        <div class="field"><label>${trad('Prix de vente unitaire')}</label>
+        <div class="field" data-vente="reelle"><label>${trad('Prix de vente unitaire')}</label>
           <input type="number" step="any" id="vePrice" autocomplete="off">
           <span class="hint" id="veDev"></span></div>
-        <div class="field" id="veFxWrap" hidden><label>${trad('Taux de change à la vente')}</label>
+        <div class="field" data-vente="reelle" id="veFxWrap" hidden><label>${trad('Taux de change à la vente')}</label>
           <input type="number" step="any" id="veFx" autocomplete="off">
           <span class="hint">${trad('1 unité de devise = ce montant en euros')}</span></div>
+        <div class="field" data-vente="passee" hidden><label>${trad('Montant encaissé (€)')}</label>
+          <input type="number" step="any" id="vePasGross" autocomplete="off"></div>
+        <div class="field" data-vente="passee" hidden><label>${trad('Plus ou moins-value réalisée (€)')}</label>
+          <input type="number" step="any" id="vePasPnl" autocomplete="off">
+          <span class="hint">${trad('négative si la vente a perdu : le prix de revient s’en déduit')}</span></div>
         <div class="field"><label>Date</label>
-          <input type="date" id="veDate" value="${todayISO()}"></div>
-        <div class="field"><label>${trad('Le produit va sur')}</label>
+          <input type="date" id="veDate" value="${todayISO()}">
+          <span class="hint" data-vente="passee" hidden>${trad('même approximative : elle range la vente dans son année')}</span></div>
+        <div class="field" data-vente="reelle"><label>${trad('Le produit va sur')}</label>
           <select id="veCash"></select>
           <span class="hint">${trad('Sans ça, ton patrimoine baisserait du montant vendu')}</span></div>
         <div class="field"><label>Note</label>
@@ -11285,9 +11307,28 @@ function askSale(indexInitial) {
     montrerModal(m);
 
     const sel = $('#vePos'), qte = $('#veQty'), prix = $('#vePrice'), fx = $('#veFx');
+    const passee = () => sel.value === 'passee';
+
+    /* Les champs de chaque nature s'affichent ou s'effacent d'un coup. Le taux de
+       change garde son propre secret : il ne se montre que sur une ligne en
+       devise, donc `chargerLigne()` le decide apres, jamais celle-ci. */
+    const majNature = () => {
+      const p = passee();
+      $('#modalBody').querySelectorAll('[data-vente]').forEach(el => {
+        el.hidden = el.dataset.vente !== (p ? 'passee' : 'reelle');
+      });
+      if (p) $('#veFxWrap').hidden = true;
+      $('#modalTitle').textContent = p ? trad('Déclarer une vente passée') : trad('Vendre une ligne');
+      $('#modalSub').textContent = p
+        ? trad('Pour mémoire : rien d’autre ne bouge, ni cash ni patrimoine')
+        : 'La plus-value est calculée sur ton prix de revient';
+      $('#veOk').textContent = p ? trad('Ajouter au journal') : trad('Enregistrer la vente');
+    };
 
     /* Quand on change de ligne, on repart de ses propres valeurs. */
     const chargerLigne = () => {
+      majNature();
+      if (passee()) { majApercuVente(); return; }
       const p = ps[+sel.value];
       qte.value = num(p.qty);
       qte.max = num(p.qty);
@@ -11307,6 +11348,26 @@ function askSale(indexInitial) {
     };
 
     const majApercuVente = () => {
+      /* La vente passee n'a rien a verifier : on ne connait ni quantite ni prix
+         de revient, c'est le detenteur qui donne le resultat. L'apercu se
+         contente donc de le relire, et le bouton ne se bloque que sur un nom
+         manquant — sans nom, la ligne du journal ne dirait pas de quoi elle
+         parle. */
+      if (passee()) {
+        const nom = $('#vePasNom').value.trim();
+        const pnl = num($('#vePasPnl').value);
+        $('#veOk').disabled = !nom;
+        $('#veApercu').innerHTML = !nom
+          ? `<div class="note">⚠ <span>${trad('Indique le titre vendu.')}</span></div>`
+          : `<div class="note" style="${pnl >= 0
+              ? 'background:color-mix(in oklab, var(--good) 12%, var(--surface-1)); border-color:color-mix(in oklab, var(--good) 38%, transparent)'
+              : 'background:color-mix(in oklab, var(--critical) 10%, var(--surface-1)); border-color:color-mix(in oklab, var(--critical) 34%, transparent)'}">
+              ${pnl >= 0 ? '↗' : '↘'}
+              <span><b>${pnl >= 0 ? trad('Plus-value') : trad('Moins-value')} ${trad('de')} ${fmtSigned(pnl)}</b><br>
+              ${trad('Au journal seulement : ni cash, ni position, ni patrimoine ne bougent.')}</span>
+            </div>`;
+        return;
+      }
       const p = ps[+sel.value];
       const a = salePreview(p, qte.value, prix.value, $('#veFxWrap').hidden ? 1 : fx.value);
       const trop = a.qty > num(p.qty), nul = a.qty <= 0;
@@ -11332,10 +11393,12 @@ function askSale(indexInitial) {
     };
 
     sel.onchange = chargerLigne;
-    for (const el of [qte, prix, fx]) el.oninput = majApercuVente;
+    for (const el of [qte, prix, fx, $('#vePasNom'), $('#vePasGross'), $('#vePasPnl')]) el.oninput = majApercuVente;
     chargerLigne();
-    focusChamp(qte);
-    qte.select();
+    /* Le premier champ de la nature choisie, et non toujours la quantite : sans
+       ligne a vendre, le curseur tombait dans un champ cache. */
+    if (passee()) focusChamp($('#vePasNom'));
+    else { focusChamp(qte); qte.select(); }
 
     const fermer = v => {
       masquerModal(m);      $('#modalClose').onclick = null;
@@ -11344,6 +11407,16 @@ function askSale(indexInitial) {
     $('#veCancel').onclick = () => fermer(null);
     $('#modalClose').onclick = () => fermer(null);
     $('#veOk').onclick = () => {
+      if (passee()) {
+        const name = $('#vePasNom').value.trim();
+        if (!name) return;
+        fermer({
+          passee: true, name,
+          gross: num($('#vePasGross').value), realised: num($('#vePasPnl').value),
+          date: $('#veDate').value, note: $('#veNote').value.trim(),
+        });
+        return;
+      }
       const p = ps[+sel.value];
       const a = salePreview(p, qte.value, prix.value, $('#veFxWrap').hidden ? 1 : fx.value);
       if (a.qty <= 0 || a.qty > num(p.qty)) return;

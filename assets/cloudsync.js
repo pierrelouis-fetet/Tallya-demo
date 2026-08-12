@@ -103,7 +103,8 @@ const CloudSync = (() => {
     status.pushing = true;
     try {
       /* La version qu'on a lue part avec l'ecriture : le serveur n'accepte que si
-         c'est encore celle en place. Voir la note de `functions/api/state.js`.
+         c'est encore celle en place. Voir la note de `handleState()` dans
+         `_worker.js`, le seul point d'entree que Cloudflare Pages charge.
          Sans ce parametre, un onglet ouvert depuis des heures ecrasait ce qu'un
          autre appareil venait d'enregistrer, sur la seule foi d'une estampille
          plus fraiche. */

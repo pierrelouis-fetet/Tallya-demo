@@ -269,6 +269,18 @@ bien (`bienId`).
   grille, mais dans une rangée ils donnaient quatre largeurs sur une même fiche —
   117, 160, 299 et 364 px — et rien ne s'alignait. C'est la grille qui décide de
   la largeur, le champ l'occupe.
+- **Deux boutons, ou un bouton et un menu de nature : ça se tranche par la
+  symétrie.** « + Rentrée » et « + Dépense » sont deux sens opposés du même acte,
+  connus au moment où l'on appuie : deux boutons, et pas de menu — le demander
+  ensuite ferait répondre deux fois à la même question. « Vendre » et « Vente
+  passée » ne sont pas symétriques : la seconde est la variante dégradée de la
+  première, celle que l'application n'a pas pu calculer et qu'on ne fait que
+  déclarer. Un seul bouton, donc, et le repli en dernier choix du menu qui demande
+  **quoi** vendre : la nature se choisit dans le même contrôle que le sujet, et
+  avant les montants — elle change ce que les chiffres veulent dire.
+  Bénéfice de bord : plus de bouton désactivé. Sans ligne à vendre, la fenêtre
+  s'ouvre sur le repli au lieu de refuser de s'ouvrir, et un `disabled` dont la
+  raison vit dans une infobulle ne se lit pas au doigt.
 - **Deux boutons du même geste passent à la ligne ensemble, et mesurent pareil.**
   `.paire-btn` en fait un seul élément de flex — donc un seul point de rupture —
   et une grille à colonnes `1fr` leur donne la largeur du libellé le plus long.

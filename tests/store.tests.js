@@ -8154,9 +8154,16 @@ suite('Une vente s’ajoute depuis le journal des ventes', () => {
       + 'l’écran où l’on vient saisir la première');
     vrai(/data-action="sell-position"/.test(bloc[0]),
       'et elle porte le bouton qui l’alimente');
-    vrai(/aVendre \? '' : 'disabled'/.test(bloc[0]),
-      'désactivé s’il n’y a aucune ligne de titres : un bouton qui ouvre une '
-      + 'fenêtre pour la refermer aussitôt ne vaut pas mieux qu’une erreur');
+    /* Il fut desactive faute de ligne a vendre, au motif qu'une fenetre qui
+       s'ouvre pour se refermer ne vaut pas mieux qu'une erreur. La fenetre ne se
+       referme plus : son menu propose « une vente passee, pour memoire », et
+       s'ouvre dessus quand il n'y a rien a vendre. Un bouton grise qui ne dit
+       pourquoi que dans une infobulle est pire, au doigt, qu'une fenetre qui
+       montre ce qu'elle peut. */
+    vrai(!/disabled/.test(bloc[0]),
+      'et il ne se désactive plus : sans ligne, la fenêtre s’ouvre sur la vente passée');
+    vrai(!/data-action="declarer-vente"/.test(bloc[0]),
+      'un seul bouton : la nature de la vente se choisit dans la fenêtre');
   });
 
   test('aucun écran n’envoie plus chercher ce bouton ailleurs', () => {
@@ -8397,12 +8404,14 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
     const worker = lireSource('_worker.js');
     vrai(/path === '\/api\/state'\) return handleState/.test(worker),
       'c’est bien _worker.js qui route /api/state');
+    /* La copie morte est supprimee, `shared/market.js` avec elle : il n'y a plus
+       qu'un seul endroit ou corriger. Le controle reste malgre tout, au cas ou
+       quelqu'un recree le dossier en croyant que Pages le charge. */
     const mort = lireSource('functions/api/state.js');
-    if (mort) {
-      vrai(/base !== prevAt/.test(mort),
-        'la copie morte de functions/api/ existe encore : elle doit porter la même '
-        + 'règle, sinon le prochain correctif ira dans celle qui ne tourne pas');
-    }
+    vrai(!mort || /base !== prevAt/.test(mort),
+      'functions/api/ est du code mort chez Pages : soit il n’existe pas, soit il '
+      + 'porte la même règle, sinon le prochain correctif ira dans celui qui ne '
+      + 'tourne pas');
   });
 
   test('la base voyage avec l’écriture, beacon compris', () => {
@@ -13449,12 +13458,13 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
        rupture. */
     const src = lireSource('assets/app.js');
     const css = lireSource('assets/styles.css');
-    /* Deux paires dans l'application : les entrees du journal des apports, et
-       celles du journal des ventes, qui tombaient une par une pour la meme
-       raison. Chacune porte exactement deux boutons — trois ne seraient plus une
-       paire, et la grille leur donnerait trois colonnes. */
+    /* Il en reste une, celle du journal des apports : les deux entrees du journal
+       des ventes ont fusionne en un seul bouton, la nature se choisissant dans le
+       menu de la fenetre. La regle vaut pour toute paire, pas pour celle-la :
+       chacune porte exactement deux boutons — trois ne seraient plus une paire, et
+       la grille leur donnerait trois colonnes. */
     const paires = [...src.matchAll(/class="paire-btn">([\s\S]*?)<\/span>/g)].map(m => m[1]);
-    vrai(paires.length >= 2, `les deux paires doivent être trouvables, ${paires.length} trouvée(s)`);
+    vrai(paires.length >= 1, `au moins une paire doit être trouvable, ${paires.length} trouvée(s)`);
     paires.forEach((p, n) => {
       eq((p.match(/<button/g) || []).length, 2,
         `la paire ${n + 1} porte deux boutons, et ils sont dans le même élément`);
@@ -14234,10 +14244,13 @@ suite('L’interface tient ses seuils', () => {
        62 px, leurs libelles se replient, et le controle mesure alors le pire des
        cas plutot que celui qu'il croit regarder. */
     boite.style.width = '600px';
+    /* Deux libelles de longueurs franchement inegales, comme la paire des apports
+       — « + Rentrée » contre « + Dépense ». C'est l'ecart qui rend le defaut
+       visible : en flex, le plus long imposait sa largeur a lui seul. */
     boite.innerHTML = '<div class="card-head"><h2>Journal</h2>'
       + '<span class="paire-btn">'
-      + '<button class="btn sm ghost">− Vendre</button>'
-      + '<button class="btn sm ghost">+ Vente passée</button>'
+      + '<button class="btn sm ghost">+ Rentrée</button>'
+      + '<button class="btn sm ghost">+ Dépense exceptionnelle</button>'
       + '</span></div>';
     document.body.appendChild(boite);
     try {

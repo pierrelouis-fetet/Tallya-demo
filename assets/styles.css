@@ -5180,19 +5180,25 @@ details[open]::details-content { block-size: auto; }
   box-shadow: 0 0 0 2px var(--surface-1);
 }
 
-/* ---------------- Budget : charges variables puis charges fixes ----------
-   Les deux grands tableaux se suivent, sur toute la largeur. L'ordre du
-   balisage place « Charges fixes » en premier, pour une raison d'historique ;
-   `order` le renvoie apres la colonne qui porte l'epargne et les autres
-   depenses, sans qu'on ait a deplacer soixante lignes de gabarit. */
-/* La colonne interieure s'efface en `display: contents` : ses deux cartes
+/* ---------------- Budget : le resume, puis les deux tableaux ----------
+   Trois cartes a la suite, sur toute la largeur, et l'ordre du balisage n'est
+   pas le bon : `order` le corrige sans qu'on ait a deplacer soixante lignes de
+   gabarit.
+
+   « Epargne mensuelle » vient en premier, juste sous « Ce qui sort chaque
+   mois » : c'est un resume de six lignes — revenus, charges, depenses, epargne
+   theorique, taux, objectif — et il se lit avant les tableaux qui le detaillent.
+   Il fermait la page, donc apres cent lignes de saisie, alors qu'il repond a la
+   question qu'on se pose en arrivant. Le commentaire d'avant annoncait deja
+   qu'il « passe devant » : l'ordre disait le contraire.
+
+   La colonne interieure s'efface en `display: contents` : ses deux cartes
    deviennent des elements de la grille exterieure, et l'ordre se decide alors
-   sur les trois d'un coup. Sans elle, l'epargne restait coincee devant
-   « Autres depenses » et separait les deux grands tableaux. */
+   sur les trois d'un coup. */
 .budget-charges > .grid { display: contents; }
-.budget-charges > .card { order: 1; }                      /* Charges fixes */
-.budget-charges > .grid > .card:nth-child(2) { order: 2; } /* Autres depenses */
-.budget-charges > .grid > .card:nth-child(1) { order: 3; } /* Epargne mensuelle */
+.budget-charges > .grid > .card:nth-child(1) { order: 1; } /* Epargne mensuelle */
+.budget-charges > .card { order: 2; }                      /* Charges fixes */
+.budget-charges > .grid > .card:nth-child(2) { order: 3; } /* Autres depenses */
 
 /* Pastille sur un sous-onglet : le meme ambre que celle du menu, posee contre
    le libelle. Elle dit lequel des trois onglets attend une saisie, ce que la
