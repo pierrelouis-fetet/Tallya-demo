@@ -22,8 +22,22 @@ prises et les pièges rencontrés. Ce fichier-ci ne dit que les règles.
    une seule, et aucun fichier d'`assets/` ne peut être servi sans balise.
    Régénérer les icônes compte comme un changement d'`assets/` : voir
    `ICONES.md` et `icones.py`.
-4. **Demander l'accord** du mainteneur. `git push` déclenche le déploiement
-   Cloudflare : on ne pousse jamais de sa propre initiative.
+4. **Pousser sans demander, si et seulement si les trois points ci-dessus sont
+   faits.** L'accord est donné d'avance, le 12 août 2026 : ce qui le remplace,
+   c'est la liste. Les tests verts, complétés, la balise de version remplacée,
+   l'arbre de travail propre, et alors le push.
+
+   Ce qui reste interdit sans un mot, parce qu'aucune vérification ne le rattrape :
+   `--force` et toute réécriture d'un historique déjà publié ; un `git push` qui
+   pousse une branche autre que celle demandée ; ici, pousser la branche de
+   travail, dont l'historique est privé, la publication passant par
+   `public-propre:main` et par elle seule. Et en cas de rejet pour
+   non-fast-forward, on regarde ce que le distant porte en plus avant de faire
+   quoi que ce soit : quelqu'un a écrit ailleurs, l'écraser perdrait son travail.
+
+   Les deux `fatal: Failed to write item to store` de chaque push sont du bruit :
+   c'est la ligne d'avancement des refs qui dit si l'envoi a abouti, jamais le
+   code de sortie.
 
 ## Ce que les tests doivent couvrir
 

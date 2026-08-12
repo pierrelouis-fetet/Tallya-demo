@@ -13183,20 +13183,26 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
     const bloc = src.slice(src.indexOf('function viewPerformance'),
                            src.indexOf('function mountPerformance'));
     vrai(bloc, 'la vue doit être trouvable');
-    vrai(/class="grid \$\{tout\.count \? 'g-3' : 'g-2'\} g-tuiles"/.test(bloc),
+    vrai(/class="grid \$\{surTout && tout\.count \? 'g-3' : 'g-2'\} g-tuiles"/.test(bloc),
       'la rangée compte ses tuiles, elle ne laisse pas un trou');
-    vrai(/\$\{tout\.count \? `[\s\S]{0,200}?data-apercu="perfTotale"/.test(bloc),
-      'la tuile du total est gardée par l’existence d’une vente');
+    /* La rangee suit la plage : l'encaisse la prend, la latente ne peut pas —
+       elle mesure ce qu'on detient aujourd'hui — et le total n'a de sens que la
+       ou les deux parts couvrent la meme periode. */
+    vrai(/const surTout = salesRange === 'all';/.test(src),
+      '« Tout » est la seule plage où la somme se tient');
+    vrai(/\$\{surTout && tout\.count \? `[\s\S]{0,200}?data-apercu="perfTotale"/.test(bloc),
+      'le total ne s’affiche donc que là, jamais sur une plage plus courte');
     vrai(/const total = lat\.pnl \+ tout\.realised;/.test(bloc),
-      'le total est la somme de ses deux parts');
-    vrai(/data-apercu="perfRealisee" data-arg="all"/.test(bloc),
-      'la tuile du réalisé prend la même borne que le total, et son aperçu la reçoit');
-    vrai(!/st\.realised/.test(bloc),
-      'aucun montant de la plage glissante dans la rangée : elle garde les graphiques');
+      'et il reste la somme de ses deux parts, prises sur tout');
+    vrai(/data-apercu="perfRealisee" data-arg="\$\{esc\(salesRange\)\}"/.test(bloc),
+      'la tuile du réalisé suit le sélecteur, et son aperçu reçoit la même plage');
+    vrai(/trad\('Plus-value encaissée'\)\}\$\{surTout \? '' : ` · \$\{esc\(libellePlage\)\}`\}/.test(bloc),
+      'la période est dans le libellé, pas dans la meta : sous 768 px la meta est '
+      + 'invisible, et un montant sans base y serait muet sur sa période');
     /* Un zero signe annonce un gain nul ; une absence de ligne ou de vente n'est
        pas un gain nul. Les deux tuiles suivent la meme regle. */
-    for (const v of ['lat', 'tout']) {
-      vrai(new RegExp(`\\$\\{\\s*${v}\\.count \\? fmtSigned\\(${v}\\.(pnl|realised)\\) : fmtEUR0\\(0\\)\\}`).test(bloc),
+    for (const [v, champ] of [['lat', 'pnl'], ['st', 'realised']]) {
+      vrai(new RegExp(`\\$\\{\\s*${v}\\.count \\? fmtSigned\\(${v}\\.${champ}\\) : fmtEUR0\\(0\\)\\}`).test(bloc),
         `la tuile « ${v} » dit son zéro sans signe quand elle n’a rien à compter`);
     }
     vrai(!/Lignes en gain/.test(src), 'la quatrième tuile est partie du fichier');
@@ -13276,6 +13282,17 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
     vrai(!/data-action="del-sale"/.test(bloc),
       'l’annulation quitte la liste : un geste irréversible collé au geste de lecture');
 
+    /* Deux lectures du journal, et le tri par montant est signe : la plus grosse
+       plus-value en tete, les pertes en queue. Trier sur la valeur absolue aurait
+       mis la pire perte au sommet du classement des gains. */
+    vrai(/data-action="tri-ventes" data-tri="date"/.test(bloc)
+      && /data-action="tri-ventes" data-tri="montant"/.test(bloc),
+      'le journal se lit par date ou par montant');
+    vrai(/sort\(\(a, b\) => num\(b\.realised\) - num\(a\.realised\)\)/.test(bloc),
+      'et le tri par montant est signé, du plus gros gain à la pire perte');
+    vrai(/let triVentes = 'date';/.test(src),
+      'la date reste le défaut : un journal est un récit avant d’être un classement');
+
     const ap = src.slice(src.indexOf('vente: (i) =>'), src.indexOf('vente: (i) =>') + 2200);
     vrai(ap.length > 500, 'l’aperçu d’une vente doit être trouvable');
     for (const champ of ['Produit encaissé', 'Prix de revient vendu', 'Plus-value']) {
@@ -13290,6 +13307,24 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
     /* Un panneau ne survit pas a ce qu'il decrit : il porte le bouton qui retire
        la vente, et son rafraichissement sortirait en silence faute de la
        retrouver — donc un ecran fige sur des montants qui n'existent plus. */
+    /* Modifier une vente : la frontiere est celle des consequences. Date, nom et
+       note ne touchent a rien d'autre. Les montants d'une vraie vente ont credite
+       un compte et reduit une ligne : les corriger apres coup ferait dire au
+       journal 900 EUR quand 944 sont arrives, sans que rien ne le signale. */
+    const ed = src.slice(src.indexOf("async 'edit-sale'"), src.indexOf("async 'edit-sale'") + 3000);
+    vrai(ed.length > 500, 'l’édition d’une vente doit être trouvable');
+    for (const champ of ['date', 'name', 'note']) {
+      vrai(new RegExp(`cle: '${champ}'`).test(ed), `« ${champ} » se modifie sur toute vente`);
+    }
+    vrai(/\.\.\.\(v\.declaree \? \[/.test(ed),
+      'les montants ne s’offrent que sur une vente déclarée, qui n’a rien écrit d’autre');
+    vrai(/lecture: true/.test(ed),
+      'et sur une vraie vente ils s’affichent en lecture, pas en champ grisé');
+    vrai(/annuler cette vente, puis la ressaisir/.test(ed),
+      'la fenêtre dit le chemin exact au lieu de laisser chercher');
+    vrai(/if \(v\.declaree\) \{[\s\S]{0,400}?v\.invested = round2\(v\.gross - v\.realised\)/.test(ed),
+      'le prix de revient se dérive : trois champs pour deux libertés se contrediraient');
+
     vrai(/function fermerApercuSi\(cle\)/.test(src), 'la fermeture existe');
     eq((src.match(/fermerApercuSi\('vente'\)/g) || []).length, 2,
       'et elle est appelée dans les deux branches de del-sale, déclarée comme annulée');

@@ -2915,6 +2915,11 @@ select.annee {
   text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px;
 }
 @media (hover: hover) { .dep-n:hover { color: var(--text-primary); } }
+/* Le chevron du compte de montants. Il tourne d'un quart de tour a l'ouverture,
+   et l'etat vient de la classe posee sur le champ : la fleche ne peut donc pas
+   se desynchroniser du panneau, elle lit la meme verite. */
+.dep-chev { display: inline-block; margin-left: 3px; transition: transform .16s ease; }
+.dep-champ.ouvert .dep-chev { transform: rotate(90deg); }
 
 /* Ouvert, le champ prend toute la largeur de la grille : trois colonnes de
    140 px ne logent pas un libellé, un montant et une croix. */
