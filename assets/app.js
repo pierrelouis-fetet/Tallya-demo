@@ -2794,7 +2794,7 @@ function sortableTh(key, label, extraClass = '', explication = '', suffixe = '')
   return `<th class="sortable ${on ? posSort.dir : ''} ${extraClass}">`
        + `<button type="button" class="th-tri" data-action="sort-positions" data-key="${key}"`
        + ` title="${trad('Trier par')} ${esc(trad(label))}, ${trad('ordre')} ${sens}">${esc(trad(label))}${suffixe}</button>`
-       + (explication ? aide(explication) : '')
+       + (explication ? aide(trad(explication)) : '')
        + `</th>`;
 }
 
@@ -2944,7 +2944,7 @@ function viewPositions() {
        la file feraient un marathon de pouce a 375 px. -->
   <div class="reperes-familles" id="reperesFamilles" role="tablist"
        aria-label="${trad('Familles de repères')}" hidden></div>
-  <div class="reperes" id="reperes" aria-label="Marchés" hidden></div>
+  <div class="reperes" id="reperes" aria-label="${trad('Marchés')}" hidden></div>
 
   ${(() => {
     const j = dayPerformance();
@@ -3024,7 +3024,7 @@ function viewPositions() {
                  reste en infobulle et dans la fiche. -->
             <span class="jl-nom"><button type="button" class="mois-lien"
               data-action="open-position" data-i="${l.index}"
-              title="${esc(l.name)} · voir la fiche complète">${
+              title="${esc(l.name)} · ${trad('voir la fiche complète')}">${
                 esc(l.name)}</button></span>
             <span class="jl-poids muted">${fmtPct(poidsLigne(l), 1)}</span>
             <!-- Les colonnes Cours et Cloture veille sont parties d'ici, et avec
@@ -3092,12 +3092,12 @@ function viewPositions() {
                 cloture que tu n'as pas vecue. C'est ici et non dans une colonne
                 a part, parce que sous 460 px il ne reste que le nom, le poids,
                 la variation et l'effet.
-             -->${l.depuisAchat ? '<span class="jl-quand">acheté aujourd’hui</span>' : ''}<!--
+             -->${l.depuisAchat ? `<span class="jl-quand">${trad('acheté aujourd’hui')}</span>` : ''}<!--
                 Les deux faits sont vrais, et cote a cote ils se contredisent
                 — sans cette mention, « ouvert · +0,00 % » se lit « le titre
                 ne bouge pas ».-->${l.horsSeance ? `<span class="jl-quand">${l.quoteTime
-                 ? `cours ${esc(fmtCoursQuand(l.quoteTime))}`
-                 : 'pas coté aujourd’hui'}</span>` : ''}</span>
+                 ? `${trad('cours')} ${esc(fmtCoursQuand(l.quoteTime))}`
+                 : trad('pas coté aujourd’hui')}</span>` : ''}</span>
           </div>`).join('')}
       </div>
       <!-- Le paragraphe qui vivait ici est parti dans les intitules de colonnes.
@@ -3240,9 +3240,9 @@ function viewPositions() {
           ${sortableTh('name', 'Nom', 'sticky-col')}
           ${sortableTh('qty', 'Qté')}
           ${sortableTh('pru', 'PRU', '',
-            'Prix de revient unitaire, dans la devise de cotation.', ' <span class="u">dev.</span>')}
+            'Prix de revient unitaire, dans la devise de cotation.', ` <span class="u">${trad('dev.')}</span>`)}
           ${sortableTh('cours', 'Cours', '',
-            'Dernier cours connu, dans la devise de cotation.', ' <span class="u">dev.</span>')}
+            'Dernier cours connu, dans la devise de cotation.', ` <span class="u">${trad('dev.')}</span>`)}
           ${sortableTh('value', 'Valeur €')}${sortableTh('invested', 'Investi €')}
           ${sortableTh('perfEur', 'Perf €')}${sortableTh('perfPct', 'Perf %')}
           ${sortableTh('poids', '% portef.', '',
@@ -3461,7 +3461,7 @@ function salesCard() {
    seance principale. */
 const GLYPHES_SEANCE = {
   open:  { icone: 'soleil', titre: trad('Marché ouvert') },
-  pre:   { icone: 'soleil', titre: 'Pré-ouverture' },
+  pre:   { icone: 'soleil', titre: trad('Pré-ouverture') },
   post:  { icone: 'soleil', titre: trad('Après clôture') },
   close: { icone: 'lune',   titre: trad('Marché fermé · dernier cours de clôture') },
 };
@@ -3578,7 +3578,7 @@ async function mountReperes() {
   box.innerHTML = utiles.map(l => `
     <button type="button" class="repere" data-action="apercu"
             data-apercu="repere" data-arg="${esc(l.symbole)}"
-            title="${esc(l.nom)}${l.quoteTime ? ` · cours ${fmtCoursQuand(l.quoteTime)}` : ''}">
+            title="${esc(l.nom)}${l.quoteTime ? ` · ${trad('cours')} ${fmtCoursQuand(l.quoteTime)}` : ''}">
       <span class="rp-tete">
         <span class="rp-nom">${esc(l.nom)}</span>
         ${glypheSeance(marketStatus(l))}
@@ -3657,11 +3657,14 @@ function mountPositions() {
    Cours automatiques
    ------------------------------------------------------------ */
 function fmtWhen(iso) {
-  if (!iso) return 'jamais';
+  if (!iso) return trad('jamais');
   const d = new Date(iso), mins = Math.round((Date.now() - d) / 60000);
-  if (mins < 1) return "à l'instant";
-  if (mins < 60) return `il y a ${mins} min`;
-  if (mins < 1440) return `il y a ${Math.round(mins / 60)} h`;
+  if (mins < 1) return trad("à l'instant");
+  /* Le nombre se place par gabarit et non par concatenation : l'anglais met
+     l'anciennete apres la duree, « 5 min ago », et deux fragments cousus dans
+     l'ordre francais donneraient « ago 5 min ». */
+  if (mins < 60) return trad('il y a {n} min').replace('{n}', mins);
+  if (mins < 1440) return trad('il y a {n} h').replace('{n}', Math.round(mins / 60));
   return d.toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
 }
 
@@ -3682,7 +3685,7 @@ function barreEtatCours() {
          et rien ne disait qu'on pouvait cliquer dessus pour relancer une
          récupération qui a échoué. L'icône tourne pendant l'appel. -->
     <button class="etat-cours" id="btnQuotes" type="button" data-action="refresh-quotes"
-            title="${trad('Récupérer les cours de bourse')}"><i class="pt"></i><span id="coursQuand">Cours</span><span
+            title="${trad('Récupérer les cours de bourse')}"><i class="pt"></i><span id="coursQuand">${trad('Cours')}</span><span
             class="etat-maj" aria-hidden="true">↻</span></button>
   </div>`;
 }
@@ -3764,19 +3767,24 @@ function majEtatCours(etat) {
   quand.textContent = ferme ? trad('hors séance')
                     : partiel ? `${j.horsSeance} ${trad('hors séance')}`
                     : marche ? fmtWhen(new Date(marche * 1000))
-                    : last ? fmtWhen(last) : 'Cours';
+                    : last ? fmtWhen(last) : trad('Cours');
   /* Les deux heures dans l'infobulle, parce que leur ecart est justement ce
      qu'on cherche a savoir quand les chiffres ne bougent pas. */
+  /* Le compte des lignes passe par un gabarit a deux nombres : l'accord du
+     verbe et du pluriel differe d'une langue a l'autre, et l'anglais n'a qu'une
+     forme la ou le francais en a deux. */
   btn.title = marche
-    ? `Cours ${fmtCoursQuand(marche)}, relevés ${fmtWhen(last)}`
-      + (ferme ? ' · aucune de tes lignes n’a coté depuis minuit'
-       : partiel ? ` · ${j.horsSeance} ligne${j.horsSeance > 1 ? 's' : ''} sur `
-                 + `${j.lignes.length} n’${j.horsSeance > 1 ? 'ont' : 'a'} pas encore coté aujourd’hui`
+    ? `${trad('Cours')} ${fmtCoursQuand(marche)}, ${trad('relevés')} ${fmtWhen(last)}`
+      + (ferme ? ` · ${trad('aucune de tes lignes n’a coté depuis minuit')}`
+       : partiel ? ' · ' + trad(j.horsSeance > 1
+                    ? '{n} lignes sur {t} n’ont pas encore coté aujourd’hui'
+                    : '{n} ligne sur {t} n’a pas encore coté aujourd’hui')
+                    .replace('{n}', j.horsSeance).replace('{t}', j.lignes.length)
        : '')
-      + ' · cliquer pour actualiser'
+      + ` · ${trad('cliquer pour actualiser')}`
     : last
-    ? `Cours mis à jour ${fmtWhen(last)} · cliquer pour actualiser`
-    : 'Récupérer les cours de bourse';
+    ? `${trad('Cours mis à jour')} ${fmtWhen(last)} · ${trad('cliquer pour actualiser')}`
+    : trad('Récupérer les cours de bourse');
 }
 
 function symbolSearchCard() {
@@ -3816,8 +3824,7 @@ function symbolSearchCard() {
            pourquoi, et c'est une limite technique qui interesse le jour ou l'on
            se demande pourquoi le champ ISIN est reste vide. -->
       <p class="small muted" style="margin:8px 0 0">
-        <b>${trad('Colle plutôt l\'ISIN de ton relevé')}</b> : la ligne se remplit alors
-        entièrement.${aide(trad("Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout."))}
+        <b>${trad('Colle plutôt l\'ISIN de ton relevé')}</b>${trad(' : la ligne se remplit alors entièrement.')}${aide(trad("Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout."))}
       </p>
       <div id="symResults" class="small" style="margin-top:12px"></div>
       </details>
@@ -5915,7 +5922,7 @@ function espaceBien(c, idx, t) {
         </div>
         <div class="field"><label>Adresse</label>
           <input data-path="comptes.${idx}.lignes.${i}.adresse" value="${esc(l.adresse || '')}"
-                 placeholder="facultatif" style="text-align:left"></div>
+                 placeholder="${trad('facultatif')}" style="text-align:left"></div>
       </div>`).join('')}
     ${(() => {
       /* Le prix au mètre carré : c'est lui qu'on compare aux annonces du
@@ -6222,7 +6229,7 @@ function viewFicheCompte(id) {
     </div>
     ${(c.cash || []).length ? (c.cash || []).map((e, i) => `
       <div class="plc-ligne">
-        <span class="cpt-nom">Liquidités</span>
+        <span class="cpt-nom">${trad('Liquidités')}</span>
         <select data-path="comptes.${idx}.cash.${i}.affectation" class="annee" title="${trad('À quoi sert cet argent ?')}">
           ${AFFECTATIONS.map(([v, l]) => `<option value="${v}" ${v === e.affectation ? 'selected' : ''}>${l}</option>`).join('')}
         </select>
@@ -6300,14 +6307,14 @@ function viewFicheCompte(id) {
     const valeur = valeurCompte(c);
     return `
   <div class="card">
-    <div class="card-head"><h2>Financement${aide(trad("Ce que cet établissement te prête : une marge de courtier, un prêt sur titres, une avance. Les placements achetés avec cet argent restent comptés en entier dans tes avoirs, puisque tu les possèdes, et le montant prêté se retranche de ton patrimoine net. Ne le note pas en liquidités négatives sur le compte : il compterait deux fois, et aucun écran ne le dirait. Le crédit appartient à l’établissement, pas à ce compte : s’il en tient plusieurs, il n’est déduit qu’une fois du patrimoine."))}</h2>
+    <div class="card-head"><h2>${trad('Financement')}${aide(trad("Ce que cet établissement te prête : une marge de courtier, un prêt sur titres, une avance. Les placements achetés avec cet argent restent comptés en entier dans tes avoirs, puisque tu les possèdes, et le montant prêté se retranche de ton patrimoine net. Ne le note pas en liquidités négatives sur le compte : il compterait deux fois, et aucun écran ne le dirait. Le crédit appartient à l’établissement, pas à ce compte : s’il en tient plusieurs, il n’est déduit qu’une fois du patrimoine."))}</h2>
       <span class="hint">${dettes.length
-        ? `chez ${esc(etab.nom)}, pour tous ses comptes`
-        : 'marge, prêt sur titres, avance'}</span>
+        ? `${trad('chez')} ${esc(etab.nom)}, ${trad('pour tous ses comptes')}`
+        : trad('marge, prêt sur titres, avance')}</span>
       <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">${trad('+ Crédit')}</button></div>
     ${!dettes.length ? `
-    <p class="small muted" style="margin:0">Aucun crédit chez ${esc(etab.nom)}.
-      Si ce courtier te prête, sur marge par exemple, déclare-le ici.</p>`
+    <p class="small muted" style="margin:0">${trad('Aucun crédit chez')} ${esc(etab.nom)}.
+      ${trad('Si ce courtier te prête, sur marge par exemple, déclare-le ici.')}</p>`
     : `<div class="mlist-groupe">${dettes.map(({ d, i }) => `
       <button type="button" class="mlist" data-action="editer-credit"
               data-etab="${esc(etab.id)}" data-i="${i}" title="${trad('Modifier ce crédit')}">
@@ -6375,10 +6382,10 @@ function viewFicheCompte(id) {
              (Aucun guillemet oblique ici : ce commentaire vit dans un litteral
              de gabarit, un backtick y fermerait la chaine.) -->
         <dt>${trad('Type de')} ${motCompte(t)}${aide(t.interne
-          ? 'Les espèces n’ont pas d’établissement : personne ne les tient pour '
+          ? trad('Les espèces n’ont pas d’établissement : personne ne les tient pour '
           + 'toi. Ce compte existe une fois, il ne se choisit pas dans la liste '
-          + 'et ne se supprime pas. S’il n’y a plus de billets, mets-le à 0.'
-          : 'Il commande la poche du patrimoine, les classes que le compte peut '
+          + 'et ne se supprime pas. S’il n’y a plus de billets, mets-le à 0.')
+          : trad('Il commande la poche du patrimoine, les classes que le compte peut '
           + 'porter et la disponibilité de ce qu’il contient. On peut le corriger '
           + 'à tout moment : l’historique des relevés suit le compte, il ne se '
           + 'perd pas. Un changement qui laisserait un placement sans place est '
@@ -6387,8 +6394,8 @@ function viewFicheCompte(id) {
           + 'parts de société, Plateforme A ou un pacte d’associés : on sort au rachat, '
           + 'pas à une date. « Financement participatif » pour un prêt à un taux, '
           + 'avec une échéance et un état : ces lignes-là portent une date de '
-          + 'remboursement, et l’application te rappelle celles qui l’ont dépassée.')}</dt>
-        <dd>${esc(t.label)}${t.interne ? ', sans établissement' : ''}</dd>
+          + 'remboursement, et l’application te rappelle celles qui l’ont dépassée.'))}</dt>
+        <dd>${esc(trad(t.label))}${t.interne ? trad(', sans établissement') : ''}</dd>
         <!-- Le plafond, sur les livrets seulement, et saisi plutot que deduit :
              le modele connait le type « livret », pas le produit. Une table des
              plafonds par produit aurait demande d'etre tenue a jour a chaque
@@ -6422,10 +6429,10 @@ function viewFicheCompte(id) {
            remplit au moment ou l'on y pense. -->
       <div class="field" style="margin-top:12px"><label>Notes</label>
         <input data-path="comptes.${idx}.notes" value="${esc(c.notes || '')}"
-               placeholder="facultatif" style="text-align:left"></div>
+               placeholder="${trad('facultatif')}" style="text-align:left"></div>
     </div>
     <div class="card">
-      <div class="card-head"><h2>Actions</h2></div>
+      <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
       ${boutonEnregistrerFiche()}
       <!-- La meme geometrie que la rangee du dessus, et non une rangee de petits
            boutons : deux hauteurs differentes, l'une justifiee a droite et l'autre
@@ -6440,8 +6447,8 @@ function viewFicheCompte(id) {
         <button class="btn ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">${trad('Clôturer et supprimer')}</button>
       </div>
       <p class="small muted" style="margin:12px 0 0">
-        Archiver conserve l’historique et sort le compte de tous les totaux.
-        Supprimer efface aussi ses montants des vues. Les relevés passés restent lisibles.
+        ${trad('Archiver conserve l’historique et sort le compte de tous les totaux. '
+          + 'Supprimer efface aussi ses montants des vues. Les relevés passés restent lisibles.')}
       </p>
     </div>
   </div>`;
@@ -6510,7 +6517,7 @@ function viewFicheEtab(id) {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Crédits en cours${aide(trad("Un crédit pèse en négatif sur le patrimoine net : patrimoine net = total de tes avoirs moins tes crédits."))}</h2>
+    <div class="card-head"><h2>${trad('Crédits en cours')}${aide(trad("Un crédit pèse en négatif sur le patrimoine net : patrimoine net = total de tes avoirs moins tes crédits."))}</h2>
       <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(e.id)}">${trad('+ Crédit')}</button></div>
     ${(e.dettes || []).length ? e.dettes.map((d, i) => `
       <div class="plc-ligne">
@@ -6522,22 +6529,22 @@ function viewFicheEtab(id) {
              nommée et rouge — c'est ce qu'on vient faire ici quand un crédit
              ne finance plus rien. -->
         <button class="btn sm danger" data-action="retirer-credit"
-                data-id="${esc(e.id)}" data-i="${i}">Supprimer</button>
+                data-id="${esc(e.id)}" data-i="${i}">${trad('Supprimer')}</button>
       </div>`).join('') + `
       <p class="small muted" style="margin:12px 0 0">
-        Après chaque mensualité, baisse le capital restant dû : ton
-        patrimoine net monte d’autant, sans que la valeur du bien change.
+        ${trad('Après chaque mensualité, baisse le capital restant dû : ton patrimoine net '
+          + 'monte d’autant, sans que la valeur du bien change.')}
       </p>`
-    : `<p class="empty">Aucun crédit déclaré chez ${esc(e.nom)}.</p>`}
+    : `<p class="empty">${trad('Aucun crédit déclaré chez')} ${esc(e.nom)}.</p>`}
   </div>
 
   <div class="card">
     <div class="card-head"><h2>Notes</h2></div>
-    <input data-path="etabs.${idx}.notes" value="${esc(e.notes || '')}" placeholder="facultatif" style="text-align:left">
+    <input data-path="etabs.${idx}.notes" value="${esc(e.notes || '')}" placeholder="${trad('facultatif')}" style="text-align:left">
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Actions</h2></div>
+    <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
     ${boutonEnregistrerFiche()}
   </div>`;
 }
@@ -8666,11 +8673,17 @@ const ACTIONS = {
            Le libelle porte le compte qui le determine, sinon « deduit des comptes
            rattaches » obligerait a aller les compter ailleurs. */
         { cle: 'type', label: 'Type', type: 'texte', valeur: trad(mot.titre), lecture: true,
+          /* La phrase entiere est la clef, ponctuation comprise : l'anglais ne
+             met pas d'espace avant un deux-points, et coudre « deduit de son
+             compte » + « : » + la liste imposait la typographie francaise aux
+             deux langues. */
           aide: siens.length
-            ? `déduit de ${siens.length === 1 ? 'son compte' : `ses ${siens.length} comptes`} `
-              + `: ${siens.map(c => typeCompte(c.type).label).join(', ')}. `
-              + 'Pour le changer, change ce qu’il contient.'
-            : 'aucun compte rattaché pour l’instant, donc le terme le plus large' },
+            ? (siens.length === 1
+                ? trad('déduit de son compte : {types}. Pour le changer, change ce qu’il contient.')
+                : trad('déduit de ses {n} comptes : {types}. Pour le changer, change ce qu’il contient.')
+                    .replace('{n}', siens.length))
+                .replace('{types}', siens.map(c => trad(typeCompte(c.type).label)).join(', '))
+            : trad('aucun compte rattaché pour l’instant, donc le terme le plus large') },
         { cle: 'notes', label: 'Notes', type: 'texte', valeur: e.notes || '',
           exemple: 'ex. le numéro du conseiller, la date du prochain point',
           aide: trad('facultatif') },
@@ -11494,7 +11507,7 @@ function askPosition(index) {
           <select data-path="positions.${index}.assetClass">
             ${OPTIONS_CLASSE.map(([v, l]) => `<option value="${v}" ${v === assetClassDe(p) ? 'selected' : ''}>${esc(l)}</option>`).join('')}
           </select></div>
-        <div class="field"><label>${trad('Date d’achat')}${aide(DATE_ACHAT_AIDE)}</label>
+        <div class="field"><label>${trad('Date d’achat')}${aide(trad(DATE_ACHAT_AIDE))}</label>
           <input type="date" data-path="positions.${index}.dateAchat" value="${esc(p.dateAchat || '')}"></div>
         <div class="field"><label>${trad('Nature')}${aide(trad("Un fonds répartit le risque sur des centaines de lignes, un titre en direct le concentre sur une société. La classe d'actif ne le dit pas (un MSCI World et une action Meta sont tous deux des actions), et c'est pourtant ce qui distingue un socle d'un pari. Déduit de l'instrument, corrigeable ici."))}</label>
           <select data-path="positions.${index}.nature">
@@ -12159,7 +12172,7 @@ function askMonthlySnapshot(index) {
            La photo du jour le note déjà ; sans ce champ, un mois rempli à la
            main resterait sans dette et sa part nette ne monterait jamais. -->
       <div class="field" style="margin-top:12px">
-        <label>Crédits en cours ce mois-là (€)${aide(trad("Le total du capital restant dû à cette date. Il ne se soustrait pas des champs ci-dessus (ceux-ci portent la valeur brute de chaque compte), mais il fait monter la part nette de tes biens, mois après mois, à mesure que tu rembourses."))}</label>
+        <label>${trad('Crédits en cours ce mois-là (€)')}${aide(trad("Le total du capital restant dû à cette date. Il ne se soustrait pas des champs ci-dessus (ceux-ci portent la valeur brute de chaque compte), mais il fait monter la part nette de tes biens, mois après mois, à mesure que tu rembourses."))}</label>
         <input type="number" step="any" inputmode="decimal" id="relDettes"
                class="champ-large" value="${num(r.dettes) || ''}" placeholder="0">
       </div>
@@ -13982,7 +13995,7 @@ function majOnglets() {
      repoussé n'en fait pas partie : `notifications()` s'appuie sur `missing`. */
   const n = notifications();
   pastille('#pastilleCloche', n.length,
-    n.length === 1 ? n[0].title : `${n.length} points à regarder`);
+    n.length === 1 ? n[0].title : trad('{n} points à regarder').replace('{n}', n.length));
 }
 
 function renderSidebar() {
@@ -14059,7 +14072,8 @@ function renderSidebar() {
   /* Le patrimoine du menu est lui aussi une bascule : son infobulle doit
      dire l'etat courant, comme l'oeil. */
   const nw = $('#sbNetWorth');
-  if (nw) nw.title = (masqueActif() ? 'Afficher' : 'Masquer') + ' les montants (touche h)';
+  if (nw) nw.title = (masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants'))
+    + ' ' + trad('(touche h)');
 }
 
 /* -------------------------------------------------------------
@@ -14918,7 +14932,7 @@ function bindGlobal() {
     for (const b of [burger, profil]) {
       if (!b) continue;
       b.setAttribute('aria-expanded', String(open));
-      b.setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu');
+      b.setAttribute('aria-label', trad(open ? 'Fermer le menu' : 'Ouvrir le menu'));
     }
     backdrop.hidden = !open;
     majOnglets();

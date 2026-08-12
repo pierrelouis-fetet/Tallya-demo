@@ -9853,8 +9853,10 @@ suite('Une fiche se valide ou s’annule, et rien ne se saisit sans borne', () =
     /* Le tri vit dans un bouton a l'interieur de la cellule, et l'aide a cote. */
     vrai(/<button type="button" class="th-tri" data-action="sort-positions"/.test(src),
       'le tri est porté par un bouton, pas par la cellule entière');
-    vrai(/\+ \(explication \? aide\(explication\) : ''\)/.test(src),
-      'et l’explication se pose à côté de ce bouton');
+    /* `trad()` autour de l'explication : elle arrive d'un appelant qui l'écrit en
+       français, et une bulle d'aide se traduit comme le reste. */
+    vrai(/\+ \(explication \? aide\(trad\(explication\)\) : ''\)/.test(src),
+      'et l’explication se pose à côté de ce bouton, traduite');
     vrai(!/<th title="Prix de revient unitaire/.test(src),
       'plus aucune explication sur la cellule elle-même');
 
@@ -13388,6 +13390,101 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
     });
     enLangue('fr', () => eq(trad('releve.ligneSupprimee', 'Ligne supprimée'), 'Ligne supprimée',
       'et le français passe par le repli'));
+  });
+});
+
+suite('Les fiches et les marchés parlent anglais en anglais', () => {
+
+  /* Le releve de la panne : sur une application chargee en anglais, une fiche de
+     compte disait « Compte courant », « Financement », « facultatif », et la page
+     des marches « cours from yesterday at 22:00 » — la moitie francaise d'une
+     phrase dont l'autre moitie etait traduite. Trois familles de causes, et une
+     seule mesure honnete : lire le DOM d'une page vraiment chargee en anglais.
+     Ce qui suit garde les trois portes fermees. */
+
+  test('aucun attribut affiché ne porte du français en dur', () => {
+    /* Un `title` ou un `aria-label` ecrit en clair dans le balisage ne passe par
+       aucune fonction : il n'a aucune chance d'etre traduit un jour. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const nu = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+    const fautes = [...nu.matchAll(/\b(placeholder|title|aria-label)="([^"${}<>]*[àâäéèêëîïôöùûüçœ][^"${}<>]*)"/g)]
+      .map(m => `${m[1]}="${m[2]}"`);
+    eq(fautes.join(' | '), '', 'ces attributs ne passeront jamais par trad()');
+  });
+
+  test('une bulle d’aide reçoit une phrase traduite, jamais une chaîne nue', () => {
+    /* `aide()` pose son texte dans un attribut : elle ne traduit pas, elle
+       transporte. Deux bulles longues sont restees francaises par ce chemin. */
+    const src = lireSource('assets/app.js');
+    const nu = src.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const nues = [...nu.matchAll(/\baide\(\s*['"]([^'"]{6,})/g)].map(m => m[1].slice(0, 45));
+    eq(nues.join(' | '), '', 'aide() reçoit une chaîne nue : elle restera française');
+  });
+
+  test('les libellés statiques d’index.html ont tous leur anglais', () => {
+    /* Douze titres et intitules vivaient dans le balisage statique, hors
+       d'atteinte de `trad()`. `translateStatic()` les traduit desormais par leur
+       valeur : le francais qui s'y trouve EST la clef, donc chacun doit en avoir
+       une, sans quoi la traduction est un silence. */
+    const html = lireSource('index.html');
+    vrai(html, 'index.html doit être lisible pour ce contrôle');
+    const corps = html.replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<script[\s\S]*?<\/script>/g, ' ');
+    const sans = [...corps.matchAll(/\b(title|aria-label|placeholder)="([^"]+)"/g)]
+      .map(m => m[2])
+      .filter(v => /[A-Za-zÀ-ÿ]{4}/.test(v) && !I18N.en[v]);
+    eq([...new Set(sans)].join(' | '), '',
+      'ces attributs statiques n’ont pas de traduction anglaise');
+    vrai(/for \(const a of ATTRS_TRADUITS\)/.test(lireSource('assets/i18n.js')),
+      'et translateStatic() parcourt bien les attributs');
+  });
+
+  test('l’ancienneté d’un cours se dit dans les deux langues', () => {
+    /* Le nombre se place par gabarit : l'anglais met l'anciennete apres la
+       duree, « 5 min ago », et deux fragments cousus dans l'ordre francais
+       donneraient « ago 5 min ». */
+    /* `fmtWhen()` vit dans app.js, que cette page ne charge pas : on lit son
+       câblage dans la source et son vocabulaire dans le dictionnaire, et on
+       compose comme elle le fait. */
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf('function fmtWhen'), src.indexOf('function fmtWhen') + 800);
+    vrai(/return trad\('jamais'\)/.test(f), 'sans date, une phrase traduite');
+    vrai(/trad\("à l'instant"\)/.test(f), 'et à l’instant aussi');
+    vrai(/trad\('il y a \{n\} min'\)\.replace\('\{n\}', mins\)/.test(f),
+      'les minutes passent par un gabarit, pas par une concaténation');
+    enLangue('fr', () => {
+      eq(trad('jamais'), 'jamais', 'le français passe par le repli');
+      eq(trad('il y a {n} min').replace('{n}', 5), 'il y a 5 min', 'et l’ordre français');
+    });
+    enLangue('en', () => {
+      eq(trad('jamais'), 'never', 'sans date, never');
+      eq(trad('il y a {n} min').replace('{n}', 5), '5 min ago',
+        'et l’ordre anglais, pas « ago 5 min »');
+    });
+  });
+
+  test('le compte des lignes non cotées s’accorde, dans les deux langues', () => {
+    /* Le francais a deux formes, « une ligne n'a pas cote » et « deux lignes
+       n'ont pas cote », l'anglais une seule : le pluriel se choisit avant la
+       traduction, jamais en cousant un « s » a la sortie. */
+    for (const cle of ['{n} ligne sur {t} n’a pas encore coté aujourd’hui',
+                       '{n} lignes sur {t} n’ont pas encore coté aujourd’hui']) {
+      enLangue('en', () => {
+        const dit = trad(cle);
+        vrai(dit !== cle, `« ${cle.slice(0, 20)}… » a son anglais`);
+        vrai(dit.includes('{n}') && dit.includes('{t}'),
+          'et garde ses deux nombres, sinon le compte disparaît');
+      });
+    }
+  });
+
+  test('le préfixe d’un cours et l’heure qu’il porte parlent la même langue', () => {
+    /* La faute d'origine, et la plus visible : « cours » en dur devant une heure
+       que `fmtCoursQuand()` rendait deja en anglais. */
+    const src = lireSource('assets/app.js');
+    eq((src.match(/`cours \$\{/g) || []).length, 0, 'plus un seul préfixe « cours » en dur');
+    enLangue('en', () => eq(trad('cours'), 'price', 'et le mot a son anglais'));
   });
 });
 

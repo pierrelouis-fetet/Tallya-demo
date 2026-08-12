@@ -224,6 +224,80 @@ const I18N = {
     "déclarée, pour mémoire": "declared, for the record",
     "Par année": "By year",
     "Additionner un autre montant dans ce champ": "Add another amount into this field",
+
+    /* Les fiches de comptes, les fiches d'etablissement et la page des marches.
+       Un nombre entre accolades se place par gabarit et non par concatenation :
+       l'anglais met l'anciennete apres la duree, « 5 min ago », et deux
+       fragments cousus dans l'ordre francais donneraient « ago 5 min ». */
+    "voir la fiche complète": "see the full card",
+    "acheté aujourd’hui": "bought today",
+    "Pré-ouverture": "Pre-market",
+    "jamais": "never",
+    "à l'instant": "just now",
+    "il y a {n} min": "{n} min ago",
+    "il y a {n} h": "{n} h ago",
+    "relevés": "fetched",
+    "{n} lignes sur {t} n’ont pas encore coté aujourd’hui": "{n} of {t} holdings have not traded yet today",
+    "{n} ligne sur {t} n’a pas encore coté aujourd’hui": "{n} of {t} holdings has not traded yet today",
+    "cliquer pour actualiser": "click to refresh",
+    "Cours mis à jour": "Prices updated",
+    " : la ligne se remplit alors entièrement.": ": the holding then fills in on its own.",
+    "Financement": "Financing",
+    "pour tous ses comptes": "for all its accounts",
+    "marge, prêt sur titres, avance": "margin, securities loan, advance",
+    "Aucun crédit chez": "No loan at",
+    "Si ce courtier te prête, sur marge par exemple, déclare-le ici.": "If this broker lends to you, on margin for example, declare it here.",
+    "Archiver conserve l’historique et sort le compte de tous les totaux. Supprimer efface aussi ses montants des vues. Les relevés passés restent lisibles.": "Archiving keeps the history and takes the account out of every total. Deleting also removes its amounts from the views. Past statements stay readable.",
+    "Après chaque mensualité, baisse le capital restant dû : ton patrimoine net monte d’autant, sans que la valeur du bien change.": "After each instalment, lower the principal outstanding: your net worth rises by as much, without the asset's value changing.",
+    "Aucun crédit déclaré chez": "No loan declared at",
+    "Crédits en cours ce mois-là (€)": "Loans outstanding that month (€)",
+    "déduit de son compte : {types}. Pour le changer, change ce qu’il contient.": "deduced from its account: {types}. To change it, change what it contains.",
+    "déduit de ses {n} comptes : {types}. Pour le changer, change ce qu’il contient.": "deduced from its {n} accounts: {types}. To change it, change what it contains.",
+    "aucun compte rattaché pour l’instant, donc le terme le plus large": "no account attached yet, so the widest term",
+    "ex. ta banque en ligne": "e.g. your online bank",
+    "ex. le numéro du conseiller, la date du prochain point": "e.g. the adviser’s number, the date of the next review",
+
+    /* La coquille : ces titres et intitules vivent dans le balisage statique
+       d'index.html, et `translateStatic()` les traduit par leur valeur. */
+    "Navigation principale": "Main navigation",
+    "Ouvrir le menu": "Open the menu",
+    "Fermer le menu": "Close the menu",
+    "Retour": "Back",
+    "Retour à la vue d'ensemble": "Back to the overview",
+    "Masquer les montants (touche h)": "Hide amounts (h key)",
+    "Ce qui demande ton attention": "What needs your attention",
+    "Basculer clair / sombre": "Toggle light / dark",
+    "Basculer le thème clair ou sombre": "Toggle light or dark theme",
+    "{n} points à regarder": "{n} things to look at",
+
+    /* Intitules de champs des fenetres de saisie : `askForm` les traduit, leur
+       francais est donc la clef. Identiques dans les deux langues pour
+       certains, et l'entree existe quand meme : sans elle, rien ne distingue
+       « traduit a l'identique » de « traduction oubliee ». */
+    /* « Actions » sur une fiche veut dire « ce qu'on peut faire », et la clef
+       nue est deja prise par la classe d'actif : « Equities ». Un homographe se
+       resout par une clef pointee, jamais en changeant celle du voisin. */
+    "actions.fiche": "Actions",
+    "La part de cette ligne dans le portefeuille de titres, pas dans tes avoirs. Le classement est celui de la valeur : le dénominateur est le même pour toutes.": "This holding’s share of the securities portfolio, not of your total assets. The ranking is by value: the denominator is the same for all of them.",
+    "Facultative, mais deux chiffres en dépendent. Le rendement par an, qui ramène « +36 % » à une échelle comparable, car sans date il ne dit pas s’il a fallu un an ou cinq. Et l’effet du jour : une ligne achetée aujourd’hui se compare à ton prix d’achat, pas à la clôture d’hier, que tu n’as pas vécue. Pour une ligne renforcée plusieurs fois, mets la date du premier achat.": "Optional, but two figures depend on it. The yearly return, which brings “+36%” to a comparable scale, because without a date it does not say whether it took one year or five. And today’s move: a holding bought today is compared with your purchase price, not with yesterday’s close, which you did not live through. For a holding topped up several times, use the date of the first purchase.",
+    ", sans établissement": ", with no institution",
+    "Les espèces n’ont pas d’établissement : personne ne les tient pour toi. Ce compte existe une fois, il ne se choisit pas dans la liste et ne se supprime pas. S’il n’y a plus de billets, mets-le à 0.": "Cash in hand has no institution: nobody holds it for you. This account exists once, it is not picked from the list and cannot be deleted. If there are no notes left, set it to 0.",
+    "Il commande la poche du patrimoine, les classes que le compte peut porter et la disponibilité de ce qu’il contient. On peut le corriger à tout moment : l’historique des relevés suit le compte, il ne se perd pas. Un changement qui laisserait un placement sans place est refusé, en disant lequel déplacer. Non coté : deux types, deux métiers. « Placements non cotés » pour des parts de société, Plateforme A ou un pacte d’associés : on sort au rachat, pas à une date. « Financement participatif » pour un prêt à un taux, avec une échéance et un état : ces lignes-là portent une date de remboursement, et l’application te rappelle celles qui l’ont dépassée.": "It drives the wealth pocket, the classes the account may hold and how available its contents are. You can fix it at any time: the statement history follows the account, nothing is lost. A change that would leave a holding with nowhere to sit is refused, naming the one to move. Private assets: two types, two trades. “Private holdings” for company shares, Plateforme A or a shareholders’ agreement: you exit on a buyout, not on a date. “Crowdlending” for a loan at a rate, with a maturity and a status: those holdings carry a repayment date, and the app reminds you of the ones past due.",
+
+    "Notes": "Notes",
+    "Intitulé": "Label",
+    "Note": "Note",
+    "Date": "Date",
+    "Nature": "Nature",
+    "ISIN": "ISIN",
+    "ex. MSCI World": "e.g. MSCI World",
+    "ex. IE000OJ5TQP4": "e.g. IE000OJ5TQP4",
+    "Échéance": "Maturity",
+    "Rendement": "Yield",
+    "Titres": "Holdings",
+    "Organisme": "Provider",
+    "Poste": "Item",
+    "Facturé": "Billed",
     "Plusieurs dépenses dans une catégorie : tape-les additionnées, 100+50+70. Le + du champ écrit le signe, que le pavé numérique n’a pas. Pour suivre deux choses séparément, fais deux catégories.": "Several expenses in one category: type them added up, 100+50+70. The + in the field writes the sign, which the numeric keypad does not have. To track two things separately, make two categories.",
     "Par date": "By date",
     "Par montant": "By amount",
@@ -1721,10 +1795,28 @@ const FR = {
   'range.years': '{n} ans',
 };
 
-/* Applique les traductions aux libellés statiques d'index.html. */
+/* Applique les traductions aux libellés statiques d'index.html.
+
+   Les attributs se traduisent par leur valeur, sans balise à poser : le
+   français qui s'y trouve EST la clef, comme partout ailleurs. Douze titres et
+   intitulés pour lecteur d'écran vivaient dans le balisage statique, donc hors
+   d'atteinte de `trad()`, et restaient français sur toutes les pages, dans les
+   deux langues. Marquer chacun d'un `data-i18n-title` aurait fait deux endroits
+   à tenir d'accord pour un seul fait.
+
+   `trad()` rend sa clef inchangée quand le dictionnaire ne la connaît pas : un
+   attribut déjà anglais, une valeur qui n'est pas une phrase, un second passage
+   sur le même élément ne changent rien. */
+const ATTRS_TRADUITS = ['title', 'aria-label', 'placeholder'];
 function translateStatic() {
   for (const el of document.querySelectorAll('[data-i18n]')) {
     el.textContent = t(el.dataset.i18n);
+  }
+  for (const a of ATTRS_TRADUITS) {
+    for (const el of document.querySelectorAll(`[${a}]`)) {
+      const v = el.getAttribute(a);
+      if (v) el.setAttribute(a, trad(v));
+    }
   }
   document.documentElement.lang = currentLang();
 }
