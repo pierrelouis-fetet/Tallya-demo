@@ -7064,7 +7064,21 @@ function viewBudget(section = 'depenses') {
         });
       }).join('')}
     </div>
-    <div class="table-wrap large-seulement" style="max-height:60vh; overflow-y:auto">
+    <!-- Il defile en largeur, jamais en hauteur.
+
+         Un plafond de 60 vh enfermait douze mois dans une boite de 530 px : sur un
+         ecran de 900, on faisait defiler un tableau a l'interieur d'une page qui
+         defile deja, et la barre du conteneur se confondait avec celle du
+         navigateur. Douze lignes sont douze lignes — l'annee entiere tient sur la
+         page, et c'est justement ce qu'on vient comparer d'un mois a l'autre.
+
+         La largeur, elle, garde son defilement : onze categories plus le mois, le
+         total et l'ecart ne rentrent dans aucun ecran, et la classe table-wrap est
+         faite pour ca. La hauteur n'a pas ce probleme, elle n'a que le nombre de
+         mois — douze, et le selecteur d'annee les borne.
+         (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
+         et fermerait la chaine.) -->
+    <div class="table-wrap large-seulement">
       <table class="editable">
         <!--    Les en-tetes trient, comme celles des lignes de titres : on trie un tableau
    par la colonne qu'on regarde, et « quel mois a le plus coute en Voyages »

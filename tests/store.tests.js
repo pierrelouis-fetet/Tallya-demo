@@ -13479,6 +13479,29 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
       'et rien n’y passe à la ligne : c’est tout le point de la mettre ensemble');
   });
 
+  test('un tableau défile en largeur, jamais en hauteur', () => {
+    /* Le detail mensuel enfermait douze mois dans 60 vh : sur un ecran de 900 px,
+       on faisait defiler un tableau a l'interieur d'une page qui defile deja, et la
+       barre du conteneur se confondait avec celle du navigateur. La largeur garde
+       son defilement — onze categories ne rentrent dans aucun ecran — la hauteur
+       n'a que le nombre de mois, et le selecteur d'annee la borne. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('<div class="table-wrap large-seulement"');
+    vrai(i > 0, 'le conteneur du détail mensuel doit être trouvable');
+    const balise = src.slice(i, src.indexOf('>', i) + 1);
+    vrai(!/max-height/.test(balise),
+      'aucun plafond de hauteur : le tableau s’affiche en entier');
+    vrai(!/overflow-y/.test(balise),
+      'et aucun défilement vertical posé à la main');
+    /* Ancre en debut de ligne : `.table-wrap` apparait aussi au milieu d'un
+       selecteur groupe, `.grid > *, .card, .table-wrap { min-width: 0 }`, et la
+       recherche tombait dessus — une regle vraie, mais pas celle qu'on verifie. */
+    const css = lireSource('assets/styles.css');
+    const regle = (css.match(/^\.table-wrap \{[^}]*\}/m) || [''])[0];
+    vrai(/overflow-x: auto/.test(regle),
+      `la largeur, elle, garde le sien ; règle lue : « ${regle || 'aucune'} »`);
+  });
+
   test('le tableau de correction ne se propose plus sous 767 px', () => {
     /* Quinze colonnes dans un conteneur qui defile, quand la liste juste au-dessus
        ouvre le meme mois dans une fenetre qui tient dans l'ecran : deux surfaces
