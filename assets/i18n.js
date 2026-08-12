@@ -44,6 +44,27 @@ const LOCALES = { fr: 'fr-FR', en: 'en-GB' };
 const locale = () => LOCALES[currentLang()] || LOCALES.fr;
 const enAnglais = () => currentLang() === 'en';
 
+/* Les guillemets suivent la langue, comme les nombres et les heures.
+
+   Un nom cite dans un titre de dialogue portait « x » dans les deux langues :
+   la typographie francaise, espaces insecables comprises, au milieu d'une phrase
+   anglaise. Cinquante-cinq citations, presque toutes des noms saisis par le
+   detenteur, donc rien que le dictionnaire pouvait rattraper. */
+const guill = (x) => (enAnglais() ? `“${x}”` : `« ${x} »`);
+
+/* L'espace avant un point d'interrogation est francais, et lui seul.
+
+   Les questions se composent d'un morceau traduit et d'un morceau ecrit dans le
+   gabarit : « Supprimer la categorie {nom} ? ». Le point d'interrogation vit
+   donc hors de la clef, et l'anglais heritait de l'espace insecable francais,
+   « Delete the category “Courses” ? ». Applique aux sinks des dialogues, la ou
+   la question se pose. */
+const ponct = (s) => (enAnglais()
+  /* Les deux espaces de la classe sont ecrits en echappement : l'insecable est
+     invisible dans une source, et ce depot a deja porte des octets fantomes. */
+  ? String(s ?? '').replace(/[\u00a0\u0020]+([?!:;])/g, '$1')
+  : String(s ?? ''));
+
 const I18N = {
   en: {
     /* --- navigation --- */
@@ -259,6 +280,128 @@ const I18N = {
 
     /* La coquille : ces titres et intitules vivent dans le balisage statique
        d'index.html, et `translateStatic()` les traduit par leur valeur. */
+
+    /* Les vues : intitules de groupe, infobulles, aides. */
+    "Saisir les dépenses de": "Enter the expenses for",
+    "Séparer {c} en core et satellite": "Split {c} into core and satellite",
+    "Sortir {c} du rééquilibrage": "Take {c} out of rebalancing",
+    "Classes d’actif": "Asset classes",
+    "Trésorerie": "Cash",
+    "Le ⤒ d’une ligne y reprend tous les montants actuels d’un clic. La saisie case par case ne sert qu’à corriger un mois passé.": "The ⤒ on a row takes in every current amount in one click. Cell-by-cell entry is only there to fix a past month.",
+    "La sortir de la saisie du mois, sans toucher aux montants passés": "Take it out of the monthly entry, leaving past amounts untouched",
+    "garde l'historique,": "keeps the history,",
+    "l'efface.": "erases it.",
+    "Répartition classée": "Ranked breakdown",
+
+    /* Les dialogues de confirmation. Un dialogue non traduit est un
+       consentement qu'on n'a pas vraiment obtenu : c'est le moment ou l'on
+       s'apprete a supprimer, et ou il faut comprendre ce qui est demande. */
+    "L'Excel ne peut pas être réimporté": "The Excel file cannot be imported back",
+    "C'est une photo pour lire et retravailler ailleurs : il ne contient pas tous les réglages du tableau de bord. Pour restaurer, prends le fichier « Sauvegarde JSON ».": "It is a snapshot to read and rework elsewhere: it does not hold every dashboard setting. To restore, use the “JSON backup” file.",
+    ", qui n’a pas de nom": ", which has no name",
+    "Cette action est réversible avec Ctrl+Z, et une sauvegarde du jour existe dans l'onglet Données.": "This can be undone with Ctrl+Z, and today’s backup is in the Data tab.",
+    "du journal ?": "from the journal?",
+    "Cette vente était déclarée pour mémoire : elle n'avait rien écrit d'autre, il n'y a rien à défaire. Réversible avec Ctrl+Z.": "This sale was recorded for the record only: it wrote nothing else, so there is nothing to undo. Reversible with Ctrl+Z.",
+    "Annuler cette vente ?": "Cancel this sale?",
+    "Les {n} titres reviennent sur leur ligne": "The {n} units go back to their holding",
+    "et {m} repartent de {ou}": "and {m} leaves {ou} again",
+    "et la vente quitte le journal.": "and the sale leaves the journal.",
+    "Le total ne revient pas forcément à l'euro d'avant : les titres rendus valent le cours du jour. Réversible avec Ctrl+Z.": "The total will not necessarily return to the exact euro it was: the returned units are worth today’s price. Reversible with Ctrl+Z.",
+    "Ce panneau porte des montants qui ne sont pas encore dans tes données.": "This panel holds amounts that are not in your data yet.",
+    "Repartir de zéro ?": "Start from scratch?",
+    "Toutes les données actuelles seront effacées : {p} positions, {c} comptes, {m} mois de relevés, le budget et les dépenses.": "All current data will be erased: {p} holdings, {c} accounts, {m} months of statements, the budget and the expenses.",
+    "Une sauvegarde est prise avant, et Ctrl+Z annule.": "A backup is taken first, and Ctrl+Z undoes it.",
+    "Il revient dans tous les totaux de ton patrimoine": "It comes back into every total of your wealth",
+    "Sa date de clôture, le {d}, sera retirée : un compte rouvert n'est pas clôturé.": "Its closing date, {d}, will be removed: a reopened account is not closed.",
+    "Réversible : tu peux l'archiver de nouveau.": "Reversible: you can archive it again.",
+    "Annuler tes modifications ?": "Discard your changes?",
+    "Cette fiche revient telle qu’elle était en l’ouvrant. Ce que tu as saisi depuis sera perdu.": "This card goes back to how it was when you opened it. Anything you typed since will be lost.",
+    "Les espèces ne se suppriment pas": "Cash in hand cannot be deleted",
+    "Ce compte existe pour tout le monde, sans établissement. S’il n’y a plus de billets, mets son montant à 0 : il sort alors de tous les totaux, et les relevés passés restent lisibles.": "This account exists for everyone, with no institution. If there are no notes left, set its amount to 0: it then drops out of every total, and past statements stay readable.",
+    "Impossible de supprimer": "Cannot delete",
+    "{n} placements de marché y sont rattachés.": "{n} market holdings are attached to it.",
+    "{n} placement de marché y est rattaché.": "{n} market holding is attached to it.",
+    "Déplace-les d'abord vers un autre compte dans Marchés.": "Move them to another account in Markets first.",
+    "Sa valeur de {v} sortira du patrimoine.": "Its value of {v} will leave your wealth.",
+    "Le crédit qui le finance, {c} de capital restant dû, sera supprimé en même temps : il ne peut pas rester seul.": "The loan financing it, {c} of principal outstanding, will be deleted at the same time: it cannot stand alone.",
+    "Ses montants restent lisibles dans {n} relevés passés.": "Its amounts stay readable in {n} past statements.",
+    "Ses montants restent lisibles dans {n} relevé passé.": "Its amounts stay readable in {n} past statement.",
+    "disparaîtra avec lui : c'était son dernier compte.": "will disappear with it: it was its last account.",
+    "Retirer cette part de {v} ?": "Remove this {v} share?",
+    "Le montant sortira du patrimoine. Réversible avec Ctrl+Z.": "The amount will leave your wealth. Reversible with Ctrl+Z.",
+    "{v} de parts réparties sur {n} lignes seront effacées. Les montants des charges ne changent pas, ni ton budget.": "{v} of shares spread over {n} rows will be erased. The charge amounts do not change, nor does your budget.",
+    "{v} de parts réparties sur {n} ligne seront effacées. Les montants des charges ne changent pas, ni ton budget.": "{v} of shares on {n} row will be erased. The charge amounts do not change, nor does your budget.",
+    "Aucune part ne lui est attribuée.": "No share is assigned to them.",
+    "Elle contient {v} répartis sur {m} mois. Ces montants seront effacés et tes totaux baisseront d'autant.": "It holds {v} spread over {m} months. Those amounts will be erased and your totals will drop by as much.",
+    "Elle est vide, rien ne sera perdu.": "It is empty, nothing will be lost.",
+    "Effacer les dépenses de {m} ?": "Clear the expenses for {m}?",
+    "La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.": "The row stays in the table, empty, and all twelve months of the year keep showing.",
+    "Supprimer la ligne du {d} des dépenses ?": "Delete the {d} expense row?",
+    "Recharger les données depuis le cloud ?": "Reload the data from the cloud?",
+    "En ligne :": "Online:",
+    "Ici :": "Here:",
+    "L'état actuel sera sauvegardé avant remplacement.": "The current state will be backed up before being replaced.",
+    "Restaurer la sauvegarde du {d} ?": "Restore the backup from {d}?",
+    "L'état actuel sera d'abord sauvegardé, tu pourras donc revenir en arrière.": "The current state will be backed up first, so you can go back.",
+    "Revenir aux données d'origine importées du Google Sheet ?": "Go back to the original data imported from the Google Sheet?",
+    "Toutes tes modifications locales seront perdues. Exporte d'abord une sauvegarde si besoin.": "All your local changes will be lost. Export a backup first if you need one.",
+    "Enregistrer le relevé de {m} ?": "Save the statement for {m}?",
+    "La photo du jour, {v}, sera écrite dans cette ligne, compte par compte.": "Today’s snapshot, {v}, will be written into this row, account by account.",
+    "Remplacer les montants de {m} par la photo actuelle ?": "Replace the amounts for {m} with the current snapshot?",
+    "Actuellement :": "Currently:",
+    "Photo du jour :": "Today’s snapshot:",
+    "Annulable juste après, et une sauvegarde est prise avant.": "Undoable right after, and a backup is taken first.",
+    "Cette ligne porte des changements qui ne sont pas encore dans tes données.": "This holding carries changes that are not in your data yet.",
+    "La ligne quitte le portefeuille sans vente : ni encaissement, ni plus-value au journal. Réversible avec Ctrl+Z, et une sauvegarde du jour existe dans l'onglet Données.": "The holding leaves the portfolio without a sale: nothing cashed in, no gain in the journal. Reversible with Ctrl+Z, and today’s backup is in the Data tab.",
+    "Les dépenses de {m} portent des changements qui ne sont pas encore dans tes données.": "The expenses for {m} carry changes that are not in your data yet.",
+    "Effacer les montants de {m} ?": "Clear the amounts for {m}?",
+    "Supprimer la ligne du {d} ?": "Delete the {d} row?",
+    "Ce n'est pas un mois du calendrier : la ligne disparaîtra du tableau.": "This is not a calendar month: the row will disappear from the table.",
+    "Enregistrer un relevé pour {m} ?": "Save a statement for {m}?",
+    "Ce mois n’a pas encore eu lieu. La ligne comptera comme un relevé passé, dans les courbes comme dans les écarts d’un mois à l’autre.": "This month has not happened yet. The row will count as a past statement, in the charts as well as in the month-to-month changes.",
+    "Remplacer les montants de {m} ?": "Replace the amounts for {m}?",
+    "Enregistré :": "Saved:",
+    "Après reprise :": "After the snapshot:",
+    "Réversible : le message qui suit propose de revenir en arrière.": "Reversible: the message that follows offers to go back.",
+    "Ce relevé porte des montants qui ne sont pas encore dans tes données.": "This statement holds amounts that are not in your data yet.",
+    "Deux versions différentes de tes données": "Two different versions of your data",
+    "Cet appareil a des modifications qui n'ont jamais été envoyées, et une version plus récente existe en ligne.": "This device has changes that were never sent, and a newer version exists online.",
+    "Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)": "Load the online version? (Cancel keeps this device’s version and sends it.)",
+
+    /* Les avis passagers. */
+    ", les placements s’ajoutent dans Marchés": ", holdings are added in Markets",
+    "{v} moins {c} de crédit": "{v} less {c} of loan",
+    "ajouté, et sa charge de": "added, and its charge of",
+    "restant dû, patrimoine net": "principal outstanding, net worth",
+    "ajoutée aux charges fixes": "added to the fixed charges",
+    "débité de": "debited from",
+    "Objectif de dépenses :": "Spending target:",
+    "Objectif de dépenses retiré": "Spending target removed",
+    "quitte la saisie. Ses {v} restent dans l’historique.": "leaves the monthly entry. Its {v} stay in the history.",
+    "quitte la saisie du mois.": "leaves the monthly entry.",
+
+    /* Les intitules de bouton des dialogues, traduits par askConfirm. */
+    "Compris": "Got it",
+    "Annuler les modifications": "Discard changes",
+    "Continuer à modifier": "Keep editing",
+    "Enregistrer quand même": "Save anyway",
+    "Charger celle en ligne": "Load the online one",
+    "Tout effacer et repartir": "Erase everything and start over",
+    "Supprimer la colonne": "Delete the column",
+    "Annuler la vente": "Cancel the sale",
+    "Enregistrer et fermer": "Save and close",
+    "Fermer sans enregistrer": "Close without saving",
+
+    "Revenir à l’écran précédent": "Go back to the previous screen",
+    "La reproposer à la saisie du mois": "Offer it again in the monthly entry",
+    "Motif": "Reason",
+    "Taille": "Size",
+
+    "Démonstration chargée, tes données sont en sécurité": "Demo loaded, your data is safe",
+    "Retour à tes données": "Back to your data",
+    "Voir la démonstration ?": "See the demo?",
+    "Tes données ne sont pas touchées : elles restent enregistrées de leur côté, et tu les retrouves en quittant le mode. Rien ne part en ligne pendant ce temps.": "Your data is untouched: it stays saved on its own side, and you get it back when you leave the mode. Nothing goes online in the meantime.",
+    "Charger la démonstration": "Load the demo",
     "Navigation principale": "Main navigation",
     "Ouvrir le menu": "Open the menu",
     "Fermer le menu": "Close the menu",
@@ -424,7 +567,6 @@ const I18N = {
     "Dépenses mensuelles": "Monthly spending",
     "Déploiement par seuil": "Deployment by threshold",
     "Détail mensuel": "Monthly detail",
-    "Enregistrer et fermer": "Save and close",
     "Enregistrer la vente": "Record the sale",
     "Enregistrer une vente et sa plus-value": "Record a sale and its gain",
     "Filtrer par rôle": "Filter by role",
@@ -1466,7 +1608,6 @@ const I18N = {
 
     "Modifications non enregistrées": "Unsaved changes",
     "Ce que tu viens de saisir n’est pas encore dans tes données.": "What you just entered is not in your data yet.",
-    "Fermer sans enregistrer": "Close without saving",
     "Importer": "Import",
     "Cela remplacera toutes les données actuellement enregistrées dans ce navigateur.": "This will replace all the data currently stored in this browser.",
     "Supprimer la position": "Delete the position",

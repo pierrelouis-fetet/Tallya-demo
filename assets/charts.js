@@ -300,7 +300,7 @@ const Charts = (() => {
          qui la rendait negative est corrige, mais la ceinture reste. */
       const clip = 'clip' + Math.random().toString(36).slice(2, 8);
       el.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Évolution du patrimoine">
+        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Évolution du patrimoine')}">
           <defs><clipPath id="${clip}"><rect x="${m.l}" y="0" width="${iw}" height="${H}"/></clipPath></defs>
           ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${c.grid}" stroke-width="1"/>
             <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" class="tick">${kEur(t)}</text>`).join('')}
@@ -457,7 +457,7 @@ const Charts = (() => {
       });
 
       el.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Répartition">
+        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Répartition')}">
           ${arcs.map((a, i) => `<path d="${a.d}" fill="${a.it.color}" stroke="${c.surface}" stroke-width="2" class="slice" data-i="${i}"/>`).join('')}
           <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="donut-val">${kEur(opts.centerValue ?? total)}</text>
           <text x="${cx}" y="${cy + 16}" text-anchor="middle" class="donut-lab">${esc(centerLabel || 'Total')}</text>
@@ -502,7 +502,7 @@ const Charts = (() => {
       const color = opts.color || cssv('--series-1');
 
       el.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Répartition classée">
+        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Répartition classée')}">
           ${items.map((it, i) => {
             const y = i * rowH + 4;
             const w = Math.max(2, Math.abs(it.value) / max * barMax);
@@ -661,7 +661,7 @@ const Charts = (() => {
       const every = Math.ceil(items.length / Math.max(3, Math.floor(iw / 62)));
 
       el.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Dépenses mensuelles">
+        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Dépenses mensuelles')}">
           ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${c.grid}"/>
             <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" class="tick">${kEur(t)}</text>`).join('')}
           ${items.map((it, i) => {

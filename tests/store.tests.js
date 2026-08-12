@@ -8075,7 +8075,9 @@ suite('Une ligne sans nom se supprime quand même', () => {
     const src = lireSource('assets/app.js');
     const bloc = src.match(/function makeDeleter\([\s\S]*?\n\}/);
     vrai(bloc, 'makeDeleter doit être trouvable');
-    vrai(/nom \? ` « \$\{nom\} »` :/.test(bloc[0]),
+    /* Les guillemets suivent la langue depuis `guill()` : l'anglais n'ecrit pas
+       « x » mais “x”, et la citation d'un nom saisi traversait les deux langues. */
+    vrai(/nom \? ` \$\{guill\(nom\)\}` :/.test(bloc[0]),
       'la question doit rester lisible quand la ligne n’a pas de nom');
   });
 });
@@ -9877,8 +9879,8 @@ suite('Une fiche se valide ou s’annule, et rien ne se saisit sans borne', () =
        defait un travail, et qui merite sa confirmation. */
     const src = lireSource('assets/app.js');
     vrai(/'annuler-fiche'\(btn\)/.test(src), 'l’action existe');
-    vrai(/await askConfirm\(\s*\n?\s*'Annuler tes modifications \?/.test(src),
-      'et elle demande confirmation');
+    vrai(/await askConfirm\(\s*\n?\s*trad\('Annuler tes modifications \?'\)/.test(src),
+      'et elle demande confirmation, dans les deux langues');
     /* La confirmation ne se pose que s'il y a quelque chose a defaire : un
        avertissement systematique cesse d'etre lu. */
     vrai(/if \(!ficheModifiee\(\)\) \{[^}]*retour\(\); return; \}/.test(src),
@@ -13368,7 +13370,7 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
       'en bas, à part et rouge, comme sur la fiche d’une ligne');
 
     /* La question se regle a un seul endroit : deux portes, un seul texte. */
-    eq((src.match(/Effacer les montants de \$\{fmtMonth/g) || []).length, 1,
+    eq((src.match(/trad\('Effacer les montants de \{m\} \?'\)/g) || []).length, 1,
       'la question ne s’écrit qu’une fois');
     const j = src.indexOf("async 'del-month'(btn)");
     const action = src.slice(j, src.indexOf('},', j));
@@ -13485,6 +13487,118 @@ suite('Les fiches et les marchés parlent anglais en anglais', () => {
     const src = lireSource('assets/app.js');
     eq((src.match(/`cours \$\{/g) || []).length, 0, 'plus un seul préfixe « cours » en dur');
     enLangue('en', () => eq(trad('cours'), 'price', 'et le mot a son anglais'));
+  });
+});
+
+suite('Aucun dialogue ne parle français en dur', () => {
+
+  /* Un dialogue non traduit est un consentement qu'on n'a pas vraiment obtenu :
+     c'est le moment ou l'on s'apprete a supprimer quelque chose, et ou il faut
+     comprendre ce qui est demande. Vingt-huit confirmations et neuf avis etaient
+     dans ce cas.
+
+     Le controle se fait sur les appels, pas sur des mots-clefs : on isole
+     l'argument par appariement de parentheses, on neutralise les `trad()` qui s'y
+     trouvent, et ce qui reste ne doit plus porter d'accent. */
+
+  const finAppel = (s, i) => {
+    let prof = 0, chaine = null;
+    while (i < s.length) {
+      const c = s[i];
+      if (chaine) {
+        if (c === '\\') { i += 2; continue; }
+        if (c === chaine) chaine = null;
+        i++; continue;
+      }
+      if (c === '\'' || c === '"' || c === '`') chaine = c;
+      else if (c === '(') prof++;
+      else if (c === ')') { prof--; if (!prof) return i + 1; }
+      i++;
+    }
+    return -1;
+  };
+  /* Un accent, et non l'apostrophe typographique : l'anglais de cette
+     application ecrit « yesterday’s » avec la meme. Ni le ×, qui vit dans
+     « quantity × price ». */
+  const ACCENT = /[àâäéèêëîïôöùûüÿçœÀÂÄÉÈÊËÎÏÔÖÙÛÜÇŒ]/;
+
+  const neutraliserTrad = (bloc) => {
+    for (let tour = 0; tour < 6; tour++) {
+      let change = false;
+      const re = /\b(?:trad|t)\(/g;
+      let m;
+      while ((m = re.exec(bloc))) {
+        const j = finAppel(bloc, m.index + m[0].length - 1);
+        if (j < 0) continue;
+        const dedans = bloc.slice(m.index, j);
+        if (!ACCENT.test(dedans)) continue;
+        bloc = bloc.slice(0, m.index) + ' '.repeat(j - m.index) + bloc.slice(j);
+        change = true;
+        re.lastIndex = 0;
+      }
+      if (!change) break;
+    }
+    return bloc;
+  };
+
+  const appelsFautifs = (src, nom) => {
+    const out = [];
+    let i = 0;
+    while ((i = src.indexOf(nom + '(', i)) >= 0) {
+      if (/[\w.$]/.test(src[i - 1] || ' ')) { i += nom.length + 1; continue; }
+      const j = finAppel(src, i + nom.length);
+      if (j < 0) break;
+      const bloc = src.slice(i, j);
+      /* Les interpolations sont des expressions, pas du texte. Et l'objet
+         d'options en fin d'appel non plus : `askConfirm` traduit lui-meme les
+         libelles `ok` et `refus`, donc leur français y est la clef. */
+      const reste = neutraliserTrad(bloc)
+        .replace(/\$\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/g, ' ')
+        .replace(/,\s*\{[^{}]*\}\s*\)$/, ')');
+      if (ACCENT.test(reste)) out.push(bloc.slice(0, 120).replace(/\s+/g, ' '));
+      i = j;
+    }
+    return out;
+  };
+
+  test('chaque confirmation et chaque avis passent par trad()', () => {
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    for (const nom of ['askConfirm', 'toast']) {
+      const fautifs = appelsFautifs(src, nom);
+      eq(fautifs.join('\n  '), '', `${nom}() reçoit du français en dur`);
+    }
+  });
+
+  test('la fenêtre à un champ traduit ses trois textes, une fois pour toutes', () => {
+    /* `askText` recevait titre, message et exemple en français de dix appelants :
+       traduire chez l'appelant demandait d'y penser dix fois. */
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf('function askText'), src.indexOf('function askForm'));
+    vrai(/\$\('#modalTitle'\)\.textContent = trad\(titre\)/.test(f), 'le titre');
+    vrai(/message \? trad\(message\) : ''/.test(f), 'le message');
+    vrai(/placeholder="\$\{esc\(trad\(exemple\)\)\}"/.test(f), 'et l’exemple');
+    const g = src.slice(src.indexOf('function askForm'), src.indexOf('function askForm') + 1200);
+    vrai(/\$\('#modalTitle'\)\.textContent = trad\(titre\)/.test(g),
+      'et la fenêtre à plusieurs champs traduit le sien');
+  });
+
+  test('un nombre entre dans une phrase par gabarit, pas par couture', () => {
+    /* « il y a 5 min » et « 5 min ago » n'ont pas le meme ordre : coudre les
+       fragments dans l'ordre francais donnerait « ago 5 min ». Les clefs a
+       gabarit portent {n}, {m}, {v}, {d}, {t}, {p}, {c}, {ou} ou {types}, et
+       leur anglais doit garder le meme. */
+    const trous = /\{(?:n|m|v|d|t|p|c|ou|types)\}/g;
+    const fautes = [];
+    for (const [fr, en] of Object.entries(I18N.en)) {
+      /* Une clef pointee n'est pas une phrase : son français vit dans `FR`, et
+         comparer les gabarits de la clef a ceux de sa traduction n'a pas de sens. */
+      if (/^[\w.]+$/.test(fr)) continue;
+      const dans = (String(fr).match(trous) || []).sort().join('');
+      const sort = (String(en).match(trous) || []).sort().join('');
+      if (dans !== sort) fautes.push(`${fr.slice(0, 40)} → ${en.slice(0, 40)}`);
+    }
+    eq(fautes.join(' | '), '', 'un gabarit perdu en traduction fait disparaître un nombre');
   });
 });
 

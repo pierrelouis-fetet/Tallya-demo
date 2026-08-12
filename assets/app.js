@@ -75,6 +75,7 @@ function marquerEcrit(champ) {
    Le bouton vit le temps du message. Au-dela, la pile reste — l'onglet Donnees
    y donne acces — mais l'occasion de defaire d'un geste a passe. */
 function toast(msg, action) {
+  msg = ponct(msg);
   const t = $('#toast');
   /* escMontant : une dizaine de toasts annoncent un montant (« ajouté ·
      160 € »), et en mode discret fmtEUR0 rend l'oeil SVG. Le canal texte
@@ -789,9 +790,9 @@ function viewOverview() {
   ${depEnAttente.missing ? `
   <div class="rappel card-cliquable">
     <button type="button" class="card-couvre" data-action="saisir-mois-en-attente"
-            aria-label="Saisir les dépenses de ${esc(depEnAttente.label)}"></button>
+            aria-label="${trad('Saisir les dépenses de')} ${esc(depEnAttente.label)}"></button>
     <span class="rappel-pastille"></span>
-    <span class="rappel-texte"><b>Saisir les dépenses de ${esc(depEnAttente.label)} ›</b><br>
+    <span class="rappel-texte"><b>${trad('Saisir les dépenses de')} ${esc(depEnAttente.label)} ›</b><br>
       <span class="muted">${trad('Le mois est clos, ce qu’il a coûté reste à enregistrer')}</span></span>
     ${sortiesRappel('depenses', depEnAttente.label)}
   </div>` : ''}
@@ -898,7 +899,7 @@ function viewOverview() {
     ${repartitionClasses().map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="classe" data-arg="${esc(x.classe)}"
-              title="Voir le détail de ${esc(x.label)}">
+              title="${trad('Voir le détail de')} ${esc(trad(x.label))}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
           <span class="repart-nom">${esc(trad(x.label))}</span>
@@ -2466,7 +2467,7 @@ function viewObjective() {
                nom precedent, « En euros d'aujourd'hui », debordait de 45 px a
                375 px et imposait un en-tete sur deux lignes ; il reste dans
                les textes d'aide, ou il explique ce que celui-ci veut dire. -->
-          <th>Patrimoine</th><th>${trad('Après inflation')}</th>
+          <th>${trad('Patrimoine')}</th><th>${trad('Après inflation')}</th>
         </tr></thead>
         <!-- La ligne de l'horizon retenu se nomme. Sans elle, changer la durée
              dans le pied du tableau faisait bouger le graphique et le total de
@@ -3911,7 +3912,7 @@ function mountSymbolSearch() {
               champs: [
                 { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
                   options: OPTIONS_CLASSE, valeur: cat,
-                  aide: sel.dataset.type ? `déduite de « ${sel.dataset.type} »` : '' },
+                  aide: sel.dataset.type ? `déduite de ${guill(sel.dataset.type)}` : '' },
                 { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE,
                   valeur: 'satellite', aide: trad('coeur de portefeuille ou pari satellite') },
                 { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
@@ -4113,7 +4114,7 @@ function viewAllocation() {
     ${disponibilite.map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="${esc(x.apercu)}"${x.arg ? ` data-arg="${esc(x.arg)}"` : ''}
-              title="Voir le détail de ${esc(x.label)}">
+              title="${trad('Voir le détail de')} ${esc(trad(x.label))}">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
           <span class="repart-nom">${esc(trad(x.label))}</span>
@@ -4198,7 +4199,7 @@ function mountAllocation() {
      tableau et les parts du camembert ne peuvent plus diverger. */
   const bt = teinterParRang(byAccountType());
   Charts.donut($('#aType'), {
-    height: 200, centerLabel: 'Bourse',
+    height: 200, centerLabel: trad('Bourse'),
     centerValue: bt.reduce((s, i) => s + i.value, 0),
     items: bt.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
@@ -4355,12 +4356,12 @@ function viewRebalance() {
                                data-cle="${esc(key.split('.')[1])}"
                                aria-expanded="false"
                                title="Ouvrir en deux cibles : ${esc(row.label)} core et satellite"
-                               aria-label="Séparer ${esc(row.label)} en core et satellite"
+                               aria-label="${trad('Séparer {c} en core et satellite').replace('{c}', esc(row.label))}"
                                >›</button>` : '';
                 })()}
             <button class="btn icon xs" data-action="retirer-classe-cible"
                     data-cle="${esc(key.split('.')[1])}"
-                    title="Sortir ${esc(row.labelClasse || row.label)} du rééquilibrage">✕</button>` : ''}
+                    title="${trad('Sortir {c} du rééquilibrage').replace('{c}', esc(row.labelClasse || row.label))}">✕</button>` : ''}
           <!-- La tresorerie se retire aussi. Quelqu'un qui place tout le jour
                meme garde une ligne a zero sous un intitule de groupe, pour rien.
                Meme action que les classes : elle passe par la meme liste
@@ -4368,7 +4369,7 @@ function viewRebalance() {
           ${key === CLE_TRESORERIE ? `
             <button class="btn icon xs" data-action="retirer-classe-cible"
                     data-cle="${esc(CLE_TRESORERIE)}"
-                    title="Sortir ${esc(row.label)} du rééquilibrage">✕</button>` : ''}
+                    title="${trad('Sortir {c} du rééquilibrage').replace('{c}', esc(row.label))}">✕</button>` : ''}
         </span>
       </div>
       <!-- La jauge ouvre les placements qu'elle compte.
@@ -4554,7 +4555,7 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
          toucher a un seul calcul : les pourcentages et les cibles sont ceux
          d'avant, la somme fait toujours la base. -->
     <ul class="reeq">
-      <li class="reeq-groupe">Classes d’actif</li>
+      <li class="reeq-groupe">${trad('Classes d’actif')}</li>
       ${r.classes.map(c => ligneReeq(c, c.cle)).join('')}
       <!--    Le bouton vivait dans l'en-tete, ou il s'est perdu des que la mention de
    base l'a fait passer sur deux lignes : 79 px, et un bouton pousse hors du
@@ -4563,7 +4564,7 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
       <!-- Sortie, la tresorerie n'a plus ni ligne ni intitule de groupe : un
            titre au-dessus de rien se lirait comme une panne. Elle se remet
            depuis la phrase de perimetre, comme une classe. -->
-      ${r.cash ? `<li class="reeq-groupe reeq-groupe-suite">Trésorerie</li>
+      ${r.cash ? `<li class="reeq-groupe reeq-groupe-suite">${trad('Trésorerie')}</li>
       ${ligneReeq(r.cash, CLE_TRESORERIE)}` : ''}
     </ul>
     <button class="btn sm ghost" data-action="ajouter-classe-cible"
@@ -4730,7 +4731,7 @@ function viewHistory() {
         <button class="btn icon snap${attendSaPhoto ? ' snap-attendu' : ''}${aVenir ? ' snap-avenir' : ''}"
                 data-action="snapshot-row" data-i="${i}"
                 title="${aVenir
-                  ? `${esc(fmtMonth(r.date))} n’a pas encore eu lieu`
+                  ? `${esc(fmtMonth(r.date))} ${trad('n’a pas encore eu lieu')}`
                   : attendSaPhoto
                   ? `${trad('Enregistrer le relevé de')} ${esc(fmtMonth(r.date))} : ${trad('reprend tous les montants actuels')}`
                   : trad('Reprendre tous les montants actuels dans cette ligne')}">⤒</button>
@@ -4980,9 +4981,8 @@ function viewHistory() {
          doigt : c'est la regle des trois colonnes. -->
     <details class="data-view large-seulement" style="margin-top:12px">
       <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
-      <p class="hint" style="margin:12px 0 0">Le ⤒ d’une ligne y reprend tous les
-        montants actuels d’un clic. La saisie case par case ne sert qu’à corriger
-        un mois passé.</p>
+      <p class="hint" style="margin:12px 0 0">${trad('Le ⤒ d’une ligne y reprend tous les '
+        + 'montants actuels d’un clic. La saisie case par case ne sert qu’à corriger un mois passé.')}</p>
     <div class="table-wrap" style="max-height:70vh; overflow-y:auto">
       <table class="editable">
         <thead><tr>
@@ -5354,7 +5354,7 @@ function viewAccounts() {
     corps = `<div class="card">${invitePremierPas('comptes')
       || `<p class="empty">${trad('Aucun compte pour l’instant.')}</p>`}</div>`;
   } else if (!ouverts.length) {
-    corps = `<div class="card"><p class="empty">Rien ne correspond à « ${esc(compteRecherche)} ».
+    corps = `<div class="card"><p class="empty">Rien ne correspond à ${guill(esc(compteRecherche))}.
       Essaie avec le nom de la banque ou du placement.</p></div>`;
   } else if (compteVue === 'banque') {
     /* Deux sections, et la frontiere se derive des comptes.
@@ -6442,7 +6442,7 @@ function viewFicheCompte(id) {
            gabarit, et fermerait la chaine.) -->
       <div class="fiche-valider">
         ${c.statut === 'archive'
-          ? `<button class="btn ghost" data-action="restaurer-compte" data-id="${esc(c.id)}">Restaurer</button>`
+          ? `<button class="btn ghost" data-action="restaurer-compte" data-id="${esc(c.id)}">${trad('Restaurer')}</button>`
           : `<button class="btn ghost" data-action="archiver-compte" data-id="${esc(c.id)}">${trad('Archiver')}</button>`}
         <button class="btn ghost danger" data-action="supprimer-compte" data-id="${esc(c.id)}">${trad('Clôturer et supprimer')}</button>
       </div>
@@ -7049,7 +7049,7 @@ function viewBudget(section = 'depenses') {
             .filter(Boolean).join(' ');
           return `<tr class="ligne-ouvre${classes ? ` ${classes}` : ''}"
               data-action="edit-expense-month" data-i="${i}"
-              title="Saisir les dépenses de ${esc(fmtMonth(r.month))}"${
+              title="${trad('Saisir les dépenses de')} ${esc(fmtMonth(r.month))}"${
               estMoisCourant ? ' data-anchor="mois-courant"' : ''}${estAttendu ? ' data-anchor="mois-attendu"' : ''}>
             <td class="name sticky-col"><span class="mois-lien">${esc(fmtMonth(r.month))}</span>${
               estAttendu ? '<span class="marque-attendu" title="Le mois que la relance attend">⚠</span>' : ''}</td>
@@ -7072,7 +7072,7 @@ function viewBudget(section = 'depenses') {
             ${expenseCategories().map(c => `<td>${r.v[c] != null && r.v[c] !== ''
                 ? fmtEUR0(r.v[c]) : ''}</td>`).join('')}
             <td class="name prose">${esc(r.note || '')}</td>
-            <td><button class="btn icon" data-action="del-expense-month" data-i="${i}" title="Supprimer">✕</button></td>
+            <td><button class="btn icon" data-action="del-expense-month" data-i="${i}" title="${trad('Supprimer')}">✕</button></td>
           </tr>`;
         }).join('')}</tbody>
         <tfoot><tr>
@@ -7136,9 +7136,9 @@ function viewBudget(section = 'depenses') {
               </span>
               <button class="btn sm ghost" data-action="${retiree ? 'reprendre' : 'retirer'}-category"
                 data-cat="${esc(c)}"
-                title="${retiree ? 'La reproposer à la saisie du mois'
-                                 : 'La sortir de la saisie du mois, sans toucher aux montants passés'}"
-                >${retiree ? 'Reprendre' : 'Retirer'}</button>
+                title="${trad(retiree ? 'La reproposer à la saisie du mois'
+                                    : 'La sortir de la saisie du mois, sans toucher aux montants passés')}"
+                >${trad(retiree ? 'Reprendre' : 'Retirer')}</button>
               <button class="btn icon" data-action="del-category" data-cat="${esc(c)}"
                 title="${trad('Supprimer cette colonne et tous ses montants')}">✕</button>
             </td>
@@ -7146,7 +7146,7 @@ function viewBudget(section = 'depenses') {
         }).join('')}</tbody>
       </table>
       <p class="hint" style="margin-top:8px">
-        <b>Retirer</b> garde l'historique, <b>Supprimer</b> l'efface.${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
+        <b>${trad('Retirer')}</b> ${trad("garde l'historique,")} <b>${trad('Supprimer')}</b> ${trad("l'efface.")}${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
     </details>
   </div>
@@ -7355,8 +7355,8 @@ function viewBudget(section = 'depenses') {
               const cr = creditsEnCours().lignes.find(x => x.id === c.creditId);
               if (!cr) return '';
               return cr.capital != null
-                ? `${trad('rembourse')} « ${cr.libelle} », ${trad('dont')} ${fmtEUR0(cr.capital)} ${trad('de capital')}`
-                : `${trad('rembourse')} « ${cr.libelle} »`;
+                ? `${trad('rembourse')} ${guill(cr.libelle)}, ${trad('dont')} ${fmtEUR0(cr.capital)} ${trad('de capital')}`
+                : `${trad('rembourse')} ${guill(cr.libelle)}`;
             })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
           second: gens.length ? `${fmtEUR(myShareMensuelle(c))} ${trad('à ma charge')}` : '',
@@ -7402,7 +7402,7 @@ function viewBudget(section = 'depenses') {
                qui perd, puisqu'elle ne peut pas tout dire. -->
           <tbody>${b.fixedCharges.map((c, i) => `<tr class="ligne-ouvre"
               data-action="edit-charge" data-i="${i}"
-              title="Modifier « ${esc(c.label || 'Sans nom')} »">
+              title="Modifier ${guill(esc(c.label || 'Sans nom'))}">
             <td class="name sticky-col"><span class="mois-lien">${esc(c.label || 'Sans nom')}</span></td>
             <td>${fmtEUR(num(c.amount))}</td>
             <!-- La periodicite se lit dans la meme table que la liste de la
@@ -7417,7 +7417,7 @@ function viewBudget(section = 'depenses') {
             ${gens.map(p => `<td>${shareOf(c, p.id) ? fmtEUR(shareOf(c, p.id)) : ''}</td>`).join('')}
             <td><b>${fmtEUR(myShareMensuelle(c))}</b></td>
             <td class="name">${esc(c.provider || '')}</td>
-            <td><button class="btn icon" data-action="del-charge" data-i="${i}" title="Supprimer">✕</button></td>
+            <td><button class="btn icon" data-action="del-charge" data-i="${i}" title="${trad('Supprimer')}">✕</button></td>
           </tr>`).join('')}</tbody>
           <tfoot><tr>
             <td class="sticky-col">Total / mois</td><td colspan="2"></td>
@@ -7592,7 +7592,7 @@ function viewData() {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Importer</h2><span class="hint">${trad('Fichier JSON uniquement')}</span></div>
+      <div class="card-head"><h2>${trad('Importer')}</h2><span class="hint">${trad('Fichier JSON uniquement')}</span></div>
       <input type="file" id="importFile" accept="application/json,.json">
       <p class="small muted" style="margin:12px 0 0">
         <b>${trad('Fichier JSON uniquement')}</b>${trad(', celui produit par « Sauvegarde JSON ». L’import écrase l’état enregistré ; une confirmation est demandée. Exporte d’abord si tu as un doute.')}
@@ -7685,7 +7685,7 @@ function viewData() {
            tableau reste sur grand ecran ; en dessous, la liste cliquable, comme
            partout ailleurs. -->
       <table class="large-seulement">
-        <thead><tr><th>Date</th><th>Motif</th><th>Patrimoine</th><th>Taille</th><th></th></tr></thead>
+        <thead><tr><th>${trad('Date')}</th><th>${trad('Motif')}</th><th>${trad('Patrimoine')}</th><th>${trad('Taille')}</th><th></th></tr></thead>
         <tbody>${backups.map((b, i) => {
           const t = (b.data.positions || []).length;
           return `<tr>
@@ -7694,7 +7694,7 @@ function viewData() {
             <td class="muted">${esc(b.reason)}</td>
             <td>${t} positions</td>
             <td class="muted">${(JSON.stringify(b.data).length / 1024).toFixed(0)} Ko</td>
-            <td><button class="btn ghost sm" data-action="restore-backup" data-i="${i}">Restaurer</button></td>
+            <td><button class="btn ghost sm" data-action="restore-backup" data-i="${i}">${trad('Restaurer')}</button></td>
           </tr>`;
         }).join('')}</tbody>
       </table>
@@ -7736,14 +7736,14 @@ function mountData() {
     const file = f.files[0];
     if (!file) return;
     if (/\.(xlsx|xls|csv)$/i.test(file.name)) {
-      await askConfirm(`L'Excel ne peut pas être réimporté\n`
-        + `C'est une photo pour lire et retravailler ailleurs : il ne contient pas tous les `
-        + `réglages du tableau de bord. Pour restaurer, prends le fichier « Sauvegarde JSON ».`,
+      await askConfirm(trad("L'Excel ne peut pas être réimporté") + '\n'
+        + trad("C'est une photo pour lire et retravailler ailleurs : il ne contient pas tous les "
+        + 'réglages du tableau de bord. Pour restaurer, prends le fichier « Sauvegarde JSON ».'),
         { ok: 'Compris', danger: false });
       f.value = '';
       return;
     }
-    if (!await askConfirm(`${trad('Importer')} « ${file.name} » ?\n\n${trad('Cela remplacera toutes les données actuellement enregistrées dans ce navigateur.')}`)) {
+    if (!await askConfirm(`${trad('Importer')} ${guill(file.name)} ?\n\n${trad('Cela remplacera toutes les données actuellement enregistrées dans ce navigateur.')}`)) {
       f.value = ''; return;
     }
     try {
@@ -8093,19 +8093,19 @@ function makeDeleter(listKey, what, nameOf) {
     const suites = [];
     const bien = item.bienId ? compteById(item.bienId) : null;
     if (bien) {
-      suites.push(`${trad('Le cash-flow et le rendement de')} « ${nomCompteV2(bien)} » ${
+      suites.push(`${trad('Le cash-flow et le rendement de')} ${guill(nomCompteV2(bien))} ${
         trad('ne la compteront plus.')}`);
     }
     if (item.creditId) {
       const cr = creditsEnCours().lignes.find(x => x.id === item.creditId);
       if (cr) {
-        suites.push(`« ${cr.libelle} » ${trad('n’aura plus de mensualité : sa date de fin '
+        suites.push(`${guill(cr.libelle)} ${trad('n’aura plus de mensualité : sa date de fin '
           + 'et la part de capital de chaque échéance cesseront de se calculer.')}`);
       }
     }
-    if (!await askConfirm(`Supprimer ${what}${nom ? ` « ${nom} »` : ', qui n’a pas de nom'} ?\n\n`
+    if (!await askConfirm(`${trad('Supprimer')} ${what}${nom ? ` ${guill(nom)}` : trad(', qui n’a pas de nom')} ?\n\n`
       + (suites.length ? `${suites.join(' ')}\n\n` : '')
-      + `Cette action est réversible avec Ctrl+Z, et une sauvegarde du jour existe dans l'onglet Données.`)) return;
+      + trad("Cette action est réversible avec Ctrl+Z, et une sauvegarde du jour existe dans l'onglet Données."))) return;
     list.splice(i, 1);
     Store.save(); render(); toast(trad('Ligne supprimée'));
   };
@@ -8219,9 +8219,9 @@ const ACTIONS = {
     /* Une vente declaree n'a rien ecrit : la question n'est pas la meme, et
        promettre un retour de titres qui n'existent pas serait un mensonge. */
     if (v.declaree) {
-      if (!await askConfirm(`Retirer « ${v.name} » du journal ?\n\n`
-        + `Cette vente était déclarée pour mémoire : elle n'avait rien écrit `
-        + `d'autre, il n'y a rien à défaire. Réversible avec Ctrl+Z.`,
+      if (!await askConfirm(`${trad('Retirer')} ${guill(v.name)} ${trad('du journal ?')}\n\n`
+        + trad("Cette vente était déclarée pour mémoire : elle n'avait rien écrit "
+        + "d'autre, il n'y a rien à défaire. Réversible avec Ctrl+Z."),
         { ok: 'Retirer du journal', danger: true })) return;
       Store.addBackup('avant retrait d’une vente déclarée');
       annulerVente(i);
@@ -8232,13 +8232,13 @@ const ACTIONS = {
     }
     const ou = v.cashAccount ? ACC[v.cashAccount]?.short || compteById(v.cashAccount)
       && nomCompteV2(compteById(v.cashAccount)) || 'le cash' : null;
-    if (!await askConfirm(`Annuler cette vente ?\n`
+    if (!await askConfirm(trad('Annuler cette vente ?') + '\n'
       + `${v.name}, ${num(v.qty)} × ${fmtCur(num(v.price), v.currency)}, ${fmtSigned(v.realised)}.\n\n`
-      + `Les ${num(v.qty)} titres reviennent sur leur ligne`
-      + (ou ? ` et ${fmtEUR(num(v.gross))} repartent de ${ou}` : '')
-      + `, et la vente quitte le journal.\n\n`
-      + `Le total ne revient pas forcément à l'euro d'avant : les titres rendus valent le `
-      + `cours du jour. Réversible avec Ctrl+Z.`, { ok: 'Annuler la vente', danger: true })) return;
+      + trad('Les {n} titres reviennent sur leur ligne').replace('{n}', num(v.qty))
+      + (ou ? ` ${trad('et {m} repartent de {ou}').replace('{m}', fmtEUR(num(v.gross))).replace('{ou}', ou)}` : '')
+      + `, ${trad('et la vente quitte le journal.')}\n\n`
+      + trad("Le total ne revient pas forcément à l'euro d'avant : les titres rendus valent le "
+      + 'cours du jour. Réversible avec Ctrl+Z.'), { ok: 'Annuler la vente', danger: true })) return;
     Store.addBackup('avant annulation de vente');
     annulerVente(i);
     fermerApercuSi('vente');
@@ -8278,7 +8278,7 @@ const ACTIONS = {
     if (!v) return;
     declarerVente(v);
     Store.save(); render();
-    toast(`« ${v.name} » ${trad('ajoutée au journal')} · ${fmtSigned(num(v.realised))}`);
+    toast(`${guill(v.name)} ${trad('ajoutée au journal')} · ${fmtSigned(num(v.realised))}`);
   },
   /* Ajouter une ligne : un seul chemin, et c'est la recherche.
 
@@ -8339,12 +8339,12 @@ const ACTIONS = {
       dateAchat: v.dateAchat || '',
     });
     Store.save(); render();
-    toast(`« ${v.name} » ${trad('ajoutée')}`);
+    toast(`${guill(v.name)} ${trad('ajoutée')}`);
   },
   async 'del-position'(btn) {
     const i = +btn.dataset.i;
     const p = Store.state.positions[i];
-    if (!await askConfirm(`${trad('Supprimer la position')} « ${p.name} » ?\n\n${trad('Réversible avec Ctrl+Z. Une sauvegarde du jour existe dans l’onglet Données.')}`)) return;
+    if (!await askConfirm(`${trad('Supprimer la position')} ${guill(p.name)} ?\n\n${trad('Réversible avec Ctrl+Z. Une sauvegarde du jour existe dans l’onglet Données.')}`)) return;
     Store.state.positions.splice(i, 1);
     Store.save(); render(); toast(trad('Position supprimée'));
   },
@@ -8358,8 +8358,8 @@ const ACTIONS = {
   async 'modal-close'() {
     const corps = $('#modalBody');
     if (corps?.dataset.differe === 'sale') {
-      const garder = await askConfirm('Modifications non enregistrées\n'
-        + 'Ce panneau porte des montants qui ne sont pas encore dans tes données.',
+      const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
+        + trad('Ce panneau porte des montants qui ne sont pas encore dans tes données.'),
         { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
       if (garder) { appliquerDiffere(); Store.save(); render(); toast(trad('Montants enregistrés')); }
     }
@@ -8582,9 +8582,9 @@ const ACTIONS = {
      clic, pour ne rien couter au demarrage. */
   async 'charger-demo'() {
     if (modeDemo()) return;
-    if (!await askConfirm("Voir la démonstration ?\n\n"
-      + "Tes données ne sont pas touchées : elles restent enregistrées de leur côté, "
-      + "et tu les retrouves en quittant le mode. Rien ne part en ligne pendant ce temps.",
+    if (!await askConfirm(trad('Voir la démonstration ?') + '\n\n'
+      + trad('Tes données ne sont pas touchées : elles restent enregistrées de leur côté, '
+      + 'et tu les retrouves en quittant le mode. Rien ne part en ligne pendant ce temps.'),
       { ok: 'Charger la démonstration' })) return;
     /* Le jeu de demonstration est la graine, et il n'en existe pas de second.
 
@@ -8603,7 +8603,7 @@ const ACTIONS = {
     Store.migrate();
     Store.save();
     render();
-    toast('Démonstration chargée, tes données sont en sécurité');
+    toast(trad('Démonstration chargée, tes données sont en sécurité'));
   },
 
   /* Sortir. On remet la cle reelle et on relit : l'etat de demonstration reste
@@ -8614,15 +8614,17 @@ const ACTIONS = {
     Store.load();
     refreshAccounts();
     render();
-    toast('Retour à tes données');
+    toast(trad('Retour à tes données'));
   },
 
   async 'start-blank'() {
-    if (!await askConfirm("Repartir de zéro ?\n"
-      + `Toutes les données actuelles seront effacées : ${Store.state.positions.length} positions, `
-      + `${ACCOUNTS.length} comptes, ${Store.state.monthly.filter(r => !rowIsEmpty(r)).length} mois de relevés, `
-      + `le budget et les dépenses.\n\n`
-      + `Une sauvegarde est prise avant, et Ctrl+Z annule.`,
+    if (!await askConfirm(trad('Repartir de zéro ?') + '\n'
+      + trad('Toutes les données actuelles seront effacées : {p} positions, {c} comptes, '
+        + '{m} mois de relevés, le budget et les dépenses.')
+        .replace('{p}', Store.state.positions.length)
+        .replace('{c}', ACCOUNTS.length)
+        .replace('{m}', Store.state.monthly.filter(r => !rowIsEmpty(r)).length)
+      + '\n\n' + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
       { ok: 'Tout effacer et repartir', danger: true })) return;
 
     Store.addBackup('avant remise à zéro');
@@ -8868,8 +8870,8 @@ const ACTIONS = {
 
       Store.save(); render();
       toast(typeChange
-        ? `${nomCompteV2(c)} : ${avant} devient ${typeCompte(c.type).label}`
-        : `${nomCompteV2(c)} enregistré`);
+        ? `${nomCompteV2(c)} : ${trad(avant)} ${trad('devient')} ${trad(typeCompte(c.type).label)}`
+        : `${nomCompteV2(c)} ${trad('enregistré')}`);
       return;
     }
   },
@@ -9245,9 +9247,11 @@ const ACTIONS = {
     });
     refreshAccounts(); Store.save(); render();
     toast([t.label, nomContenant() || String(e3.nom || '').trim()].filter(Boolean).join(' · ')
-      + (t.titres ? ', les placements s’ajoutent dans Marchés'
+      + (t.titres ? trad(', les placements s’ajoutent dans Marchés')
                   : bien ? (num(e3.credit)
-                      ? ` · ${fmtEUR0(num(e3.valeur))} moins ${fmtEUR0(num(e3.credit))} de crédit`
+                      ? ` · ${trad('{v} moins {c} de crédit')
+                          .replace('{v}', fmtEUR0(num(e3.valeur)))
+                          .replace('{c}', fmtEUR0(num(e3.credit)))}`
                       : ` · ${fmtEUR0(num(e3.valeur))}`) : ''));
   },
 
@@ -9279,7 +9283,7 @@ const ACTIONS = {
     const c = compteById(btn.dataset.id);
     if (!c) return;
     const v = await askForm({
-      titre: `Archiver « ${nomCompteV2(c)} » ?`,
+      titre: `Archiver ${guill(nomCompteV2(c))} ?`,
       sous: trad('Il sort de tous les totaux et garde son historique. Restaurable à tout moment.'),
       ok: 'Archiver',
       champs: [
@@ -9295,7 +9299,7 @@ const ACTIONS = {
        ailleurs dans cette fenetre de compte. */
     if (v.clotureLe) c.clotureLe = v.clotureLe; else delete c.clotureLe;
     refreshAccounts(); Store.save(); render();
-    toast(`« ${nomCompteV2(c)} » ${trad('archivé')}${v.clotureLe ? ` ${trad('au')} ${fmtDate(v.clotureLe)}` : ''}`);
+    toast(`${guill(nomCompteV2(c))} ${trad('archivé')}${v.clotureLe ? ` ${trad('au')} ${fmtDate(v.clotureLe)}` : ''}`);
   },
   /* Restaurer se confirme, et ne vit plus que dans la fiche.
 
@@ -9313,27 +9317,28 @@ const ACTIONS = {
     const c = compteById(btn.dataset.id);
     if (!c) return;
     const v = valeurCompte(c);
-    if (!await askConfirm(`${trad('Restaurer')} « ${nomCompteV2(c)} » ?\n`
-      + `Il revient dans tous les totaux de ton patrimoine${
-          Math.abs(v) > 0.005 ? `, pour ${fmtEUR(v)}` : ''}.\n\n`
+    if (!await askConfirm(`${trad('Restaurer')} ${guill(nomCompteV2(c))} ?\n`
+      + `${trad('Il revient dans tous les totaux de ton patrimoine')}${
+          Math.abs(v) > 0.005 ? `, ${trad('pour')} ${fmtEUR(v)}` : ''}.\n\n`
       + (c.clotureLe
-        ? `Sa date de clôture, le ${fmtDate(c.clotureLe)}, sera retirée : un compte rouvert n'est pas clôturé.`
-        : `Réversible : tu peux l'archiver de nouveau.`),
+        ? trad("Sa date de clôture, le {d}, sera retirée : un compte rouvert n'est pas clôturé.")
+            .replace('{d}', fmtDate(c.clotureLe))
+        : trad("Réversible : tu peux l'archiver de nouveau.")),
       { danger: false, ok: 'Restaurer' })) return;
     const avait = c.clotureLe;
     c.statut = 'ouvert';
     delete c.clotureLe;
     refreshAccounts(); Store.save(); render();
-    toast(`« ${nomCompteV2(c)} » ${trad('restauré')}${avait ? trad(', sa date de clôture est retirée') : ''}`);
+    toast(`${guill(nomCompteV2(c))} ${trad('restauré')}${avait ? trad(', sa date de clôture est retirée') : ''}`);
   },
   async 'annuler-fiche'(btn) {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     const retour = () => ACTIONS.goto({ dataset: { view: btn?.dataset?.view || 'accounts', anchor: '' } });
     if (!ficheModifiee()) { retourHaptique(); ficheAvant = null; retour(); return; }
     const ok = await askConfirm(
-      'Annuler tes modifications ?\n'
-      + 'Cette fiche revient telle qu’elle était en l’ouvrant. '
-      + 'Ce que tu as saisi depuis sera perdu.',
+      trad('Annuler tes modifications ?') + '\n'
+      + trad('Cette fiche revient telle qu’elle était en l’ouvrant. '
+      + 'Ce que tu as saisi depuis sera perdu.'),
       { ok: 'Annuler les modifications', refus: 'Continuer à modifier' });
     if (!ok) return;
     retablirFiche();
@@ -9369,18 +9374,20 @@ const ACTIONS = {
        chargement, vides, et l'historique du compte efface pour rien. Mettre a
        zero dit la meme chose et garde les mois passes. */
     if (typeCompte(c.type).interne) {
-      await askConfirm('Les espèces ne se suppriment pas\n'
-        + 'Ce compte existe pour tout le monde, sans établissement. S’il n’y a '
-        + 'plus de billets, mettez son montant à 0 : il sort alors de tous les '
-        + 'totaux, et les relevés passés restent lisibles.',
+      await askConfirm(trad('Les espèces ne se suppriment pas') + '\n'
+        + trad('Ce compte existe pour tout le monde, sans établissement. S’il n’y a '
+        + 'plus de billets, mets son montant à 0 : il sort alors de tous les '
+        + 'totaux, et les relevés passés restent lisibles.'),
         { ok: 'Compris', danger: false });
       return;
     }
     const titres = Store.state.positions.filter(p => p.account === c.id).length;
     if (titres) {
-      await askConfirm(`Impossible de supprimer « ${nomCompteV2(c)} »\n`
-        + `${titres} placement${titres > 1 ? 's' : ''} de marché y ${titres > 1 ? 'sont rattachés' : 'est rattaché'}. `
-        + `Déplacez-les d'abord vers un autre compte dans Marchés.`, { ok: 'Compris', danger: false });
+      await askConfirm(`${trad('Impossible de supprimer')} ${guill(nomCompteV2(c))}\n`
+        + trad(titres > 1 ? '{n} placements de marché y sont rattachés.'
+                          : '{n} placement de marché y est rattaché.').replace('{n}', titres)
+        + ' ' + trad("Déplace-les d'abord vers un autre compte dans Marchés."),
+        { ok: 'Compris', danger: false });
       return;
     }
     const v = valeurCompte(c);
@@ -9396,13 +9403,15 @@ const ACTIONS = {
       && COMPTES().filter(x => x.etabId === etab.id && x.id !== c.id).length === 0;
     const credits = dernierDeSonEtab ? (etab.dettes || []) : [];
     const duCredit = credits.reduce((s, d) => s + num(d.montant), 0);
-    if (!await askConfirm(`Clôturer et supprimer « ${nomCompteV2(c)} » ?\n\n`
-      + (v ? `Sa valeur de ${fmtEUR(v)} sortira du patrimoine.\n` : '')
-      + (duCredit ? `Le crédit qui le finance, ${fmtEUR(duCredit)} de capital restant dû, `
-                  + `sera supprimé en même temps : il ne peut pas rester seul.\n` : '')
-      + (mois ? `Ses montants restent lisibles dans ${mois} relevé${mois > 1 ? 's' : ''} passé${mois > 1 ? 's' : ''}.\n` : '')
-      + (dernierDeSonEtab ? `« ${etab.nom} » disparaîtra avec lui : c'était son dernier compte.\n` : '')
-      + `\nRéversible avec Ctrl+Z.`, { ok: 'Supprimer', danger: true })) return;
+    if (!await askConfirm(`${trad('Clôturer et supprimer')} ${guill(nomCompteV2(c))} ?\n\n`
+      + (v ? trad('Sa valeur de {v} sortira du patrimoine.').replace('{v}', fmtEUR(v)) + '\n' : '')
+      + (duCredit ? trad('Le crédit qui le finance, {c} de capital restant dû, sera supprimé en '
+                       + 'même temps : il ne peut pas rester seul.').replace('{c}', fmtEUR(duCredit)) + '\n' : '')
+      + (mois ? trad(mois > 1 ? 'Ses montants restent lisibles dans {n} relevés passés.'
+                              : 'Ses montants restent lisibles dans {n} relevé passé.')
+                  .replace('{n}', mois) + '\n' : '')
+      + (dernierDeSonEtab ? `${guill(etab.nom)} ${trad("disparaîtra avec lui : c'était son dernier compte.")}\n` : '')
+      + `\n${trad('Réversible avec Ctrl+Z.')}`, { ok: 'Supprimer', danger: true })) return;
     if (credits.length) etab.dettes = [];
     /* Pierre tombale : les relevés passés portent des colonnes à son nom. */
     if (!Store.state.accounts.some(a => a.id === c.id)) {
@@ -9426,7 +9435,7 @@ const ACTIONS = {
     }
     refreshAccounts(); Store.save();
     if (currentView() === 'ficheCompte') location.hash = '#/accounts'; else render();
-    toast(`« ${nomCompteV2(c)} » ${trad('supprimé')}`);
+    toast(`${guill(nomCompteV2(c))} ${trad('supprimé')}`);
   },
 
   'scinder-cash'(btn) {
@@ -9444,7 +9453,8 @@ const ACTIONS = {
     if (!c || !c.cash?.[i]) return;
     const e = c.cash[i];
     if (num(e.montant) && !await askConfirm(
-      `Retirer cette part de ${fmtEUR(num(e.montant))} ?\n\nLe montant sortira du patrimoine. Réversible avec Ctrl+Z.`,
+      trad('Retirer cette part de {v} ?').replace('{v}', fmtEUR(num(e.montant)))
+      + '\n\n' + trad('Le montant sortira du patrimoine. Réversible avec Ctrl+Z.'),
       { ok: 'Retirer', danger: true })) return;
     c.cash.splice(i, 1);
     Store.save(); render();
@@ -9478,7 +9488,7 @@ const ACTIONS = {
     c.lignes = c.lignes || [];
     c.lignes.push(litPlacement(v, { id: 'l' + Date.now().toString(36), classe }));
     refreshAccounts(); Store.save(); render();
-    toast(`« ${v.libelle} » ${trad('ajouté')} · ${fmtEUR0(num(v.valeur))}`);
+    toast(`${guill(v.libelle)} ${trad('ajouté')} · ${fmtEUR0(num(v.valeur))}`);
   },
 
   async 'editer-placement'(btn) {
@@ -9499,12 +9509,12 @@ const ACTIONS = {
     if (v.supprimer) {
       c.lignes.splice(i, 1);
       refreshAccounts(); Store.save(); render();
-      toast(`« ${l.libelle} » ${trad('retiré')}`);
+      toast(`${guill(l.libelle)} ${trad('retiré')}`);
       return;
     }
     Object.assign(l, litPlacement(v, l));
     refreshAccounts(); Store.save(); render();
-    toast(`« ${l.libelle} » · ${fmtEUR0(num(v.valeur))}`);
+    toast(`${guill(l.libelle)} · ${fmtEUR0(num(v.valeur))}`);
   },
 
   /* Un loyer cree depuis la fiche du bien : rattache d'office.
@@ -9528,7 +9538,7 @@ const ACTIONS = {
     if (!v) return;
     Store.state.budget.income.push({ label: v.label, amount: num(v.amount), bienId: c.id });
     Store.save(); render();
-    toast(`« ${v.label} » · ${fmtEUR0(num(v.amount))} ${trad('/ mois')}`);
+    toast(`${guill(v.label)} · ${fmtEUR0(num(v.amount))} ${trad('/ mois')}`);
   },
 
   /* Une charge du bien, meme raisonnement. La periode reste offerte : une taxe
@@ -9567,7 +9577,7 @@ const ACTIONS = {
       provider: v.provider || '', shares: {}, creditId: null, bienId: c.id,
     });
     Store.save(); render();
-    toast(`« ${v.label} » · ${fmtEUR(chargeMensuelle({ amount: num(v.amount), period: v.period }))} ${trad('/ mois')}`);
+    toast(`${guill(v.label)} · ${fmtEUR(chargeMensuelle({ amount: num(v.amount), period: v.period }))} ${trad('/ mois')}`);
   },
 
   async 'ajouter-credit'(btn) {
@@ -9611,8 +9621,9 @@ const ACTIONS = {
     const posee = v.charge && creerChargeDuCredit(e.dettes[e.dettes.length - 1]);
     if (posee) { Store.save(); render(); }
     toast(posee
-      ? `Crédit « ${v.libelle} » ajouté, et sa charge de ${fmtEUR0(num(v.mensualite))} ${trad('/ mois')}`
-      : `Crédit « ${v.libelle} » ajouté`);
+      ? `${trad('Crédit')} ${guill(v.libelle)} ${trad('ajouté, et sa charge de')} `
+        + `${fmtEUR0(num(v.mensualite))} ${trad('/ mois')}`
+      : `${trad('Crédit')} ${guill(v.libelle)} ${trad('ajouté')}`);
   },
 
   /* Modifier un credit, depuis n'importe ou il s'affiche.
@@ -9640,7 +9651,7 @@ const ACTIONS = {
     const v = await askForm({
       titre: d.libelle || 'Crédit',
       sous: [`chez ${e.nom}`,
-        lien ? `remboursé par « ${lien.charge.label || 'charge fixe'} », ${
+        lien ? `remboursé par ${guill(lien.charge.label || 'charge fixe')}, ${
           fmtEUR0(chargeMensuelle(lien.charge))} par mois` : '',
         siens.length ? `${siens.map(c => nomCompteV2(c)).join(', ')} · ${fmtEUR0(
           siens.reduce((s, c) => s + valeurCompte(c), 0))}` : 'aucun compte rattaché',
@@ -9694,7 +9705,7 @@ const ACTIONS = {
       const rendu = num(d.montant);
       e.dettes.splice(i, 1);
       Store.save(); render();
-      toast(`« ${nom} » ${trad('supprimé')} · ${trad('patrimoine net')} +${fmtEUR0(rendu)}`);
+      toast(`${guill(nom)} ${trad('supprimé')} · ${trad('patrimoine net')} +${fmtEUR0(rendu)}`);
       return;
     }
     const avant = num(d.montant);
@@ -9715,12 +9726,12 @@ const ACTIONS = {
        corrigeant ce champ, et qu'elle se lit a l'envers du montant saisi. */
     const baisse = avant - d.montant;
     toast(Math.abs(baisse) > 0.005
-      ? `${d.libelle} · ${fmtEUR0(d.montant)} restant dû, patrimoine net ${
+      ? `${d.libelle} · ${fmtEUR0(d.montant)} ${trad('restant dû, patrimoine net')} ${
         baisse > 0 ? `+${fmtEUR0(baisse)}` : `−${fmtEUR0(-baisse)}`}`
-      : `${d.libelle} enregistré`);
+      : `${d.libelle} ${trad('enregistré')}`);
     if (v.charge && creerChargeDuCredit(d)) {
       Store.save(); render();
-      toast(`« ${d.libelle} » ajoutée aux charges fixes · ${fmtEUR0(fixedTotal())} ${trad('/ mois')}`);
+      toast(`${guill(d.libelle)} ${trad('ajoutée aux charges fixes')} · ${fmtEUR0(fixedTotal())} ${trad('/ mois')}`);
     }
   },
   async 'retirer-credit'(btn) {
@@ -9728,7 +9739,7 @@ const ACTIONS = {
     const i = +btn.dataset.i;
     if (!e || !e.dettes?.[i]) return;
     const d = e.dettes[i];
-    if (!await askConfirm(`${trad('Retirer le crédit')} « ${d.libelle} » ?\n\n${trad('Le patrimoine net remontera de')} ${fmtEUR(num(d.montant))}. ${trad('Réversible avec Ctrl+Z.')}`,
+    if (!await askConfirm(`${trad('Retirer le crédit')} ${guill(d.libelle)} ?\n\n${trad('Le patrimoine net remontera de')} ${fmtEUR(num(d.montant))}. ${trad('Réversible avec Ctrl+Z.')}`,
       { ok: 'Retirer', danger: false })) return;
     e.dettes.splice(i, 1);
     Store.save(); render();
@@ -9895,7 +9906,7 @@ const ACTIONS = {
       Store.addBackup('avant suppression de ligne');
       Store.state.positions.splice(suite.supprimer, 1);
       Store.save(); render();
-      toast(`« ${p.name || trad('Ligne')} » ${trad('supprimée')}`);
+      toast(`${guill(p.name || trad('Ligne'))} ${trad('supprimée')}`);
       return;
     }
     if (suite && suite.vendre != null) {
@@ -9926,7 +9937,7 @@ const ACTIONS = {
       }
       Store.save(); render();
       toast(`${a.qty} × ${fmtCur(a.price, p.currency)} · ${trad('nouveau PRU')} ${fmtCur(p.buyPrice, p.currency)}`
-        + (a.cashAccount ? ` · débité de ${ACC[a.cashAccount]?.short || 'cash'}` : ''));
+        + (a.cashAccount ? ` · ${trad('débité de')} ${ACC[a.cashAccount]?.short || 'cash'}` : ''));
     }
   },
   /* Depuis la brique du haut de Budget : ouvre la saisie du mois courant.
@@ -9951,8 +9962,8 @@ const ACTIONS = {
     Store.state.budget.monthlyTarget = Math.max(0, num(r.montant));
     Store.save(); render();
     toast(Store.state.budget.monthlyTarget
-      ? `Objectif de dépenses : ${fmtEUR0(Store.state.budget.monthlyTarget)} par mois`
-      : 'Objectif de dépenses retiré');
+      ? `${trad('Objectif de dépenses :')} ${fmtEUR0(Store.state.budget.monthlyTarget)} ${trad('par mois')}`
+      : trad('Objectif de dépenses retiré'));
   },
 
   async 'saisir-mois-courant'() {
@@ -10010,7 +10021,7 @@ const ACTIONS = {
     while (liste.some(p => p.id === id)) id = base + (n++);
     liste.push({ id, name: nom });
     Store.save(); render();
-    toast(`« ${nom} » ${trad('ajoutée aux charges partagées')}`);
+    toast(`${guill(nom)} ${trad('ajoutée aux charges partagées')}`);
   },
   async 'del-contributor'(btn) {
     const id = btn.dataset.id;
@@ -10019,10 +10030,14 @@ const ACTIONS = {
     const total = Store.state.budget.fixedCharges.reduce((s, c) => s + shareOf(c, id), 0);
     const lignes = Store.state.budget.fixedCharges.filter(c => shareOf(c, id)).length;
     if (!await askConfirm(`${trad('Retirer')} ${p.name} ${trad('des charges partagées ?')}\n`
-      + (total ? `${fmtEUR0(total)} de parts réparties sur ${lignes} ligne${lignes > 1 ? 's' : ''} `
-               + `seront effacées. Les montants des charges ne changent pas, ni ton budget.\n\n`
-               : `Aucune part ne lui est attribuée.\n\n`)
-      + `Réversible avec Ctrl+Z.`, { danger: total > 0, ok: 'Retirer' })) return;
+      + (total ? trad(lignes > 1
+                    ? '{v} de parts réparties sur {n} lignes seront effacées. Les montants des '
+                      + 'charges ne changent pas, ni ton budget.'
+                    : '{v} de parts réparties sur {n} ligne seront effacées. Les montants des '
+                      + 'charges ne changent pas, ni ton budget.')
+                    .replace('{v}', fmtEUR0(total)).replace('{n}', lignes) + '\n\n'
+               : trad('Aucune part ne lui est attribuée.') + '\n\n')
+      + trad('Réversible avec Ctrl+Z.'), { danger: total > 0, ok: 'Retirer' })) return;
     Store.state.budget.contributors = Store.state.budget.contributors.filter(x => x.id !== id);
     for (const c of Store.state.budget.fixedCharges) if (c.shares) delete c.shares[id];
     Store.save(); render();
@@ -10034,7 +10049,7 @@ const ACTIONS = {
     if (!nom) return;
     if (!addExpenseCategory(nom)) { toast(trad('Cette catégorie existe déjà')); return; }
     Store.save(); render();
-    toast(`${trad('Colonne')} « ${nom.trim()} » ${trad('ajoutée')}`);
+    toast(`${trad('Colonne')} ${guill(nom.trim())} ${trad('ajoutée')}`);
   },
   /* Retirer ne demande pas confirmation : rien n'est perdu, et le geste inverse
      est a cote, sur la meme ligne. Une question a chaque fois pour une action
@@ -10045,29 +10060,31 @@ const ACTIONS = {
     Store.save(); render();
     const total = expenseCategoryTotal(cat);
     toast(total
-      ? `« ${cat} » quitte la saisie. Ses ${fmtEUR0(total)} restent dans l’historique.`
-      : `« ${cat} » quitte la saisie du mois.`);
+      ? `${guill(cat)} ${trad('quitte la saisie. Ses {v} restent dans l’historique.')
+          .replace('{v}', fmtEUR0(total))}`
+      : `${guill(cat)} ${trad('quitte la saisie du mois.')}`);
   },
   'reprendre-category'(btn) {
     const cat = btn.dataset.cat;
     if (!reprendreCategorie(cat)) return;
     Store.save(); render();
-    toast(`« ${cat} » ${trad('revient dans la saisie du mois')}`);
+    toast(`${guill(cat)} ${trad('revient dans la saisie du mois')}`);
   },
   async 'del-category'(btn) {
     const cat = btn.dataset.cat;
     const total = expenseCategoryTotal(cat);
     const mois = Store.state.budget.expenses.filter(r => num(r.v?.[cat])).length;
-    if (!await askConfirm(`${trad('Supprimer la catégorie')} « ${cat} » ?\n`
+    if (!await askConfirm(`${trad('Supprimer la catégorie')} ${guill(cat)} ?\n`
       + (total
-        ? `Elle contient ${fmtEUR0(total)} répartis sur ${mois} mois. Ces montants seront effacés `
-          + `et tes totaux baisseront d'autant.\n\n`
-        : `Elle est vide, rien ne sera perdu.\n\n`)
-      + `Réversible avec Ctrl+Z.`, { danger: total > 0, ok: 'Supprimer la colonne' })) return;
+        ? trad("Elle contient {v} répartis sur {m} mois. Ces montants seront effacés et tes "
+             + "totaux baisseront d'autant.")
+            .replace('{v}', fmtEUR0(total)).replace('{m}', mois) + '\n\n'
+        : trad('Elle est vide, rien ne sera perdu.') + '\n\n')
+      + trad('Réversible avec Ctrl+Z.'), { danger: total > 0, ok: 'Supprimer la colonne' })) return;
     Store.addBackup('avant suppression de catégorie');
     removeExpenseCategory(cat);
     Store.save(); render();
-    toast(`${trad('Colonne')} « ${cat} » ${trad('supprimée')}`);
+    toast(`${trad('Colonne')} ${guill(cat)} ${trad('supprimée')}`);
   },
   'add-expense-month'() {
     const list = Store.state.budget.expenses;
@@ -10086,10 +10103,11 @@ const ACTIONS = {
     if (!r) return;
     const calendrier = isCalendarMonth(r.month);
     if (!await askConfirm(calendrier
-      ? `Effacer les dépenses de ${fmtMonth(r.month)} ?\n\n`
-        + `La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.\n\n`
-        + `Réversible avec Ctrl+Z.`
-      : `Supprimer la ligne du ${fmtDate(r.month)} des dépenses ?\n\nRéversible avec Ctrl+Z.`)) return;
+      ? trad('Effacer les dépenses de {m} ?').replace('{m}', fmtMonth(r.month)) + '\n\n'
+        + trad("La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.")
+        + '\n\n' + trad('Réversible avec Ctrl+Z.')
+      : trad('Supprimer la ligne du {d} des dépenses ?').replace('{d}', fmtDate(r.month))
+        + '\n\n' + trad('Réversible avec Ctrl+Z.'))) return;
     if (calendrier) clearMonthRow(r, 'note');
     else Store.state.budget.expenses.splice(i, 1);
     Store.save(); render();
@@ -10128,7 +10146,7 @@ const ACTIONS = {
     APPORTS().push({ id: 'a' + Date.now().toString(36), libelle: v.libelle,
       montant, date: v.date || todayISO(), note: v.note || '' });
     Store.save(); render();
-    toast(`« ${v.libelle} » · ${fmtSigned(montant)}`);
+    toast(`${guill(v.libelle)} · ${fmtSigned(montant)}`);
   },
 
   async 'editer-apport'(btn) {
@@ -10161,14 +10179,14 @@ const ACTIONS = {
     if (v.supprimer) {
       APPORTS().splice(i, 1);
       Store.save(); render();
-      toast(`« ${a.libelle} » ${trad('retirée du journal')}`);
+      toast(`${guill(a.libelle)} ${trad('retirée du journal')}`);
       return;
     }
     a.libelle = v.libelle;
     a.montant = v.sens === 'sortie' ? -Math.abs(num(v.montant)) : Math.abs(num(v.montant));
     a.date = v.date || a.date; a.note = v.note || '';
     Store.save(); render();
-    toast(`« ${a.libelle} » · ${fmtSigned(a.montant)}`);
+    toast(`${guill(a.libelle)} · ${fmtSigned(a.montant)}`);
   },
 
   /* On en saisit rarement une seule. Depuis que le tableau passe par la fenetre,
@@ -10211,7 +10229,7 @@ const ACTIONS = {
         creditId: v.creditId || null, bienId: v.bienId || null,
       });
       Store.save(); render();
-      toast(`« ${v.label} » ajoutée · ${fmtEUR(chargeMensuelle({ amount: v.amount, period: v.period }))} ${trad('/ mois')}`);
+      toast(`${guill(v.label)} ${trad('ajoutée')} · ${fmtEUR(chargeMensuelle({ amount: v.amount, period: v.period }))} ${trad('/ mois')}`);
       if (!v.__encore) return;
     }
   },
@@ -10263,7 +10281,7 @@ const ACTIONS = {
       Store.state.budget.fixedCharges.splice(i, 1);
       Store.save(); render();
       /* Meme raison que dans `makeDeleter` : sans nom, on ne cite pas un vide. */
-      toast(c.label ? `« ${c.label} » ${trad('supprimée')}` : trad('Charge fixe supprimée'));
+      toast(c.label ? `${guill(c.label)} ${trad('supprimée')}` : trad('Charge fixe supprimée'));
       return;
     }
     c.label = v.label; c.amount = v.amount; c.period = v.period; c.provider = v.provider;
@@ -10272,7 +10290,7 @@ const ACTIONS = {
     c.shares = c.shares || {};
     for (const p of gens) c.shares[p.id] = num(v[`part_${p.id}`]) || 0;
     Store.save(); render();
-    toast(`« ${c.label} » · ${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`);
+    toast(`${guill(c.label)} · ${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`);
   },
 
   async 'add-income'() {
@@ -10292,7 +10310,7 @@ const ACTIONS = {
     if (!v) { rafraichirRevenus(); return; }
     Store.state.budget.income.push({ label: v.label, amount: v.amount });
     Store.save(); render(); rafraichirRevenus();
-    toast(`« ${v.label} » ${trad('ajoutée aux revenus')}`);
+    toast(`${guill(v.label)} ${trad('ajoutée aux revenus')}`);
   },
   /* Une source de revenu, modifiable depuis ailleurs que la page Budget.
 
@@ -10336,14 +10354,14 @@ const ACTIONS = {
     if (v.supprimer) {
       Store.state.budget.income.splice(i, 1);
       Store.save(); render();
-      toast(r.label ? `« ${r.label} » ${trad('supprimée')}` : trad('Source supprimée'));
+      toast(r.label ? `${guill(r.label)} ${trad('supprimée')}` : trad('Source supprimée'));
       return;
     }
     r.label = v.label; r.amount = num(v.amount); r.period = v.period;
     r.estime = !!v.estime;
     if (v.bienId !== undefined) r.bienId = v.bienId || null;
     Store.save(); render();
-    toast(`« ${r.label} » · ${fmtEUR(revenuMensuel(r))} ${trad('/ mois')}`);
+    toast(`${guill(r.label)} · ${fmtEUR(revenuMensuel(r))} ${trad('/ mois')}`);
   },
 
   /* Meme retour que pour l'ajout : la demande de confirmation ferme la
@@ -10380,7 +10398,7 @@ const ACTIONS = {
     if (!p) return;
     if (Quotes.isOnline() === null) await Quotes.health();
     if (Quotes.isOnline() === false) { toast(trad('Passerelle non détectée')); return; }
-    if (!isinIsValid(p.isin)) { toast(`${trad('ISIN invalide pour')} « ${p.name} »`); return; }
+    if (!isinIsValid(p.isin)) { toast(`${trad('ISIN invalide pour')} ${guill(p.name)}`); return; }
     btn.disabled = true;
     try {
       const r = await Quotes.resolveIsin(p.isin.trim());
@@ -10455,14 +10473,14 @@ const ACTIONS = {
       const data = await CloudSync.pull();
       if (!data) { toast(trad('Rien en ligne')); return; }
       const at = data.meta?.savedAt;
-      if (!await askConfirm(`Recharger les données depuis le cloud ?\n\n`
-        + `En ligne : ${at ? new Date(at).toLocaleString(locale()) : 'inconnue'}\n`
-        + `Ici      : ${new Date(Store.state.meta.savedAt || Date.now()).toLocaleString(locale())}\n\n`
-        + `L'état actuel sera sauvegardé avant remplacement.`)) return;
+      if (!await askConfirm(trad('Recharger les données depuis le cloud ?') + '\n\n'
+        + `${trad('En ligne :')} ${at ? new Date(at).toLocaleString(locale()) : trad('inconnue')}\n`
+        + `${trad('Ici :')} ${new Date(Store.state.meta.savedAt || Date.now()).toLocaleString(locale())}\n\n`
+        + trad("L'état actuel sera sauvegardé avant remplacement."))) return;
       Store.addBackup('avant rechargement cloud');
       Store.state = data; Store.migrate(); Store.save();
       render(); toast(trad('Données rechargées'));
-    } catch (e) { toast('Échec : ' + e.message); }
+    } catch (e) { toast(trad('Échec :') + ' ' + e.message); }
   },
   'make-backup'() {
     Store.addBackup('manuelle') ? toast(trad('Sauvegarde créée')) : toast(trad('Sauvegarde impossible (stockage plein)'));
@@ -10471,8 +10489,8 @@ const ACTIONS = {
   async 'restore-backup'(btn) {
     const i = +btn.dataset.i, b = Store.backups()[i];
     if (!b) return;
-    if (!await askConfirm(`Restaurer la sauvegarde du ${new Date(b.at).toLocaleString(locale())} ?\n\n`
-      + `L'état actuel sera d'abord sauvegardé, tu pourras donc revenir en arrière.`)) return;
+    if (!await askConfirm(trad('Restaurer la sauvegarde du {d} ?').replace('{d}', new Date(b.at).toLocaleString(locale()))
+      + '\n\n' + trad("L'état actuel sera d'abord sauvegardé, tu pourras donc revenir en arrière."))) return;
     Store.restoreBackup(i);
     render(); toast(trad('Sauvegarde restaurée'));
   },
@@ -10506,7 +10524,8 @@ const ACTIONS = {
     toast(`${trad('Classeur Excel exporté,')} ${feuilles.length} ${trad('feuilles')}`);
   },
   async 'reset'() {
-    if (!await askConfirm("Revenir aux données d'origine importées du Google Sheet ?\n\nToutes tes modifications locales seront perdues. Exporte d'abord une sauvegarde si besoin.")) return;
+    if (!await askConfirm(trad("Revenir aux données d'origine importées du Google Sheet ?") + '\n\n'
+      + trad("Toutes tes modifications locales seront perdues. Exporte d'abord une sauvegarde si besoin."))) return;
     Store.reset(); render(); toast(trad('Données réinitialisées'));
   },
   async 'wipe'() {
@@ -10549,11 +10568,13 @@ const ACTIONS = {
        ecrire sans prevenir. */
     const vide = rowIsEmpty(row);
     if (!await askConfirm(vide
-      ? `Enregistrer le relevé de ${fmtMonth(row.date)} ?\n\n`
-        + `La photo du jour, ${fmtEUR0(t.total)}, sera écrite dans cette ligne, compte par compte.`
-      : `Remplacer les montants de ${fmtMonth(row.date)} par la photo actuelle ?\n\n`
-        + `Actuellement : ${fmtEUR0(rowTotal(row))}\nPhoto du jour : ${fmtEUR0(t.total)}\n\n`
-        + `Annulable juste après, et une sauvegarde est prise avant.`,
+      ? trad('Enregistrer le relevé de {m} ?').replace('{m}', fmtMonth(row.date)) + '\n\n'
+        + trad('La photo du jour, {v}, sera écrite dans cette ligne, compte par compte.')
+            .replace('{v}', fmtEUR0(t.total))
+      : trad('Remplacer les montants de {m} par la photo actuelle ?').replace('{m}', fmtMonth(row.date))
+        + '\n\n' + `${trad('Actuellement :')} ${fmtEUR0(rowTotal(row))}\n`
+        + `${trad('Photo du jour :')} ${fmtEUR0(t.total)}\n\n`
+        + trad('Annulable juste après, et une sauvegarde est prise avant.'),
       vide ? { danger: false, ok: 'Enregistrer' } : {})) return;
 
     sauvegardeAvantEcrasement(row);
@@ -10807,12 +10828,15 @@ function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX)
   return new Promise(resolve => {
     const m = $('#modal');
     apercuOuvert = null;
-    $('#modalTitle').textContent = titre;
-    $('#modalSub').textContent = message || '';
+    /* Les trois textes se traduisent ici, pas chez l'appelant : c'est le meme
+       regime que les descripteurs d'`askForm`, et le français passe pour la
+       clef. Sans cela, chaque appel devait y penser, et sept sur dix l'oubliaient. */
+    $('#modalTitle').textContent = trad(titre);
+    $('#modalSub').textContent = message ? trad(message) : '';
     $('#modalBody').innerHTML = `
       <div class="modal-champs">
         <div class="field">
-          <input id="txtValeur" value="${esc(valeur)}" placeholder="${esc(exemple)}"
+          <input id="txtValeur" value="${esc(valeur)}" placeholder="${esc(trad(exemple))}"
                  maxlength="${max}" autocomplete="off" spellcheck="false">
         </div>
       </div>`;
@@ -10906,7 +10930,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
   return new Promise(resolve => {
     const m = $('#modal');
     apercuOuvert = null;
-    $('#modalTitle').textContent = titre;
+    $('#modalTitle').textContent = trad(titre);
     /* Le meme regime que les apercus : un sous-titre peut porter un montant,
        donc l'oeil SVG en mode discret. escMontant echappe tout le reste. */
     $('#modalSub').innerHTML = escMontant(sous);
@@ -11108,7 +11132,9 @@ function askChoice(titre, message, options, valeur) {
 function askConfirm(texte, { danger = true, ok = 'Confirmer', refus = 'Annuler' } = {}) {
   // Même signature d'appel que await askConfirm() : la première ligne devient le titre,
   // le reste le corps du message.
-  const [titre, ...suite] = String(texte).split('\n');
+  /* `ponct()` retire l'espace avant un « ? » en anglais : la question se compose
+     d'un morceau traduit et du signe, ecrit dans le gabarit, donc hors de la clef. */
+  const [titre, ...suite] = ponct(String(texte)).split('\n');
   const message = suite.join('\n').trim();
   return new Promise(resolve => {
     const m = $('#confirm'), oui = $('#confirmYes'), non = $('#confirmNo');
@@ -11618,8 +11644,8 @@ function askPosition(index) {
        sans un mot — le contraire de ce que la saisie differee doit apporter. */
     const fermerOuDemander = async () => {
       if (propre()) { fermer('ferme'); return; }
-      const garder = await askConfirm('Modifications non enregistrées\n'
-        + 'Cette ligne porte des changements qui ne sont pas encore dans tes données.',
+      const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
+        + trad('Cette ligne porte des changements qui ne sont pas encore dans tes données.'),
         { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
       if (garder) enregistrer();
       fermer('ferme');
@@ -11651,11 +11677,11 @@ function askPosition(index) {
        Les champs sales ne se demandent pas. La fenetre proposerait de garder des
        corrections sur une ligne qu'on vient d'accepter de faire disparaitre. */
     $('#posDelete').onclick = async () => {
-      const ok = await askConfirm(`${trad('Supprimer')} « ${p.name || trad('cette ligne')} » ?\n`
-        + `${num(p.qty)} × ${fmtCur(p.price, dev)}, soit ${fmtEUR(posValue(p))}.\n\n`
-        + `La ligne quitte le portefeuille sans vente : ni encaissement, ni `
-        + `plus-value au journal. Réversible avec Ctrl+Z, et une sauvegarde du `
-        + `jour existe dans l'onglet Données.`, { ok: 'Supprimer', danger: true });
+      const ok = await askConfirm(`${trad('Supprimer')} ${guill(p.name || trad('cette ligne'))} ?\n`
+        + `${num(p.qty)} × ${fmtCur(p.price, dev)}, ${trad('soit')} ${fmtEUR(posValue(p))}.\n\n`
+        + trad('La ligne quitte le portefeuille sans vente : ni encaissement, ni '
+        + "plus-value au journal. Réversible avec Ctrl+Z, et une sauvegarde du "
+        + "jour existe dans l'onglet Données."), { ok: 'Supprimer', danger: true });
       if (!ok) return;
       fermer({ supprimer: index });
     };
@@ -12011,9 +12037,9 @@ function askExpenseMonth(index) {
        perte ne se voit qu'au retour sur le tableau. */
     const annulerOuDemander = async () => {
       if (!sale()) { fermer(null); return; }
-      const garder = await askConfirm('Modifications non enregistrées\n'
-        + `Les dépenses de ${fmtMonth(r.month)} portent des changements qui ne sont pas `
-        + 'encore dans tes données.',
+      const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
+        + trad('Les dépenses de {m} portent des changements qui ne sont pas encore dans tes données.')
+            .replace('{m}', fmtMonth(r.month)),
         { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
       fermer(garder ? saisie() : null);
     };
@@ -12075,12 +12101,12 @@ async function viderOuSupprimerMois(index) {
   if (!r) return false;
   const calendrier = isCalendarMonth(r.date);
   if (!await askConfirm(calendrier
-    ? `Effacer les montants de ${fmtMonth(r.date)} ?\n\n`
-      + `La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.\n\n`
-      + `Réversible avec Ctrl+Z.`
-    : `Supprimer la ligne du ${fmtDate(r.date)} ?\n\n`
-      + `Ce n'est pas un mois du calendrier : la ligne disparaîtra du tableau.\n\n`
-      + `Réversible avec Ctrl+Z.`)) return false;
+    ? trad('Effacer les montants de {m} ?').replace('{m}', fmtMonth(r.date)) + '\n\n'
+      + trad("La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.")
+      + '\n\n' + trad('Réversible avec Ctrl+Z.')
+    : trad('Supprimer la ligne du {d} ?').replace('{d}', fmtDate(r.date)) + '\n\n'
+      + trad("Ce n'est pas un mois du calendrier : la ligne disparaîtra du tableau.")
+      + '\n\n' + trad('Réversible avec Ctrl+Z.'))) return false;
   if (calendrier) clearMonthRow(r, 'comment');
   else Store.state.monthly.splice(index, 1);
   Store.save();
@@ -12287,16 +12313,16 @@ function askMonthlySnapshot(index) {
          deja rempli se perd sans qu'on l'ait voulu. Corriger un champ a la main
          est delibere, champ par champ, et n'a rien a confirmer. */
       if (!revolu && !await askConfirm(
-          `Enregistrer un relevé pour ${fmtMonth(r.date)} ?\n\n`
-        + 'Ce mois n’a pas encore eu lieu. La ligne comptera comme un relevé '
-        + 'passé, dans les courbes comme dans les écarts d’un mois à l’autre.',
+          trad('Enregistrer un relevé pour {m} ?').replace('{m}', fmtMonth(r.date)) + '\n\n'
+        + trad('Ce mois n’a pas encore eu lieu. La ligne comptera comme un relevé '
+        + 'passé, dans les courbes comme dans les écarts d’un mois à l’autre.'),
           { ok: 'Enregistrer quand même' })) return false;
 
       if (photoPrise && !rowIsEmpty(r) && !await askConfirm(
-          `Remplacer les montants de ${fmtMonth(r.date)} ?\n\n`
-        + `Enregistré : ${fmtEUR0(rowTotal(r))}\n`
-        + `Après reprise : ${fmtEUR0(champs.reduce((s, c) => s + num(c.value), 0))}\n\n`
-        + 'Réversible : le message qui suit propose de revenir en arrière.',
+          trad('Remplacer les montants de {m} ?').replace('{m}', fmtMonth(r.date)) + '\n\n'
+        + `${trad('Enregistré :')} ${fmtEUR0(rowTotal(r))}\n`
+        + `${trad('Après reprise :')} ${fmtEUR0(champs.reduce((s, c) => s + num(c.value), 0))}\n\n`
+        + trad('Réversible : le message qui suit propose de revenir en arrière.'),
           { ok: 'Remplacer' })) return false;
 
       appliquerReleve(index, { v, comment: $('#relNote').value,
@@ -12313,8 +12339,8 @@ function askMonthlySnapshot(index) {
        champs sans une question. */
     const quitter = async () => {
       if (sale) {
-        const garder = await askConfirm('Modifications non enregistrées\n'
-          + 'Ce relevé porte des montants qui ne sont pas encore dans tes données.',
+        const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
+          + trad('Ce relevé porte des montants qui ne sont pas encore dans tes données.'),
           { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
         if (garder && !await enregistrer()) return;   // garde refusee : on reste
       }
@@ -13703,7 +13729,7 @@ function render() {
     } else if (orpheline) {
       retour.dataset.action = 'retour-arriere';
       delete retour.dataset.view;
-      retour.setAttribute('aria-label', 'Revenir à l’écran précédent');
+      retour.setAttribute('aria-label', trad('Revenir à l’écran précédent'));
     }
     document.body.classList.toggle('sous-page', !retour.hidden);
   }
@@ -14796,7 +14822,7 @@ function bindGlobal() {
     const etab = ETABS().find(x => x.id === c.etabId);
     if (etab && COMPTES().filter(x => x.etabId === etab.id).length === 1) etab.nom = nom;
     Store.save(); render();
-    toast(`${trad('Renommé en')} « ${nom} »`);
+    toast(`${trad('Renommé en')} ${guill(nom)}`);
   });
 
   document.addEventListener('change', e => {
@@ -14810,7 +14836,7 @@ function bindGlobal() {
       return;
     }
     Store.save(); render();
-    toast(`« ${ancien} » ${trad('renommée')} « ${nouveau} »`);
+    toast(`${guill(ancien)} ${trad('renommée')} ${guill(nouveau)}`);
   });
 
   document.addEventListener('change', e => {
@@ -15221,7 +15247,7 @@ async function lookupSymbol(i) {
     const r = await fetch(`${Quotes.BASE}/api/quotes?symbols=${encodeURIComponent(sym)}`, { cache: 'no-store' });
     const q = (await r.json()).quotes?.[0];
     if (!q || q.error || !q.price) {
-      toast(`${trad('Symbole')} « ${sym} » ${trad('introuvable')}`);
+      toast(`${trad('Symbole')} ${guill(sym)} ${trad('introuvable')}`);
       return;
     }
     p.symbol = q.symbol || sym;
@@ -15348,12 +15374,12 @@ function applyField(f) {
       /* Vrai conflit : cet appareil porte des modifications jamais envoyées
          et le cloud a bougé de son côté. Là seulement, on demande. */
       const ok = await askConfirm(
-        `Deux versions différentes de tes données\n\n`
-        + `Cet appareil a des modifications qui n'ont jamais été envoyées, et une `
-        + `version plus récente existe en ligne.\n\n`
-        + `En ligne : ${new Date(cloud.at).toLocaleString(locale())}\n`
-        + `Ici : ${cloud.localAt ? new Date(cloud.localAt).toLocaleString(locale()) : 'inconnue'}\n\n`
-        + `Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)`,
+        trad('Deux versions différentes de tes données') + '\n\n'
+        + trad("Cet appareil a des modifications qui n'ont jamais été envoyées, et une "
+        + 'version plus récente existe en ligne.') + '\n\n'
+        + `${trad('En ligne :')} ${new Date(cloud.at).toLocaleString(locale())}\n`
+        + `${trad('Ici :')} ${cloud.localAt ? new Date(cloud.localAt).toLocaleString(locale()) : trad('inconnue')}\n\n`
+        + trad("Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)"),
         { danger: false, ok: 'Charger celle en ligne' });
       if (ok) { Store.addBackup('avant chargement cloud'); Store.state = cloud.data; Store.migrate(); Store.save(); }
       else { await CloudSync.push({ force: true }); }
