@@ -5202,11 +5202,11 @@ function lignePlacement(l, compte, editable = false) {
     <span class="dispo-reglable">
       ${badgeMobilisable(mob)}
       <select data-path="${esc(l.refMobilite)}"
-              aria-label="Disponibilité de ${esc(l.libelle)}">
+              aria-label="${trad('Disponibilité de')} ${esc(l.libelle)}">
         <option value="auto" ${!l.mobilite || l.mobilite === 'auto' ? 'selected' : ''}>
-          Auto, ${esc(MOBILISABLE_COURT[mobilisabilite(l.classe, compte.type, compte.ouvertLe)])}</option>
+          ${trad('Auto,')} ${esc(trad(MOBILISABLE_COURT[mobilisabilite(l.classe, compte.type, compte.ouvertLe)]))}</option>
         ${Object.entries(MOBILISABLE_COURT).map(([v, lib]) =>
-          `<option value="${v}" ${l.mobilite === v ? 'selected' : ''}>${esc(lib)}</option>`).join('')}
+          `<option value="${v}" ${l.mobilite === v ? 'selected' : ''}>${esc(trad(lib))}</option>`).join('')}
       </select>
     </span>` : badgeMobilisable(mob);
   /* Ce que la ligne dit d'elle-meme, sous son nom : sa classe, son compte, et pour
@@ -6088,13 +6088,24 @@ function espaceBien(c, idx, t) {
 
    « Annuler » reste, et rend la fiche telle qu'elle etait au dernier point
    connu — l'ouverture, ou le dernier « Enregistrer ». */
-function boutonEnregistrerFiche(retour = 'accounts') {
+/* La barre de validation d'une fiche : une barre de page, pas une rangee dans une
+   carte.
+
+   Elle validait la visite entiere depuis la carte « Actions », a cote d'Archiver
+   et de Clocher-supprimer : quatre boutons de meme poids pour deux natures d'acte,
+   et un titre de carte qui ne decrivait ni l'une ni l'autre. La regle qui en sort :
+   les boutons d'une carte agissent sur le sujet de cette carte, et ce qui porte sur
+   la page entiere vit dehors.
+
+   Elle se place apres les champs et avant la carte « Actions » : on saisit, on
+   valide, et ce qui decide de la vie du compte reste en dernier, comme partout. */
+function barreValiderFiche(retour = 'accounts') {
   return `
-      <div class="fiche-valider">
-        <button class="btn ghost" data-action="annuler-fiche"
-                data-view="${esc(retour)}">${trad('Annuler')}</button>
-        <button class="btn primary" data-action="enregistrer-fiche">${trad('Enregistrer')}</button>
-      </div>`;
+    <div class="fiche-pied">
+      <button class="btn ghost" data-action="annuler-fiche"
+              data-view="${esc(retour)}">${trad('Annuler')}</button>
+      <button class="btn primary" data-action="enregistrer-fiche">${trad('Enregistrer')}</button>
+    </div>`;
 }
 
 /* L'etat d'une fiche a son ouverture, pour pouvoir y revenir.
@@ -6150,7 +6161,7 @@ function viewFicheCompte(id) {
   for (const l of lignes) if (!l.marche || true) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
 
   return `
-  <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ Actifs</button>
+  <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
 
   <div class="card cpt-entete">
     <div>
@@ -6172,7 +6183,7 @@ function viewFicheCompte(id) {
            qu'il y a a savoir.
            (Pas d'accent grave ici, meme raison qu'ailleurs dans ce fichier.) -->
       ${c.statut === 'archive' ? '' : `<div class="cpt-net">${fmtEUR(valeurCompte(c))}</div>`}
-      <span class="sub">${esc([sousTitreCompte(c, false), c.statut === 'archive' ? 'archivé' : '']
+      <span class="sub">${esc([sousTitreCompte(c, false), c.statut === 'archive' ? trad('archivé') : '']
         .filter(Boolean).join(' · '))}</span>
       <!-- Ce qu'il reste a verser, sous le montant : c'est la que la question se
            pose, en regardant ce qu'il y a dessus. Une jauge et une phrase, parce
@@ -6225,7 +6236,7 @@ function viewFicheCompte(id) {
   <div class="card">
     <div class="card-head"><h2>${BASES.liquidites.nom} ${trad('sur ce compte')}</h2>
       <button class="btn sm ghost" data-action="scinder-cash" data-id="${esc(c.id)}"
-              title="${trad('Déclarer un second usage sur le même compte')}">Scinder</button>
+              title="${trad('Déclarer un second usage sur le même compte')}">${trad('Scinder')}</button>
     </div>
     ${(c.cash || []).length ? (c.cash || []).map((e, i) => `
       <div class="plc-ligne">
@@ -6252,7 +6263,7 @@ function viewFicheCompte(id) {
           : `<button class="btn icon" data-action="retirer-cash" data-id="${esc(c.id)}" data-i="${i}" title="${trad('Retirer cette part')}">✕</button>`}
       </div>`).join('')
     : `<p class="empty">${t.titres
-        ? 'Aucune espèce en attente. « Scinder » déclare un montant à investir.'
+        ? trad('Aucune espèce en attente. « Scinder » déclare un montant à investir.')
         : trad('Pas d’argent déclaré sur ce compte. « Scinder » ajoute une première part.')}</p>`}
   </div>`}
 
@@ -6270,17 +6281,17 @@ function viewFicheCompte(id) {
          listes de la carte font la meme chose — une par ligne aurait repete la
          meme phrase autant de fois qu'il y a de placements. Le mot
          « Disponibilite » sert de titre de colonne, ce qui manquait aussi. -->
-    <div class="card-head"><h2>${t.titres ? 'Lignes de titres' : 'Placements détenus'}</h2>
-      <span class="hint">Disponibilité${aide(trad("Sous combien de temps chaque placement redevient de l’argent disponible. Elle alimente la carte « Autonomie financière » de l’accueil. « Auto » suit la règle du type de compte : un PEA de moins de cinq ans est bloqué, un compte-titres se vend en séance. La règle se trompe parfois : un non coté peut se revendre sur un marché secondaire, c’est pourquoi chaque ligne peut la contredire."))}</span>
-      ${t.titres ? `<a class="hint lien-vue" href="#/positions">${trad('Gérer dans Marchés')} →</a>`
+    <div class="card-head"><h2>${trad(t.titres ? 'Lignes de titres' : 'Placements détenus')}</h2>
+      <span class="hint">${trad('Disponibilité')}${aide(trad("Sous combien de temps chaque placement redevient de l’argent disponible. Elle alimente la carte « Autonomie financière » de l’accueil. « Auto » suit la règle du type de compte : un PEA de moins de cinq ans est bloqué, un compte-titres se vend en séance. La règle se trompe parfois : un non coté peut se revendre sur un marché secondaire, c’est pourquoi chaque ligne peut la contredire."))}</span>
+      ${t.titres ? `<a class="btn sm ghost" href="#/positions">${trad('Gérer dans Marchés')} →</a>`
         : `<button class="btn sm ghost" data-action="ajouter-placement" data-id="${esc(c.id)}"
-                   title="${trad('Ajouter un placement à ce compte')}">+ Placement</button>`}
+                   title="${trad('Ajouter un placement à ce compte')}">${trad('+ Placement')}</button>`}
     </div>
     ${lignes.length ? lignes.map(l => lignePlacement(l, c, true)).join('')
       : `<div class="empty">
-          <p style="margin:0 0 12px">Aucun placement pour l’instant.${t.titres
-            ? ' Les lignes se créent dans l’onglet Marchés, rattachées à ce compte.'
-            : ' Un prêt participatif, une part de société, un projet : chacun sa ligne, avec son échéance.'}</p>
+          <p style="margin:0 0 12px">${trad('Aucun placement pour l’instant.')} ${trad(t.titres
+            ? 'Les lignes se créent dans l’onglet Marchés, rattachées à ce compte.'
+            : 'Un prêt participatif, une part de société, un projet : chacun sa ligne, avec son échéance.')}</p>
           ${t.titres ? '' : `<button class="btn sm" data-action="ajouter-placement" data-id="${esc(c.id)}"
                    >${trad('+ Ajouter un placement')}</button>`}
         </div>`}
@@ -6342,9 +6353,8 @@ function viewFicheCompte(id) {
   </div>`;
   })()}
 
-  <div class="grid g-2">
-    <div class="card">
-      <div class="card-head"><h2>Informations</h2>
+  <div class="card">
+      <div class="card-head"><h2>${trad('Informations')}</h2>
         <button class="btn sm ghost" data-action="modifier-compte" data-id="${esc(c.id)}">${trad('Modifier')}</button></div>
       <!-- Ces champs se lisent, ils ne se saisissent plus.
 
@@ -6404,12 +6414,13 @@ function viewFicheCompte(id) {
              sur un livret, savoir qu'on peut declarer un plafond fait partie de
              ce que la fiche doit dire. -->
         ${t.id === 'livret' ? `
-        <dt>Plafond de versement${aide(trad("Facultatif. Une fois posé, la fiche dit ce qu’il reste à verser. Les plafonds courants : 22 950 € pour un Livret A, 12 000 € pour un LDDS, 10 000 € pour un LEP. Les intérêts peuvent faire dépasser le plafond, c’est normal et la fiche l’annonce alors comme plein."))}</dt>
-        <dd>${num(c.plafond) ? fmtEUR(c.plafond) : '<span class="muted">non renseigné</span>'}</dd>` : ''}
+        <dt>${trad('Plafond de versement')}${aide(trad("Facultatif. Une fois posé, la fiche dit ce qu’il reste à verser. Les plafonds courants : 22 950 € pour un Livret A, 12 000 € pour un LDDS, 10 000 € pour un LEP. Les intérêts peuvent faire dépasser le plafond, c’est normal et la fiche l’annonce alors comme plein."))}</dt>
+        <dd>${num(c.plafond) ? fmtEUR(c.plafond)
+              : `<span class="muted">${trad('non renseigné')}</span>`}</dd>` : ''}
         ${t.dateSensible ? `
-        <dt>Date d’ouverture${aide(trad("Elle conditionne la disponibilité : un PEA se débloque à cinq ans, une assurance-vie à huit, un PER à la retraite. C’est pour cela qu’elle est demandée ici et pas sur les autres types de compte."))}</dt>
+        <dt>${trad('Date d’ouverture')}${aide(trad("Elle conditionne la disponibilité : un PEA se débloque à cinq ans, une assurance-vie à huit, un PER à la retraite. C’est pour cela qu’elle est demandée ici et pas sur les autres types de compte."))}</dt>
         <dd>${c.ouvertLe ? esc(fmtDate(c.ouvertLe))
-              : '<span class="muted">à renseigner</span>'}</dd>`
+              : `<span class="muted">${trad('à renseigner')}</span>`}</dd>`
         : c.ouvertLe ? `<dt>${motDateCompte(t)}</dt><dd>${esc(fmtDate(c.ouvertLe))}</dd>` : ''}
         <!-- L'autre bout de la vie du compte. Elle ne s'affiche que sur un
              compte archivé : sur un compte ouvert, une ligne « Date de
@@ -6418,7 +6429,7 @@ function viewFicheCompte(id) {
              la fait. Un état se déclare, il ne se déduit pas d'une date. -->
         ${c.statut === 'archive' ? `<dt>${trad('Date de clôture')}</dt>
         <dd>${c.clotureLe ? esc(fmtDate(c.clotureLe))
-              : '<span class="muted">non renseignée</span>'}</dd>` : ''}
+              : `<span class="muted">${trad('non renseignée')}</span>`}</dd>` : ''}
         ${!t.interne && c.numero ? `<dt>${trad('Numéro de compte')}</dt><dd>${esc(c.numero)}</dd>` : ''}
       </dl>
       <!-- Le depliant portait numero, notes et date d'ouverture. Les deux
@@ -6431,15 +6442,18 @@ function viewFicheCompte(id) {
         <input data-path="comptes.${idx}.notes" value="${esc(c.notes || '')}"
                placeholder="${trad('facultatif')}" style="text-align:left"></div>
     </div>
+    ${barreValiderFiche()}
+    <!-- La carte ne porte plus que la vie du compte, et son titre le dit enfin.
+
+         Elle vient apres la barre de validation, et c'est une regle de pouce : a
+         375 px le doigt descendait sur « Cloturer et supprimer » pour atteindre
+         « Enregistrer ». On saisit, on valide, et ce qui detruit reste en dernier.
+         La hierarchie se dit par le remplissage, fantome ou rouge, jamais par la
+         taille : les deux boutons ont la meme geometrie.
+         (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
+         et fermerait la chaine.) -->
     <div class="card">
       <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
-      ${boutonEnregistrerFiche()}
-      <!-- La meme geometrie que la rangee du dessus, et non une rangee de petits
-           boutons : deux hauteurs differentes, l'une justifiee a droite et l'autre
-           a gauche, ne s'alignaient sur rien. La hierarchie se dit par le
-           remplissage — plein, fantome, rouge — pas par la taille.
-           (Aucun backtick dans ce commentaire : il vit dans un litteral de
-           gabarit, et fermerait la chaine.) -->
       <div class="fiche-valider">
         ${c.statut === 'archive'
           ? `<button class="btn ghost" data-action="restaurer-compte" data-id="${esc(c.id)}">${trad('Restaurer')}</button>`
@@ -6450,8 +6464,7 @@ function viewFicheCompte(id) {
         ${trad('Archiver conserve l’historique et sort le compte de tous les totaux. '
           + 'Supprimer efface aussi ses montants des vues. Les relevés passés restent lisibles.')}
       </p>
-    </div>
-  </div>`;
+    </div>`;
 }
 
 /* ------------------------------------------------------------
@@ -6468,7 +6481,7 @@ function viewFicheEtab(id) {
   const credits = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
 
   return `
-  <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ Actifs</button>
+  <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
 
   <!-- Le nom s'ecrit, il ne se saisit plus.
 
@@ -6543,10 +6556,7 @@ function viewFicheEtab(id) {
     <input data-path="etabs.${idx}.notes" value="${esc(e.notes || '')}" placeholder="${trad('facultatif')}" style="text-align:left">
   </div>
 
-  <div class="card">
-    <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
-    ${boutonEnregistrerFiche()}
-  </div>`;
+  ${barreValiderFiche()}`;
 }
 
 /* Glisser une ligne vers la gauche révèle Modifier / Archiver.

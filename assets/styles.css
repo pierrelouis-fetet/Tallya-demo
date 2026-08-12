@@ -866,6 +866,10 @@ a[href^="tel:"], a[x-apple-data-detectors] {
   padding: 8px 14px; border-radius: var(--radius-sm);
   border: 1px solid transparent; background: var(--text-primary); color: var(--page);
   cursor: pointer; transition: opacity .12s, background .12s;
+  /* Un lien peut porter cette classe : dans un en-tete de carte, un lien nu au
+     milieu de boutons se lisait comme un oubli. Il faut alors lui retirer le
+     soulignement et le centrer, ce qu'un bouton fait de lui-meme. */
+  text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
 }
 @media (hover: hover) { .btn:hover { opacity: .85; } }
 .btn.ghost { background: var(--surface-1); color: var(--text-primary); border-color: var(--border-strong); }
@@ -4088,6 +4092,12 @@ td .empty, th .empty { background: none; border: none; }
 
   /* Les en-tetes de carte et les barres de boutons passent a la ligne */
   .card-head { flex-wrap: wrap; gap: 6px 10px; }
+  /* Un bouton qui passe a la ligne reste a droite. `space-between` distribue
+     ligne par ligne : seul sur la seconde, il partait a gauche, et la carte
+     voisine dont le titre est plus court gardait le sien a droite. Deux cartes
+     l'une sous l'autre avec leur action a deux endroits differents. */
+  .card-head > .btn:last-child,
+  .card-head > .paire-btn:last-child { margin-left: auto; }
   .card-head .row { flex-wrap: wrap; }
   .row { flex-wrap: wrap !important; }
   .hero-deltas { gap: 12px 18px; }
@@ -5147,6 +5157,31 @@ details[open]::details-content { block-size: auto; }
    colles au meme bord, donc les deux rangees s'alignent par la droite. */
 .fiche-valider {
   display: flex; gap: 8px; margin-bottom: 10px;
+}
+/* La barre de validation d'une fiche : pas de fond de carte, un filet au-dessus.
+
+   Elle porte la meme geometrie que les rangees de boutons des cartes, parce que
+   c'en est une : ce qui la distingue est sa place, hors des cartes, puisqu'elle
+   valide la page et non un sujet. */
+.fiche-pied {
+  display: flex; gap: 8px; margin: 4px 0 14px;
+  /* Le remplissage lateral aligne la barre sur le CONTENU d'une carte, pas sur son
+     bord : une carte porte 18 px de remplissage plus 1 px de bordure, donc son
+     premier pixel de contenu est a 19. Sans ce calcul la barre tombait a 18 et le
+     decalage d'un pixel se voyait entre deux rangees de boutons superposees. */
+  padding: 14px 19px 0; border-top: 1px solid var(--grid);
+}
+.fiche-pied .btn { flex: 1; justify-content: center; }
+@media (min-width: 768px) {
+  .fiche-pied { justify-content: flex-end; }
+  .fiche-pied .btn { flex: 0 0 auto; }
+}
+/* Apres la regle de base, et non dans le bloc 900 px plus haut : a specificite
+   egale c'est l'ordre qui tranche, et le remplissage de 18 px l'emportait donc
+   sur telephone. La barre s'alignait alors a 18 px quand les cartes voisines
+   s'alignent a 15. */
+@media (max-width: 900px) {
+  .fiche-pied { padding: 14px 16px 0; }   /* 15 px de carte + 1 px de bordure */
 }
 .fiche-valider .btn { flex: 1; justify-content: center; }
 @media (min-width: 768px) {

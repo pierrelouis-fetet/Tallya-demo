@@ -237,6 +237,30 @@ bien (`bienId`).
   même carte, l'une en `btn` justifiée à droite et l'autre en `btn sm` à gauche,
   se lisent comme un oubli. La hiérarchie se dit par le remplissage — plein,
   fantôme, rouge — jamais par la taille.
+- **Les boutons d'une carte agissent sur le sujet de cette carte**, et ce qui
+  porte sur la page entière vit dans une barre de page, hors des cartes
+  (`.fiche-pied`). La carte « Actions » d'une fiche portait quatre boutons en deux
+  rangées : deux qui validaient la visite entière, deux qui décidaient de la vie du
+  compte. Même poids visuel pour deux natures d'acte, sous un titre qui ne
+  décrivait ni l'une ni l'autre.
+- **Ce qui valide vient avant ce qui détruit**, et c'est une règle de pouce : à
+  375 px les cartes se suivent, et le doigt descendait sur « Clôturer et supprimer »
+  pour atteindre « Enregistrer ».
+- **Une barre hors carte s'aligne sur le contenu des cartes, pas sur leur bord.**
+  Une carte porte 18 px de remplissage plus 1 px de bordure : son premier pixel de
+  contenu est à 19, et à 15 px de remplissage sous 900 px il est à 16. Sans ce
+  calcul la barre touchait les bords de l'écran.
+- **Un en-tête de carte ne mélange pas un lien et des boutons.** Un renvoi vers un
+  autre écran prend `btn sm ghost` comme ses voisins ; `.btn` retire le
+  soulignement pour qu'un `<a>` puisse la porter.
+- **Un bouton qui passe à la ligne reste à droite.** `justify-content:
+  space-between` distribue ligne par ligne : seul sur la seconde, un bouton partait
+  à gauche pendant que la carte voisine, dont le titre est plus court, gardait le
+  sien à droite. `margin-left: auto` sur le dernier bouton d'un en-tête.
+- **Une vue paramétrée ne se vérifie pas sur une instance.** La fiche d'un compte
+  a été mesurée sur un compte de liquidités, qui ne rend ni carte de titres ni
+  carte de placements : six types de compte sur douze portaient encore du français.
+  Les balayer tous coûte trois lignes de plus.
 - **Un pied de fenêtre tient sur une ligne à 375 px.** Ses boutons se partagent
   la largeur à parts égales : trois font 107 px chacun, et un libellé trop long
   s'y plie en trois lignes — la hauteur double et le bouton voisin paraît énorme.

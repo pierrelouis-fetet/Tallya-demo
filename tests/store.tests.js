@@ -9782,8 +9782,8 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
        relire les comptes que la saisie vient de changer, et « Enregistrer et
        fermer » emportait l'ecran avant qu'on ait pu les lire. */
     const src = lireSource('assets/app.js');
-    vrai(/function boutonEnregistrerFiche/.test(src), 'le bouton a une seule source');
-    const fn = src.slice(src.indexOf('function boutonEnregistrerFiche'),
+    vrai(/function barreValiderFiche/.test(src), 'la barre a une seule source');
+    const fn = src.slice(src.indexOf('function barreValiderFiche'),
                          src.indexOf("/* L'etat d'une fiche a son ouverture"));
     vrai(/data-action="enregistrer-fiche">\$\{trad\('Enregistrer'\)\}/.test(fn),
       'il dit ce qu’il fait, et ne promet plus de fermer');
@@ -9796,8 +9796,12 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
       '« Annuler » ne peut pas défaire ce qui vient d’être enregistré');
     vrai(/window\.scrollY[\s\S]{0,120}window\.scrollTo\(0, y\)/.test(action),
       'et la position dans la page est gardée : la fiche est longue');
-    eq((src.match(/boutonEnregistrerFiche\(/g) || []).length, 3,
+    eq((src.match(/barreValiderFiche\(/g) || []).length, 3,
       'une déclaration et deux appels : la fiche d’un compte et celle d’un établissement');
+    /* Elle vit hors des cartes : les boutons d'une carte agissent sur le sujet de
+       cette carte, et valider la visite entiere n'en est pas un. */
+    vrai(/<div class="fiche-pied">/.test(fn),
+      'et elle est une barre de page, pas une rangée dans la carte « Actions »');
     /* L'ecriture a la frappe reste la regle : l'ecouteur `input` continue
        d'appeler `applyField` et `Store.save` hors des blocs differes. */
     /* L'ancre est le selecteur des champs, pas l'evenement : `input` est ecoute
@@ -13599,6 +13603,79 @@ suite('Aucun dialogue ne parle français en dur', () => {
       if (dans !== sort) fautes.push(`${fr.slice(0, 40)} → ${en.slice(0, 40)}`);
     }
     eq(fautes.join(' | '), '', 'un gabarit perdu en traduction fait disparaître un nombre');
+  });
+});
+
+suite('Les boutons d’une fiche ont une géométrie et une place', () => {
+
+  /* Le signalement tenait en une phrase : « il y a pas un bouton pareil ». La
+     carte « Actions » portait quatre boutons en deux rangees, deux qui validaient
+     la visite entiere et deux qui decidaient de la vie du compte, au meme poids
+     visuel sous un titre qui ne decrivait ni l'un ni l'autre. Un en-tete melangeait
+     un lien souligne et des boutons. Et a 375 px un bouton qui passait a la ligne
+     partait a gauche pendant que son voisin restait a droite.
+
+     Trois regles en sortent, et ce sont elles que ces controles gardent. */
+
+  test('les boutons d’une carte agissent sur le sujet de cette carte', () => {
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    /* La barre de validation vit hors des cartes : elle valide la page. */
+    const barre = src.slice(src.indexOf('function barreValiderFiche'),
+                            src.indexOf('function barreValiderFiche') + 700);
+    vrai(/<div class="fiche-pied">/.test(barre), 'la validation est une barre de page');
+    vrai(!/class="card"/.test(barre), 'et non une carte');
+    /* La carte « Actions » ne porte plus que la vie du compte. */
+    const i = src.indexOf("trad('actions.fiche', 'Actions')");
+    const carte = src.slice(i, i + 900);
+    vrai(/data-action="(archiver|restaurer)-compte"/.test(carte), 'archiver y reste');
+    vrai(/data-action="supprimer-compte"/.test(carte), 'supprimer aussi');
+    vrai(!/enregistrer-fiche|annuler-fiche/.test(carte),
+      'mais plus la validation : deux natures d’acte au même poids ne se distinguaient pas');
+  });
+
+  test('la validation vient avant ce qui détruit, et c’est une règle de pouce', () => {
+    /* A 375 px les cartes se suivent : le doigt descendait sur « Clôturer et
+       supprimer » pour atteindre « Enregistrer ». */
+    const src = lireSource('assets/app.js');
+    const iBarre = src.indexOf('${barreValiderFiche()}');
+    const iActions = src.indexOf("trad('actions.fiche', 'Actions')");
+    vrai(iBarre > 0 && iActions > 0, 'les deux blocs doivent être trouvables');
+    vrai(iBarre < iActions,
+      'la barre se rend avant la carte « Actions », sinon le pouce traverse le rouge');
+  });
+
+  test('un en-tête de carte ne mélange pas un lien et des boutons', () => {
+    const src = lireSource('assets/app.js');
+    const css = lireSource('assets/styles.css');
+    /* Le renvoi vers Marches etait un lien souligne au milieu de boutons. */
+    vrai(!/<a class="hint lien-vue" href="#\/positions">\$\{trad\('Gérer dans Marchés'\)\}/.test(src),
+      'le renvoi vers Marchés n’est plus un lien nu');
+    vrai(/<a class="btn sm ghost" href="#\/positions">/.test(src),
+      'il porte la même géométrie que ses voisins');
+    /* Et un lien qui porte la classe d'un bouton ne se souligne pas. */
+    const regle = (css.match(/^\.btn \{[^}]*\}/m) || [''])[0];
+    vrai(/text-decoration: none/.test(regle), 'la classe .btn retire le soulignement');
+  });
+
+  test('un bouton qui passe à la ligne reste à droite', () => {
+    /* `space-between` distribue ligne par ligne : seul sur la seconde, un bouton
+       partait a gauche, et la carte voisine gardait le sien a droite. */
+    const css = lireSource('assets/styles.css');
+    vrai(/\.card-head > \.btn:last-child,\s*\n?\s*\.card-head > \.paire-btn:last-child \{ margin-left: auto; \}/.test(css),
+      'le dernier bouton d’un en-tête porte margin-left: auto sous 900 px');
+  });
+
+  test('la barre de page s’aligne sur le contenu des cartes, pas sur leur bord', () => {
+    /* Une carte porte 18 px de remplissage plus 1 px de bordure : son contenu
+       commence a 19. La barre tombait a 0, donc contre les bords de l'ecran. */
+    const css = lireSource('assets/styles.css');
+    const base = (css.match(/\.fiche-pied \{[^}]*\}/) || [''])[0];
+    vrai(/padding: 14px 19px 0/.test(base), 'dix-neuf pixels sur grand écran');
+    const i = css.lastIndexOf('.fiche-pied { padding: 14px 16px 0;');
+    vrai(i > css.indexOf('.fiche-pied {'),
+      'et seize sur téléphone, déclarés APRÈS la règle de base : à spécificité '
+      + 'égale, c’est l’ordre qui tranche');
   });
 });
 

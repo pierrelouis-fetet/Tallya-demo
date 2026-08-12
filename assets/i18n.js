@@ -392,6 +392,24 @@ const I18N = {
     "Enregistrer et fermer": "Save and close",
     "Fermer sans enregistrer": "Close without saving",
 
+    /* La fiche d'un compte, tous les types. Une vue parametree ne se verifie pas
+       sur une instance : un compte de liquidites ne rend ni carte de titres ni
+       carte de placements, et c'est sur lui que la mesure avait ete faite. */
+    "Actifs": "Assets",
+    "Scinder": "Split",
+    "Placements détenus": "Holdings",
+    "Disponibilité de": "Availability of",
+    "Informations": "Information",
+    "non renseignée": "not filled in",
+    "à renseigner": "to fill in",
+    "Plafond de versement": "Deposit cap",
+    "+ Placement": "+ Holding",
+    "Auto,": "Auto,",
+    "Aucun placement pour l’instant.": "No holding yet.",
+    "Les lignes se créent dans l’onglet Marchés, rattachées à ce compte.": "Holdings are created in the Markets tab, attached to this account.",
+    "Un prêt participatif, une part de société, un projet : chacun sa ligne, avec son échéance.": "A crowdlending loan, a stake in a company, a project: one row each, with its maturity.",
+    "Aucune espèce en attente. « Scinder » déclare un montant à investir.": "No cash waiting. “Split” declares an amount to invest.",
+
     "Revenir à l’écran précédent": "Go back to the previous screen",
     "La reproposer à la saisie du mois": "Offer it again in the monthly entry",
     "Motif": "Reason",

@@ -316,7 +316,7 @@ const estUnBien = t => !!t && !t.titres && t.groupe === 'pe';
    detention. Le drapeau `direct` vit donc sur le type, declare une fois dans
    `TYPES_COMPTE`, la ou vivent deja `sansEtab`, `prete` et `interne`. */
 const estDetenuEnDirect = t => !!t && !!t.direct;
-const motDateCompte = t => estUnBien(t) ? 'Date d’achat' : 'Date d’ouverture';
+const motDateCompte = t => trad(estUnBien(t) ? 'Date d’achat' : 'Date d’ouverture');
 
 /* « compte » ou « bien », selon ce dont on parle.
 
