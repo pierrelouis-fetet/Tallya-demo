@@ -1319,41 +1319,7 @@ suite('Somme saisie à la main', () => {
     pres(parseSomme('+5').total, 5, 'un plus initial est toléré');
   });
 
-  test('retaper le total d’une catégorie ne fabrique pas deux chiffres', () => {
-    /* La fenêtre affichait un panneau de détail à 0 € en face d'un champ qui
-       portait 20 : le détail avait été jeté, le panneau restait ouvert et vide.
-       Un total n'égalait plus la somme de ses parts, à dix pixels d'écart.
-
-       Deux règles, qui tiennent au nombre de lignes : un montant unique se
-       corrige et garde son libellé — sinon commenter une dépense unique n'aurait
-       aucun état stable — plusieurs lignes devenues fausses disparaissent, car
-       rien ne dit laquelle absorbe l'écart. */
-    const nomme = [{ montant: 20, libelle: 'Billet Lisbonne' }];
-
-    const inchange = recalerDetail(nomme, 20);
-    eq(inchange, nomme, 'un total qui colle laisse le détail tel quel');
-
-    const corrige = recalerDetail(nomme, 35);
-    eq(corrige.length, 1, 'un montant unique reste un montant unique');
-    pres(corrige[0].montant, 35, 'et prend le total retapé');
-    eq(corrige[0].libelle, 'Billet Lisbonne', 'son libellé survit à la correction');
-    eq(nomme[0].montant, 20, 'sans modifier le tableau reçu');
-
-    const deux = [{ montant: 10, libelle: 'Train' }, { montant: 25, libelle: 'Hôtel' }];
-    eq(recalerDetail(deux, 35), deux, 'deux lignes qui font le total restent');
-    eq(recalerDetail(deux, 99), null, 'deux lignes qui ne le font plus disparaissent');
-    eq(recalerDetail([], 20), null, 'pas de détail, rien à recaler');
-    eq(recalerDetail(null, 20), null, 'ni sur une absence de détail');
-
-    /* L'invariant, quelle que soit l'entrée : ou bien le détail disparaît, ou
-       bien la somme de ses lignes égale le total annoncé. */
-    for (const [lignes, total] of [[nomme, 0], [nomme, 12.5], [deux, 35], [deux, 0.004]]) {
-      const out = recalerDetail(lignes, total);
-      if (out) pres(out.reduce((s, l) => s + num(l.montant), 0), total,
-        `la somme des lignes fait le total pour ${JSON.stringify(total)}`);
-    }
   });
-});
 
 /* ------------------------------------------------------------------
    6. L'état d'une place
@@ -5018,7 +4984,7 @@ suite('Un champ qui se répète propose ce qu’on y a déjà mis', () => {
     });
     const v = valeursConnues('organisme');
     eq(v.length, 2, 'deux organismes distincts, la casse ne fait pas un doublon');
-    /* La derniere ecriture rencontree gagne, comme dans `libellesConnus()`.
+    /* La derniere ecriture rencontree gagne.
        Peu importe laquelle : ce qui compte est qu'il n'y en ait qu'une, et que
        la regle soit la meme dans tout le fichier. */
     eq(v.join('|'), 'Engie|maif', 'triés, une seule écriture par organisme');
@@ -7231,40 +7197,7 @@ suite('Les animations s’éteignent, et se déclenchent au doigt', () => {
     }
   });
 
-  test('Entrée enchaîne une saisie, et ne fabrique pas de ligne vide', () => {
-    /* Là où l'on saisit plusieurs lignes d'affilée sur un ordinateur, Entrée pose
-       la suivante — demande du propriétaire, « si je veux en rentrer plein ».
-
-       Il y en avait deux endroits pendant une heure : le détail d'une catégorie de
-       dépenses et le tableau des charges fixes. Le second est parti avec ses
-       champs, le tableau passant désormais par sa fenêtre. Reste donc un seul
-       porteur de la règle, et c'est cohérent : on n'enchaîne des lignes que là où
-       il y a des lignes à remplir.
-
-       Ce que ce contrôle protège avant tout, c'est le garde : une ligne encore
-       vide ne fabrique pas sa suivante. Sans lui, rester appuyé sur Entrée pose
-       des lignes fantômes que personne ne supprimera, et qui compteraient pour
-       zéro dans tous les totaux.
-
-       Le contrôle porte sur la source : le harnais ne rend pas de DOM, et cette
-       règle ne vit pas dans un calcul qu'on peut interroger. */
-    const js = lireSource('assets/app.js');
-    vrai(js, 'assets/app.js doit être lisible pour ce contrôle');
-
-    /* Le détail d'une catégorie de dépenses : la touche, le garde, le chemin. */
-    const detail = js.indexOf('el.onkeydown');
-    vrai(detail > 0, 'le détail d’une catégorie doit écouter le clavier');
-    const blocDetail = js.slice(detail, detail + 400);
-    vrai(/e\.key !== 'Enter'/.test(blocDetail), 'à Entrée elle aussi');
-    vrai(/num\(l\.montant\) \|\| l\.libelle/.test(blocDetail),
-      'avec le même garde : une ligne vide n’engendre pas la suivante');
-    vrai(/ajouterLigne\(cat\)/.test(blocDetail),
-      'et elle passe par le chemin d’ajout existant, pas par une copie de celui-ci');
-    vrai(/preventDefault/.test(blocDetail),
-      'Entrée dans une fenêtre vaut « Enregistrer » : sans preventDefault, demander '
-      + 'une ligne de plus fermerait la saisie');
-  });
-
+  
   test('le fond gelé couvre l’écran, d’où qu’on ouvre', () => {
     /* Deuxième moitié d'un défaut dont la première a déjà été corrigée. Geler la
        page met le corps en `position: fixed; top: -Ypx` — mais
@@ -9691,67 +9624,6 @@ suite('Une grille ne réserve pas de place à ce qu’elle ne montre pas', () =>
   });
 });
 
-/* ------------------------------------------------------------------
-   Un montant nommé se garde, même seul
-   ------------------------------------------------------------------ */
-suite('Le détail d’une dépense ne perd pas un montant nommé', () => {
-
-  /* « Quand je rentre le nom d'une dépense, si il n'y en a qu'une, même après
-     avoir enregistré, ça n'enregistre pas. » le propriétaire, 6 août 2026.
-
-     La règle exigeait deux lignes pour conserver le détail. Elle avait sa
-     raison — « Voyages, 220, dont 220 » ne dit rien de plus que « Voyages,
-     220 » — mais elle ne valait que pour un montant **sans nom**. Avec un nom,
-     la ligne porte ce que le total ne porte pas, et c'est exactement ce qu'on
-     venait d'écrire. La saisie disparaissait en silence à l'enregistrement.
-
-     C'est la page la plus utilisée de l'application : une perte silencieuse y
-     coûte plus cher qu'ailleurs. */
-
-  /* La règle, telle que la fenêtre l'applique. Reconstruite depuis sa source :
-     elle vit dans une fermeture, on ne peut pas l'appeler autrement. */
-  function garde(lignes) {
-    const src = lireSource('assets/app.js');
-    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    const m = src.match(/const nomme = lignes\.some[\s\S]{0,80}?if \(lignes\.length > 1 \|\| nomme\)/);
-    vrai(m, 'la règle de conservation du détail doit être trouvable');
-    const nomme = lignes.some(l => String(l.libelle || '').trim());
-    return lignes.length > 1 || nomme;
-  }
-
-  test('un seul montant nommé se garde', () => {
-    vrai(garde([{ montant: 208, libelle: 'Chaussures' }]),
-      'c’est le cas signalé : la saisie disparaissait à l’enregistrement');
-  });
-
-  test('un seul montant sans nom ne se garde pas', () => {
-    /* La raison d'origine de la règle, et elle reste bonne : « Shopping 208,
-       dont 208 » ne dit rien de plus que « Shopping 208 ». */
-    vrai(!garde([{ montant: 208, libelle: '' }]),
-      'un montant sans nom ne dit rien que le total ne dise déjà');
-    vrai(!garde([{ montant: 208, libelle: '   ' }]),
-      'des espaces ne sont pas un nom');
-  });
-
-  test('deux montants se gardent, nommés ou non', () => {
-    vrai(garde([{ montant: 100, libelle: '' }, { montant: 108, libelle: '' }]),
-      'le découpage est l’information, même anonyme');
-  });
-
-  test('le nom se tape, il ne se choisit pas dans une liste', () => {
-    /* « J'avais fait des tests et maintenant il y a un menu déroulant de choix
-       de nom ? Je n'en veux pas. » La liste se peuplait des essais faits une
-       fois, et imposait un geste de plus sur la page la plus utilisée. */
-    const src = lireSource('assets/app.js');
-    vrai(!/<select class="dep-dl-lib"/.test(src),
-      'le libellé d’un montant est un champ libre, pas une liste déroulante');
-    vrai(!/Nouveau…<\/option>/.test(src),
-      'et il n’y a plus de mode « Nouveau… » à quitter');
-    vrai(/class="dep-dl-lib"[\s\S]{0,120}?maxlength="\$\{NOM_DETAIL_MAX\}"/.test(src),
-      'la saisie reste bornée : c’est ce qui remplace la liste pour tenir la '
-      + 'largeur de la colonne');
-  });
-});
 
 suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
   test('la classe existe partout où une classe doit exister', () => {
@@ -11054,18 +10926,7 @@ suite('Budget : le pourcentage dit sa base, l annee reste une annee', () => {
     }
   });
 
-  test('le libelle d une depense peut raconter, les autres noms restent courts', () => {
-    /* « Augmenter un peu le nombre de caracteres possibles sur les depenses
-       uniquement. » C est desormais la seule borne au-dessus de celle des
-       lignes : la relation est testee, pas les valeurs. */
-    const src = lireSource('assets/app.js');
-    const ligne = +src.match(/const NOM_LIGNE_MAX = (\d+)/)[1];
-    const detail = +src.match(/const NOM_DETAIL_MAX = (\d+)/)[1];
-    vrai(detail > ligne,
-      'le détail d’une dépense doit pouvoir être plus long qu’un nom de ligne');
-    vrai(detail <= 60, 'sans pour autant permettre le pavé');
   });
-});
 
 /* ------------------------------------------------------------------
    Une vente declaree n ecrit que le journal
@@ -11401,25 +11262,7 @@ suite('Revenus : la période se lisse, l’estimation s’annonce', () => {
    ------------------------------------------------------------------ */
 suite('Le détail d’une dépense accepte l’addition', () => {
 
-  test('le montant d’une ligne de détail passe par parseSomme', () => {
-    /* « Possible d accepter aussi les additions a l interieur des depenses ?
-       je voudrais additionner les deliveroo qui sont dans les resto. » Le
-       champ du total de categorie savait deja lire « 100+50+70 » ; celui
-       d une ligne de detail lisait num(), qui rend 0 sur une addition. Meme
-       analyseur pour les deux — une regle ecrite pour un champ vaut pour
-       ceux qui lui ressemblent. */
-    pres(parseSomme('10+10+10').total, 30, 'l’analyseur fait la somme');
-    eq(parseSomme('10+'), null, 'et refuse l’expression incomplète, sans zéro silencieux');
-
-    const src = lireSource('assets/app.js');
-    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    vrai(/const s = parseSomme\(el\.value\);\s*\n\s*if \(s\) l\.montant = s\.total;/.test(src),
-      'la ligne de détail lit parseSomme, et garde le dernier montant su '
-      + 'quand l’expression est incomplète');
-    vrai(!/l\.montant = num\(el\.value/.test(src),
-      'plus aucun chemin ne rend zéro sur une addition tapée');
   });
-});
 
 /* ------------------------------------------------------------------
    Un indice se compte en points, pas en argent
@@ -13330,6 +13173,10 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
       'et elle est appelée dans les deux branches de del-sale, déclarée comme annulée');
   });
 
+  
+  
+  
+  
   test('la carte du journal n’a plus de phrase hors traduction', () => {
     /* La reserve fiscale etait posee sans `trad()` : elle s'affichait en francais
        dans les deux langues, et le rattrapage de traduction ne pouvait pas la
@@ -13372,6 +13219,106 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
                          'latente + réalisée depuis le début']) {
       vrai(!I18N.en[morte], `« ${morte} » ne s’affiche plus : sa clé n’a plus à vivre`);
     }
+  });
+});
+
+/* ------------------------------------------------------------------
+   Une categorie porte un total, et rien d'autre
+   ------------------------------------------------------------------ */
+suite('Une catégorie porte un total, et rien d’autre', () => {
+
+  test('le détail par catégorie est parti, code et données', () => {
+    const app = lireSource('assets/app.js');
+    const store = lireSource('assets/store.js');
+    const css = lireSource('assets/styles.css');
+    vrai(app && store && css, 'les trois sources doivent être lisibles');
+
+    /* Le detail vivait dans `d`, a cote du total : deux surfaces d'edition pour
+       une seule valeur, et tout le mal venait de les reconcilier. Retaper le total
+       effacait les libelles, le champ principal ne pouvait etre a la fois un total
+       et une porte, et la somme tapee au clavier n'existait pas sur un pave
+       numerique. Qui veut suivre deux choses separement fait deux categories. */
+    for (const mort of ['recalerDetail', 'setExpenseDetail', 'clearExpenseDetail',
+                        'expenseDetail', 'libellesConnus']) {
+      eq(store.split(mort).length - 1, 0, `${mort} est parti de store.js`);
+    }
+    for (const mort of ['majPastille', 'rendreDetail', 'ajouterLigne', 'majPorte',
+                        'NOM_DETAIL_MAX', 'sheetExpenseDetail', 'aDuDetailDepenses']) {
+      eq(app.split(mort).length - 1, 0, `${mort} est parti d’app.js`);
+    }
+    for (const mort of ['dep-dl', 'dep-detail', 'dep-plus', 'dep-chev', 'champ-porte']) {
+      eq(css.split(mort).length - 1, 0, `la classe ${mort} est partie du CSS`);
+    }
+  });
+
+  test('la purge du champ est jouée une fois, et deux fois donne le même état', () => {
+    /* Un champ que plus aucun ecran ne lit deviendrait invisible sans disparaitre,
+       et il sortirait encore dans les sauvegardes. La migration l'efface, et la
+       rejouer ne change rien — c'est la regle de toutes les migrations ici. */
+    Fixture.poser(s => {
+      s.budget.expenses[0].d = { Courses: [{ montant: 10, libelle: 'Marché' }, { montant: 20, libelle: '' }] };
+      delete s.meta.detailRetire;
+    });
+    Store.migrate();
+    eq(Store.state.budget.expenses[0].d, undefined, 'le champ est effacé');
+    eq(Store.state.meta.detailRetire, true, 'et la migration se marque');
+    const apres = JSON.stringify(Store.state.budget.expenses);
+    Store.migrate();
+    eq(JSON.stringify(Store.state.budget.expenses), apres, 'la rejouer ne change rien');
+    /* Le total du mois, lui, n'a pas bouge : `v` a toujours ete la seule verite,
+       et c'est ce qui rend cette suppression sans consequence sur les chiffres. */
+    Fixture.poser();
+    const avant = expenseRowTotal(Store.state.budget.expenses[0]);
+    Store.migrate();
+    pres(expenseRowTotal(Store.state.budget.expenses[0]), avant,
+      'et aucun total de mois ne change');
+  });
+
+  test('le champ accepte une somme, et le « + » l’écrit', () => {
+    /* La somme tapee reste, elle : c'est desormais le seul moyen de mettre deux
+       depenses dans une categorie, et le pave numerique d'un telephone n'a pas la
+       touche. Le bouton est le seul « + » de la fenetre, donc sans ambiguite. */
+    pres(parseSomme('100+50+70')?.total, 220, 'trois termes font leur somme');
+    eq(parseSomme('157+'), null, 'une somme inachevée reste invalide');
+
+    const app = lireSource('assets/app.js');
+    const corps = app.slice(app.indexOf('function askExpenseMonth'), app.indexOf('id="depNote"'));
+    /* Le compte se fait sur `champSomme`, pas sur le corps de la fenetre. Le
+       premier exemplaire de ce controle comptait « >+< » dans la fenetre et
+       trouvait 1 : c'etait le « + » en gras du paragraphe d'aide, le bouton etant
+       ecrit ailleurs. Il serait passe au vert sans aucun bouton. */
+    const cs = app.slice(app.indexOf('function champSomme'), app.indexOf('function insererPlus'));
+    eq((cs.match(/>\+</g) || []).length, 1, 'le champ porte un « + », et un seul');
+    eq((corps.match(/champSomme\(/g) || []).length, 1,
+      'posé une seule fois, sur le champ de montant');
+    eq((corps.match(/>\+</g) || []).length, 0,
+      'et la fenêtre n’en décore aucun autre : deux « + » de sens différents ne se distinguaient par rien');
+    vrai(/champSomme\(`<input type="text" inputmode="decimal" data-cat=/.test(corps),
+      'il est dans le champ, là où la place est libre à gauche des montants');
+    const f = app.slice(app.indexOf('function insererPlus'), app.indexOf('function cablerSommePlus'));
+    vrai(/champ\.value = `\$\{texte\}\+`;/.test(f), 'il s’ajoute à la suite');
+    /* La garde s'ecrit avec un antislash, donc ce controle aussi : un document en
+       ligne en mange un niveau, et l'assertion cherchait un chiffre la ou la source
+       porte « \d ». Elle passait a cote sans rien dire de faux. */
+    vrai(f.includes("if (!/\\d$/.test(texte)) { champ.focus(); return; }"),
+      'jamais sur un champ vide ni deux fois de suite');
+    vrai(/b\.onmousedown = e => e\.preventDefault\(\);/.test(app),
+      'et il ne prend pas le focus, sinon le champ entier se resélectionne');
+
+    /* L'aide dit un geste possible sur telephone, ce qui n'etait plus vrai entre
+       le retrait du bouton et son retour. Elle se replie dans un « ? » : quatre
+       lignes de texte occupaient le tiers d'un ecran de telephone et repoussaient
+       le champ de note hors du cadre, pour une phrase qu'on lit une fois. */
+    eq((corps.match(/class="hint"/g) || []).length, 0,
+      'aucun pavé de texte dans la fenêtre');
+    vrai(/\$\{aide\(trad\('Plusieurs dépenses dans une catégorie/.test(corps),
+      'l’explication est une bulle, à côté du geste qu’elle concerne');
+    /* La phrase est coupee sur trois lignes dans la source : on cherche un fragment
+       qui tient d'un seul tenant, pas la phrase entiere. */
+    vrai(/du champ écrit le signe, que le pavé /.test(corps),
+      'l’aide nomme le bouton et dit pourquoi il existe');
+    vrai(/fais deux catégories/.test(corps),
+      'et donne la sortie pour qui veut vraiment séparer deux choses');
   });
 });
 

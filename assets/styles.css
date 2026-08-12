@@ -1836,7 +1836,24 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--grid); text-align: right;
 @media (hover: hover) { tbody tr:hover td { background: color-mix(in oklab, var(--surface-2) 70%, transparent); } }
 tbody tr:last-child td { border-bottom: none; }
 tfoot td { font-weight: 650; border-top: 1px solid var(--border-strong); border-bottom: none; padding-top: 11px; }
-td.name { font-weight: 550; }
+/* Une cellule qui porte un nom porte du texte, pas un nombre : elle s'aligne a
+   gauche. `td` est a droite par defaut, ce qui est juste pour des montants, et
+   seule la premiere colonne repassait a gauche. Toutes les cellules `.name`
+   etaient premieres sauf une, la note du mois, qui se retrouvait donc alignee
+   comme un chiffre : on lisait le debut de la phrase et la fin sortait du cadre. */
+td.name { font-weight: 550; text-align: left; }
+
+/* La note d'un mois est de la prose, et la seule du tableau : elle se replie sur
+   plusieurs lignes au lieu d'etre coupee. `td` est en `nowrap` parce qu'un montant
+   ne se coupe pas en deux ; une phrase, si. La borne haute evite qu'une note
+   bavarde pousse les colonnes de chiffres hors de l'ecran. */
+td.prose {
+  white-space: normal; text-align: left;
+  min-width: 16em; max-width: 26em; overflow-wrap: anywhere;
+}
+/* L'en-tete suit sa colonne : un intitule aligne a droite au-dessus d'un texte
+   aligne a gauche se lit comme une erreur de gabarit, et il l'est. */
+th.prose { text-align: left; }
 
 /* Pastille de couleur devant un libelle : elle rattache la ligne du tableau a
    sa part du graphique juste au-dessus. En `inline-block` avec une marge a
@@ -2893,47 +2910,22 @@ select.annee {
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 .dep-grille input { text-align: right; }
-
-/* L'étiquette porte deux commandes : le « + » ajoute un montant détaillé, la
-   pastille rouvre le détail pour le relire. Le nom de la catégorie, lui,
-   redevient un simple mot — souligné en pointillé, il promettait une action
-   sans dire laquelle. */
-.dep-lab { display: flex; align-items: center; gap: 6px; }
-.dep-plus {
-  font: inherit; font-size: 14px; line-height: 1; font-weight: 600;
-  width: 20px; height: 20px; flex: none; padding: 0;
+/* Le « + » qui ecrit un « + », a l'interieur du champ de montant. A gauche,
+   parce que les montants sont alignes a droite : a droite il recouvrirait les
+   chiffres. Le champ recule son texte de sa largeur, sinon un montant long passe
+   dessous. */
+.champ-somme { position: relative; display: block; }
+.champ-somme > input { padding-left: 30px; }
+.somme-plus {
+  position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted); background: var(--surface-2);
+  font: inherit; font-size: 14px; line-height: 1; font-weight: 700;
+  color: var(--text-secondary); background: var(--surface-2);
   border: 1px solid var(--border); border-radius: var(--radius-xs); cursor: pointer;
-  transition: color .15s, border-color .15s;
 }
-@media (hover: hover) { .dep-plus:hover { color: var(--accent); border-color: var(--accent); } }
-.dep-plus:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.dep-n {
-  font: inherit; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
-  color: var(--muted); background: none; border: none; padding: 0; cursor: pointer;
-  text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px;
-}
-@media (hover: hover) { .dep-n:hover { color: var(--text-primary); } }
-/* Le chevron du compte de montants. Il tourne d'un quart de tour a l'ouverture,
-   et l'etat vient de la classe posee sur le champ : la fleche ne peut donc pas
-   se desynchroniser du panneau, elle lit la meme verite. */
-.dep-chev { display: inline-block; margin-left: 3px; transition: transform .16s ease; }
-.dep-champ.ouvert .dep-chev { transform: rotate(90deg); }
-
-/* Ouvert, le champ prend toute la largeur de la grille : trois colonnes de
-   140 px ne logent pas un libellé, un montant et une croix. */
-.dep-champ.ouvert { grid-column: 1 / -1; }
-.dep-detail {
-  margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--surface-2); display: flex; flex-direction: column; gap: 6px;
-}
-.dep-dl { display: grid; grid-template-columns: minmax(0, 1fr) 7em auto; gap: 8px; align-items: center; }
-.dep-dl-lib { text-align: left !important; }
-.dep-dl-pied { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
-@media (max-width: 479px) {
-  .dep-dl { grid-template-columns: minmax(0, 1fr) 5.5em auto; }
-}
+@media (hover: hover) { .somme-plus:hover { color: var(--accent); border-color: var(--accent); } }
+.somme-plus:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* --------- Aide contextuelle ---------
    Un « ? » qui ne se remarque qu'au besoin, et un panneau qui se place à
@@ -4209,6 +4201,11 @@ td .empty, th .empty { background: none; border: none; }
      ce rôle, min-width l'emporterait sur max-width et déborderait la page. */
   .table-wrap table.editable { min-width: 880px; }   /* une colonne de plus : Classe + Rôle */
   table.editable th, table.editable td { white-space: nowrap; }
+  /* Sauf la prose : cette regle-ci empeche un montant de se couper en deux, ce
+     qui est juste, mais elle est plus specifique que `td.prose` et lui reprenait
+     son repli. Une phrase se replie a toutes les largeurs, et d'autant plus sur
+     un ecran etroit. */
+  table.editable td.prose { white-space: normal; }
   table.editable input, table.editable select { min-width: 4.5em; }
   table.editable td.name input { min-width: 9em; }
   /* Categorie et compte portent des mots, pas des nombres : 4.5em tronquait

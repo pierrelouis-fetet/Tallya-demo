@@ -1873,8 +1873,6 @@ const A_PLAT = trad('porté à plat, sans rendement');
    suspension, et se relisent en entier dans la fiche. */
 const NOM_LIGNE_MAX = 30;
 
-/* Le nom d'un montant, dans le detail d'une categorie de depenses. */
-const NOM_DETAIL_MAX = 40;
 
 /* L'horizon vit dans l'état : le choix survit au rechargement, et la fenêtre
    d'aperçu peut le modifier par un simple data-path. */
@@ -7012,7 +7010,7 @@ function viewBudget(section = 'depenses') {
             return th('mois', 'Mois', 'sticky-col') + th('total', 'Total') + `<th>${trad('vs obj.')}</th>`
               + expenseCategories().map(c => th(`cat:${c}`, c)).join('');
           })()}
-          <th>${trad('Note du mois')}</th><th></th>
+          <th class="prose">${trad('Note du mois')}</th><th></th>
         </tr></thead>
         <tbody>${(depSort ? (() => {
           /* On trie une copie de la vue indexee : `data-i` continue de viser
@@ -7057,7 +7055,7 @@ function viewBudget(section = 'depenses') {
                  ne remonte pas jusqu'a la ligne. -->
             ${expenseCategories().map(c => `<td>${r.v[c] != null && r.v[c] !== ''
                 ? fmtEUR0(r.v[c]) : ''}</td>`).join('')}
-            <td class="name" style="min-width:280px">${esc(r.note || '')}</td>
+            <td class="name prose">${esc(r.note || '')}</td>
             <td><button class="btn icon" data-action="del-expense-month" data-i="${i}" title="Supprimer">✕</button></td>
           </tr>`;
         }).join('')}</tbody>
@@ -8016,35 +8014,6 @@ function sheetExpenses() {
     rows,
     total: ['Total', grand, null, ...totals, ''],
   };
-}
-
-/* Le découpage d'une catégorie, une ligne par montant. La feuille Dépenses
-   donne « Voyages : 220 € » et s'arrête là ; celle-ci dit 100 de train, 50
-   d'hôtel et 70 sans nom. Format long exprès : c'est celui qui se recoupe en
-   tableau croisé une fois dans Excel. */
-function sheetExpenseDetail() {
-  const rows = [];
-  for (const r of Store.state.budget.expenses) {
-    for (const cat of expenseCategories()) {
-      for (const l of (r.d?.[cat] || [])) {
-        rows.push([r.month, cat, l.libelle || '', round2(num(l.montant))]);
-      }
-    }
-  }
-  return {
-    name: 'Détail dépenses',
-    cols: [
-      { h: 'Mois', t: 'date', w: 12 }, { h: 'Catégorie', t: 'text', w: 18 },
-      { h: 'Libellé', t: 'text', w: 26 }, { h: 'Montant', t: 'eur', w: 14 },
-    ],
-    rows,
-    total: ['Total', '', '', round2(rows.reduce((s, x) => s + num(x[3]), 0))],
-  };
-}
-
-/* Y a-t-il seulement du détail à exporter ? */
-function aDuDetailDepenses() {
-  return Store.state.budget.expenses.some(r => r.d && Object.keys(r.d).length);
 }
 
 function sheetFixedCharges() {
@@ -10525,8 +10494,6 @@ const ACTIONS = {
       sheetExpenses(),
       // Pas de feuille vide : le journal n'existe que s'il porte quelque chose.
       ...(apportsTries().length ? [sheetApports()] : []),
-      // Comme pour les ventes : pas de feuille vide si rien n'est découpé.
-      ...(aDuDetailDepenses() ? [sheetExpenseDetail()] : []),
       sheetFixedCharges(),
     ];
     Xlsx.save(`tallya-${stamp()}.xlsx`, feuilles);
@@ -11803,12 +11770,68 @@ function askBuy(index) {
    mois ». Deux copies de ces quatre lignes auraient fini par ne plus traiter
    le detail de la meme façon — c'est le champ le plus facile a oublier, il
    n'apparait que sur les categories qui ont plus d'un terme. */
+/* Le « + » qui écrit un « + », dans un champ de montant.
+
+   L'aide promet « tape-les additionnées, 100+50+70 » et le pavé numérique d'un
+   téléphone n'a pas cette touche : sans ce bouton, la phrase annonce depuis
+   l'écran de saisie un geste qu'on ne peut pas faire.
+
+   Il a déjà été posé puis retiré, parce qu'il faisait deux « + » de sens
+   différents sur la même rangée — l'autre ajoutait un montant détaillé. Ce
+   système-là est parti : celui-ci est le seul « + » de la fenêtre, et l'ambiguïté
+   avec lui.
+
+   Il se place à gauche dans le champ : les montants sont alignés à droite, donc
+   c'est là qu'est la place libre. */
+function champSomme(html) {
+  return `<span class="champ-somme">${html}<button type="button" class="somme-plus"
+    tabindex="-1" title="${trad('Additionner un autre montant dans ce champ')}"
+    aria-label="${trad('Additionner un autre montant dans ce champ')}">+</button></span>`;
+}
+
+/* Le « + » s'ajoute à la fin, jamais au curseur : le gestionnaire de focus
+   sélectionne le champ entier à l'entrée, donc `selectionStart` vaut 0, et une
+   insertion au curseur aurait soit refusé d'écrire, soit remplacé le montant.
+   C'est de toute façon le sens du bouton — un autre montant s'ajoute à la suite.
+
+   Deux refus, pour ne jamais rendre la saisie invalide : rien à additionner à un
+   champ vide, et pas de « + » sur un « + ». */
+function insererPlus(champ) {
+  if (!champ) return;
+  const texte = String(champ.value).replace(/\s+$/, '');
+  if (!/\d$/.test(texte)) { champ.focus(); return; }
+  champ.value = `${texte}+`;
+  const q = champ.value.length;
+  /* Le curseur au bout, et le champ défilé jusqu'au bout avec lui : sur un champ
+     étroit, le « + » qu'on vient d'écrire pouvait rester hors cadre. */
+  const placerCurseur = () => {
+    try { champ.setSelectionRange(q, q); } catch (e) {}
+    champ.scrollLeft = champ.scrollWidth;
+  };
+  /* Passer après le gestionnaire de focus global, qui sélectionne tout une image
+     après la prise de focus : sans ce décalage le chiffre suivant effaçait la
+     somme. Inutile quand le champ a déjà le focus, ce que `onmousedown` garantit
+     dans le cas courant. */
+  if (document.activeElement === champ) placerCurseur();
+  else { champ.focus(); requestAnimationFrame(() => requestAnimationFrame(placerCurseur)); }
+  champ.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function cablerSommePlus(racine) {
+  for (const b of racine.querySelectorAll('.somme-plus')) {
+    /* Le bouton ne prend pas le focus : sans cela le champ le perd, le regagne, et
+       le gestionnaire global le sélectionne en entier. Il garde aussi le pavé
+       numérique ouvert sur téléphone. */
+    b.onmousedown = e => e.preventDefault();
+    b.onclick = () => insererPlus(b.previousElementSibling);
+  }
+}
+
 function ecrireDepensesMois(index, saisi) {
   const r = Store.state.budget.expenses[index];
   if (!r || !saisi) return null;
   r.v = saisi.v;
   r.note = saisi.note;
-  if (Object.keys(saisi.d || {}).length) r.d = saisi.d; else delete r.d;
   Store.save();
   return r;
 }
@@ -11830,50 +11853,30 @@ function askExpenseMonth(index) {
 
     $('#modalTitle').textContent = `${trad('Dépenses de')} ${fmtMonth(r.month)}`;
     $('#modalSub').innerHTML = cible ? `${trad('Objectif mensuel :')} ${fmtEUR0(cible)}` : '';
-    /* Le détail par catégorie vit dans la fenêtre jusqu'à Enregistrer : on
-       peut découper, recoller, annuler, sans rien avoir écrit. */
-    const detail = {};
-    for (const c of cats) {
-      const d = expenseDetail(r, c);
-      if (d) detail[c] = d.map(l => ({ montant: l.montant, libelle: l.libelle || '' }));
-    }
-
-    $('#modalTitle').textContent = `${trad('Dépenses de')} ${fmtMonth(r.month)}`;
-    $('#modalSub').innerHTML = cible ? `${trad('Objectif mensuel :')} ${fmtEUR0(cible)}` : '';
     $('#modalBody').innerHTML = `
       <div class="dep-total" id="depTotal"></div>
       <div class="dep-grille">
         ${cats.map(c => `
           <div class="field dep-champ" data-champ="${esc(c)}">
-            <label class="dep-lab">
-              <span>${esc(c)}</span>
-              <button type="button" class="dep-n" data-plier="${esc(c)}" hidden
-                      title="${trad('Voir le détail des montants')}"></button>
-              <span class="spacer"></span>
-              <button type="button" class="dep-plus" data-ajout-cat="${esc(c)}"
-                      title="${trad('Ajouter un montant détaillé à')} ${esc(c)}"
-                      aria-label="${trad('Ajouter un montant à')} ${esc(c)}">+</button>
-            </label>
-            <input type="text" inputmode="decimal" data-cat="${esc(c)}"
-                   value="${r.v?.[c] ?? ''}" placeholder="" autocomplete="off">
-            <div class="dep-detail" data-detail="${esc(c)}" hidden></div>
+            <label class="dep-lab"><span>${esc(c)}</span></label>
+            ${champSomme(`<input type="text" inputmode="decimal" data-cat="${esc(c)}"
+                   value="${r.v?.[c] ?? ''}" placeholder="" autocomplete="off">`)}
           </div>`).join('')}
       </div>
       <!-- Créer une catégorie sans quitter la saisie : la dépense qui n'entre
            dans aucune case se présente au moment où l'on remplit, pas en
            relisant le tableau. Elle rejoint la grille aussitôt, prête à
            recevoir son montant. -->
+      <!-- L'explication se replie dans un « ? », a cote du geste qu'elle
+           concerne : ce quatre lignes occupait le tiers d'un ecran de telephone
+           pour un texte qu'on lit une fois, juste au-dessus du champ de note
+           qu'il repoussait hors du cadre. -->
       <div class="row" style="margin-top:12px">
         <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
+        ${aide(trad('Plusieurs dépenses dans une catégorie : tape-les additionnées, 100+50+70. '
+          + 'Le + du champ écrit le signe, que le pavé numérique n’a pas. Pour suivre deux '
+          + 'choses séparément, fais deux catégories.'))}
       </div>
-      <!-- L'aide annoncait « le nom de la categorie ouvre le detail » : c'est
-           la pastille qui l'ouvre, le nom est une etiquette et ne fait que
-           donner le focus au champ. Elle dit maintenant ce qui repond. -->
-      <p class="hint" style="margin:12px 0 0">
-        ${trad('Plusieurs dépenses dans une catégorie : tape-les additionnées,')}
-        <b>100+50+70</b>. ${trad('La pastille')} <b>${trad('1 montant')}</b> ${trad('ouvre le détail, où '
-        + 'chaque montant se renomme.')}
-      </p>
       <div class="field" style="margin-top:12px">
         <label>${trad('Note du mois')}</label>
         <input id="depNote" value="${esc(r.note || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
@@ -11902,7 +11905,17 @@ function askExpenseMonth(index) {
 
     const champs = $$('#modalBody [data-cat]');
     const champDe = cat => champs.find(c => c.dataset.cat === cat);
-    const valeurChamp = el => parseSomme(el.value)?.total ?? 0;
+    /* Un « + » sans rien après est un geste inachevé, pas une saisie invalide :
+       on l'ignore au lieu de rejeter le champ entier. Deux conséquences, et la
+       seconde est grave. Le total tombait à zéro entre le clic sur « + » et la
+       frappe du second montant. Et surtout, un « 157+ » laissé en place valait
+       zéro à l'enregistrement : `saisie()` fait `if (!t) continue`, donc la
+       catégorie quittait `v`, et le 157 déjà saisi était perdu sans un mot. Le
+       bouton qui met le « + » à portée d'un doigt rendait cette perte facile.
+
+       `parseSomme()` n'est pas touchée : elle continue de rejeter ce qui est
+       vraiment invalide, et ce rejet ne devient jamais un zéro ici. */
+    const valeurChamp = el => parseSomme(String(el.value).replace(/[+\s]+$/, ''))?.total ?? 0;
 
     const majTotal = () => {
       const t = champs.reduce((s, c) => s + valeurChamp(c), 0);
@@ -11913,198 +11926,21 @@ function askExpenseMonth(index) {
           ${ecart > 0 ? '▲' : '▼'} ${fmtSigned(Math.abs(ecart) * (ecart > 0 ? 1 : -1))} ${trad('vs objectif')}</span>` : ''}`;
     };
 
-    /* La pastille annonce le nombre de montants et ouvre le détail pour le
-       relire — le « + », lui, en ajoute un. Deux gestes, deux boutons : un
-       seul qui fasse les deux obligerait à deviner lequel on déclenche. */
-    const majPastille = cat => {
-      const n = detail[cat]?.length || 0;
-      const el = $(`#modalBody [data-plier="${CSS.escape(cat)}"]`);
-      if (!el) return;
-      /* La pastille apparait des qu'il y a un montant a nommer, meme un seul
-         tape a la main. Elle ne se montrait qu'a partir d'un detail existant,
-         et « commenter une depense unique » n'avait alors aucun chemin : le nom
-         de la categorie ne repondait pas, et le « + » posait une deuxieme ligne
-         vide a cote des 20 EUR qu'on voulait juste intituler. */
-      const un = n || (valeurChamp(champDe(cat)) ? 1 : 0);
-      el.hidden = !un;
-      /* Un chevron a cote du compte : le pointille disait « cliquable » sans dire
-         ce que le clic fait, et « 1 montant » se lit comme une etiquette. La
-         fleche dit que ca se deplie, et elle tourne quand c'est ouvert, donc elle
-         dit aussi dans quel etat on est. Elle suit la classe `ouvert` deja posee
-         par `afficher()` : aucun etat de plus a tenir. */
-      el.innerHTML = un
-        ? `${esc(String(un))} ${esc(un > 1 ? trad('montants') : trad('montant'))}`
-          + '<i class="dep-chev" aria-hidden="true">›</i>'
-        : '';
-    };
-
-    /* Un montant tape dans le champ de la categorie devient une ligne de
-       detail, sans en ajouter d'autre. C'est le passage oblige avant d'ouvrir
-       le panneau : sans lui, le panneau s'ouvrait vide en face d'un champ qui
-       portait 20 EUR. */
-    const materialiser = cat => {
-      if (detail[cat]) return;
-      const v = valeurChamp(champDe(cat));
-      detail[cat] = v ? [{ montant: v, libelle: '' }] : [];
-    };
-
-    const rendreDetail = cat => {
-      const panneau = $(`#modalBody [data-detail="${CSS.escape(cat)}"]`);
-      const lignes = detail[cat] || [];
-      /* Un champ libre, et rien d'autre.
-
-         C'est la page la plus utilisée de l'application. Un geste de plus y coûte
-         douze fois par mois, et la liste se peuplait des essais qu'on a faits une
-         fois. Le champ libre est le bon outil : on tape, ou on ne tape pas.
-
-         La saisie est bornée : voir NOM_DETAIL_MAX. */
-      const champLibelle = (l, i) => `
-        <input class="dep-dl-lib" data-d="${esc(cat)}" data-i="${i}" data-k="libelle"
-               maxlength="${NOM_DETAIL_MAX}"
-               value="${esc(l.libelle || '')}" placeholder="${trad('Nommer ce montant…')}" autocomplete="off">`;
-      panneau.innerHTML = `
-        ${lignes.map((l, i) => `
-          <div class="dep-dl">
-            ${champLibelle(l, i)}
-            <input class="dep-dl-mt" type="text" inputmode="decimal" data-d="${esc(cat)}" data-i="${i}"
-                   data-k="montant" value="${l.montant}" autocomplete="off">
-            <button type="button" class="btn icon xs" data-suppr="${esc(cat)}" data-i="${i}"
-                    title="${trad('Retirer ce montant')}">✕</button>
-          </div>`).join('')}
-        <div class="dep-dl-pied">
-          <button type="button" class="btn sm ghost" data-ajout="${esc(cat)}">${trad('+ Ajouter un montant')}</button>
-          <button type="button" class="btn sm ghost" data-replier="${esc(cat)}">Replier</button>
-          <span class="spacer"></span>
-          <b>${fmtEUR0(lignes.reduce((s, l) => s + num(l.montant), 0))}</b>
-        </div>`;
-
-      for (const el of panneau.querySelectorAll('[data-d]')) {
-        el.oninput = () => {
-          const l = detail[cat][+el.dataset.i];
-          if (!l) return;
-          /* La bascule « Nouveau… » est partie avec le menu déroulant : le champ
-             est libre en permanence, il n'y a plus de mode à quitter. */
-          if (el.dataset.k === 'montant') {
-            /*    parseSomme, comme le champ du total de la categorie : les trois Deliveroo
-   du mois se tapent « 10+10+10 » et valent 30. Une expression encore
-   incomplete (« 10+ ») rend null : on garde alors le dernier montant su au
-   lieu d'ecraser par zero a la frappe — le meme refus du zero silencieux que
-   parseSomme applique partout.*/
-            const s = parseSomme(el.value);
-            if (s) l.montant = s.total;
-            champDe(cat).value = detail[cat].reduce((s2, x) => s2 + num(x.montant), 0);
-            panneau.querySelector('.dep-dl-pied b').textContent =
-              fmtEUR0(detail[cat].reduce((s2, x) => s2 + num(x.montant), 0));
-            majTotal();
-          } else { l.libelle = el.value; }
-        };
-        /* Entrée ajoute la ligne suivante et y pose le curseur, même règle que
-           dans le tableau des charges fixes : c'est le geste de qui en saisit
-           plusieurs d'affilée. Depuis une ligne encore vide, elle ne crée rien —
-           deux Entrée de suite laisseraient des lignes fantômes.
-
-           `preventDefault` protège de l'autre lecture d'Entrée dans une fenêtre,
-           celle qui vaut « Enregistrer » : la saisie serait partie au moment même
-           où l'on demandait une ligne de plus. */
-        el.onkeydown = e => {
-          if (e.key !== 'Enter' || e.isComposing) return;
-          e.preventDefault();
-          const l = detail[cat]?.[+el.dataset.i];
-          if (l && (num(l.montant) || l.libelle)) ajouterLigne(cat);
-        };
-      }
-      panneau.querySelector('[data-ajout]').onclick = () => ajouterLigne(cat);
-      panneau.querySelector('[data-replier]').onclick = () => afficher(cat, false);
-      for (const b of panneau.querySelectorAll('[data-suppr]')) {
-        b.onclick = () => {
-          detail[cat].splice(+b.dataset.i, 1);
-          if (!detail[cat].length) delete detail[cat];
-          champDe(cat).value = (detail[cat] || []).reduce((s, x) => s + num(x.montant), 0) || '';
-          /* Plus une seule ligne : le panneau n'a plus rien a montrer, et le
-             laisser ouvert garderait le champ de la categorie masque derriere
-             un detail vide. On se replie, ce qui le rend. */
-          if (!detail[cat]) { afficher(cat, false); majPastille(cat); majTotal(); return; }
-          rendreDetail(cat); majPastille(cat); majTotal();
-        };
-      }
-    };
-
-    /* Ouvrir le detail elargit le champ sur toute la grille : trois colonnes
-       de 140 px ne logent pas un libelle, un montant et une croix.
-
-       Le champ est masque, pas vide : il garde sa valeur, que `saisie()` relit
-       a l'enregistrement, et la retrouve en se repliant. */
-    const afficher = (cat, ouvre) => {
-      $(`#modalBody [data-champ="${CSS.escape(cat)}"]`).classList.toggle('ouvert', ouvre);
-      $(`#modalBody [data-detail="${CSS.escape(cat)}"]`).hidden = !ouvre;
-      champDe(cat).hidden = ouvre;
-      if (ouvre) { materialiser(cat); rendreDetail(cat); }
-    };
-
-    const basculer = cat => {
-      const panneau = $(`#modalBody [data-detail="${CSS.escape(cat)}"]`);
-      afficher(cat, panneau.hidden);
-    };
-
-    /* Le « + » ouvre le détail et y pose une ligne vide, prête à recevoir un
-       montant.
-
-       Sauf sur un montant déjà saisi et pas encore détaillé : il devient une
-       ligne, et rien de plus. Ajouter en même temps une ligne vide donnait deux
-       lignes pour un seul montant, « 20 » et « 0 », et lisait le geste comme
-       « j'en ai un deuxième » alors qu'on voulait nommer le premier. La
-       deuxième ligne s'obtient dans le panneau, par « + Ajouter un montant » :
-       à ce moment-là on est déjà dans le détail, le geste ne se devine plus. */
-    const ajouterLigne = cat => {
-      const aNommer = !detail[cat] && valeurChamp(champDe(cat)) > 0;
-      materialiser(cat);
-      if (!aNommer) detail[cat].push({ montant: 0, libelle: '' });
-      afficher(cat, true);
-      majPastille(cat);
-      /* Nommer un montant : le curseur va sur le libellé. En ajouter un : sur
-         le montant, qui est ce qui reste à écrire. */
-      const sel = aNommer ? '.dep-dl-lib' : '.dep-dl-mt';
-      const dls = $$(`#modalBody [data-detail="${CSS.escape(cat)}"] ${sel}`);
-      focusChamp(dls[dls.length - 1]);
-    };
-
-    for (const b of $$('#modalBody [data-plier]')) b.onclick = () => basculer(b.dataset.plier);
-    for (const b of $$('#modalBody [data-ajout-cat]')) b.onclick = () => ajouterLigne(b.dataset.ajoutCat);
-
     for (const c of champs) {
-      /* La pastille suit la frappe : elle doit apparaitre des le premier chiffre
-         tape, sinon le chemin pour nommer ce montant n'existe qu'apres avoir
-         quitte le champ. */
-      c.oninput = () => { majTotal(); majPastille(c.dataset.cat); };
-      /* Au sortir du champ : « 100+50+70 » devient 220 et laisse ses trois
-         termes en detail. Un nombre seul retape a la main efface le detail —
-         garder « 100 + 50 + 70 » en face d'un total de 300 serait une somme
-         qui ne s'additionne pas. */
+      c.oninput = () => majTotal();
+      /* Au sortir du champ, « 100+50+70 » devient 220. La somme se tape, elle ne
+         se garde pas : ce qui restait d'elle etait un detail par categorie, et il
+         est parti. Qui veut suivre deux choses separement fait deux categories,
+         c'est ce que les categories sont. */
       c.onchange = () => {
         const s = parseSomme(c.value);
-        if (!s) { c.value = detail[c.dataset.cat]
-          ? detail[c.dataset.cat].reduce((x, l) => x + num(l.montant), 0)
-          : (r.v?.[c.dataset.cat] ?? ''); majTotal(); return; }
-        const cat = c.dataset.cat;
-        if (s.termes.length > 1) {
-          detail[cat] = s.termes.map(v => ({ montant: v, libelle: '' }));
-          c.value = s.total;
-        } else if (detail[cat]) {
-          /* La regle vit dans le modele, sous test : un montant unique se
-             corrige et garde son libelle, plusieurs lignes devenues fausses
-             partent. Ici on ne fait que refermer le panneau quand il n'a plus
-             rien a montrer. */
-          const recale = recalerDetail(detail[cat], s.total);
-          if (recale) detail[cat] = recale;
-          else { delete detail[cat]; afficher(cat, false); }
-        }
-        majPastille(cat);
-        const panneau = $(`#modalBody [data-detail="${CSS.escape(cat)}"]`);
-        if (!panneau.hidden) rendreDetail(cat);
+        /* Une saisie illisible ne vaut pas zero : le champ reprend ce qu'il avait,
+           sans quoi une faute de frappe effacerait un montant. */
+        c.value = s ? (s.total || '') : (r.v?.[c.dataset.cat] ?? '');
         majTotal();
       };
     }
-    for (const c of cats) majPastille(c);
+    cablerSommePlus($('#modalBody'));
     majTotal();
     focusChamp(champs[0]);
 
@@ -12138,29 +11974,14 @@ function askExpenseMonth(index) {
       resolve(v);
     };
     const saisie = () => {
-      const v = {}, d = {};
+      const v = {};
       for (const c of champs) {
         const cat = c.dataset.cat;
         const t = valeurChamp(c);
         if (!t) continue;
         v[cat] = round2(t);
-        /* Un seul terme n'est pas un detail : « Voyages, 220, dont 220 » ne
-           dit rien de plus que « Voyages, 220 ». */
-        const lignes = (detail[cat] || []).filter(l => num(l.montant));
-        /* Un seul montant se garde s'il porte un nom.
-
-           Elle avait sa raison — « Voyages, 220, dont 220 » ne dit rien de plus
-           que « Voyages, 220 » — mais elle ne valait que pour un montant **sans
-           nom**. Avec un nom, la ligne porte une information que le total ne
-           porte pas : « Shopping 208, dont Chaussures 208 » dit quelque chose,
-           et c'est justement ce qu'on venait d'écrire. La saisie disparaissait
-           en silence à l'enregistrement.
-
-           On garde donc dès qu'il y a deux lignes, ou qu'une seule est nommée. */
-        const nomme = lignes.some(l => String(l.libelle || '').trim());
-        if (lignes.length > 1 || nomme) d[cat] = lignes.map(l => ({ montant: round2(num(l.montant)), libelle: String(l.libelle || '').trim() }));
       }
-      return { v, d, note: $('#depNote').value };
+      return { v, note: $('#depNote').value };
     };
     /* L'etat de depart, releve par la fonction meme qui enregistre.
 

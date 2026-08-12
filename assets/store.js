@@ -1516,6 +1516,24 @@ const Store = {
        porter, meme sans compte dessus aujourd'hui : la vue Avoirs ne montre
        que les types utilises, mais le formulaire d'ajout doit tout offrir.
        Une seule fois, pour que supprimer un type reste possible. */
+    /* Le détail d'une catégorie de dépenses est retiré, et son champ avec.
+
+       Il vivait dans `d`, à côté du total : « Restos 146, dont TR 110 et Bourso
+       36 ». Deux surfaces d'édition pour une seule valeur, et tout le mal venait
+       de les réconcilier — retaper le total effaçait les libellés, et le champ
+       principal ne pouvait pas être à la fois un total et une porte. Quelqu'un qui
+       veut suivre deux choses séparément fait deux catégories : c'est ce que les
+       catégories sont.
+
+       La purge est ici et non à l'enregistrement d'un mois : un champ que plus
+       aucun écran ne lit deviendrait invisible sans disparaître, et il sortirait
+       encore dans les sauvegardes. Idempotente par construction — elle supprime
+       une clé absente au second passage. */
+    if (!s.meta.detailRetire) {
+      for (const r of (s.budget?.expenses || [])) delete r.d;
+      s.meta.detailRetire = true;
+    }
+
     if (!s.meta.typesEnrichis) {
       const nouveaux = [
         { id: 'av',      label: 'Assurance vie',       group: 'bourse' },
@@ -3601,51 +3619,12 @@ function expenseRowTotal(row) {
   return expenseCategories().reduce((s, c) => s + num(row.v[c]), 0);
 }
 
-/* --- détail d'une catégorie -------------------------------------------
-   « Voyages : 220 € » ne dit pas si c'est un billet ou trois. Le détail vit
-   à côté du total, dans `d`, et jamais à sa place :
-
-     v: { Voyages: 220 }
-     d: { Voyages: [ { montant: 100, libelle: 'Train' }, { montant: 120 } ] }
-
-   `v` reste la seule vérité pour le reste de l'application — le tableau, les
-   statistiques, les graphiques, les exports, le renommage de catégorie, une
-   quinzaine de lecteurs qui n'ont pas à connaître `d`. Un mois sans détail est
-   exactement ce qu'il était avant : aucune migration, et seize mois
-   d'historique qui ne bougent pas. */
-function expenseDetail(row, cat) {
-  const d = row.d?.[cat];
-  return Array.isArray(d) && d.length ? d : null;
-}
-
-/* Écrit le détail et recale le total dessus. Une liste vide efface les deux :
-   `d` ne doit jamais survivre en orphelin à côté d'un total saisi à la main. */
-function setExpenseDetail(row, cat, lignes) {
-  const propres = (lignes || []).filter(l => num(l.montant));
-  if (!propres.length) {
-    if (row.d) { delete row.d[cat]; if (!Object.keys(row.d).length) delete row.d; }
-    return null;
-  }
-  row.d = row.d || {};
-  row.d[cat] = propres.map(l => ({ montant: round2(num(l.montant)), libelle: String(l.libelle || '').trim() }));
-  row.v[cat] = round2(propres.reduce((s, l) => s + num(l.montant), 0));
-  return row.v[cat];
-}
-
-function clearExpenseDetail(row, cat) { setExpenseDetail(row, cat, []); }
-
-/* Les libellés déjà employés dans cette catégorie, tous mois confondus. On
-   retape « Train » douze fois par an sinon, et deux orthographes du même poste
-   ne se regroupent jamais. Portée volontairement étroite : « Train » a du sens
-   sous Voyages, aucun sous Santé. */
 /* --- ce qu'on a deja tape dans un champ -------------------------------
 
-   `libellesConnus()` fait cela depuis longtemps pour le detail d'une depense,
-   et rien d'autre n'en beneficiait. Trois champs se retapent pourtant a chaque
-   fois : le preteur d'un credit, l'organisme d'une charge fixe, la source d'un
-   revenu. « Credit Agricole » saisi deux fois donne deux orthographes qui ne se
-   regrouperont jamais, et personne ne s'en apercoit — ce sont des champs qu'on
-   relit rarement.
+   Trois champs se retapent a chaque fois : le preteur d'un credit, l'organisme
+   d'une charge fixe, la source d'un revenu. « Credit Agricole » saisi deux fois
+   donne deux orthographes qui ne se regrouperont jamais, et personne ne s'en
+   apercoit — ce sont des champs qu'on relit rarement.
 
    Les valeurs se derivent des donnees, jamais d'une table tenue a la main :
    celle-ci aurait vieilli des le premier organisme ajoute. Le champ reste libre,
@@ -3671,48 +3650,16 @@ function valeursConnues(cle) {
   for (const v of (VALEURS_CONNUES[cle]?.() || [])) {
     const t = String(v || '').trim();
     /* La cle en minuscules dedoublonne « MAIF » et « Maif ». L'ecriture gardee
-       est la derniere rencontree, comme dans `libellesConnus()` : peu importe
-       laquelle, ce qui compte est qu'il n'y en ait qu'une et que la regle soit
-       la meme partout. Deux facons de dedoublonner dans un meme fichier
-       finiraient par donner deux listes differentes du meme champ. */
+       est la derniere rencontree : peu importe laquelle, ce qui compte est qu'il
+       n'y en ait qu'une et que la regle soit la meme partout. Deux facons de
+       dedoublonner dans un meme fichier finiraient par donner deux listes
+       differentes du meme champ. */
     if (t) vues.set(t.toLowerCase(), t);
   }
   return [...vues.values()].sort((a, b) => a.localeCompare(b, 'fr'));
 }
 
-function libellesConnus(cat) {
-  const vus = new Map();
-  for (const r of B().expenses) {
-    for (const l of (r.d?.[cat] || [])) {
-      const t = String(l.libelle || '').trim();
-      if (t) vus.set(t.toLowerCase(), t);
-    }
-  }
-  return [...vus.values()].sort((a, b) => a.localeCompare(b, 'fr'));
-}
 
-/* Ce que devient le detail d'une categorie quand son total est retape a la main
-   dans le champ. C'est une regle du modele, pas de l'affichage : elle decide si
-   un libelle survit, et le panneau ne fait que suivre.
-
-   Un seul montant detaille se corrige, son libelle reste : le commentaire pose
-   sur une depense unique doit survivre a la correction du chiffre, sinon
-   « ajouter un commentaire » n'a aucun etat stable.
-
-   Plusieurs lignes ne se repartissent pas toutes seules — rien ne dit laquelle
-   absorbe l'ecart — donc le detail devient faux et part. Il restait affiche :
-   le panneau annoncait 0 EUR en face d'un champ qui portait 20, deux chiffres
-   contradictoires a dix pixels l'un de l'autre.
-
-   Rend `null` quand le detail doit disparaitre. Sinon la somme des lignes
-   rendues egale le total, toujours. */
-function recalerDetail(lignes, total) {
-  if (!lignes || !lignes.length) return null;
-  const somme = lignes.reduce((s, l) => s + num(l.montant), 0);
-  if (Math.abs(somme - num(total)) <= 0.005) return lignes;
-  if (lignes.length === 1) return [{ ...lignes[0], montant: num(total) }];
-  return null;
-}
 
 /* « 100+50+70 », « 12,50 + 8 » : la somme se tape dans le champ, ce qui evite
    d'ouvrir un panneau pour trois montants. Analyseur strict — pas d'`eval` sur
