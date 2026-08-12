@@ -12,6 +12,34 @@
      moitie de l'ecran virait au bleu. -->
 <meta name="format-detection" content="telephone=no,date=no,address=no">
 <title>Tallya</title>
+<!-- La description que Google affiche sous le lien. `og:description` ne lui
+     suffit pas : les reseaux sociaux lisent l'une, un moteur lit l'autre, et
+     sans celle-ci il compose l'extrait avec ce qu'il trouve dans la page — sur
+     une application rendue en JavaScript, il ne trouve presque rien. -->
+<meta name="description" content="Tallya, a personal wealth dashboard by Pierre-Louis FETET: accounts, markets, allocation, budget and projection. Zero dependencies, no build step, 600+ tests.">
+<meta name="author" content="Pierre-Louis FETET">
+<!-- Les donnees structurees, pour qu'un moteur rattache l'application a une
+     personne plutot que de deviner. C'est ce qui fait la difference entre un nom
+     present dans un texte et un nom reconnu comme l'auteur : le premier se noie
+     dans la page, le second devient une propriete de l'entite. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Tallya",
+  "applicationCategory": "FinanceApplication",
+  "operatingSystem": "Web",
+  "url": "https://tallya-demo.pages.dev/",
+  "description": "A personal wealth dashboard: accounts, markets, allocation, budget and projection.",
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+  "author": {
+    "@type": "Person",
+    "name": "Pierre-Louis FETET",
+    "url": "https://github.com/pierrelouis-fetet"
+  },
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+}
+</script>
 <!-- Les cartes de partage (LinkedIn, Slack, X) se construisent sur ces
      balises ; sans elles, certains validateurs refusent meme le lien. Les
      adresses sont absolues et pointent la demonstration : c'est le seul
