@@ -1016,6 +1016,27 @@ input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
   width: auto; align-self: start;
   max-width: min(28em, 100%); text-overflow: ellipsis;
 }
+/* Un menu se dimensionne sur ce qu'il montre, pas sur sa plus longue option.
+
+   C'est le principe ; la mise en oeuvre demande deux regles parce qu'aucune ne
+   suffit seule. `width: auto` prend la largeur de la plus longue option, et une
+   liste de quarante-quatre places de cotation etale donc son menu sur 292 px pour
+   afficher « Automatique », onze caracteres. A l'inverse, un plafond serre pour
+   tout le monde couperait « Oui, chercher les cours automatiquement », qui est la
+   valeur choisie et non une option lointaine. Le CSS ne connait pas l'option
+   selectionnee : il ne peut pas trancher entre ces deux cas.
+
+   Le plafond general reste donc large — la valeur choisie doit tenir — et les
+   listes qui portent une option nettement plus longue que ce qu'on y choisit
+   d'ordinaire prennent `menu-serre`. Douze em valent 192 px sur telephone, ou le
+   navigateur impose 16 px aux controles de formulaire, et 156 sur ecran : de quoi
+   ecrire « Euronext Paris » en entier. Les deux ou trois noms plus longs de la
+   liste s'y coupent, avec l'ellipse pour le dire — c'est la contrepartie assumee,
+   et la liste deroulee, elle, reste dessinee par le systeme a sa vraie largeur.
+
+   `select.menu-serre` et non `.menu-serre` seul : a specificite egale avec
+   `.field select`, c'est l'ordre qui tranche, et une classe nue perdrait. */
+select.menu-serre { max-width: min(12em, 100%); }
 .field input[type="text"], .field input:not([type]) { max-width: 28em; }
 /*   2. Un nombre : de quoi lire un montant a six chiffres et deux decimales,
       separateur de milliers compris. Douze em en laissaient la moitie vide. */
@@ -3449,8 +3470,11 @@ select.annee {
 .barre-recherche #symQuery {
   flex: 1 1 260px; max-width: 340px; min-width: 0;
 }
+/* Le plafond vient de `menu-serre`, pose sur la balise : celui qui vivait ici,
+   220 px, etait plus large que lui et le rendait inoperant. Deux plafonds sur le
+   meme menu, c'est le plus grand qui ne sert jamais. */
 .barre-recherche select {
-  flex: 0 1 auto; width: auto; max-width: 220px;
+  flex: 0 1 auto; width: auto;
   font-size: 12px; color: var(--text-secondary);
 }
 

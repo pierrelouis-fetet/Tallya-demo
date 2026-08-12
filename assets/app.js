@@ -1535,7 +1535,7 @@ function viewSettings() {
       </div>
       <div class="field">
         <label>${t('settings.exchange')}</label>
-        <select data-path="meta.preferredExchange">
+        <select class="menu-serre" data-path="meta.preferredExchange">
           ${EXCHANGES.map(([region, places]) => `<optgroup label="${esc(region)}">${
             places.map(([v, l]) => `<option value="${v}" ${v === (m.preferredExchange ?? '.PA') ? 'selected' : ''}>${esc(l)}</option>`).join('')
           }</optgroup>`).join('')}
@@ -2635,8 +2635,16 @@ const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'CAD', 'JPY'];
    coté à plusieurs endroits : il est passé tel quel à la passerelle, donc
    ajouter une place ici suffit — rien à changer côté serveur. */
 const EXCHANGES = [
+  /* « Automatique » tout court, et la parenthese est partie. Un menu natif se
+     serre a la largeur qu'on lui laisse et tronque sans rien dire : dans la carte
+     de recherche, a cote d'un champ et d'un bouton, il affichait « Automatique
+     (place de ré ». Une etiquette qui ne tient jamais entiere ne renseigne pas,
+     elle encombre. Ce que la parenthese disait est deja sous le champ des
+     Preferences, dans sa bulle — « Sert a departager un ISIN cote sur plusieurs
+     marches » — c'est-a-dire au seul endroit ou l'on vient regler ce choix plutot
+     que le subir. */
   [trad('Par défaut'), [
-    ['auto', trad('Automatique (place de référence du titre)')],
+    ['auto', trad('Automatique')],
   ]],
   [trad('Europe'), [
     ['.PA', 'Euronext Paris'], ['.AS', 'Amsterdam'], ['.BR', trad('Bruxelles')], ['.LS', trad('Lisbonne')],
@@ -2951,6 +2959,11 @@ function viewPositions() {
       <button class="btn" data-action="goto" data-view="accounts" data-anchor="">${trad('Aller à Actifs')}</button>
       <button class="btn ghost" data-action="ajouter-ligne">${trad('+ Un titre coté')}</button>
     </div>`;
+      /* Le bouton ci-dessus ouvre la carte de recherche, et cette carte doit donc
+         exister : elle ne se rendait qu'avec le tableau des lignes, c'est-a-dire
+         partout sauf ici. Le clic posait son drapeau, relançait le rendu, ne
+         trouvait rien a ouvrir, et ne faisait donc rien — precisement sur l'ecran
+         ou l'on n'a encore aucune ligne. */
       return `
     <div class="row" style="gap:8px">
       <button class="btn" data-action="ajouter-compte">${trad('Créer un compte-titres')}</button>
@@ -2959,7 +2972,17 @@ function viewPositions() {
     <p class="small muted" style="margin:12px 0 0">${trad('Un titre se pose sur le compte qui le détient : commence par en créer un.')}
       ${trad('Ceux qui peuvent en porter :')} ${esc(porteurs.map(t => trad(t.label)).join(', '))}.</p>`;
     })()}
-  </div>`;
+  </div>
+  ${(() => {
+    const porteurs = TYPES_COMPTE.filter(t =>
+      (t.classes || []).some(c => ['actions', 'obligations', 'crypto'].includes(c)));
+    /* La carte de recherche, la meme qu'en bas de la page pleine : un seul chemin
+       pour ajouter une ligne, ici comme ailleurs. Elle ne se rend qu'avec un compte
+       capable de porter le titre — sans lui, la fenetre d'ajout n'offrirait qu'une
+       liste vide, et le bouton d'a cote propose deja d'en creer un. */
+    return comptesOuverts().some(c => porteurs.some(t => t.id === c.type))
+      ? symbolSearchCard() : '';
+  })()}`;
   }
 
   return `
@@ -3655,13 +3678,14 @@ let outilsAjoutOuvert = false;
 let ouvrirRechercheApresRendu = false;
 
 function mountPositions() {
-  /* Sans titre cote, la vue rend son etat vide : ni graphique, ni barre de
-     reperes, ni champ de recherche. Monter quoi que ce soit dessus jetait
-     « clientWidth de null » et laissait la page a moitie construite — le montage
-     doit suivre le rendu, et le rendu n'a plus ces noeuds. */
-  if (!Store.state.positions.length) return;
   /*    Le montage de « Performance par ligne » est parti avec sa carte : c'était
    le même graphique que celui de Performance.*/
+  /* La recherche se monte meme sans aucune ligne, et c'est le correctif : l'etat
+     vide porte le bouton « + Un titre coté » et desormais la carte qu'il ouvre.
+     Le montage sortait avant, donc le champ restait inerte au moment precis ou
+     l'on n'a rien et ou l'on vient tout ajouter. `mountSymbolSearch()` se tait
+     de lui-meme si la carte n'est pas la — c'est le cas sans compte capable de
+     porter un titre. */
   mountSymbolSearch();
   /* La recherche demandee depuis l'en-tete du tableau : on ouvre, on s'y rend,
      on donne le focus. `focusChamp` se tait sur ecran tactile, ce qui est voulu
@@ -3678,16 +3702,22 @@ function mountPositions() {
     focusChamp($('#symQuery'));
     if (pli) setTimeout(() => pli.scrollIntoView({ block: 'center', behavior: 'smooth' }), 320);
   }
-  mountReperes();
-  monteTirerRafraichir();
 
-  /* Les deux panneaux d'outillage retiennent leur etat, comme les hypotheses
-     de Projection : chaque reglage relance render(). */
+  /* Le panneau d'outillage retient son etat, comme les hypotheses de Projection :
+     chaque reglage relance render(). Ici aussi, avant la sortie : la carte existe
+     dans l'etat vide, son depliant doit s'y souvenir de la meme facon. */
   for (const [id, poser] of [
                              ['pliAjout', v => { outilsAjoutOuvert = v; }]]) {
     const d = $('#' + id);
     if (d) d.addEventListener('toggle', () => poser(d.open));
   }
+
+  /* Ce qui suit a besoin du tableau et de ses voisins : sans une seule ligne, la
+     vue ne rend ni graphique ni barre de reperes, et monter dessus jetait
+     « clientWidth de null » en laissant la page a moitie construite. */
+  if (!Store.state.positions.length) return;
+  mountReperes();
+  monteTirerRafraichir();
 }
 
 /* ------------------------------------------------------------
@@ -3846,7 +3876,7 @@ function symbolSearchCard() {
       <div class="barre-recherche" style="margin-top:12px">
         <input id="symQuery" placeholder="${trad('ISIN ou nom, ex. IE000OJ5TQP4')}" style="text-align:left">
         <button class="btn sm" id="symSearch" ${on === false ? 'disabled' : ''}>Chercher</button>
-        <select data-path="meta.preferredExchange"
+        <select class="menu-serre" data-path="meta.preferredExchange"
                 title="${trad('Place privilégiée quand un ISIN est coté sur plusieurs marchés')}">
           ${(() => {
             const choisi = Store.state.meta.preferredExchange ?? '.PA';

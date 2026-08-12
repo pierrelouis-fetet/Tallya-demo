@@ -12271,6 +12271,30 @@ suite('Un patrimoine net négatif a deux causes', () => {
    ------------------------------------------------------------------ */
 suite('Une application vide dit quoi faire', () => {
 
+  test('le bouton d’ajout ouvre une carte qui existe', () => {
+    /* « Enorme bug, sur un compte vide le bouton ajouter un titre ça marche pas. »
+       Il posait son drapeau, relançait le rendu, ne trouvait rien à ouvrir — la
+       carte de recherche ne se rendait qu'avec le tableau des lignes, c'est-à-dire
+       partout sauf sur l'écran sans aucune ligne. Le clic ne faisait donc rien
+       précisément là où l'on vient tout ajouter.
+
+       Deux moitiés à ce défaut, et il fallait les deux : la carte doit se rendre,
+       et le montage doit la câbler — il sortait avant, faute de positions. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('), src.indexOf('function mountPositions('));
+    const vide = vue.slice(0, vue.indexOf('${barreEtatCours()}'));
+    vrai(/data-action="ajouter-ligne"/.test(vide), 'l’état vide porte le bouton');
+    vrai(/symbolSearchCard\(\)/.test(vide),
+      'et la carte de recherche qu’il ouvre, sinon le clic ne trouve rien');
+    const montage = src.slice(src.indexOf('function mountPositions('),
+                              src.indexOf('function mountSymbolSearch('));
+    const iCablage = montage.indexOf('mountSymbolSearch()');
+    const iSortie = montage.indexOf('if (!Store.state.positions.length) return;');
+    vrai(iCablage > 0, 'le montage câble la recherche');
+    vrai(iSortie < 0 || iCablage < iSortie,
+      'et il le fait avant de sortir faute de lignes, sinon le champ reste inerte');
+  });
+
   /* Chaque ecran portait son texte d'ecran vide, mais l'accueil — le premier
      ouvert — ne disait rien, et rien ne donnait l'ordre. La forme retenue est
      celle qui existait deja pour le revenu : un bouton, une phrase, dans la
@@ -12501,8 +12525,11 @@ suite('Une application vide dit quoi faire', () => {
        elle se derive de ces comptes-la. */
     eq(comptesOuverts().length, 0, 'aucun compte ne peut porter un titre');
     const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf("trad('Aucun titre coté')"),
-                           src.indexOf("trad('Aucun titre coté')") + 2200);
+    /* La fenetre se lit jusqu'a la fin de l'etat vide, et non sur un nombre de
+       caracteres arbitraire : la carte de recherche s'y est ajoutee, et le
+       compte rond d'avant coupait la phrase qu'on verifie. */
+    const debut = src.indexOf("trad('Aucun titre coté')");
+    const bloc = src.slice(debut, src.indexOf('${barreEtatCours()}', debut));
     vrai(/Un titre se pose sur le compte qui le détient/.test(bloc),
       'l’écran dit le prérequis, pas seulement la frontière avec Actifs');
     vrai(/data-action="ajouter-compte"/.test(bloc), 'et offre le geste');

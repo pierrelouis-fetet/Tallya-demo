@@ -1021,7 +1021,7 @@ const I18N = {
     "Restaurer": "Restore",
     "connecté en tant que": "signed in as",
     "Voir": "See",
-    "Automatique (place de référence du titre)": "Automatic (the security's reference venue)",
+    "Automatique": "Automatic",
     "Saisies en attente": "Entries pending",
     "Le relevé du mois, les dépenses du mois clos": "The month's statement, the closed month's spending",
     "Cours de bourse": "Market prices",
