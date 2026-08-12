@@ -399,6 +399,21 @@ bien (`bienId`).
   la largeur à parts égales : trois font 107 px chacun, et un libellé trop long
   s'y plie en trois lignes — la hauteur double et le bouton voisin paraît énorme.
   Un test refuse tout pied dont les libellés dépassent 36 caractères au total.
+- **Une page s'ouvre sur son sujet, se lit, puis se corrige.** L'ordre des cartes
+  ne se voit dans aucun calcul et aucun rendu ne le signale : un bloc déplacé se
+  remet en place au prochain coup d'éditeur, sans que rien ne casse. Quatre suites
+  le mesurent désormais, une par écran. Le principe, dans cet ordre : le grand
+  chiffre ou le geste qu'on vient faire, les cartes qui font lire, **puis** l'outil
+  de correction, **et la destruction en dernier**. Sur Dépenses, le tableau de
+  correction de 880 px s'intercalait entre les cartes de lecture ; sur Performance,
+  les deux cartes des ventes encadraient celle du portefeuille détenu — l'état vide
+  de la seconde l'avouait, « le journal, plus haut, porte le bouton », et une carte
+  qui donne l'itinéraire vers sa voisine est mal placée ; sur Données, « État »
+  était coincé entre les sauvegardes et la remise à zéro.
+  **Exception, et elle est du détenteur** : sur Positions, la carte du jour ouvre la
+  page, avant même la valeur du portefeuille. C'est un choix explicite — « c'est ça
+  qui nous intéresse » — et un test le garde avec sa citation. Une règle générale ne
+  défait pas une décision prise ; on la lit avant de proposer.
 - **Une page qui ne peut rien montrer dit ce qui la remplirait**, et ne montre
   rien d'autre. Allocation répartissait 0 € entre sept classes, Projection étalait
   des zéros sur cinquante ans : commenter chaque carte aurait remplacé six zéros

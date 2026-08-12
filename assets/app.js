@@ -1732,6 +1732,59 @@ function viewPerformance() {
     </button>` : ''}
   </div>
 
+  <!-- Latente, journal, realisee : ce qu'on detient, puis ce qu'on a vendu, puis
+       le detail des ventes.
+
+       Le journal ouvrait la page et separait les deux cartes des ventes par celle
+       du portefeuille detenu. L'etat vide de la troisieme l'avouait : « le journal,
+       plus haut, porte le bouton pour en saisir une ». Une carte qui doit donner
+       l'itineraire vers sa voisine est mal placee.
+
+       La grille qui enveloppait les deux dernieres portait une classe qui n'existe
+       pas dans la feuille, g-1-2 : elle ne rendait donc qu'une colonne, et les
+       cartes s'empilaient deja. Elle disparait sans rien changer au rendu, et les
+       trois cartes deviennent trois voisines que la vue espace comme les autres.
+       (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
+       et fermerait la chaine.) -->
+  <div class="card">
+    <div class="card-head"><h2>${trad('Latente, ligne par ligne')}</h2>
+      <span class="hint">${lat.count} ${lat.count > 1 ? trad('lignes') : trad('ligne')}</span></div>
+    <div class="chart" id="perfLatente"></div>
+    <dl class="kv" style="margin-top:12px">
+      <dt>${trad('Valeur du portefeuille')}</dt><dd>${fmtEUR(lat.value)}</dd>
+      <dt>${trad('Prix de revient')}</dt><dd>${fmtEUR(lat.invested)}</dd>
+      <dt>${trad('Écart')}</dt><dd class="${cls(lat.pnl)}"><b>${fmtSigned(lat.pnl)}</b></dd>
+      <!-- « Rendement annuel » vivait ici, et il est parti.
+
+           Le chiffre n'etait alors ni pondere par le temps, ni par les
+           montants : selon qu'on a renforce en hausse ou en baisse, il
+           surestime ou sous-estime, et on ne sait meme pas dans quel sens. Un
+           lecteur qui sait dans quel sens un chiffre se trompe peut s'en
+           servir ; celui-la, non.
+
+           Une case « alimentee regulierement » a ete envisagee puis ecartee :
+           elle aurait demande du travail pour que l'application cesse de
+           mentir, et sur ce portefeuille elle aurait eteint le chiffre sur les
+           lignes qui portent l'essentiel de la valeur. Un indicateur qui ne
+           couvre plus 20 % du portefeuille est une decoration.
+
+           Ce qui reste dit vrai : l'ecart en euros et en pourcentage, qui ne
+           depend pas de la façon dont la ligne s'est constituee. Et la fiche
+           de chaque ligne annonce depuis combien de temps elle est detenue —
+           la duree comme un fait, pas comme un taux. -->
+    </dl>
+    <!-- Trois lignes de prose vivaient ici, sous la colonne de chiffres, pour
+         reserver l'ecart du jour : « ces lignes n'ont pas de date d'achat, leur
+         ecart du jour suppose que tu les detenais hier soir ».
+
+         Elles sont parties, et rien n'est perdu. La reserve etait juste, mais
+         posee sur la mauvaise carte : celle-ci montre la plus-value latente,
+         qui ne depend d'aucune date. L'ecart du jour s'affiche ailleurs, et sa
+         colonne « Var. » porte deja la meme reserve dans son aide, a l'endroit
+         exact ou le chiffre concerne se lit. Une reserve se dit une fois, la ou
+         elle porte. -->
+  </div>
+
   <!-- Le journal avant les graphiques, et non en pied de page.
 
        C'est la carte qu'on vient lire : elle porte des faits datés et nommés,
@@ -1741,62 +1794,22 @@ function viewPerformance() {
        graphiques qu'on ne voit plus. -->
   ${salesCard()}
 
-  <div class="grid g-1-2">
-    <div class="card">
-      <div class="card-head"><h2>${trad('Latente, ligne par ligne')}</h2>
-        <span class="hint">${lat.count} ${lat.count > 1 ? trad('lignes') : trad('ligne')}</span></div>
-      <div class="chart" id="perfLatente"></div>
-      <dl class="kv" style="margin-top:12px">
-        <dt>${trad('Valeur du portefeuille')}</dt><dd>${fmtEUR(lat.value)}</dd>
-        <dt>${trad('Prix de revient')}</dt><dd>${fmtEUR(lat.invested)}</dd>
-        <dt>${trad('Écart')}</dt><dd class="${cls(lat.pnl)}"><b>${fmtSigned(lat.pnl)}</b></dd>
-        <!-- « Rendement annuel » vivait ici, et il est parti.
-
-             Le chiffre n'etait alors ni pondere par le temps, ni par les
-             montants : selon qu'on a renforce en hausse ou en baisse, il
-             surestime ou sous-estime, et on ne sait meme pas dans quel sens. Un
-             lecteur qui sait dans quel sens un chiffre se trompe peut s'en
-             servir ; celui-la, non.
-
-             Une case « alimentee regulierement » a ete envisagee puis ecartee :
-             elle aurait demande du travail pour que l'application cesse de
-             mentir, et sur ce portefeuille elle aurait eteint le chiffre sur les
-             lignes qui portent l'essentiel de la valeur. Un indicateur qui ne
-             couvre plus 20 % du portefeuille est une decoration.
-
-             Ce qui reste dit vrai : l'ecart en euros et en pourcentage, qui ne
-             depend pas de la façon dont la ligne s'est constituee. Et la fiche
-             de chaque ligne annonce depuis combien de temps elle est detenue —
-             la duree comme un fait, pas comme un taux. -->
-      </dl>
-      <!-- Trois lignes de prose vivaient ici, sous la colonne de chiffres, pour
-           reserver l'ecart du jour : « ces lignes n'ont pas de date d'achat, leur
-           ecart du jour suppose que tu les detenais hier soir ».
-
-           Elles sont parties, et rien n'est perdu. La reserve etait juste, mais
-           posee sur la mauvaise carte : celle-ci montre la plus-value latente,
-           qui ne depend d'aucune date. L'ecart du jour s'affiche ailleurs, et sa
-           colonne « Var. » porte deja la meme reserve dans son aide, a l'endroit
-           exact ou le chiffre concerne se lit. Une reserve se dit une fois, la ou
-           elle porte. -->
-    </div>
-    <div class="card">
-      <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
-           « vente par vente » au-dessus de barres trimestrielles annoncerait la
-           mauvaise lecture. -->
-      <!-- Pas de selecteur de plage ici : le journal, juste au-dessus, porte
-           celui de la page. Deux exemplaires du meme contrôle a deux cents pixels
-           d'ecart se lisent comme deux reglages, et l'un des deux passe pour
-           inerte. Il est en haut parce que c'est la que la borne se choisit, et
-           ces graphiques la suivent. -->
-      <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
-        ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>
-        <span class="hint">${esc(libellePlage)}</span></div>
-      ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
-        <p class="empty">${tout.count
-          ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
-          : trad('Aucune vente enregistrée. Le journal, plus haut, porte le bouton pour en saisir une.')}</p>`}
-    </div>
+  <div class="card">
+    <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
+         « vente par vente » au-dessus de barres trimestrielles annoncerait la
+         mauvaise lecture. -->
+    <!-- Pas de selecteur de plage ici : le journal, juste au-dessus, porte
+         celui de la page. Deux exemplaires du meme contrôle a deux cents pixels
+         d'ecart se lisent comme deux reglages, et l'un des deux passe pour
+         inerte. Il est en haut parce que c'est la que la borne se choisit, et
+         ces graphiques la suivent. -->
+    <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
+      ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>
+      <span class="hint">${esc(libellePlage)}</span></div>
+    ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
+      <p class="empty">${tout.count
+        ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
+        : trad('Aucune vente enregistrée. Le journal, plus haut, porte le bouton pour en saisir une.')}</p>`}
   </div>
 
   ${st.count ? `
@@ -7022,6 +7035,84 @@ function viewBudget(section = 'depenses') {
     </button>
   </div>
 
+  <div class="card">
+    <!-- L'objectif est rappele ici, pas reglable ici : sa ligne pointillee
+         traverse ce graphique, donc son montant doit se lire a cote. Le reglage
+         vit dans la brique du haut de cet onglet, et lui seul — deux champs
+         editables pour une meme valeur sur un meme ecran, c'est le doublon que
+         ce projet passe son temps a supprimer. -->
+    <div class="card-head">
+      <h2>${trad('Dépenses mensuelles')}</h2>
+      <span class="hint">${trad('objectif')} ${fmtEUR0(b.monthlyTarget)}</span>
+      ${yearControl('budget-year', years, year)}
+    </div>
+    <div class="chart" id="bChart"></div>
+    <!-- La moyenne sous le graphique : la barre de chaque mois se lit contre
+         l'objectif, pas contre les autres mois, et « est-ce que je dépense
+         plus que d'habitude ? » n'avait plus de reponse sur cette carte. -->
+    <div class="goal-foot" style="margin-top:12px">
+      <span>${trad('Moyenne')} ${esc(year)}
+        <b>${fmtEUR0(stats.average)} ${trad('/ mois')}</b>${stats.moisEnCoursExclu
+          ? `<span class="sub">${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, le mois en cours est écarté')}</span>` : ''}</span>
+      <span class="${classeDepassement(stats.average, f.target)}">${
+        stats.average ? `${fmtSigned(stats.average - f.target)} ${trad('vs objectif')}` : ''}</span>
+    </div>
+    <p class="small muted" style="margin:12px 0 0">
+      ${trad('Vert sous l’objectif, orange au-dessus, rouge à partir de')} ${fmtPct(SEUIL_DEPASSEMENT_GRAVE * 100, 0)} ${trad('de dépassement. Survole une barre pour la note du mois.')}
+    </p>
+    <details class="data-view">
+      <summary>${trad('Voir les données')}</summary>
+      <table>
+        <thead><tr><th>${trad('Mois')}</th><th>${trad('Dépensé')}</th><th>${trad('vs objectif')}</th><th style="text-align:left">Note</th></tr></thead>
+        <tbody>${(year === 'all' ? expenseSeries() : expenseSeries(year)).map(r => `<tr>
+          <td class="name">${esc(r.label)}</td>
+          <td>${r.total ? fmtEUR0(r.total) : ''}</td>
+          <td class="${classeDepassement(r.total, f.target)}">${r.total ? fmtSigned(r.total - f.target) : ''}</td>
+          <td style="text-align:left" class="muted small">${esc(r.note || '')}</td></tr>`).join('')}</tbody>
+      </table>
+    </details>
+  </div>
+
+  <!-- Une carte, un axe. « Par catégorie » et « Moyenne par mois » etaient les
+       memes categories vues deux fois cote a cote : un graphique donnant le
+       total de l'annee, un tableau donnant la moyenne mensuelle. Deux cartes
+       pour un seul axe, et il fallait comparer deux listes pour rapprocher les
+       deux chiffres d'une meme categorie.
+
+       Le tableau descend sous le graphique et porte les deux colonnes. Il se
+       replie, comme celui des depenses mensuelles juste au-dessus : c'est
+       l'idiome de cette page pour les donnees qu'on verifie sans les regarder
+       tout le temps. -->
+  <div class="card">
+    <div class="card-head"><h2>${trad('Par catégorie')}</h2>
+      <div class="row">
+        <span class="hint">${fmtEUR0(stats.total)} ${trad('au total')}</span>
+        ${yearControl('budget-year', years, year)}
+      </div>
+    </div>
+    <div class="chart" id="bCats"></div>
+    <details class="data-view">
+      <summary>${trad('Voir les données')}</summary>
+      <table>
+        <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total')}</th>
+          <th>${trad('/ mois')}</th><th>%</th></tr></thead>
+        <tbody>${cats.map(c => `<tr>
+          <td class="name">${esc(trad(c.label))}</td>
+          <td>${fmtEUR0(c.value)}</td>
+          <td>${fmtEUR0(c.average)}</td>
+          <td class="muted">${fmtPct(c.pct, 1)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td>${trad('Total')}</td><td>${fmtEUR0(stats.total)}</td>
+          <td>${fmtEUR0(stats.average)}</td><td></td></tr></tfoot>
+      </table>
+    </details>
+  </div>
+  <!-- Le tableau de correction ferme la page, il ne la coupe plus.
+
+       Il s'intercalait entre les cartes qui font lire — la repartition, le
+       graphique des mois, les categories — avec ses 880 px : on traversait l'outil
+       de saisie pour atteindre la lecture. C'est l'argument qui a deja range
+       l'onglet voisin : un tableau est un outil de correction, on y vient changer
+       un montant, et on ne l'ouvre qu'une fois qu'on a vu ce qui cloche. -->
   <div class="card" data-anchor="detail-mensuel">
     <div class="card-head">
       <h2>${trad('Détail mensuel')}</h2>
@@ -7219,78 +7310,6 @@ function viewBudget(section = 'depenses') {
       <p class="hint" style="margin-top:8px">
         <b>${trad('Retirer')}</b> ${trad("garde l'historique,")} <b>${trad('Supprimer')}</b> ${trad("l'efface.")}${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
-    </details>
-  </div>
-
-  <div class="card">
-    <!-- L'objectif est rappele ici, pas reglable ici : sa ligne pointillee
-         traverse ce graphique, donc son montant doit se lire a cote. Le reglage
-         vit dans la brique du haut de cet onglet, et lui seul — deux champs
-         editables pour une meme valeur sur un meme ecran, c'est le doublon que
-         ce projet passe son temps a supprimer. -->
-    <div class="card-head">
-      <h2>${trad('Dépenses mensuelles')}</h2>
-      <span class="hint">${trad('objectif')} ${fmtEUR0(b.monthlyTarget)}</span>
-      ${yearControl('budget-year', years, year)}
-    </div>
-    <div class="chart" id="bChart"></div>
-    <!-- La moyenne sous le graphique : la barre de chaque mois se lit contre
-         l'objectif, pas contre les autres mois, et « est-ce que je dépense
-         plus que d'habitude ? » n'avait plus de reponse sur cette carte. -->
-    <div class="goal-foot" style="margin-top:12px">
-      <span>${trad('Moyenne')} ${esc(year)}
-        <b>${fmtEUR0(stats.average)} ${trad('/ mois')}</b>${stats.moisEnCoursExclu
-          ? `<span class="sub">${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, le mois en cours est écarté')}</span>` : ''}</span>
-      <span class="${classeDepassement(stats.average, f.target)}">${
-        stats.average ? `${fmtSigned(stats.average - f.target)} ${trad('vs objectif')}` : ''}</span>
-    </div>
-    <p class="small muted" style="margin:12px 0 0">
-      ${trad('Vert sous l’objectif, orange au-dessus, rouge à partir de')} ${fmtPct(SEUIL_DEPASSEMENT_GRAVE * 100, 0)} ${trad('de dépassement. Survole une barre pour la note du mois.')}
-    </p>
-    <details class="data-view">
-      <summary>${trad('Voir les données')}</summary>
-      <table>
-        <thead><tr><th>${trad('Mois')}</th><th>${trad('Dépensé')}</th><th>${trad('vs objectif')}</th><th style="text-align:left">Note</th></tr></thead>
-        <tbody>${(year === 'all' ? expenseSeries() : expenseSeries(year)).map(r => `<tr>
-          <td class="name">${esc(r.label)}</td>
-          <td>${r.total ? fmtEUR0(r.total) : ''}</td>
-          <td class="${classeDepassement(r.total, f.target)}">${r.total ? fmtSigned(r.total - f.target) : ''}</td>
-          <td style="text-align:left" class="muted small">${esc(r.note || '')}</td></tr>`).join('')}</tbody>
-      </table>
-    </details>
-  </div>
-
-  <!-- Une carte, un axe. « Par catégorie » et « Moyenne par mois » etaient les
-       memes categories vues deux fois cote a cote : un graphique donnant le
-       total de l'annee, un tableau donnant la moyenne mensuelle. Deux cartes
-       pour un seul axe, et il fallait comparer deux listes pour rapprocher les
-       deux chiffres d'une meme categorie.
-
-       Le tableau descend sous le graphique et porte les deux colonnes. Il se
-       replie, comme celui des depenses mensuelles juste au-dessus : c'est
-       l'idiome de cette page pour les donnees qu'on verifie sans les regarder
-       tout le temps. -->
-  <div class="card">
-    <div class="card-head"><h2>${trad('Par catégorie')}</h2>
-      <div class="row">
-        <span class="hint">${fmtEUR0(stats.total)} ${trad('au total')}</span>
-        ${yearControl('budget-year', years, year)}
-      </div>
-    </div>
-    <div class="chart" id="bCats"></div>
-    <details class="data-view">
-      <summary>${trad('Voir les données')}</summary>
-      <table>
-        <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total')}</th>
-          <th>${trad('/ mois')}</th><th>%</th></tr></thead>
-        <tbody>${cats.map(c => `<tr>
-          <td class="name">${esc(trad(c.label))}</td>
-          <td>${fmtEUR0(c.value)}</td>
-          <td>${fmtEUR0(c.average)}</td>
-          <td class="muted">${fmtPct(c.pct, 1)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td>${trad('Total')}</td><td>${fmtEUR0(stats.total)}</td>
-          <td>${fmtEUR0(stats.average)}</td><td></td></tr></tfoot>
-      </table>
     </details>
   </div>`}
 
@@ -7633,6 +7652,21 @@ function viewData() {
       : `<p class="empty">${trad('✓ Aucune incohérence détectée.')}</p>`}
   </div>
 
+  <!-- L'etat de l'application suit ses controles : les deux repondent a la meme
+       question, comment elle va. Il fermait la page, coince entre les sauvegardes
+       et la remise a zero — un encart de lecture au milieu de deux actes. -->
+  <div class="card">
+    <div class="card-head"><h2>${trad('État')}</h2></div>
+    <dl class="kv">
+      <dt>Positions</dt><dd>${Store.state.positions.length}</dd>
+      <dt>${trad('Lignes d\'historique')}</dt><dd>${Store.state.monthly.length}</dd>
+      <dt>${trad('Comptes suivis')}</dt><dd>${ACCOUNTS.length}</dd>
+      <dt>${trad('Taille du stockage')}</dt><dd>${(JSON.stringify(Store.state).length / 1024).toFixed(1)} Ko</dd>
+      <dt>${trad('Version')}${aide(trad("La version du code que tu es en train d’exécuter, lue sur la balise du script. Si elle ne change pas après un déploiement, c’est que le navigateur ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple rechargement ne suffit pas toujours."))}</dt>
+        <dd style="font-family:var(--font-nb)">${esc(VERSION_APP)}</dd>
+    </dl>
+  </div>
+
   <div class="note">
     🔒 <span><b>${trad('Données personnelles.')}</b> ${trad('Ce tableau de bord contient des informations financières qui te concernent directement : au sens du RGPD, ce sont des <b>données à caractère personnel</b>, et tu en es responsable.')}
     ${CloudSync.isAvailable()
@@ -7643,7 +7677,7 @@ function viewData() {
 
   <div class="grid g-2">
     <div class="card">
-      <div class="card-head"><h2>Exporter</h2><span class="hint">${trad('Toutes tes données')}</span></div>
+      <div class="card-head"><h2>${trad('Exporter')}</h2><span class="hint">${trad('Toutes tes données')}</span></div>
       <div class="row">
         <button class="btn ghost" data-action="export-xlsx-all">${trad('⤓ Classeur Excel')}</button>
         <button class="btn" data-action="export-json">${trad('⤓ Sauvegarde JSON')}</button>
@@ -7791,18 +7825,6 @@ function viewData() {
         ${trad('Une sauvegarde est prise automatiquement au premier chargement de la journée, et avant toute réinitialisation ou restauration. Restaurer crée d’abord une sauvegarde de l’état actuel, rien n’est jamais perdu d’un seul clic.')}
       </p>`
       : `<p class="empty">${trad('Aucune sauvegarde pour l\'instant.')}</p>`}
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>${trad('État')}</h2></div>
-    <dl class="kv">
-      <dt>Positions</dt><dd>${Store.state.positions.length}</dd>
-      <dt>${trad('Lignes d\'historique')}</dt><dd>${Store.state.monthly.length}</dd>
-      <dt>${trad('Comptes suivis')}</dt><dd>${ACCOUNTS.length}</dd>
-      <dt>${trad('Taille du stockage')}</dt><dd>${(JSON.stringify(Store.state).length / 1024).toFixed(1)} Ko</dd>
-      <dt>${trad('Version')}${aide(trad("La version du code que tu es en train d’exécuter, lue sur la balise du script. Si elle ne change pas après un déploiement, c’est que le navigateur ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple rechargement ne suffit pas toujours."))}</dt>
-        <dd style="font-family:var(--font-nb)">${esc(VERSION_APP)}</dd>
-    </dl>
   </div>
 
   <!-- L'acte le plus destructeur de l'application vivait sous le titre

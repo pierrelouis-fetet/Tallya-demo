@@ -13757,6 +13757,70 @@ suite('Aucun dialogue ne parle français en dur', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   L'ordre des cartes d'un écran. Il ne se voit pas dans un calcul et
+   aucun rendu ne le signale : un bloc déplacé à la main se remet en
+   place au prochain coup d'éditeur, sans que rien ne casse.
+   ------------------------------------------------------------------ */
+suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
+
+  const positions = (src, ...reperes) => reperes.map(r => src.indexOf(r));
+  const croissant = (l) => l.every((n, i) => n > 0 && (i === 0 || n > l[i - 1]));
+
+  test('Dépenses : lire d’abord, corriger ensuite', () => {
+    /* Le tableau de correction, 880 px, s'intercalait entre la repartition, le
+       graphique des mois et les categories : on traversait l'outil de saisie pour
+       atteindre la lecture. C'est l'argument qui a deja range l'onglet voisin. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget('), src.indexOf('function viewData('));
+    const l = positions(vue,
+      "trad('Où va ce que tu gagnes')",
+      "trad('Dépenses mensuelles')",
+      "trad('Par catégorie')",
+      'data-anchor="detail-mensuel"');
+    vrai(croissant(l), `l’ordre attendu est répartition, graphique, catégories, détail : ${l.join(' < ')}`);
+  });
+
+  test('Performance : ce qu’on détient, puis ce qu’on a vendu', () => {
+    /* Les deux cartes des ventes encadraient celle du portefeuille detenu, et
+       l'etat vide de la troisieme l'avouait : « le journal, plus haut, porte le
+       bouton pour en saisir une ». Une carte qui donne l'itineraire vers sa
+       voisine est mal placee. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPerformance('), src.indexOf('function viewObjective('));
+    const l = positions(vue,
+      "trad('Latente, ligne par ligne')",
+      '${salesCard()}',
+      "trad('Réalisée')");
+    vrai(croissant(l), `l’ordre attendu est latente, journal, réalisée : ${l.join(' < ')}`);
+  });
+
+  test('Données : le diagnostic ensemble, la destruction en dernier', () => {
+    /* « État » fermait la page, coince entre les sauvegardes et la remise a zero :
+       un encart de lecture au milieu de deux actes, alors qu'il repond a la meme
+       question que les controles de coherence — comment va l'application. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewData('), src.indexOf('function mountData('));
+    const l = positions(vue,
+      "trad('Contrôles de cohérence')",
+      "trad('État')",
+      "trad('Exporter')",
+      'data-action="start-blank"');
+    vrai(croissant(l),
+      `l’ordre attendu est contrôles, état, transferts… puis la remise à zéro : ${l.join(' < ')}`);
+  });
+
+  test('Relevés : le calendrier qu’on vient remplir ouvre la page', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewHistory('), src.indexOf('function viewAccounts('));
+    const l = positions(vue,
+      "trad('Relevé mensuel du patrimoine')",
+      "trad('Entrées et sorties exceptionnelles')",
+      "trad('Notes de marché')");
+    vrai(croissant(l), `l’ordre attendu est relevé, apports, notes : ${l.join(' < ')}`);
+  });
+});
+
 suite('Les boutons d’une fiche ont une géométrie et une place', () => {
 
   /* Le signalement tenait en une phrase : « il y a pas un bouton pareil ». La

@@ -741,6 +741,7 @@ const I18N = {
     "Prix d'acquisition": "Purchase price",
     "Prix de revient": "Cost price",
     "Prix de revient des titres": "Cost price of holdings",
+    "Exporter": "Export",
     "Repartir de zéro": "Start from scratch",
     "Une vente passée, pour mémoire": "A past sale, for the record",
     "Au journal seulement : ni cash, ni position, ni patrimoine ne bougent.": "Journal only: no cash, no holding, no net worth moves.",
