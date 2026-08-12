@@ -31,8 +31,16 @@ const CloudSync = (() => {
   let lastPayload = null;       // évite les écritures identiques
   let status = { lastPush: null, error: null, conflict: null, pushing: false };
   let onChange = () => {};
+  let onConflit = () => {};
 
   const setOnChange = fn => { onChange = fn; };
+  const setOnConflit = fn => { onConflit = fn; };
+
+  /* Noter la version qu'on vient de lire. Le repere sert de `base` a la
+     prochaine ecriture, et il doit donc se poser aussi quand on adopte l'etat du
+     cloud sans l'avoir ecrit : sinon la sauvegarde suivante declare avoir lu une
+     version qui n'est plus en place, et se fait refuser sans raison. */
+  const noterVersionLue = at => markSynced(at);
 
   /* On réutilise la réponse déjà obtenue par Quotes : une seule requête
      /api/health par chargement de page, pas deux. */
@@ -94,7 +102,14 @@ const CloudSync = (() => {
 
     status.pushing = true;
     try {
-      const r = await fetch('/api/state' + (force ? '?force=1' : ''), {
+      /* La version qu'on a lue part avec l'ecriture : le serveur n'accepte que si
+         c'est encore celle en place. Voir la note de `functions/api/state.js`.
+         Sans ce parametre, un onglet ouvert depuis des heures ecrasait ce qu'un
+         autre appareil venait d'enregistrer, sur la seule foi d'une estampille
+         plus fraiche. */
+      const vu = lastSyncedAt();
+      const params = force ? '?force=1' : (vu ? `?base=${encodeURIComponent(vu)}` : '');
+      const r = await fetch('/api/state' + params, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
@@ -104,6 +119,11 @@ const CloudSync = (() => {
         const d = await r.json();
         status.conflict = d;                 // une version plus récente existe en ligne
         status.error = null;
+        /* Un refus se voyait sur la seule page Donnees, ou personne ne va apres
+           avoir saisi un montant. Il se dit maintenant la ou l'on se trouve, et
+           la cloche le garde tant qu'il dure : une modification qui n'est pas
+           partie doit se savoir tout de suite, pas au prochain passage. */
+        onConflit(d);
         return { conflict: d };
       }
       if (!r.ok) throw new Error(`écriture impossible (HTTP ${r.status})`);
@@ -219,7 +239,12 @@ const CloudSync = (() => {
     if (payload === lastPayload) return;
     clearTimeout(timer);
     try {
-      navigator.sendBeacon('/api/state',
+      /* La version lue voyage aussi dans le beacon, et c'est ici qu'elle compte le
+         plus : un onglet ouvert depuis des heures qu'on ferme envoie tout son etat
+         d'un coup, sans pouvoir rien verifier avant de partir. Le serveur, lui,
+         verifie. */
+      const vu = lastSyncedAt();
+      navigator.sendBeacon('/api/state' + (vu ? `?base=${encodeURIComponent(vu)}` : ''),
         new Blob([payload], { type: 'application/json' }));
       lastPayload = payload;
     } catch (e) { /* rien à faire de plus au moment de la fermeture */ }
@@ -227,6 +252,7 @@ const CloudSync = (() => {
 
   return {
     init, pull, push, schedulePush, probe, flushOnUnload, setOnChange,
+    setOnConflit, noterVersionLue,
     isAvailable: () => available,
     getUser: () => user,
     status: () => ({ ...status }),

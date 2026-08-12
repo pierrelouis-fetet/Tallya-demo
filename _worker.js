@@ -386,16 +386,47 @@ async function handleState(request, env) {
     return json({ error: 'format inattendu' }, 400);
   }
 
-  // Garde-fou : un appareil resté ouvert avec de vieilles données ne doit pas
-  // écraser ce qu'un autre vient d'enregistrer.
-  if (new URL(request.url).searchParams.get('force') !== '1') {
+  /* Garde-fou : on n'écrase que la version qu'on a lue.
+     -------------------------------------------------------------------------
+     La règle précédente comparait deux horodatages : elle refusait une écriture
+     dont le `savedAt` était plus ancien que celui en ligne. Elle ne pouvait pas
+     tenir, et la preuve est venue des sauvegardes du détenteur — six « avant
+     adoption de la version en ligne » dans une seule journée, et des montants
+     saisis qui disparaissaient.
+
+     Un onglet resté ouvert garde en mémoire l'état d'il y a six heures. Le
+     rafraîchissement automatique des cours y appelle `Store.save()` toutes les
+     cinq minutes, et `Store.save()` estampille `savedAt = maintenant`. Cet onglet
+     envoie donc un contenu périmé avec une estampille fraîche, plus récente que
+     celle du téléphone qui vient de saisir. L'ancienne règle l'acceptait — un
+     horodatage récent ne dit rien de l'âge du contenu — et le téléphone, lui
+     proprement synchronisé, adoptait ensuite cette version en se croyant
+     simplement en retard.
+
+     On compare donc une filiation, comme le fait `If-Match` : l'écrivain déclare
+     la version qu'il a lue, et l'écriture n'est acceptée que si c'est encore
+     celle en place. Un onglet qui n'a pas vu la dernière version est refusé,
+     quelle que soit son horloge. C'est ici et non côté client parce que le
+     `sendBeacon` de la fermeture d'onglet ne peut rien vérifier avant de partir.
+
+     Sans `base` — un client d'avant ce correctif, dont un onglet encore ouvert —
+     le refus est la bonne réponse : c'est exactement l'écrivain dont on se
+     protège. Rien n'est perdu pour lui, son état reste sur son appareil, et un
+     rechargement lui rend le droit d'écrire.
+
+     `force=1` reste la porte de l'arbitrage : c'est le détenteur qui a vu les
+     deux dates et choisi d'imposer la sienne. */
+  const params = new URL(request.url).searchParams;
+  if (params.get('force') !== '1') {
     const existing = await env.WEALTH.get(key);
     if (existing) {
       try {
         const prevAt = JSON.parse(existing)?.meta?.savedAt;
         const nextAt = incoming?.meta?.savedAt;
-        if (prevAt && nextAt && nextAt < prevAt) {
-          return json({ error: 'conflit', remoteSavedAt: prevAt, localSavedAt: nextAt }, 409);
+        const base = params.get('base');
+        if (prevAt && base !== prevAt) {
+          return json({ error: 'conflit', remoteSavedAt: prevAt, localSavedAt: nextAt,
+                        base: base || null, raison: 'version non lue' }, 409);
         }
       } catch { /* état précédent illisible : on le remplace */ }
     }

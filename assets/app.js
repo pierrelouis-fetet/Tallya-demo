@@ -698,12 +698,25 @@ function detailEvolution() {
         <span class="spacer"></span>
         ${yearControl('evo-year', annees, an)}
       </div>
+      <!-- Le total est epingle a droite, et les parts defilent sous lui. Le nombre
+           de colonnes suit les poches remplies : quatre series en font six, soit
+           552 px pour une carte qui en offre 311 a 375 px, et le total sortait de
+           l'ecran a l'ouverture — le chiffre meme que la courbe au-dessus raconte,
+           et le seul qu'on ne voyait pas.
+
+           Le mois porte la classe sticky-col comme dans les tableaux voisins,
+           mais une regle du bloc mobile la neutralise sous 768 px : une colonne
+           de noms figee y mangerait la moitie de l'ecran. Elle sert donc aux
+           ecrans etroits au-dela de ce seuil, ou un patrimoine a six poches
+           deborde aussi. Le total, lui, ne coute que 70 px : il tient partout.
+           (Aucun backtick dans ce commentaire : il vit dans un litteral de
+           gabarit, et fermerait la chaine.) -->
       <div class="table-wrap">
         <table>
-          <thead><tr><th>${trad('Mois')}</th>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th>Total</th></tr></thead>
-          <tbody>${pts.map(p => `<tr><td class="name">${esc(p.label)}</td>${
+          <thead><tr><th class="sticky-col">${trad('Mois')}</th>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th class="sticky-fin">Total</th></tr></thead>
+          <tbody>${pts.map(p => `<tr><td class="name sticky-col">${esc(p.label)}</td>${
             cols.map(c => `<td>${fmtEUR0(Number(p[c.key]) || 0)}</td>`).join('')
-          }<td><b>${fmtEUR0(p.total)}</b></td></tr>`).join('')
+          }<td class="sticky-fin"><b>${fmtEUR0(p.total)}</b></td></tr>`).join('')
             || `<tr><td colspan="${cols.length + 2}" class="empty">Aucun relevé sur cette année.</td></tr>`}</tbody>
         </table>
       </div>
@@ -1670,9 +1683,12 @@ function viewPerformance() {
        tenable ici. Elle reste donc au present, et son libelle ne promet rien
        d'autre.
 
-       D'ou la borne dans le libelle et non dans la meta : sous 768 px la meta est
-       invisible par choix, seule la pastille de pourcentage reste. « PLUS-VALUE
-       ENCAISSEE » sans periode sur un telephone serait un chiffre sans base.
+       D'ou la borne dans le libelle et non dans la meta. La raison a change sans
+       que la decision bouge : la meta etait masquee sous 768 px, elle s'affiche
+       depuis qu'un chiffre doit dire sa base sur telephone comme ailleurs. Mais
+       une borne de temps n'est pas une precision sur le chiffre, c'est une part de
+       son nom : « PLUS-VALUE ENCAISSEE » qui vaudrait un an sans le dire serait
+       faux des le libelle, pas seulement incomplet.
 
        Et le total n'apparait que sur « Tout ». Ailleurs il additionnerait une
        latente d'aujourd'hui a un encaisse d'un an : deux bornes dans une seule
@@ -3343,15 +3359,23 @@ function salesCard() {
       ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
         st.count === toutes.length ? '' : ` ${trad('sur.total', 'sur')} ${toutes.length}`}</span>
       ${plages}` : ''}
-      <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
-              title="${aVendre ? trad('Enregistrer une vente et sa plus-value')
-                               : trad('Aucune ligne de titres à vendre')}">− ${trad('Vendre')}</button>
-      <!-- La vente d'avant l'application : elle entre au journal telle qu'on
-           s'en souvient, et n'ecrit rien d'autre — ni cash, ni position, ni
-           patrimoine. C'est le chemin pour un PEA cloture, sans avoir a
-           recreer le compte, la ligne, vendre, puis archiver. -->
-      <button class="btn sm ghost" data-action="declarer-vente"
-              title="${trad('Noter une vente d\'avant l\'application, pour mémoire : rien d\'autre ne bouge')}">${trad('+ Vente passée')}</button>
+      <!-- Les deux entrees du journal sont une paire : elles tombent a la ligne
+           ensemble et mesurent pareil. Separees, elles descendaient une par une
+           dans l'en-tete souple, et la longueur du libelle decidait de leur
+           largeur : 77 px pour l'une, 120 pour l'autre, l'une au-dessus de
+           l'autre. Deux commandes du meme geste ne se lisent pas comme ca.
+
+           La vente d'avant l'application entre au journal telle qu'on s'en
+           souvient, et n'ecrit rien d'autre : ni cash, ni position, ni
+           patrimoine. C'est le chemin pour un PEA cloture, sans avoir a recreer
+           le compte, la ligne, vendre, puis archiver. -->
+      <span class="paire-btn">
+        <button class="btn sm ghost" data-action="sell-position" ${aVendre ? '' : 'disabled'}
+                title="${aVendre ? trad('Enregistrer une vente et sa plus-value')
+                                 : trad('Aucune ligne de titres à vendre')}">− ${trad('Vendre')}</button>
+        <button class="btn sm ghost" data-action="declarer-vente"
+                title="${trad('Noter une vente d\'avant l\'application, pour mémoire : rien d\'autre ne bouge')}">${trad('+ Vente passée')}</button>
+      </span>
     </div>
     ${!toutes.length ? `<p class="empty">${trad('Aucune vente enregistrée.')} ${aVendre
       ? trad('Le bouton « Vendre » enregistre la vente, sa plus-value, et crédite le compte de ton choix.')
@@ -6090,19 +6114,21 @@ function espaceBien(c, idx, t) {
    connu — l'ouverture, ou le dernier « Enregistrer ». */
 /* La rangee de validation d'une fiche, au bas de la carte qui porte les champs.
 
-   Elle a vecu dans la carte « Actions », a cote d'Archiver et de Cloturer-supprimer :
-   quatre boutons de meme poids pour deux natures d'acte, sous un titre qui ne
-   decrivait ni l'une ni l'autre. Sortie de la carte, elle flottait entre deux cartes,
-   un filet dans le vide au milieu d'une page ou tout est encadre.
+   Elle appartient au formulaire qu'elle valide : c'est la qu'on vient de taper, et
+   une rangee posee hors des cartes flotterait dans une page ou tout est encadre.
+   Rassemblee avec Archiver et Cloturer-supprimer, elle formait un mur de quatre
+   rectangles identiques sous un seul titre, sans ordre de lecture.
 
-   Sa place est donc le bas de la carte des champs : c'est la qu'on vient de taper, et
-   la validation d'une saisie appartient au formulaire qui la porte. La carte
-   « Actions », elle, ne garde que ce qui decide de la vie du compte, et reste en
-   dernier : a 375 px les cartes se suivent, et le doigt ne doit pas traverser le
-   rouge pour atteindre « Enregistrer ». */
+   `.fiche-actes` porte la geometrie, la meme pour toutes les rangees de boutons
+   d'une fiche : les cartes ayant la meme largeur, les quatre boutons gardent leur
+   taille et leur bord droit d'une carte a l'autre. `apres-champs` n'ajoute qu'un
+   filet, parce que celle-ci ferme une carte au lieu de suivre son titre.
+
+   Elle vient avant ce qui detruit : le doigt ne doit pas traverser le rouge pour
+   atteindre « Enregistrer ». */
 function barreValiderFiche(retour = 'accounts') {
   return `
-    <div class="fiche-pied">
+    <div class="fiche-actes apres-champs">
       <button class="btn ghost" data-action="annuler-fiche"
               data-view="${esc(retour)}">${trad('Annuler')}</button>
       <button class="btn primary" data-action="enregistrer-fiche">${trad('Enregistrer')}</button>
@@ -6260,8 +6286,15 @@ function viewFicheCompte(id) {
         <!-- Retirer la derniere part d'un compte d'especes le laisserait sans
              champ ou saisir un montant, sur un compte qu'on ne peut pas
              supprimer : un cul-de-sac. Mettre a 0 est le geste. -->
+        <!-- Nomme, comme le bouton qui retire un credit : un ✕ gris est le signe
+             le plus discret de l'ecran pour l'acte qui en efface un montant, et
+             on ne le trouve que par accident. Fantome et non plein, a la
+             difference du credit : un compte peut declarer trois parts, et trois
+             aplats rouges dans une carte se lisent comme une alerte. C'est aussi
+             le traitement de « Cloturer et supprimer », l'autre acte destructeur
+             de cette page. -->
         ${t.interne && (c.cash || []).length < 2 ? ''
-          : `<button class="btn icon" data-action="retirer-cash" data-id="${esc(c.id)}" data-i="${i}" title="${trad('Retirer cette part')}">✕</button>`}
+          : `<button class="btn sm ghost danger" data-action="retirer-cash" data-id="${esc(c.id)}" data-i="${i}" title="${trad('Retirer cette part')}">${trad('Retirer')}</button>`}
       </div>`).join('')
     : `<p class="empty">${t.titres
         ? trad('Aucune espèce en attente. « Scinder » déclare un montant à investir.')
@@ -6444,18 +6477,23 @@ function viewFicheCompte(id) {
                placeholder="${trad('facultatif')}" style="text-align:left"></div>
       ${barreValiderFiche()}
     </div>
-    <!-- La carte ne porte plus que la vie du compte, et son titre le dit enfin.
+    <!-- La carte ne porte que la vie du compte, et son titre le dit.
 
-         Elle vient apres la barre de validation, et c'est une regle de pouce : a
-         375 px le doigt descendait sur « Cloturer et supprimer » pour atteindre
-         « Enregistrer ». On saisit, on valide, et ce qui detruit reste en dernier.
-         La hierarchie se dit par le remplissage, fantome ou rouge, jamais par la
-         taille : les deux boutons ont la meme geometrie.
+         Rassembles, les quatre boutons formaient un mur : quatre rectangles de meme
+         taille empiles sous un seul titre, sans ordre de lecture, et deux natures
+         d'acte que seul le remplissage distinguait. La validation appartient au
+         formulaire qu'elle valide, donc au bas de la carte des champs ; ici ne reste
+         que ce qui decide de la vie du compte, juste au-dessus de la phrase qui
+         explique archiver et supprimer.
+
+         Les deux rangees gardent la meme classe et donc la meme geometrie : les deux
+         cartes ont la meme largeur, leurs colonnes coincident, et les quatre boutons
+         partagent leur taille et leur bord droit d'une carte a l'autre.
          (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
          et fermerait la chaine.) -->
     <div class="card">
       <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
-      <div class="fiche-valider">
+      <div class="fiche-actes">
         ${c.statut === 'archive'
           ? `<button class="btn ghost" data-action="restaurer-compte" data-id="${esc(c.id)}">${trad('Restaurer')}</button>`
           : `<button class="btn ghost" data-action="archiver-compte" data-id="${esc(c.id)}">${trad('Archiver')}</button>`}
@@ -6552,6 +6590,10 @@ function viewFicheEtab(id) {
     : `<p class="empty">${trad('Aucun crédit déclaré chez')} ${esc(e.nom)}.</p>`}
   </div>
 
+  <!-- La carte des champs de cette fiche, donc celle qui porte la validation. Un
+       etablissement ne s'archive ni ne se cloture depuis sa fiche : il n'y a pas de
+       carte « Actions » ou la ranger, et une carte a elle seule pour deux boutons
+       pesait plus que ce qu'elle annonce. -->
   <div class="card">
     <div class="card-head"><h2>${trad('Notes')}</h2></div>
     <input data-path="etabs.${idx}.notes" value="${esc(e.notes || '')}" placeholder="${trad('facultatif')}" style="text-align:left">
@@ -7607,14 +7649,13 @@ function viewData() {
       <p class="small muted" style="margin:12px 0 0">
         <b>${trad('Fichier JSON uniquement')}</b>${trad(', celui produit par « Sauvegarde JSON ». L’import écrase l’état enregistré ; une confirmation est demandée. Exporte d’abord si tu as un doute.')}
       </p>
+      <!-- La demonstration se charge d'ici : c'est un jeu de donnees qui remplace
+           l'etat, donc un import, et elle reste dans la carte qui porte les imports.
+           Elle a longtemps vecu a cote de la remise a zero, les deux gestes qui
+           changent tout l'etat d'un coup ; celle-ci est partie dans sa propre carte,
+           en bas de page, parce qu'elle detruit. Celle-la n'efface rien : elle n'a
+           pas suivi. -->
       <div class="row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--grid)">
-        <button class="btn ghost sm" data-action="start-blank">${trad('↻ Repartir de zéro')}</button>
-        <span class="hint">${trad('Pour qu\'une autre personne parte de ses propres chiffres')}</span>
-      </div>
-      <!-- La demonstration se charge d'ici, a cote de la remise a zero : ce sont
-           les deux gestes qui changent tout l'etat d'un coup. Celui-ci est le
-           seul des deux qui n'efface rien. -->
-      <div class="row" style="margin-top:12px">
         ${modeDemo()
           ? `<button class="btn sm" data-action="quitter-demo">← Revenir à mes données</button>
              <span class="hint">La démonstration reste disponible</span>`
@@ -7672,7 +7713,14 @@ function viewData() {
         ? `${Store.undoCount()} ${Store.undoCount() > 1 ? trad('modifications annulables') : trad('modification annulable')}`
         : trad('rien à annuler pour l’instant')}</span>
     </div>
-    <button class="btn pleine" data-action="undo" ${Store.undoCount() ? '' : 'disabled'}
+    <!-- Un bouton de la taille des autres, et non la classe « pleine ». Celle-ci
+         existe pour l'action qui remplace douze gestes de saisie, et elle donnait
+         ici un quatrieme gabarit de bouton sur une page qui en portait deja trois :
+         30, 31, 36 et 43 px. La hierarchie se dit par le remplissage, jamais par la
+         taille, et celui-ci est deja seul dans sa carte, en plein.
+         (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
+         et fermerait la chaine.) -->
+    <button class="btn" data-action="undo" ${Store.undoCount() ? '' : 'disabled'}
       >${trad('↶ Annuler la dernière modification')}</button>
     <p class="small muted" style="margin:12px 0 0">
       ${trad('Défait le dernier changement enregistré, quel qu’il soit : un relevé écrasé, un montant corrigé, une ligne supprimée. Au clavier, Ctrl+Z fait la même chose. Pour remonter plus loin qu’un geste, prends une sauvegarde ci-dessous.')}
@@ -7736,6 +7784,26 @@ function viewData() {
       <dt>${trad('Version')}${aide(trad("La version du code que tu es en train d’exécuter, lue sur la balise du script. Si elle ne change pas après un déploiement, c’est que le navigateur ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple rechargement ne suffit pas toujours."))}</dt>
         <dd style="font-family:var(--font-nb)">${esc(VERSION_APP)}</dd>
     </dl>
+  </div>
+
+  <!-- L'acte le plus destructeur de l'application vivait sous le titre
+       « Importer », en petit bouton fantome, sous un filet, a cote d'un champ de
+       fichier : le titre n'annoncait rien de ce qu'il fait, et les boutons d'une
+       carte doivent porter sur le sujet de cette carte. Il a donc la sienne, et
+       elle vient en dernier, comme sur la fiche d'un compte : ce qui detruit se
+       range apres ce qui repare, pour que le doigt ne le traverse pas.
+
+       Le glyphe ↻ est retire. Il veut dire « actualiser » partout ailleurs — les
+       cours, la synchronisation, le symbole depuis l'ISIN — et le meme signe ne
+       peut pas dire aussi « effacer seize mois de releves ». -->
+  <div class="card">
+    <div class="card-head"><h2>${trad('Repartir de zéro')}</h2>
+      <span class="hint">${trad('Pour qu\'une autre personne parte de ses propres chiffres')}</span>
+    </div>
+    <button class="btn ghost danger" data-action="start-blank">${trad('Tout effacer et repartir')}</button>
+    <p class="small muted" style="margin:12px 0 0">
+      ${trad('Efface les comptes, les relevés, le budget et les dépenses, et laisse un tableau de bord vierge. Une sauvegarde est prise avant, et Ctrl+Z annule.')}
+    </p>
   </div>`;
 }
 
@@ -11407,21 +11475,17 @@ function askPosition(index) {
           ? `${esc(p.exchange || p.symbol || '')} <span class="muted">${marche.label}</span>`
           : (p.manual ? `<span class="muted">${trad('saisie à la main')}</span>`
                       : `<span class="muted">${trad('non résolue')}</span>`))}
-        <!-- Le nom officiel se recopie d'un geste.
-
-             Le nom vient deja de la recherche ou de l'ISIN a la creation : on
-             part de l'officiel. Ce qui manquait, c'est le retour, de quoi
-             defaire une saisie hasardeuse sans avoir a la retaper. Le bouton ne
-             fait que remplir le champ, il n'enregistre pas : la fiche est
-             differee, et c'est « Enregistrer » qui tranche, comme partout
-             ailleurs ici.
+        <!-- Le nom officiel se lit, il ne s'actionne pas. Un bouton « Utiliser »
+             recopiait ce nom dans le champ du nom de la ligne : le seul bouton de
+             ce bloc, pose au milieu de six valeurs alignees, et pour un geste qui
+             se fait aussi bien en retapant le nom une fois. Le bloc redevient ce
+             qu'il est, six faits sur le titre.
              (Pas de tiret cadratin ici : un controle balaye ce bloc a la
              recherche du texte affiche, et ne distingue pas le commentaire.) -->
         ${ligne(trad('Nom officiel'), p.longName
           ? (p.longName === p.name
              ? `<span class="muted">${trad('identique au nom de la ligne')}</span>`
-             : `${esc(p.longName)} <button type="button" class="btn xs ghost" id="posNomOfficiel"
-                  title="${trad('Recopier ce nom dans le nom de la ligne')}">${trad('Utiliser')}</button>`)
+             : esc(p.longName))
           : `<span class="muted">${trad('arrive avec le cours')}</span>`)}
         ${ligne(trad('Émetteur'), emetteur
           ? `${esc(emetteur)} <span class="muted">${trad('d’après le nom du fonds')}</span>`
@@ -11664,21 +11728,6 @@ function askPosition(index) {
     $('#modalClose').onclick = () => fermer('ferme');
     $('#posSell').onclick = () => fermer({ vendre: index });
     $('#posBuy').onclick = () => fermer({ acheter: index });
-    /* Recopier le nom officiel dans le champ du nom, coupe a la borne.
-
-       Il remplit, il n'enregistre pas : la fiche est differee, et « Enregistrer »
-       tranche. L'evenement est emis a la main parce que la valeur est posee par
-       le code — sans lui, le bloc resterait « propre » et fermer jetterait le
-       nom sans un mot. */
-    const btnNom = $('#posNomOfficiel');
-    if (btnNom) btnNom.onclick = () => {
-      const champ = $(`#modalBody [data-path="positions.${index}.name"]`);
-      if (!champ) return;
-      champ.value = String(p.longName || '').slice(0, NOM_LIGNE_MAX).trim();
-      champ.dispatchEvent(new Event('change', { bubbles: true }));
-      champ.focus();
-      toast(trad('Nom officiel repris, à enregistrer'));
-    };
     /* La confirmation est ici, avant la fermeture, parce que c'est ici qu'on
        peut encore nommer la ligne et son montant. La suppression, elle, se fait
        chez l'appelant, apres que la fenetre est partie : c'est lui qui pose la
@@ -15217,9 +15266,10 @@ function bindGlobal() {
     if (e.key === 'Escape' && !$('#modal').hidden) closeApercu();
   });
 
+  /* Le rechargement remplace le `render()` : il repeint tout, y compris le fond
+     du corps, que l'attribut seul ne suffit pas a repeindre. Voir applyTheme. */
   $('#themeToggle').addEventListener('click', () => {
-    applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-    render();
+    applyTheme(currentTheme() === 'dark' ? 'light' : 'dark', true);
   });
 
   /* Langue et thème depuis la vue Préférences. */
@@ -15227,7 +15277,7 @@ function bindGlobal() {
     const lang = e.target.closest('[data-action-change="set-lang"]');
     if (lang) { setLang(lang.value); location.reload(); return; }
     const theme = e.target.closest('[data-action-change="set-theme"]');
-    if (theme) { applyTheme(theme.value); render(); }
+    if (theme) { applyTheme(theme.value, true); }
   });
 }
 
@@ -15237,9 +15287,31 @@ function currentTheme() {
     || (() => { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })()
     || 'dark';
 }
-function applyTheme(nom) {
+/* Le theme s'ecrit, puis la page se recharge. Comme la langue, et pour une
+   raison plus betement technique.
+
+   Changer l'attribut suffit a repeindre la barre laterale, les cartes, les
+   textes, les graphiques : tout suit les variables. Tout, sauf le fond du corps.
+   Mesure sur ce navigateur, thème passe en clair sans rechargement :
+   `getComputedStyle(document.documentElement)` rend bien #f7f9fb, la variable
+   `--page` lue sur le corps rend #f7f9fb, un element cree a l'instant avec
+   `background: var(--page)` rend #f7f9fb — et le corps, lui, reste peint en
+   #08090b. Il ne se repeint qu'au rechargement suivant. On obtenait donc des
+   cartes claires posees sur une page noire, jusqu'a ce que quelqu'un recharge.
+
+   Trois pistes essayees avant celle-ci : `background-color` au lieu du raccourci
+   `background` (meme resultat), retirer la declaration en double sur le corps,
+   forcer un cycle de rendu. Le rechargement est la seule qui tienne, et il ne
+   coute rien ici : l'etat est deja enregistre, aucune saisie ne se perd, et le
+   selecteur de langue fait exactement ce geste depuis toujours.
+
+   Le drapeau, enfin : appeler ceci au demarrage rechargerait en boucle. Il reste
+   donc faux quand on applique le theme lu au chargement, et vrai quand c'est
+   quelqu'un qui vient de le changer. */
+function applyTheme(nom, recharger = false) {
   document.documentElement.dataset.theme = nom;
   try { localStorage.setItem(THEME_KEY, nom); } catch (e) {}
+  if (recharger) location.reload();
 }
 
 /* Saisie d'un symbole : on identifie la ligne (nom, devise, cours) sans
@@ -15359,6 +15431,13 @@ function applyField(f) {
 
   // Synchro cloud (Cloudflare KV) : prioritaire quand elle est disponible.
   CloudSync.setOnChange(() => { if (currentView() === 'data') render(); });
+  /* Un refus d'ecriture se dit la ou l'on se trouve. La cloche le garde ensuite
+     tant qu'il dure — c'est le seul etat de l'application ou fermer fait perdre
+     quelque chose. */
+  CloudSync.setOnConflit(() => {
+    toast(trad('Modification gardée ici : une autre version existe en ligne'));
+    render();
+  });
   try {
     /* Pas de lecture en demonstration : elle remplacerait la demo par les
        vraies donnees a chaque chargement. Une demo ne parle a personne. */
@@ -15391,15 +15470,30 @@ function applyField(f) {
         + `${trad('Ici :')} ${cloud.localAt ? new Date(cloud.localAt).toLocaleString(locale()) : trad('inconnue')}\n\n`
         + trad("Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)"),
         { danger: false, ok: 'Charger celle en ligne' });
-      if (ok) { Store.addBackup('avant chargement cloud'); Store.state = cloud.data; Store.migrate(); Store.save(); }
+      if (ok) {
+        Store.addBackup('avant chargement cloud');
+        Store.state = cloud.data;
+        Store.migrate();
+        /* La version qu'on vient de lire devient la base des ecritures suivantes.
+           Sans ce reperage, le `Store.save()` juste apres declarerait avoir lu une
+           version qui n'est plus en place, et le serveur le refuserait. */
+        CloudSync.noterVersionLue(cloud.at);
+        Store.save();
+      }
       else { await CloudSync.push({ force: true }); }
       render();
     } else if (cloud.aEnvoyer) {
       /* Cet appareil est en avance : il porte des modifications que le cloud
          n'a pas encore. Elles partent maintenant, sans attendre la prochaine
          frappe — c'est cette attente qui les perdait quand l'application
-         passait en veille avant l'envoi différé. */
-      await CloudSync.push();
+         passait en veille avant l'envoi différé.
+
+         `force` parce que c'en est un, et un arbitrage deja tranche : `init()`
+         vient de lire le cloud et d'etablir qu'il est plus ancien. La base que
+         cet appareil connait ne peut pas correspondre — c'est justement le sens
+         de « jamais envoye » — donc le garde-fou de filiation refuserait une
+         ecriture qu'on sait pourtant la bonne. */
+      await CloudSync.push({ force: true });
     } else if (cloud.empty) {
       await CloudSync.push({ force: true });   // premier envoi
     }

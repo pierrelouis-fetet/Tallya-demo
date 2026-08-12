@@ -5232,6 +5232,10 @@ const FAMILLES_NOTIF = [
   ['echeances', trad('Échéances du non coté'), trad('Remboursement attendu, retard, défaut')],
   ['budget',    'Budget',                trad('Objectif intenable, épargne de précaution')],
   ['coherence', trad('Cohérence des données'), trad('Un chiffre faux, ou impossible')],
+  /* Une modification qui n'est pas partie ne se voyait que sur la page Donnees,
+     ou personne ne va apres avoir saisi un montant. C'est pourtant le seul etat
+     de l'application ou l'on peut perdre quelque chose en fermant. */
+  ['synchro',   trad('Synchronisation'),      trad('Une modification qui n’est pas partie')],
   //['warn', 'Avertissements', 'Un chiffre qui mérite un coup d\u2019oeil'],
 ];
 
@@ -5319,6 +5323,21 @@ function healthChecks() {
       if (days > 7) add('warn', `Cours vieux de ${Math.round(days)} jours`,
         'Valorisation et allocation sont décalées du marché', 'positions');
     }
+  }
+
+  /* --- une ecriture refusee par le cloud ---
+     Le serveur n'accepte une ecriture que de l'appareil qui a lu la version en
+     place. Un refus veut donc dire : ce que tu viens d'enregistrer est ici, et
+     nulle part ailleurs. C'est la seule situation ou fermer l'application fait
+     perdre quelque chose, et elle ne se disait que sur la page Donnees.
+
+     `typeof` et non un simple test : `store.js` se charge avant `cloudsync.js`,
+     et un controle qui leve une exception emporterait toute la cloche. */
+  sujet = 'synchro';
+  if (typeof CloudSync !== 'undefined' && CloudSync.isAvailable()) {
+    const c = CloudSync.status().conflict;
+    if (c) add('error', trad('Ta dernière modification n’est pas partie'),
+      trad('Une autre version existe en ligne. Choisis laquelle garder.'), 'data');
   }
 
   sujet = 'credits';

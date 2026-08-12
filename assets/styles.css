@@ -76,7 +76,13 @@
   --sidebar-border: rgba(13, 17, 23, .10);
   --text-primary: #0d1117;
   --text-secondary: #4d5866;
-  --muted: #7b8794;
+  /* Le troisieme gris porte le texte le plus petit de l'application : intitules
+     de colonnes a 11 px, bulles d'aide a 12, etiquettes de tuiles a 10,5. Il
+     doit donc franchir 4,5:1 sur les trois fonds, et non seulement sur la page.
+     #7b8794 donnait 3,66:1 sur une carte blanche et 3,32 sur `--surface-2` :
+     sous le seuil la ou les caracteres sont les plus fins. #66707d rend 5,03,
+     4,76 et 4,56, et garde un ecart net avec `--text-secondary`, a 7,23. */
+  --muted: #66707d;
   --grid: #e4e9ef;
   --axis: #c3ccd6;
   --border: rgba(13, 17, 23, .09);
@@ -100,7 +106,12 @@
   --good: #0a8f5f;
   --good-text: #06724c;
   --warning: #b07d00;
-  --serious: #c25f2b;
+  /* L'orange sert de texte, et pas seulement d'aplat : les ecarts au budget
+     s'ecrivent avec, a 12 et 13 px. #c25f2b ne rendait que 4,23:1 sur blanc et
+     3,83 sur `--surface-2`, sous le seuil aux deux endroits ou il s'affiche.
+     #ab5022 rend 5,38, 5,10 et 4,88, et reste un orange : il ne glisse pas vers
+     le rouge, qui a son propre sens dans cette application. */
+  --serious: #ab5022;
   --critical: #cf3a3a;
 
   /* La zone de gestes du telephone, nommee une fois et declaree ici, hors de
@@ -224,7 +235,11 @@
   --sidebar-border: rgba(255, 255, 255, .07);
   --text-primary: #f2f3f5;
   --text-secondary: #9a9ca3;
-  --muted: #6a6c74;
+  /* Meme regle qu'en clair, meme faute corrigee : #6a6c74 rendait 3,61:1 sur une
+     carte et 3,32 sur `--surface-2`, aux tailles ou les caracteres sont les plus
+     fins. #83858e rend 5,13, 5,42 et 4,73, et reste sous `--text-secondary`
+     (6,88) : la hierarchie des trois gris tient toujours. */
+  --muted: #83858e;
   --grid: #1e2025;
   --axis: #2c2f36;
   /* Un filet, pas un cadre. Sur un fond presque noir, la difference entre la
@@ -872,6 +887,13 @@ a[href^="tel:"], a[x-apple-data-detectors] {
   text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
 }
 @media (hover: hover) { .btn:hover { opacity: .85; } }
+/* Le meme anneau que les vingt-cinq autres composants focalisables de
+   l'application. Sans lui, le bouton s'en remettait a l'anneau par defaut du
+   navigateur : la moitie de l'interface disait « tu es ici » en violet, l'autre
+   moitie dans le dialecte du systeme, et un bouton plein clair sur fond clair
+   n'y montrait presque rien. `outline-offset` positif : l'anneau se pose autour
+   du bouton, pas dedans, ou il rognerait le libelle. */
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn.ghost { background: var(--surface-1); color: var(--text-primary); border-color: var(--border-strong); }
 @media (hover: hover) { .btn.ghost:hover { background: var(--surface-2); opacity: 1; } }
 .btn.sm { padding: 6px 11px; font-size: 12.5px; }
@@ -887,6 +909,24 @@ a[href^="tel:"], a[x-apple-data-detectors] {
 .btn.danger { background: color-mix(in oklab, var(--critical) 90%, #000); color: #fff; }
 .btn.icon { padding: 4px 8px; background: transparent; color: var(--muted); border-color: transparent; font-size: 14px; }
 @media (hover: hover) { .btn.icon:hover { color: var(--critical); background: var(--surface-2); } }
+/* La cible du doigt, plus grande que le dessin. Un bouton-icone mesurait 22 a
+   29 px selon l'endroit, quand le minimum tenable au doigt est 24 : sous cette
+   taille, on atteint son voisin une fois sur trois. L'agrandir pour de vrai
+   ferait un aplat la ou il faut un signe discret — le seul moyen d'avoir les
+   deux est de separer la boite cliquable du dessin.
+
+   `inset` negatif plutot qu'un remplissage : le remplissage pousserait les
+   voisins et deplacerait la rangee entiere. Le pseudo-element, lui, ne prend
+   aucune place dans le flux. Il faut un `position: relative` sur le bouton, et
+   surtout pas de fond : c'est une surface a viser, pas a voir. */
+.btn.icon { position: relative; }
+/* Six pixels, et pas huit, y compris pour les `xs` de 22 px : a huit, la croix
+   de la carte de rappel mordait de deux pixels sur le bord de « Plus tard », son
+   voisin a six pixels d'ecart. Une cible etendue ne doit jamais empieter sur une
+   autre — et surtout pas quand c'est l'action destructive qui gagne du terrain
+   sur celle qui ne fait que reporter. Six suffisent : 34 px pour le plus petit
+   des boutons-icones, contre 24 demandes. */
+.btn.icon::after { content: ''; position: absolute; inset: -6px; }
 /* Une croix qui supprime se voit avant qu'on la survole. Grise au repos, elle
    se confondait avec le reste du mobilier : on ne trouvait pas comment
    retirer une ligne, et on la découvrait par accident. Rouge et discrète, pas
@@ -962,8 +1002,20 @@ input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
         force sur toute la carte — d'ou « 1 000 € » dans une boite de 320 px.
         On lui rend sa largeur naturelle. Un menu de montants se serre, un
         menu de noms de comptes reste large, sans qu'on ait a les distinguer.
-        Le plafond reste, pour l'option a rallonge. */
-.field select { width: auto; align-self: start; max-width: 20em; }
+        Le plafond reste, pour l'option a rallonge — celui d'un texte libre, et
+        non 20 em : « Oui, chercher les cours automatiquement » demande 21,3 em
+        et « Automatique (place de reference du titre) » 22,5, donc les deux se
+        coupaient au milieu d'un mot. Un menu natif tronque sans rien dire ;
+        `text-overflow` ajoute l'ellipse quand le conteneur, lui, se resserre.
+
+        `min(28em, 100%)` et non 28 em seuls : un menu prend la largeur de sa
+        plus longue option sans regarder ou il est pose, et 28 em valent 364 px
+        quand la carte n'en offre que 311 a 375 px. Il sortait alors de l'ecran,
+        ou les pixels au-dela du bord sont perdus. */
+.field select {
+  width: auto; align-self: start;
+  max-width: min(28em, 100%); text-overflow: ellipsis;
+}
 .field input[type="text"], .field input:not([type]) { max-width: 28em; }
 /*   2. Un nombre : de quoi lire un montant a six chiffres et deux decimales,
       separateur de milliers compris. Douze em en laissaient la moitie vide. */
@@ -988,9 +1040,14 @@ table .field :is(input, select) { max-width: none; }
    largeur de la carte. Un champ hors grille garde son plafond.
 
    `align-self` est remis a son defaut : `.field select` le passait a `start`,
-   ce qui laissait le menu a sa largeur naturelle meme avec `width: 100%`. */
-.grid > .field :is(input, select, textarea),
-.grid .field :is(input, select, textarea) {
+   ce qui laissait le menu a sa largeur naturelle meme avec `width: 100%`.
+
+   Enfant direct seulement, et c'est essentiel : une cellule de grille est un
+   enfant de la grille, jamais un descendant. Le combinateur descendant attrapait
+   le moindre champ pose dans une carte posee dans une grille, et « Français »
+   s'affichait alors dans un menu de 442 px sur la page Preferences. Un champ
+   n'est etire que s'il est lui-meme la cellule. */
+.grid > .field :is(input, select, textarea) {
   max-width: none; width: 100%; align-self: stretch;
 }
 /* Pas de derogation pour le telephone : sous 375 px le conteneur est deja
@@ -1016,25 +1073,41 @@ table .field :is(input, select) { max-width: none; }
 }
 .card.tight { padding: 14px 16px; }
 /* Le titre porte la carte : à 14,5 px il se confondait avec le texte courant,
-   et une page de dix cartes se lisait comme une seule coulée grise. */
+   et une page de dix cartes se lisait comme une seule coulée grise. Quinze n'a
+   fait que la moitie du chemin. Entre un titre de page a 20 px et un corps a
+   13-14, il ne restait a 15 qu'un pixel et demi d'ecart avec ce qu'il annonce :
+   la hierarchie tenait par la graisse seule, et une graisse ne se lit pas de
+   loin. Seize px pose un vrai palier, 20 / 16 / 13,5, sans allonger aucun
+   en-tete — les vingt-six en-tetes de l'application gardent leur hauteur a
+   375 px, mesure faite. */
 .card-head {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 12px; margin-bottom: 14px;
 }
 .card-head h2 {
-  margin: 0; font-size: 15px; font-weight: 680; letter-spacing: -.015em;
+  margin: 0; font-size: 16px; font-weight: 680; letter-spacing: -.015em;
   color: var(--text-primary);
 }
 .card-head .hint { font-size: 12px; color: var(--muted); }
 
-/* Deux boutons du meme geste passent a la ligne ensemble, ou pas du tout.
+/* Deux boutons du meme geste passent a la ligne ensemble, ou pas du tout, et
+   mesurent pareil.
 
    En-tete de carte souple, ils tombaient un par un : « + Rentree » restait en
    haut a droite contre le selecteur d'annee, « + Depense » descendait seul a
    gauche sous le sous-titre, a l'autre bout de la rangee. Deux entrees de la
    meme paire lues comme deux commandes sans rapport. Un seul element de flex,
-   donc un seul point de rupture. */
-.paire-btn { display: flex; gap: 8px; }
+   donc un seul point de rupture.
+
+   Une grille a colonnes egales, et non un flex, pour la meme raison que les
+   rangees de boutons d'une fiche : en flex, la longueur du libelle decide de la
+   largeur, et deux boutons du meme geste finissaient a 77 et 120 px l'un
+   au-dessus de l'autre. Des colonnes en `1fr` dans un conteneur de largeur
+   naturelle prennent toutes la taille de la plus large : les deux boutons
+   mesurent celui qui en demande le plus, sans qu'aucun libelle se replie. */
+.paire-btn {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px;
+}
 
 /* Le second etage d'une carte : le meme sujet vu de plus pres.
 
@@ -1976,6 +2049,19 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 
 .sticky-col { position: sticky; left: 0; background: var(--surface-1); z-index: 2; }
 @media (hover: hover) { tbody tr:hover .sticky-col { background: color-mix(in oklab, var(--surface-2) 92%, var(--surface-1)); } }
+/* La meme chose par l'autre bord, pour la colonne qui porte le total.
+
+   Un tableau large qui defile montre ses premieres colonnes et cache la
+   derniere : sur l'evolution du patrimoine, six colonnes pour 311 px de carte,
+   le total etait hors de l'ecran a l'ouverture — le seul chiffre que la courbe
+   au-dessus raconte, et le seul qu'on ne voyait pas. Epingle a droite, il reste
+   la pendant qu'on fait defiler ses parts, et le filet a sa gauche dit d'ou il
+   se detache. Sur grand ecran le tableau tient : la regle ne change rien. */
+.sticky-fin {
+  position: sticky; right: 0; background: var(--surface-1); z-index: 2;
+  box-shadow: inset 1px 0 0 var(--grid);
+}
+@media (hover: hover) { tbody tr:hover .sticky-fin { background: color-mix(in oklab, var(--surface-2) 92%, var(--surface-1)); } }
 
 /* ---------------- Graphiques ---------------- */
 .chart { position: relative; width: 100%; }
@@ -2951,9 +3037,24 @@ select.annee {
   background: var(--surface-2); color: var(--muted);
   font: inherit; font-size: 10px; font-weight: 700; line-height: 1;
   cursor: help; vertical-align: middle; flex-shrink: 0;
+  /* Pour la cible tactile ci-dessous, qui se pose en absolu autour de lui. */
+  position: relative;
 }
+/* Quinze pixels de large, dont un de bordure : changer la couleur de ce filet
+   etait le seul signe qu'on venait d'atteindre le « ? » au clavier, et il ne se
+   voyait pas. L'anneau de l'application, comme partout ailleurs. */
 .aide:focus-visible {
-  color: var(--text-primary); border-color: var(--text-secondary); outline: none;
+  color: var(--text-primary); border-color: var(--text-secondary);
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* La cible du doigt, et non celle de l'oeil. Un « ? » de 15 px se vise mal :
+   le minimum tenable est 24, et l'agrandir pour de vrai en ferait une pastille
+   qui appelle l'attention alors qu'elle doit attendre qu'on la cherche. La
+   boite cliquable s'etend donc en dehors, sans rien deplacer. Elle mord un peu
+   sur l'intitule qui la precede, qui n'est jamais cliquable lui-meme. */
+.aide::after {
+  content: ''; position: absolute; inset: -6px;
+  border-radius: var(--radius-pill);
 }
 @media (hover: hover) { .aide:hover {
   color: var(--text-primary); border-color: var(--text-secondary); outline: none;
@@ -3561,7 +3662,13 @@ td .empty, th .empty { background: none; border: none; }
 .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px; }
 .segmented button {
   font: inherit; font-size: 12.5px; font-weight: 550; border: none; background: transparent; color: var(--text-secondary);
-  padding: 5px 12px; border-radius: var(--radius-xs); cursor: pointer;
+  /* Sept pixels et non cinq : les pilules faisaient 26 px de haut, sous le
+     minimum de 24 une fois retire le remplissage de 2 px de leur cadre, et six
+     d'entre elles se suivent sur « Marchés » — Net, Brut, YTD, 1 an, 3 ans,
+     5 ans. Deux pixels de plus par cote donnent 30, sans que la pilule change
+     d'allure. Le voisin latéral etant a portee, on ne peut pas etendre la cible
+     en dehors comme pour un bouton-icone : elle mordrait sur lui. */
+  padding: 7px 12px; border-radius: var(--radius-xs); cursor: pointer;
 }
 .segmented button.on { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); }
 
@@ -4067,13 +4174,21 @@ td .empty, th .empty { background: none; border: none; }
   .g-tuiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .g-tuiles .tile { padding: 12px 13px; }
   .g-tuiles .t-value { font-size: 19px; }
-  /* En demi-largeur, le texte d'aide n'apporte rien : tronque il etait du
-     bruit, entier il donnait a chaque carte sa propre hauteur. Il disparait
-     — le panneau qu'ouvre la tuile le dit en entier — et seule la pastille
-     de pourcentage reste. `font-size: 0` : on ne peut pas masquer un noeud
-     texte en CSS, on peut le rendre invisible. */
-  .g-tuiles .t-meta { font-size: 0; }
-  .g-tuiles .t-meta .tag { font-size: 10.5px; }
+  /* Ce texte n'est pas une aide, c'est la base du chiffre au-dessus, et il
+     revient donc. Il a ete masque par `font-size: 0` pour deux raisons dont
+     aucune ne tient plus : tronque il faisait du bruit — il ne l'est plus, il se
+     replie sur deux lignes — et entier il donnait a chaque tuile sa propre
+     hauteur — `grid-auto-rows: 1fr`, deux lignes plus bas, les egalise depuis.
+
+     Ce qu'il coute : 56 px sur la grille des quatre tuiles de Budget, mesure a
+     375 px. Ce qu'il rend : « 1 404 € » n'est une moyenne que si l'on sait « sur
+     7 mois clos, hors charges fixes ». Un dividende sans son diviseur n'est pas
+     un chiffre plus court, c'est un chiffre faux — et la regle de la maison veut
+     qu'un rapport dise sur quelle base il se calcule, sur le petit ecran comme
+     sur le grand.
+
+     Dix et demi et non onze et demi : la tuile ne fait que 167 px de large. */
+  .g-tuiles .t-meta { font-size: 10.5px; flex-wrap: wrap; gap: 4px 6px; }
   /* Toutes les rangees a la meme hauteur, meme si une etiquette se replie. */
   .g-tuiles { grid-auto-rows: 1fr; }
   .view, .topbar { padding-left: 16px; padding-right: 16px; }
@@ -4092,12 +4207,20 @@ td .empty, th .empty { background: none; border: none; }
 
   /* Les en-tetes de carte et les barres de boutons passent a la ligne */
   .card-head { flex-wrap: wrap; gap: 6px 10px; }
-  /* Un bouton qui passe a la ligne reste a droite. `space-between` distribue
+  /* Un bouton seul qui passe a la ligne reste a droite. `space-between` distribue
      ligne par ligne : seul sur la seconde, il partait a gauche, et la carte
      voisine dont le titre est plus court gardait le sien a droite. Deux cartes
-     l'une sous l'autre avec leur action a deux endroits differents. */
-  .card-head > .btn:last-child,
-  .card-head > .paire-btn:last-child { margin-left: auto; }
+     l'une sous l'autre avec leur action a deux endroits differents.
+
+     Une paire, elle, va a gauche, et ce n'est pas une exception de confort. Un
+     bouton seul est un accessoire du titre : il en suit le bord. Une paire de
+     commandes est un bloc a elle seule, et un en-tete qui la replie porte deja
+     d'autres blocs replies au-dessus — les plages du journal des ventes, le
+     selecteur d'annee des apports — tous cales a gauche. Alignee a droite, elle
+     etait la seule rangee de l'en-tete a ne pas partager son bord avec les
+     autres. `space-between` la laisse au depart de sa ligne, il n'y a donc rien
+     a poser. */
+  .card-head > .btn:last-child { margin-left: auto; }
   .card-head .row { flex-wrap: wrap; }
   .row { flex-wrap: wrap !important; }
   .hero-deltas { gap: 12px 18px; }
@@ -4120,10 +4243,15 @@ td .empty, th .empty { background: none; border: none; }
      surcharges doivent etre reprises ici — declarees plus haut, elles
      perdaient contre ces deux lignes a specificite egale. Sans elles, une
      valeur repliable prend tout et « Nom officiel » s'imprime a la
-     verticale. */
+     verticale.
+
+     Ce qui n'inverse pas, c'est l'alignement. Il etait pose a gauche ici, et
+     nulle part ailleurs : la meme carte d'identite se lisait donc a droite sur
+     un ecran et a gauche sur un telephone, au-dessus d'un bloc de chiffres reste
+     a droite. Deux colonnes de valeurs qui se suivent dans une meme fenetre
+     partagent leur bord, prose ou montants. */
   .kv-texte { grid-template-columns: auto minmax(0, 1fr); }
   .kv-texte dt { min-width: max-content; overflow-wrap: normal; }
-  .kv-texte dd { text-align: left; }
 
   /* La colonne du pourcentage tient aussi sous 900 px : sans elle dans la
      grille, le `.flow-pct` du panneau passerait a la ligne suivante et chaque
@@ -4623,11 +4751,18 @@ td .empty, th .empty { background: none; border: none; }
 
   /* Pastille de saisie en attente, sur l'onglet concerné. Budget la porte pour
      les deux saisies, dépenses et relevé : les relevés sont un de ses
-     sous-onglets, et aucune page du tiroir n'attend plus rien. */
+     sous-onglets, et aucune page du tiroir n'attend plus rien.
+
+     Ambre, et non le rouge critique : elle ne signale rien de casse, seulement
+     une saisie mensuelle qui n'a pas encore eu lieu. Chaque debut de mois, elle
+     posait donc un point d'alerte sur la barre de navigation pour de la routine,
+     et une alerte qui revient tous les mois cesse d'etre lue. Le rouge reste au
+     chiffre faux : les controles de coherence, eux, le meritent. La carte de
+     rappel de l'accueil a suivi le meme chemin, pour la meme raison. */
   .tab-pastille {
     position: absolute; top: 7px; left: 50%; margin-left: 7px;
     width: 7px; height: 7px; border-radius: 50%;
-    background: var(--critical, #d4574e);
+    background: var(--warning);
     box-shadow: 0 0 0 2px var(--surface-1);
   }
   .tab-pastille[hidden] { display: none; }
@@ -5139,51 +5274,52 @@ details[open]::details-content { block-size: auto; }
   .champ-ecrit { animation: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
 }
 
-/* Une rangee de boutons de fiche : « Annuler » et « Enregistrer », puis
-   « Archiver » et « Clôturer ».
+/* Les rangees de boutons d'une fiche : la validation, au bas de la carte des
+   champs, et la vie du compte, dans la carte « Actions ». Une seule classe pour
+   les deux, et une seule geometrie : deux rangees de boutons a quelques pixels
+   l'une de l'autre, l'une plus large ou plus haute que l'autre, se lisent comme
+   un oubli — que la bordure d'une carte les separe ou non.
 
-   Cote a cote et de largeur egale sur telephone, ou le pouce les atteint tous
-   les deux ; l'action pleine a droite, la ou se trouve deja « Valider » dans
-   toutes les fenetres de l'application.
+   Une grille, et non un flex, et c'est ce qui les rend comparables. En flex la
+   longueur du libelle decide de la largeur — 79 px pour « Archiver », 157 pour
+   « Clôturer et supprimer » — alors qu'ici deux colonnes de meme fraction
+   donnent la meme largeur a tous, quel que soit le mot. Les deux cartes ayant la
+   meme largeur, leurs colonnes coincident d'une carte a l'autre.
 
-   Les deux rangees partagent cette geometrie, et c'est le correctif : la seconde
-   etait un `.row` de boutons `sm`, donc plus basse, alignee a gauche quand la
-   premiere l'etait a droite, et de largeurs dictees par la longueur des mots.
-   Rien ne s'alignait sur rien. La hierarchie se dit par le remplissage — plein,
-   fantome, rouge — jamais par la taille : deux tailles de bouton dans une meme
-   carte se lisent comme un oubli.
+   Une seule colonne sous 768 px : a 375 px deux colonnes laissent 152 px, ou
+   « Clôturer et supprimer » se plie en deux lignes. Sa rangee prenait alors
+   17 px de plus que sa voisine. Empiles, les quatre boutons sont identiques et
+   la cible est plus large sous le pouce.
 
-   Sur grand ecran, les boutons gardent leur largeur naturelle mais restent
-   colles au meme bord, donc les deux rangees s'alignent par la droite. */
-.fiche-valider {
-  display: flex; gap: 8px; margin-bottom: 10px;
+   Au-dela, deux colonnes poussees a droite, la ou se trouve le bouton plein de
+   toutes les fenetres de l'application. Les colonnes sont plafonnees et non la
+   rangee, et la difference n'est pas cosmetique : un plafond sur la rangee la
+   reduit a la largeur des boutons, et le filet d'`apres-champs`, dessine sur
+   elle, cesse de traverser la carte pour flotter au-dessus des deux boutons
+   comme un trait sans raison. La rangee garde donc toute la largeur, et
+   `justify-content` pousse les colonnes. Sans plafond du tout, un bouton
+   prendrait les 928 px de la carte sur un ecran de 1280. */
+.fiche-actes {
+  display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr);
 }
-/* La barre de validation d'une fiche : pas de fond de carte, un filet au-dessus.
-
-   Elle porte la meme geometrie que les rangees de boutons des cartes, parce que
-   c'en est une : ce qui la distingue est sa place, hors des cartes, puisqu'elle
-   valide la page et non un sujet. */
-.fiche-pied {
-  /* Dans la carte des champs : c'est elle qui donne le remplissage lateral, donc
-     l'alignement sur ses propres intitules est acquis. Le filet separe la saisie de
-     sa validation, comme le pied d'une fenetre. */
-  display: flex; gap: 8px; margin: 16px 0 0;
-  padding-top: 14px; border-top: 1px solid var(--grid);
+/* Le bouton occupe sa cellule, comme un champ dans une grille : c'est la grille
+   qui decide de la largeur. */
+.fiche-actes .btn { width: 100%; }
+/* Deux rangees superposees se lisent comme une seule grille de quatre : l'ecart
+   entre elles est celui de la grille, pas une marge de bloc. */
+.fiche-actes + .fiche-actes { margin-top: 8px; }
+/* Une rangee qui ferme une carte de champs, au lieu de suivre son titre : un filet
+   separe la saisie de sa validation, comme le pied d'une fenetre. Aucun remplissage
+   lateral, la carte le donne deja et en poser un decalerait la rangee de ses
+   voisines. */
+.fiche-actes.apres-champs {
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--grid);
 }
-.fiche-pied .btn { flex: 1; justify-content: center; }
 @media (min-width: 768px) {
-  .fiche-pied { justify-content: flex-end; }
-  .fiche-pied .btn { flex: 0 0 auto; }
-}
-/* Apres la regle de base, et non dans le bloc 900 px plus haut : a specificite
-   egale c'est l'ordre qui tranche, et le remplissage de 18 px l'emportait donc
-   sur telephone. La barre s'alignait alors a 18 px quand les cartes voisines
-   s'alignent a 15. */
-
-.fiche-valider .btn { flex: 1; justify-content: center; }
-@media (min-width: 768px) {
-  .fiche-valider { justify-content: flex-end; }
-  .fiche-valider .btn { flex: 0 0 auto; }
+  .fiche-actes {
+    grid-template-columns: repeat(2, minmax(0, 14em));
+    justify-content: end;
+  }
 }
 
 /* Les deux etagere de la page Actifs : « Comptes » et « Biens et especes ».

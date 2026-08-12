@@ -8311,8 +8311,13 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
     vrai(/aEnvoyer: !aligne && !!localAt/.test(src),
       'init() doit dire à l’appelant que cet appareil porte des modifications non envoyées');
     const app = lireSource('assets/app.js');
-    vrai(/cloud\.aEnvoyer[\s\S]{0,400}?CloudSync\.push\(\)/.test(app),
-      'et le démarrage doit les envoyer');
+    /* En force, et c'est le seul endroit qui le justifie sans question : `init()`
+       vient de lire le cloud et d'etablir qu'il est plus ancien, et la base que
+       cet appareil connait ne peut pas correspondre — c'est le sens meme de
+       « jamais envoye ». Sans `force`, le garde-fou de filiation refuserait
+       l'ecriture qu'on sait pourtant la bonne. */
+    vrai(/cloud\.aEnvoyer[\s\S]{0,900}?CloudSync\.push\(\{ force: true \}\)/.test(app),
+      'et le démarrage doit les envoyer, en force puisque l’arbitrage est déjà tranché');
   });
 
   test('l’horodatage envoyé est celui qu’on a envoyé', () => {
@@ -8344,6 +8349,110 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
     vrai(bloc, 'la branche d’adoption doit être trouvable');
     vrai(/Store\.addBackup\(/.test(bloc[0]),
       'une adoption silencieuse doit poser une sauvegarde avant de tout remplacer');
+  });
+
+  /* « J'ai encore mis des trucs aujourd'hui, des nouveaux montants. J'ai cliqué
+     sur enregistrer. Et quand je reviens sur l'app ils ont disparu. »
+     le propriétaire, 12 aout 2026 — avec la preuve dans ses sauvegardes : six
+     « avant adoption de la version en ligne » dans la meme journee.
+
+     Le repere ne mentait pas cette fois. Ce qui etait faux, c'est la conclusion
+     qu'un horodatage plus recent designe un contenu plus recent. Un onglet ouvert
+     depuis six heures garde en memoire l'etat du matin ; le rafraichissement des
+     cours y appelle `Store.save()` toutes les cinq minutes, ce qui estampille
+     `savedAt = maintenant` et pousse tout. Contenu perime, estampille fraiche :
+     le serveur acceptait, et le telephone adoptait ensuite. */
+
+  test('on n’écrase que la version qu’on a lue', () => {
+    /* Dans `_worker.js`, et c'est tout l'objet du controle suivant : le premier
+       correctif a ete ecrit dans `functions/api/state.js`, qui ne tourne pas. */
+    const src = lireSource('_worker.js');
+    vrai(src, '_worker.js doit être lisible pour ce contrôle');
+    const bloc = src.match(/async function handleState\([\s\S]*?\n\}/);
+    vrai(bloc, 'handleState() doit être trouvable');
+    const code = bloc[0].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    vrai(/params\.get\('base'\)/.test(code),
+      'l’écrivain déclare la version qu’il a lue');
+    vrai(/base !== prevAt/.test(code),
+      'et l’écriture n’est acceptée que si c’est encore celle en place');
+    /* L'ancienne regle ne suffisait pas et ne doit pas revenir seule : elle
+       comparait deux horloges, or l'onglet perime a toujours la plus fraiche. */
+    vrai(!/nextAt < prevAt/.test(code),
+      'la comparaison d’horodatages seule ne protège de rien : elle laissait '
+      + 'passer un contenu périmé portant une estampille fraîche');
+    vrai(/force/.test(code), 'l’arbitrage explicite garde sa porte');
+  });
+
+  test('le point d’entrée qu’on teste est celui qui tourne', () => {
+    /* Le correctif a d'abord ete ecrit dans `functions/api/state.js`. Chez
+       Cloudflare Pages, un `_worker.js` a la racine prend toute la main et le
+       dossier `functions/` n'est jamais charge : le defaut est reste en
+       production, et un controle qui lisait le fichier mort passait au vert. Le
+       depot public l'a note des le 9 aout — « functions/api/ etait du code mort,
+       c'est _worker.js qui traite les requetes » — et a supprime le dossier.
+
+       Deux surfaces pour un fait, dont une morte : tant que la copie existe ici,
+       ce controle exige qu'elles disent la meme chose. La vraie reponse est de
+       supprimer la morte, comme le fork l'a fait. */
+    const worker = lireSource('_worker.js');
+    vrai(/path === '\/api\/state'\) return handleState/.test(worker),
+      'c’est bien _worker.js qui route /api/state');
+    const mort = lireSource('functions/api/state.js');
+    if (mort) {
+      vrai(/base !== prevAt/.test(mort),
+        'la copie morte de functions/api/ existe encore : elle doit porter la même '
+        + 'règle, sinon le prochain correctif ira dans celle qui ne tourne pas');
+    }
+  });
+
+  test('la base voyage avec l’écriture, beacon compris', () => {
+    /* Le `sendBeacon` de la fermeture d'onglet ne peut rien verifier avant de
+       partir : c'est precisement pourquoi le garde-fou est cote serveur, et
+       pourquoi ce chemin-la doit lui aussi declarer sa base. Un onglet perime
+       qu'on ferme envoyait tout son etat d'un coup. */
+    const src = sourceSync();
+    const push = src.match(/async function pushMaintenant\([\s\S]*?\n  \}/)[0]
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(/base=\$\{encodeURIComponent\(vu\)\}/.test(push),
+      'l’envoi ordinaire déclare la version lue');
+    const flush = src.match(/function flushOnUnload\([\s\S]*?\n  \}/)[0]
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(/base=\$\{encodeURIComponent\(vu\)\}/.test(flush),
+      'le beacon de fermeture aussi');
+  });
+
+  test('adopter une version en ligne la note comme lue', () => {
+    /* Sinon la sauvegarde suivante declare avoir lu une version qui n'est plus en
+       place, et se fait refuser sans raison : le correctif se retournerait contre
+       le detenteur qui vient de choisir la version en ligne. */
+    const src = sourceSync();
+    vrai(/const noterVersionLue = at => markSynced\(at\)/.test(src),
+      'cloudsync expose de quoi noter une version lue');
+    const app = lireSource('assets/app.js');
+    const bloc = app.match(/if \(ok\) \{[\s\S]*?Store\.save\(\);/);
+    vrai(bloc, 'la branche « charger celle en ligne » doit être trouvable');
+    vrai(/CloudSync\.noterVersionLue\(cloud\.at\)/.test(bloc[0]),
+      'et elle note la version adoptée avant d’enregistrer');
+  });
+
+  test('un refus se voit ailleurs que sur la page Données', () => {
+    /* Une modification qui n'est pas partie est le seul etat de l'application ou
+       fermer fait perdre quelque chose. Il se disait sur la seule page ou
+       personne ne va apres avoir saisi un montant. */
+    const src = sourceSync();
+    vrai(/onConflit\(d\)/.test(src), 'le refus appelle un signal');
+    const app = lireSource('assets/app.js');
+    vrai(/CloudSync\.setOnConflit\(/.test(app), 'que le démarrage branche');
+    vrai(/toast\(trad\('Modification gardée ici/.test(app), 'sur un toast immédiat');
+    const store = lireSource('assets/store.js');
+    vrai(/\['synchro',\s*trad\('Synchronisation'\)/.test(store),
+      'et la cloche porte une famille pour ça');
+    vrai(/CloudSync\.status\(\)\.conflict/.test(store),
+      'alimentée par le conflit réel, pas par une supposition');
+    /* La cloche ne parle que de ce qui existe chez celui qui la regarde : sans
+       synchro disponible, ce controle n'a rien a dire. */
+    vrai(/typeof CloudSync !== 'undefined' && CloudSync\.isAvailable\(\)/.test(store),
+      'et elle se tait là où la synchro n’existe pas');
   });
 });
 
@@ -9798,10 +9907,10 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
       'et la position dans la page est gardée : la fiche est longue');
     eq((src.match(/barreValiderFiche\(/g) || []).length, 3,
       'une déclaration et deux appels : la fiche d’un compte et celle d’un établissement');
-    /* Elle vit hors des cartes : les boutons d'une carte agissent sur le sujet de
-       cette carte, et valider la visite entiere n'en est pas un. */
-    vrai(/<div class="fiche-pied">/.test(fn),
-      'et elle est une barre de page, pas une rangée dans la carte « Actions »');
+    /* Elle ferme la carte des champs : une rangee posee hors des cartes flotte
+       dans une page ou tout est encadre, et le filet la separe de la saisie. */
+    vrai(/<div class="fiche-actes apres-champs">/.test(fn),
+      'et elle porte la géométrie commune, plus le filet du bas de carte');
     /* L'ecriture a la frappe reste la regle : l'ecouteur `input` continue
        d'appeler `applyField` et `Store.save` hors des blocs differes. */
     /* L'ancre est le selecteur des champs, pas l'evenement : `input` est ecoute
@@ -13340,13 +13449,22 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
        rupture. */
     const src = lireSource('assets/app.js');
     const css = lireSource('assets/styles.css');
-    const i = src.indexOf('class="paire-btn"');
-    vrai(i > 0, 'la paire existe');
-    const paire = src.slice(i, src.indexOf('</span>', i));
-    eq((paire.match(/data-action="ajouter-apport"/g) || []).length, 2,
-      'les deux boutons sont dans le même élément');
+    /* Deux paires dans l'application : les entrees du journal des apports, et
+       celles du journal des ventes, qui tombaient une par une pour la meme
+       raison. Chacune porte exactement deux boutons — trois ne seraient plus une
+       paire, et la grille leur donnerait trois colonnes. */
+    const paires = [...src.matchAll(/class="paire-btn">([\s\S]*?)<\/span>/g)].map(m => m[1]);
+    vrai(paires.length >= 2, `les deux paires doivent être trouvables, ${paires.length} trouvée(s)`);
+    paires.forEach((p, n) => {
+      eq((p.match(/<button/g) || []).length, 2,
+        `la paire ${n + 1} porte deux boutons, et ils sont dans le même élément`);
+    });
     const regle = (css.match(/\.paire-btn \{[^}]*\}/) || [''])[0];
-    vrai(/display: flex/.test(regle), 'la paire est une rangée');
+    vrai(/display: grid/.test(regle),
+      'la paire est une grille : en flex, la longueur du libellé décidait de la largeur');
+    vrai(/grid-auto-flow: column/.test(regle), 'ses boutons se suivent en colonnes');
+    vrai(/grid-auto-columns: 1fr/.test(regle),
+      'de largeur égale, celle du libellé le plus long');
     vrai(!/wrap/.test(regle),
       'et rien n’y passe à la ligne : c’est tout le point de la mettre ensemble');
   });
@@ -13617,32 +13735,44 @@ suite('Les boutons d’une fiche ont une géométrie et une place', () => {
 
      Trois regles en sortent, et ce sont elles que ces controles gardent. */
 
-  test('les boutons d’une carte agissent sur le sujet de cette carte', () => {
+  test('la validation ferme la carte des champs, et rien d’autre', () => {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    /* La barre de validation vit hors des cartes : elle valide la page. */
+    /* Rassembles avec Archiver et Cloturer-supprimer, les quatre boutons formaient
+       un mur : quatre rectangles de meme taille sous un seul titre, sans ordre de
+       lecture. La validation appartient au formulaire qu'elle valide. */
     const barre = src.slice(src.indexOf('function barreValiderFiche'),
                             src.indexOf('function barreValiderFiche') + 700);
-    vrai(/<div class="fiche-pied">/.test(barre), 'la validation est une barre de page');
-    vrai(!/class="card"/.test(barre), 'et non une carte');
-    /* La carte « Actions » ne porte plus que la vie du compte. */
+    vrai(/<div class="fiche-actes apres-champs">/.test(barre),
+      'elle porte la géométrie commune, et le filet qui la sépare des champs');
+    vrai(!/class="card"/.test(barre), 'et ne fabrique pas sa propre carte');
+    /* Dans la fiche d'un compte, elle suit le champ des notes et reste dans la
+       carte : la balise de fermeture vient apres elle. */
+    vrai(/data-path="comptes\.\$\{idx\}\.notes"[\s\S]{0,220}\$\{barreValiderFiche\(\)\}[\s\S]{0,12}<\/div>/.test(src),
+      'dans la fiche d’un compte, au bas de la carte « Informations »');
+    /* La fiche d'un etablissement n'a pas de carte « Actions » : rien ne s'y
+       archive. Sa carte de champs est celle des notes. */
+    vrai(/data-path="etabs\.\$\{idx\}\.notes"[\s\S]{0,220}\$\{barreValiderFiche\(\)\}[\s\S]{0,12}<\/div>/.test(src),
+      'et dans celle d’un établissement, au bas de la carte « Notes »');
+    /* La carte « Actions » ne garde que la vie du compte, et son titre le dit. */
     const i = src.indexOf("trad('actions.fiche', 'Actions')");
-    const carte = src.slice(i, i + 900);
+    const carte = src.slice(i, i + 1400);
     vrai(/data-action="(archiver|restaurer)-compte"/.test(carte), 'archiver y reste');
     vrai(/data-action="supprimer-compte"/.test(carte), 'supprimer aussi');
-    vrai(!/enregistrer-fiche|annuler-fiche/.test(carte),
-      'mais plus la validation : deux natures d’acte au même poids ne se distinguaient pas');
+    vrai(!/enregistrer-fiche|annuler-fiche|barreValiderFiche/.test(carte),
+      'mais pas la validation : quatre boutons de même taille sous un seul titre '
+      + 'ne se lisent plus dans aucun ordre');
   });
 
   test('la validation vient avant ce qui détruit, et c’est une règle de pouce', () => {
-    /* A 375 px les cartes se suivent : le doigt descendait sur « Clôturer et
-       supprimer » pour atteindre « Enregistrer ». */
+    /* Les cartes se suivent : le doigt descendrait sur « Clôturer et supprimer »
+       pour atteindre « Enregistrer ». */
     const src = lireSource('assets/app.js');
     const iBarre = src.indexOf('${barreValiderFiche()}');
     const iActions = src.indexOf("trad('actions.fiche', 'Actions')");
     vrai(iBarre > 0 && iActions > 0, 'les deux blocs doivent être trouvables');
     vrai(iBarre < iActions,
-      'la barre se rend avant la carte « Actions », sinon le pouce traverse le rouge');
+      'la validation se rend avant la carte qui décide de la vie du compte');
   });
 
   test('un en-tête de carte ne mélange pas un lien et des boutons', () => {
@@ -13658,33 +13788,508 @@ suite('Les boutons d’une fiche ont une géométrie et une place', () => {
     vrai(/text-decoration: none/.test(regle), 'la classe .btn retire le soulignement');
   });
 
-  test('un bouton qui passe à la ligne reste à droite', () => {
+  test('un bouton seul qui passe à la ligne reste à droite, une paire va à gauche', () => {
     /* `space-between` distribue ligne par ligne : seul sur la seconde, un bouton
-       partait a gauche, et la carte voisine gardait le sien a droite. */
+       partait a gauche, et la carte voisine gardait le sien a droite.
+
+       Une paire suit l'autre regle : un bouton seul est un accessoire du titre et
+       en suit le bord, une paire est un bloc, et elle s'aligne sur les blocs
+       replies au-dessus d'elle — plages, selecteur d'annee — tous a gauche. */
     const css = lireSource('assets/styles.css');
-    vrai(/\.card-head > \.btn:last-child,\s*\n?\s*\.card-head > \.paire-btn:last-child \{ margin-left: auto; \}/.test(css),
-      'le dernier bouton d’un en-tête porte margin-left: auto sous 900 px');
+    vrai(/\.card-head > \.btn:last-child \{ margin-left: auto; \}/.test(css),
+      'le dernier bouton seul d’un en-tête porte margin-left: auto sous 900 px');
+    vrai(!/\.card-head > \.paire-btn:last-child \{ margin-left: auto/.test(css),
+      'et la paire ne le porte pas : elle reste au départ de sa ligne');
   });
 
-  test('la rangée de validation vit dans la carte des champs', () => {
-    /* Entre deux cartes elle flottait : un filet dans le vide et deux boutons sans
-       cadre, au milieu d'une page ou tout est encadre. Sa place est le bas de la
-       carte qui porte les champs, c'est la qu'on vient de taper. */
-    const src = lireSource('assets/app.js');
+  test('une seule géométrie pour les rangées de boutons d’une fiche', () => {
+    /* Deux classes pour une meme rangee donnaient deux largeurs et deux hauteurs
+       dans une meme carte. Une seule classe, et une grille : c'est elle qui decide
+       de la largeur, jamais la longueur du libelle. */
     const css = lireSource('assets/styles.css');
-    /* Dans la fiche d'un compte, elle suit le champ des notes et reste dans la
-       carte : la balise de fermeture vient apres elle. */
-    vrai(/data-path="comptes\.\$\{idx\}\.notes"[\s\S]{0,220}\$\{barreValiderFiche\(\)\}[\s\S]{0,12}<\/div>/.test(src),
-      'elle est dans la carte des informations, après les champs');
-    vrai(/data-path="etabs\.\$\{idx\}\.notes"[\s\S]{0,220}\$\{barreValiderFiche\(\)\}[\s\S]{0,12}<\/div>/.test(src),
-      'et dans la carte des notes de la fiche d’établissement');
-    /* La carte donne le remplissage lateral : la rangee n'en pose aucun, sinon elle
-       se decalerait de ses propres voisins. */
-    const base = (css.match(/\.fiche-pied \{[^}]*\}/) || [''])[0];
-    vrai(/padding-top: 14px/.test(base) && !/padding: /.test(base),
-      'et elle ne pose pas de remplissage latéral : la carte le donne déjà');
-    vrai(/border-top: 1px solid var\(--grid\)/.test(base),
+    const src = lireSource('assets/app.js');
+    vrai(!/fiche-pied|fiche-valider/.test(css + src),
+      'plus de seconde classe : « Archiver » faisait 79 px quand « Clôturer et supprimer » en faisait 157');
+    const base = (css.match(/\.fiche-actes \{[^}]*\}/) || [''])[0];
+    vrai(/display: grid/.test(base), 'une grille, et non un flex');
+    vrai(/grid-template-columns: minmax\(0, 1fr\)/.test(base),
+      'une seule colonne par défaut : à 375 px, deux colonnes plient « Clôturer et supprimer » en deux lignes');
+    const grand = (css.match(/@media \(min-width: 768px\) \{\s*\n\s*\.fiche-actes \{[^}]*\}/) || [''])[0];
+    vrai(/repeat\(2, minmax\(0, 14em\)\)/.test(grand),
+      'deux colonnes égales au-delà, sur tablette comme sur écran, plafonnées : '
+      + 'sinon un bouton prend les 928 px de la carte');
+    vrai(/justify-content: end/.test(grand) && !/max-width/.test(grand),
+      'le plafond porte sur les colonnes, pas sur la rangée : réduite, elle emporte '
+      + 'son filet avec elle et le trait cesse de traverser la carte');
+    vrai(/\.fiche-actes \+ \.fiche-actes \{ margin-top: 8px; \}/.test(css),
+      'et l’écart entre deux rangées voisines est celui de la grille');
+    /* La rangee qui ferme une carte de champs n'ajoute qu'un filet : aucun
+       remplissage lateral, la carte le donne deja. */
+    const pied = (css.match(/\.fiche-actes\.apres-champs \{[^}]*\}/) || [''])[0];
+    vrai(/border-top: 1px solid var\(--grid\)/.test(pied),
       'un filet sépare la saisie de sa validation, comme le pied d’une fenêtre');
+    vrai(/padding-top: 14px/.test(pied) && !/padding: /.test(pied),
+      'et aucun remplissage latéral, qui la décalerait de ses voisines');
+  });
+
+  test('les quatre boutons d’une fiche ont la même taille et le même bord', () => {
+    /* Mesure, et non lecture du CSS : c'est la largeur rendue qui se voyait
+       fausse. Les deux rangees vivent dans deux cartes differentes, et c'est
+       precisement ce que la sonde doit reproduire — la bordure d'une carte ne
+       dispense pas deux rangees voisines de s'accorder. La sonde vaut pour la
+       largeur ou tourne la page de tests ; les deux regimes de colonnes sont
+       gardes par le controle precedent. */
+    const boite = document.createElement('div');
+    boite.style.width = '600px';
+    boite.innerHTML = '<div class="card"><div class="card-head"><h2>Informations</h2></div>'
+      + '<div class="fiche-actes apres-champs">'
+      + '<button class="btn ghost">Annuler</button>'
+      + '<button class="btn primary">Enregistrer</button></div></div>'
+      + '<div class="card"><div class="card-head"><h2>Actions</h2></div>'
+      + '<div class="fiche-actes">'
+      + '<button class="btn ghost">Archiver</button>'
+      + '<button class="btn ghost danger">Clôturer et supprimer</button></div></div>';
+    document.body.appendChild(boite);
+    try {
+      const btns = [...boite.querySelectorAll('.btn')].map(b => b.getBoundingClientRect());
+      const larg = btns.map(r => Math.round(r.width));
+      const haut = btns.map(r => Math.round(r.height));
+      eq(new Set(larg).size, 1, 'une seule largeur pour les quatre : ' + larg.join(' / '));
+      eq(new Set(haut).size, 1, 'une seule hauteur pour les quatre : ' + haut.join(' / '));
+      const rangees = [...boite.querySelectorAll('.fiche-actes')];
+      const bords = rangees.map(r => Math.round(r.getBoundingClientRect().right));
+      eq(bords[0], bords[1],
+        'et les deux rangées partagent leur bord droit, d’une carte à l’autre');
+      /* Le filet est dessine sur la rangee : si elle est plafonnee, il ne traverse
+         plus la carte et flotte au-dessus des deux boutons. La rangee doit donc
+         faire la largeur du contenu de sa carte, boutons poussees a droite. */
+      const pied = rangees[0];
+      const carte = pied.closest('.card');
+      const dedans = getComputedStyle(carte);
+      const attendu = Math.round(carte.getBoundingClientRect().width
+        - parseFloat(dedans.paddingLeft) - parseFloat(dedans.paddingRight)
+        - parseFloat(dedans.borderLeftWidth) - parseFloat(dedans.borderRightWidth));
+      eq(Math.round(pied.getBoundingClientRect().width), attendu,
+        'le filet traverse la carte : la rangée fait la largeur de son contenu');
+      /* Sous 768 px les boutons occupent toute la rangee, il n'y a rien a pousser. */
+      if (matchMedia('(min-width: 768px)').matches) {
+        vrai(Math.round(pied.firstElementChild.getBoundingClientRect().left)
+               > Math.round(pied.getBoundingClientRect().left),
+          'et ses boutons restent poussés à droite');
+      }
+    } finally {
+      boite.remove();
+    }
+  });
+});
+
+suite('Un menu déroulant a la largeur de ce qu’il montre', () => {
+
+  /* Deux defauts opposes sur la meme page : « Français » dans une boite de
+     442 px, et « Oui, chercher les cours automatiquement » coupe en plein mot. */
+
+  test('une cellule de grille est un enfant, pas un descendant', () => {
+    const css = lireSource('assets/styles.css');
+    vrai(!/\.grid \.field :is\(input, select, textarea\)/.test(css),
+      'le combinateur descendant étirait le moindre champ posé dans une carte posée dans une grille');
+    vrai(/\.grid > \.field :is\(input, select, textarea\) \{/.test(css),
+      'un champ n’est étiré que s’il est lui-même la cellule');
+  });
+
+  test('un menu garde la largeur de sa plus longue option, sans se couper', () => {
+    const css = lireSource('assets/styles.css');
+    const regle = (css.match(/\.field select \{[^}]*\}/) || [''])[0];
+    vrai(/width: auto/.test(regle) && /align-self: start/.test(regle),
+      'hors grille, un menu sait déjà quelle largeur il lui faut');
+    vrai(/max-width: min\(28em, 100%\)/.test(regle),
+      'le plafond laisse entrer « Automatique (place de référence du titre) », 22,5 em, '
+      + 'mais jamais au-delà du conteneur : 28 em valent 364 px quand la carte en offre 311');
+    vrai(/text-overflow: ellipsis/.test(regle),
+      'et si le conteneur le resserre, une ellipse le dit au lieu de trancher un mot');
+  });
+
+  test('un menu ne sort jamais de sa carte', () => {
+    /* Un menu prend la largeur de sa plus longue option sans regarder ou il est
+       pose : a 375 px il sortait de l'ecran, ou les pixels sont perdus. La sonde
+       reproduit une carte etroite et une option a rallonge. */
+    const boite = document.createElement('div');
+    boite.className = 'card';
+    boite.style.width = '311px';
+    boite.innerHTML = '<div class="field"><label>Place privilégiée</label>'
+      + '<select><option>Automatique (place de référence du titre)</option></select></div>';
+    document.body.appendChild(boite);
+    try {
+      const s = boite.querySelector('select');
+      const l = Math.round(s.getBoundingClientRect().width);
+      const dispo = Math.round(s.parentElement.getBoundingClientRect().width);
+      vrai(l <= dispo, 'le menu fait ' + l + ' px pour ' + dispo + ' px offerts');
+    } finally {
+      boite.remove();
+    }
+  });
+
+  test('deux mots ne prennent pas la carte entière', () => {
+    /* La sonde reproduit la page Preferences : une carte dans une grille, et un
+       champ dedans. Le menu ne porte que « Français » et « English ». */
+    const boite = document.createElement('div');
+    boite.className = 'grid g-2';
+    boite.style.width = '900px';
+    boite.innerHTML = '<div class="card"><div class="modal-champs"><div class="field">'
+      + '<label>Langue de l’interface</label>'
+      + '<select><option>Français</option><option>English</option></select>'
+      + '</div></div></div>';
+    document.body.appendChild(boite);
+    try {
+      const l = Math.round(boite.querySelector('select').getBoundingClientRect().width);
+      vrai(l < 200, 'le menu fait ' + l + ' px, il devrait tenir dans le mot qu’il montre');
+    } finally {
+      boite.remove();
+    }
+  });
+});
+
+/* ------------------------------------------------------------------
+   Ce qu'un audit de l'interface a trouve, et ce qui l'empechera de
+   revenir. Dix defauts, du contraste aux glyphes : chacun avait ceci de
+   commun qu'aucun test ne le regardait, et que rien a l'ecran ne criait.
+   ------------------------------------------------------------------ */
+suite('L’interface tient ses seuils', () => {
+
+  /* -- Le contraste, calcule et non estime --------------------------- */
+
+  const lum = ([r, g, b]) => {
+    const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const rgbDe = v => {
+    const s = String(v).trim();
+    const h = s.match(/^#([0-9a-f]{6})$/i);
+    if (h) return [0, 2, 4].map(i => parseInt(h[1].slice(i, i + 2), 16));
+    const m = s.match(/rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/);
+    return m ? [+m[1], +m[2], +m[3]] : null;
+  };
+  const contraste = (a, b) => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+  const jeton = nom => rgbDe(getComputedStyle(document.documentElement).getPropertyValue(nom));
+
+  test('le texte le plus petit franchit 4,5:1 sur les trois fonds, dans les deux thèmes', () => {
+    /* Le troisieme gris portait les intitules de colonnes a 11 px, les bulles
+       d'aide a 12 et les etiquettes de tuiles a 10,5 : 3,61:1 sur une carte,
+       3,32 sur `--surface-2`. Sous le seuil precisement la ou les caracteres
+       sont les plus fins, et dans les deux thèmes a la fois. Un contrôle qui
+       calcule vaut mieux qu'un oeil : personne ne voit la difference entre
+       4,3 et 4,6, et c'est pourtant la frontiere.
+
+       L'orange s'y est ajoute : il ecrit les ecarts au budget, il n'est pas
+       qu'un aplat. */
+    const memoire = document.documentElement.dataset.theme;
+    const fautes = [];
+    try {
+      for (const theme of ['light', 'dark']) {
+        document.documentElement.dataset.theme = theme;
+        const fonds = ['--surface-1', '--surface-2', '--page'].map(n => [n, jeton(n)]);
+        for (const encre of ['--muted', '--text-secondary', '--serious']) {
+          const c = jeton(encre);
+          vrai(c, `${encre} doit être lisible en ${theme}`);
+          for (const [nom, fond] of fonds) {
+            const r = contraste(c, fond);
+            if (r < 4.5) fautes.push(`${theme} : ${encre} sur ${nom} = ${r.toFixed(2)}:1`);
+          }
+        }
+      }
+    } finally {
+      if (memoire) document.documentElement.dataset.theme = memoire;
+      else delete document.documentElement.dataset.theme;
+    }
+    eq(fautes.join(' | '), '', 'du texte de 11 px sous 4,5:1 ne se lit pas');
+  });
+
+  test('les trois gris restent trois, et dans cet ordre', () => {
+    /* Remonter `--muted` pour le contraste ne doit pas l'amener au niveau de
+       `--text-secondary` : la hierarchie des trois encres est ce qui distingue
+       un intitule d'une valeur. */
+    const memoire = document.documentElement.dataset.theme;
+    try {
+      for (const theme of ['light', 'dark']) {
+        document.documentElement.dataset.theme = theme;
+        const fond = jeton('--surface-1');
+        const [muet, second, premier] = ['--muted', '--text-secondary', '--text-primary']
+          .map(n => contraste(jeton(n), fond));
+        vrai(muet < second - 0.5, `${theme} : --muted doit rester en retrait de --text-secondary`);
+        vrai(second < premier - 0.5, `${theme} : --text-secondary doit rester en retrait de --text-primary`);
+      }
+    } finally {
+      if (memoire) document.documentElement.dataset.theme = memoire;
+      else delete document.documentElement.dataset.theme;
+    }
+  });
+
+  /* -- La cible du doigt -------------------------------------------- */
+
+  test('un bouton-icône se vise, même quand son dessin fait 22 px', () => {
+    /* Les croix mesuraient 22 a 29 px selon l'endroit, le minimum tenable au
+       doigt etant 24 : sous cette taille on atteint le voisin. Le dessin ne
+       grandit pas — ce serait un aplat la ou il faut un signe discret — c'est
+       la boite cliquable qui s'etend au-dela, sans rien deplacer. */
+    const boite = document.createElement('div');
+    boite.className = 'card';
+    boite.innerHTML = '<button class="btn icon xs">✕</button>'
+      + '<span class="aide" role="button" tabindex="0">?</span>';
+    document.body.appendChild(boite);
+    try {
+      for (const sel of ['.btn.icon.xs', '.aide']) {
+        const el = boite.querySelector(sel);
+        const ap = getComputedStyle(el, '::after');
+        eq(ap.content, '""', `${sel} doit porter une cible étendue`);
+        eq(ap.position, 'absolute', `${sel} : la cible ne doit pas pousser ses voisins`);
+        const px = p => parseFloat(p) || 0;
+        const r = el.getBoundingClientRect();
+        const L = r.width - px(ap.left) - px(ap.right);
+        const H = r.height - px(ap.top) - px(ap.bottom);
+        vrai(L >= 24 && H >= 24, `${sel} : cible de ${Math.round(L)}x${Math.round(H)} px, il en faut 24`);
+        /* Pas de fond : c'est une surface a viser, pas a voir. */
+        const fond = rgbDe(ap.backgroundColor);
+        vrai(!fond || ap.backgroundColor === 'rgba(0, 0, 0, 0)',
+          `${sel} : la cible étendue ne doit rien peindre`);
+      }
+    } finally {
+      boite.remove();
+    }
+  });
+
+  test('une cible étendue n’empiète pas sur sa voisine', () => {
+    /* A huit pixels d'extension, la croix de la carte de rappel mordait de deux
+       pixels sur « Plus tard », son voisin a six pixels d'ecart. Une action
+       destructive qui gagne du terrain sur celle qui reporte, c'est le mauvais
+       sens. La sonde reproduit l'ecart le plus serre de l'application. */
+    const boite = document.createElement('div');
+    boite.className = 'card';
+    boite.innerHTML = '<span style="display:flex; gap:6px; align-items:center">'
+      + '<button class="btn sm ghost">Plus tard</button>'
+      + '<button class="btn icon xs">✕</button></span>';
+    document.body.appendChild(boite);
+    try {
+      const [voisin, croix] = [...boite.querySelectorAll('button')];
+      const ap = getComputedStyle(croix, '::after');
+      const px = p => parseFloat(p) || 0;
+      const bordGauche = croix.getBoundingClientRect().left + px(ap.left);
+      const bordVoisin = voisin.getBoundingClientRect().right;
+      vrai(bordGauche >= bordVoisin - 0.5,
+        `la cible de la croix commence à ${Math.round(bordGauche)}, le voisin finit à ${Math.round(bordVoisin)}`);
+    } finally {
+      boite.remove();
+    }
+  });
+
+  /* -- Le focus au clavier ------------------------------------------ */
+
+  test('tout ce qui se focalise porte l’anneau de l’application', () => {
+    /* Vingt-cinq composants declaraient leur `:focus-visible` en accent, et les
+       deux plus courants s'en remettaient au navigateur : `.btn`, dont l'anneau
+       par defaut ne se voit presque pas sur un bouton plein clair, et `.aide`,
+       qui posait `outline: none` et changeait la couleur d'un filet de 1 px. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const sel of ['\\.btn:focus-visible', '\\.aide:focus-visible']) {
+      const bloc = (css.match(new RegExp(sel + ' \\{[^}]*\\}')) || [''])[0];
+      vrai(/outline: 2px solid var\(--accent\)/.test(bloc),
+        `${sel.replace(/\\/g, '')} doit poser l’anneau d’accent, il porte « ${bloc.slice(0, 60)} »`);
+    }
+  });
+
+  /* -- Le rouge ne sert qu'a ce qui est faux ------------------------ */
+
+  test('une saisie en attente s’annonce en ambre, jamais en rouge', () => {
+    /* La pastille de la barre du bas etait peinte en `--critical` pour dire
+       qu'un releve mensuel restait a prendre. Chaque debut de mois, une alerte
+       rouge pour de la routine — et une alerte qui revient tous les mois cesse
+       d'etre lue. Sa jumelle de la barre laterale, `.badge`, etait deja en
+       ambre : deux couleurs pour le meme signal selon la taille de l'ecran. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const bloc = (css.match(/\.tab-pastille \{[^}]*\}/) || [''])[0];
+    vrai(/background: var\(--warning\)/.test(bloc),
+      'la pastille de l’onglet est ambre comme celle du menu');
+    vrai(!/critical/.test(bloc), 'et le rouge reste au chiffre faux');
+    const jumelle = (css.match(/\.badge \{[^}]*\}/) || [''])[0];
+    vrai(/var\(--warning\)/.test(jumelle),
+      'les deux pastilles du même signal gardent la même couleur');
+  });
+
+  /* -- Un total ne sort pas de l'ecran ------------------------------ */
+
+  test('le total d’un tableau large reste visible', () => {
+    /* Six colonnes pour 311 px de carte : la colonne « Total » etait hors de
+       l'ecran a l'ouverture, le seul chiffre que la courbe au-dessus raconte.
+       Epinglee a droite, elle y reste pendant que ses parts defilent. */
+    const src = lireSource('assets/app.js');
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const i = src.indexOf('function detailEvolution');
+    const bloc = src.slice(i, src.indexOf('function monterEvolution'));
+    vrai(/<th class="sticky-fin">Total<\/th>/.test(bloc), 'l’en-tête du total est épinglée');
+    vrai(/<td class="sticky-fin"><b>\$\{fmtEUR0\(p\.total\)\}/.test(bloc), 'et la cellule aussi');
+    const regle = (css.match(/\.sticky-fin \{[^}]*\}/) || [''])[0];
+    vrai(/position: sticky/.test(regle) && /right: 0/.test(regle),
+      'la règle épingle par le bord droit');
+    vrai(/background: var\(--surface-1\)/.test(regle),
+      'avec un fond, sinon les parts défilent sous le total et on lit deux chiffres l’un sur l’autre');
+  });
+
+  /* -- Un chiffre dit sur quelle base il se calcule ------------------ */
+
+  test('la base d’un chiffre ne disparaît pas sur téléphone', () => {
+    /* `font-size: 0` masquait « sur 7 mois clos, hors charges fixes » sous la
+       tuile qui affiche 1 404 €. Un dividende sans diviseur n'est pas un chiffre
+       plus court, c'est un chiffre faux. Les deux raisons du masquage sont
+       tombees : le texte ne se tronque plus, et `grid-auto-rows: 1fr` egalise
+       les hauteurs. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const bloc = (css.match(/\.g-tuiles \.t-meta \{[^}]*\}/) || [''])[0];
+    vrai(bloc, 'la règle mobile de la base doit être trouvable');
+    vrai(!/font-size: 0/.test(bloc), 'la base n’est plus masquée');
+    vrai(/font-size: 10\.5px/.test(bloc), 'elle se serre au lieu de disparaître');
+    vrai(/grid-auto-rows: 1fr/.test(css),
+      'et les hauteurs de tuiles restent égalisées, sinon chacune prend la sienne');
+  });
+
+  /* -- Une page suit les gabarits de la maison ----------------------- */
+
+  test('la page Données ne porte que deux gabarits de bouton', () => {
+    /* Quatre hauteurs sur une seule page : 30, 31, 36 et 43 px. La regle de la
+       maison est qu'un bouton d'en-tete ou de rangee est `sm`, un bouton de
+       corps de carte est pleine taille, et que la hierarchie se dit par le
+       remplissage — jamais par la taille. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('function viewData');
+    vrai(i > 0, 'viewData doit être trouvable');
+    const vue = src.slice(i, src.indexOf('function mountData'));
+    vrai(!/class="btn pleine" data-action="undo"/.test(vue),
+      'le bouton d’annulation prend la taille des autres');
+    vrai(/class="btn" data-action="undo"/.test(vue), 'et reste plein, seul dans sa carte');
+    /* `pleine` garde son unique emploi documente : la photo du releve. */
+    vrai(/class="btn pleine" id="relPhoto"/.test(src),
+      'la classe pleine reste réservée à l’action qui remplace douze saisies');
+  });
+
+  test('l’acte le plus destructeur a sa propre carte, et elle vient en dernier', () => {
+    /* « Repartir de zero » vivait sous le titre « Importer », en petit bouton
+       fantome derriere un filet : le titre n'annoncait rien de ce qu'il fait, et
+       les boutons d'une carte portent sur le sujet de cette carte. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewData'), src.indexOf('function mountData'));
+    const iImport = vue.indexOf("trad('Importer')");
+    const iBouton = vue.indexOf('data-action="start-blank"');
+    const iTitre = vue.indexOf("trad('Repartir de zéro')");
+    vrai(iBouton > 0 && iTitre > 0, 'la carte doit être trouvable');
+    vrai(iTitre < iBouton, 'son titre annonce ce que son bouton fait');
+    vrai(iBouton > iImport + 2000,
+      'elle ne vit plus dans la carte « Importer », qui ne l’annonçait pas');
+    vrai(/class="btn ghost danger" data-action="start-blank"/.test(vue),
+      'et le bouton porte le rouge de ce qu’il détruit');
+    /* Dernier de la page : le doigt ne traverse pas le rouge pour atteindre le
+       reste, comme sur la fiche d'un compte. */
+    vrai(iBouton > vue.indexOf("trad('Sauvegardes automatiques')"),
+      'elle se rend après les sauvegardes : ce qui répare vient avant ce qui détruit');
+  });
+
+  /* -- Un glyphe ne dit qu'une chose ------------------------------- */
+
+  test('le glyphe de l’actualisation ne sert pas à effacer', () => {
+    /* ↻ veut dire « actualiser » a quatre endroits : les cours, la
+       synchronisation, le symbole depuis l'ISIN, l'etat du chargement. Le meme
+       signe annoncait « effacer seize mois de releves ». */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('data-action="start-blank"');
+    const ligne = src.slice(src.lastIndexOf('<button', i), src.indexOf('</button>', i));
+    vrai(!/↻/.test(ligne), 'le bouton qui efface tout ne porte plus le signe de l’actualisation');
+    vrai(/↻/.test(src), 'le signe reste, pour ce qu’il veut dire');
+  });
+
+  test('l’acte qui retire un montant se nomme', () => {
+    /* Un ✕ gris est le signe le plus discret de l'ecran pour l'action qui efface
+       un montant : on ne le trouve que par accident. Le meme defaut sur les
+       credits avait deja ete corrige en bouton nomme et rouge. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('data-action="retirer-cash"');
+    const bouton = src.slice(src.lastIndexOf('<button', i), src.indexOf('</button>', i));
+    vrai(!/>✕/.test(bouton), 'le bouton ne se réduit plus à une croix');
+    vrai(/trad\('Retirer'\)/.test(bouton), 'il porte son verbe');
+    vrai(/ghost danger/.test(bouton),
+      'rouge en liseré et non en aplat : un compte peut déclarer trois parts');
+  });
+
+  /* -- La hierarchie typographique --------------------------------- */
+
+  test('deux boutons du même geste mesurent pareil', () => {
+    /* « − Vendre » et « + Vente passee » tombaient une par une dans l'en-tete
+       souple, a 77 et 120 px, l'une au-dessus de l'autre : deux commandes de la
+       meme paire lues comme deux commandes sans rapport. La paire en fait un seul
+       element de flex — donc un seul point de rupture — et une grille a colonnes
+       egales leur donne la meme largeur, celle du libelle le plus long. */
+    const boite = document.createElement('div');
+    boite.className = 'card';
+    /* Largeur posee, comme les autres sondes : le corps de la page de tests est
+       la meme grille que l'application, et une sonde sans largeur atterrit dans
+       la colonne de 244 px de la barre laterale. Les deux boutons s'y serrent a
+       62 px, leurs libelles se replient, et le controle mesure alors le pire des
+       cas plutot que celui qu'il croit regarder. */
+    boite.style.width = '600px';
+    boite.innerHTML = '<div class="card-head"><h2>Journal</h2>'
+      + '<span class="paire-btn">'
+      + '<button class="btn sm ghost">− Vendre</button>'
+      + '<button class="btn sm ghost">+ Vente passée</button>'
+      + '</span></div>';
+    document.body.appendChild(boite);
+    try {
+      const paire = boite.querySelector('.paire-btn');
+      const b = [...paire.children].map(x => x.getBoundingClientRect());
+      eq(new Set(b.map(r => Math.round(r.width))).size, 1,
+        'une seule largeur : ' + b.map(r => Math.round(r.width)).join(' / '));
+      eq(new Set(b.map(r => Math.round(r.top))).size, 1,
+        'et une seule ligne : la paire tombe d’un bloc ou pas du tout');
+      /* La largeur commune est celle du plus long, pas la moyenne : un libelle
+         qui se replie ferait deux hauteurs. */
+      eq(new Set(b.map(r => Math.round(r.height))).size, 1, 'donc une seule hauteur');
+      vrai(Math.round(b[1].right) === Math.round(paire.getBoundingClientRect().right),
+        'et la paire finit là où finit son dernier bouton');
+    } finally {
+      boite.remove();
+    }
+  });
+
+  test('le thème se change en rechargeant, comme la langue', () => {
+    /* Changer l'attribut repeint tout sauf le fond du corps, qui reste a la
+       couleur de l'ancien theme jusqu'au rechargement suivant : des cartes
+       claires posees sur une page noire. Mesure a l'appui dans le commentaire
+       d'`applyTheme`. Le selecteur de langue recharge depuis toujours. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function applyTheme'), src.indexOf('function applyTheme') + 400);
+    vrai(/location\.reload\(\)/.test(fn), 'applyTheme sait recharger');
+    vrai(/recharger = false/.test(fn),
+      'mais pas au démarrage, sinon la page se recharge en boucle');
+    for (const appel of ['applyTheme\\(currentTheme\\(\\) === .dark. \\? .light. : .dark., true\\)',
+                         'applyTheme\\(theme\\.value, true\\)']) {
+      vrai(new RegExp(appel).test(src),
+        `les deux commandes de thème demandent le rechargement (${appel.slice(0, 24)}…)`);
+    }
+    vrai(!/applyTheme\(theme\.value\); render\(\)/.test(src),
+      'et aucune ne se contente d’un render, qui laissait le fond du corps en arrière');
+  });
+
+  test('un titre de carte se distingue du texte qu’il annonce', () => {
+    /* A 15 px contre un corps a 13,5, la hierarchie ne tenait que par la
+       graisse, et une graisse ne se lit pas de loin. Trois paliers : 20 pour le
+       titre de page, 16 pour celui d'une carte, 13 pour le texte. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const taille = sel => {
+      const bloc = (css.match(new RegExp(sel.replace(/[.]/g, '\\.') + ' \\{[^}]*\\}')) || [''])[0];
+      const m = bloc.match(/font-size: ([\d.]+)px/);
+      return m ? +m[1] : null;
+    };
+    const h1 = taille('.topbar h1'), h2 = taille('.card-head h2');
+    vrai(h1 && h2, 'les deux règles doivent être trouvables');
+    vrai(h2 >= 16, `un titre de carte fait ${h2} px, il en faut 16 pour se détacher du corps`);
+    vrai(h1 > h2 + 2, `le titre de page (${h1}) doit rester au-dessus de celui d’une carte (${h2})`);
   });
 });
 
