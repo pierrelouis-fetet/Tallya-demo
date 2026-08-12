@@ -10,7 +10,7 @@ how much do I have, where does it sit, and where is it going?</p>
   <img src="https://img.shields.io/badge/PWA-installable-8A2BE2" alt="Installable PWA">
 </p>
 
-<p align="center"><a href="https://tallya-demo.pages.dev"><b>Live demo</b></a> — fictional data, nothing to install.</p>
+<p align="center"><a href="https://tallya-demo.pages.dev"><b>Live demo</b></a> : fictional data, nothing to install.</p>
 
 <p align="center">Designed and built by <b>Pierre-Louis FETET</b>.</p>
 
@@ -176,7 +176,7 @@ hundred-thousand-per-day cap.
 
 ## Author
 
-Tallya is designed, built and maintained by **Pierre-Louis FETET** — the data
+Tallya is designed, built and maintained by **Pierre-Louis FETET** : the data
 model, the engineering rules above, and every product decision behind them.
 
 ## License
