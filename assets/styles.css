@@ -5164,12 +5164,11 @@ details[open]::details-content { block-size: auto; }
    c'en est une : ce qui la distingue est sa place, hors des cartes, puisqu'elle
    valide la page et non un sujet. */
 .fiche-pied {
-  display: flex; gap: 8px; margin: 4px 0 14px;
-  /* Le remplissage lateral aligne la barre sur le CONTENU d'une carte, pas sur son
-     bord : une carte porte 18 px de remplissage plus 1 px de bordure, donc son
-     premier pixel de contenu est a 19. Sans ce calcul la barre tombait a 18 et le
-     decalage d'un pixel se voyait entre deux rangees de boutons superposees. */
-  padding: 14px 19px 0; border-top: 1px solid var(--grid);
+  /* Dans la carte des champs : c'est elle qui donne le remplissage lateral, donc
+     l'alignement sur ses propres intitules est acquis. Le filet separe la saisie de
+     sa validation, comme le pied d'une fenetre. */
+  display: flex; gap: 8px; margin: 16px 0 0;
+  padding-top: 14px; border-top: 1px solid var(--grid);
 }
 .fiche-pied .btn { flex: 1; justify-content: center; }
 @media (min-width: 768px) {
@@ -5180,9 +5179,7 @@ details[open]::details-content { block-size: auto; }
    egale c'est l'ordre qui tranche, et le remplissage de 18 px l'emportait donc
    sur telephone. La barre s'alignait alors a 18 px quand les cartes voisines
    s'alignent a 15. */
-@media (max-width: 900px) {
-  .fiche-pied { padding: 14px 16px 0; }   /* 15 px de carte + 1 px de bordure */
-}
+
 .fiche-valider .btn { flex: 1; justify-content: center; }
 @media (min-width: 768px) {
   .fiche-valider { justify-content: flex-end; }

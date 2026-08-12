@@ -13666,16 +13666,25 @@ suite('Les boutons d’une fiche ont une géométrie et une place', () => {
       'le dernier bouton d’un en-tête porte margin-left: auto sous 900 px');
   });
 
-  test('la barre de page s’aligne sur le contenu des cartes, pas sur leur bord', () => {
-    /* Une carte porte 18 px de remplissage plus 1 px de bordure : son contenu
-       commence a 19. La barre tombait a 0, donc contre les bords de l'ecran. */
+  test('la rangée de validation vit dans la carte des champs', () => {
+    /* Entre deux cartes elle flottait : un filet dans le vide et deux boutons sans
+       cadre, au milieu d'une page ou tout est encadre. Sa place est le bas de la
+       carte qui porte les champs, c'est la qu'on vient de taper. */
+    const src = lireSource('assets/app.js');
     const css = lireSource('assets/styles.css');
+    /* Dans la fiche d'un compte, elle suit le champ des notes et reste dans la
+       carte : la balise de fermeture vient apres elle. */
+    vrai(/data-path="comptes\.\$\{idx\}\.notes"[\s\S]{0,220}\$\{barreValiderFiche\(\)\}[\s\S]{0,12}<\/div>/.test(src),
+      'elle est dans la carte des informations, après les champs');
+    vrai(/data-path="etabs\.\$\{idx\}\.notes"[\s\S]{0,220}\$\{barreValiderFiche\(\)\}[\s\S]{0,12}<\/div>/.test(src),
+      'et dans la carte des notes de la fiche d’établissement');
+    /* La carte donne le remplissage lateral : la rangee n'en pose aucun, sinon elle
+       se decalerait de ses propres voisins. */
     const base = (css.match(/\.fiche-pied \{[^}]*\}/) || [''])[0];
-    vrai(/padding: 14px 19px 0/.test(base), 'dix-neuf pixels sur grand écran');
-    const i = css.lastIndexOf('.fiche-pied { padding: 14px 16px 0;');
-    vrai(i > css.indexOf('.fiche-pied {'),
-      'et seize sur téléphone, déclarés APRÈS la règle de base : à spécificité '
-      + 'égale, c’est l’ordre qui tranche');
+    vrai(/padding-top: 14px/.test(base) && !/padding: /.test(base),
+      'et elle ne pose pas de remplissage latéral : la carte le donne déjà');
+    vrai(/border-top: 1px solid var\(--grid\)/.test(base),
+      'un filet sépare la saisie de sa validation, comme le pied d’une fenêtre');
   });
 });
 

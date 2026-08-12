@@ -237,19 +237,21 @@ bien (`bienId`).
   même carte, l'une en `btn` justifiée à droite et l'autre en `btn sm` à gauche,
   se lisent comme un oubli. La hiérarchie se dit par le remplissage — plein,
   fantôme, rouge — jamais par la taille.
-- **Les boutons d'une carte agissent sur le sujet de cette carte**, et ce qui
-  porte sur la page entière vit dans une barre de page, hors des cartes
-  (`.fiche-pied`). La carte « Actions » d'une fiche portait quatre boutons en deux
-  rangées : deux qui validaient la visite entière, deux qui décidaient de la vie du
-  compte. Même poids visuel pour deux natures d'acte, sous un titre qui ne
-  décrivait ni l'une ni l'autre.
+- **Une rangée de boutons vit dans une carte, jamais entre deux.** Sortie de la
+  carte « Actions », la rangée de validation d'une fiche a flotté un moment entre
+  deux cartes : un filet dans le vide et deux boutons sans cadre, au milieu d'une
+  page où tout est encadré. Sa place est le **bas de la carte qui porte les
+  champs**, c'est là qu'on vient de taper (`.fiche-pied`, dans la carte).
+- **Une carte ne mêle pas deux natures d'acte.** « Actions » portait quatre boutons
+  en deux rangées : deux qui validaient la saisie, deux qui décidaient de la vie du
+  compte, au même poids visuel, sous un titre qui ne décrivait ni l'une ni l'autre.
+  Elle ne garde que la seconde paire, et son titre devient juste.
 - **Ce qui valide vient avant ce qui détruit**, et c'est une règle de pouce : à
   375 px les cartes se suivent, et le doigt descendait sur « Clôturer et supprimer »
   pour atteindre « Enregistrer ».
-- **Une barre hors carte s'aligne sur le contenu des cartes, pas sur leur bord.**
-  Une carte porte 18 px de remplissage plus 1 px de bordure : son premier pixel de
-  contenu est à 19, et à 15 px de remplissage sous 900 px il est à 16. Sans ce
-  calcul la barre touchait les bords de l'écran.
+- **Une rangée dans une carte ne pose aucun remplissage latéral** : la carte le
+  donne déjà, et en poser un la décalerait de ses propres voisins. Un filet la
+  sépare des champs, comme le pied d'une fenêtre.
 - **Un en-tête de carte ne mélange pas un lien et des boutons.** Un renvoi vers un
   autre écran prend `btn sm ghost` comme ses voisins ; `.btn` retire le
   soulignement pour qu'un `<a>` puisse la porter.

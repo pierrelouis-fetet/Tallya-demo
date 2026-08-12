@@ -6088,17 +6088,18 @@ function espaceBien(c, idx, t) {
 
    « Annuler » reste, et rend la fiche telle qu'elle etait au dernier point
    connu — l'ouverture, ou le dernier « Enregistrer ». */
-/* La barre de validation d'une fiche : une barre de page, pas une rangee dans une
-   carte.
+/* La rangee de validation d'une fiche, au bas de la carte qui porte les champs.
 
-   Elle validait la visite entiere depuis la carte « Actions », a cote d'Archiver
-   et de Clocher-supprimer : quatre boutons de meme poids pour deux natures d'acte,
-   et un titre de carte qui ne decrivait ni l'une ni l'autre. La regle qui en sort :
-   les boutons d'une carte agissent sur le sujet de cette carte, et ce qui porte sur
-   la page entiere vit dehors.
+   Elle a vecu dans la carte « Actions », a cote d'Archiver et de Cloturer-supprimer :
+   quatre boutons de meme poids pour deux natures d'acte, sous un titre qui ne
+   decrivait ni l'une ni l'autre. Sortie de la carte, elle flottait entre deux cartes,
+   un filet dans le vide au milieu d'une page ou tout est encadre.
 
-   Elle se place apres les champs et avant la carte « Actions » : on saisit, on
-   valide, et ce qui decide de la vie du compte reste en dernier, comme partout. */
+   Sa place est donc le bas de la carte des champs : c'est la qu'on vient de taper, et
+   la validation d'une saisie appartient au formulaire qui la porte. La carte
+   « Actions », elle, ne garde que ce qui decide de la vie du compte, et reste en
+   dernier : a 375 px les cartes se suivent, et le doigt ne doit pas traverser le
+   rouge pour atteindre « Enregistrer ». */
 function barreValiderFiche(retour = 'accounts') {
   return `
     <div class="fiche-pied">
@@ -6441,8 +6442,8 @@ function viewFicheCompte(id) {
       <div class="field" style="margin-top:12px"><label>Notes</label>
         <input data-path="comptes.${idx}.notes" value="${esc(c.notes || '')}"
                placeholder="${trad('facultatif')}" style="text-align:left"></div>
+      ${barreValiderFiche()}
     </div>
-    ${barreValiderFiche()}
     <!-- La carte ne porte plus que la vie du compte, et son titre le dit enfin.
 
          Elle vient apres la barre de validation, et c'est une regle de pouce : a
@@ -6552,11 +6553,10 @@ function viewFicheEtab(id) {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Notes</h2></div>
+    <div class="card-head"><h2>${trad('Notes')}</h2></div>
     <input data-path="etabs.${idx}.notes" value="${esc(e.notes || '')}" placeholder="${trad('facultatif')}" style="text-align:left">
-  </div>
-
-  ${barreValiderFiche()}`;
+    ${barreValiderFiche()}
+  </div>`;
 }
 
 /* Glisser une ligne vers la gauche révèle Modifier / Archiver.
