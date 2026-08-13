@@ -6,11 +6,17 @@ prises et les pièges rencontrés. Ce fichier-ci ne dit que les règles.
 ## Avant chaque push, sans exception
 
 1. **Lancer les tests** : ouvrir `/tests.html` sur le serveur local, **sur le
-   port 8765**. Le titre de l'onglet donne le résultat. Aucun push si un test
+   port 8766**. Le titre de l'onglet donne le résultat. Aucun push si un test
    est rouge. Si un serveur y répond déjà, s'y rattacher (`launch.json`, entrée
-   « dashboard ») : le port n'est pas un détail de confort, `localStorage` est
-   lié à l'origine et un autre port donne une application vide. S'il n'y en a
-   pas : `python serve.py --port 8765 --no-browser`.
+   « demo ») : le port n'est pas un détail de confort, `localStorage` est lié à
+   l'origine et un autre port donne une application vide. S'il n'y en a pas :
+   `python serve.py --port 8766 --no-browser`.
+
+   **8766 et non 8765**, et la confusion coûte une demi-heure : 8765 est
+   l'origine du dossier principal, `Dashboard wealth`, dont l'application
+   répond aussi et affiche aussi « Tallya ». Une suite verte lue sur 8765
+   n'aura rien vérifié de ce dépôt-ci. La balise `?v=` du fichier servi
+   tranche : celle de la démonstration se termine par `-demo`.
 2. **Compléter les tests** avec ce que le changement vient d'introduire. Un
    correctif sans test qui le protège se re-cassera. La question à se poser :
    *quelle assertion aurait attrapé ce bug avant moi ?*

@@ -1941,6 +1941,17 @@ th {
 th:first-child, td:first-child { text-align: left; }
 td { padding: 9px 10px; border-bottom: 1px solid var(--grid); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (hover: hover) { tbody tr:hover td { background: color-mix(in oklab, var(--surface-2) 70%, transparent); } }
+
+/* La ligne qu'un reglage designe, marquee sans un mot. Un libelle dans la
+   premiere colonne elargit celle-ci, donc repousse les dernieres hors de
+   l'ecran : c'est l'encre qui designe, jamais un mot de plus. L'accent porte
+   ici du texte et non un aplat, il franchit donc le seuil de 4,5:1 sur les
+   trois fonds et dans les deux themes, ce qu'un controle calcule.
+   L'annee suit le libelle : « 30 ans » en accent et « · 2056 » en gris
+   couperait en deux une seule et meme etiquette. */
+tr.jalon-retenu td:first-child,
+tr.jalon-retenu td:first-child .muted { color: var(--accent); }
+tr.jalon-retenu td:first-child { font-weight: 650; }
 tbody tr:last-child td { border-bottom: none; }
 tfoot td { font-weight: 650; border-top: 1px solid var(--border-strong); border-bottom: none; padding-top: 11px; }
 /* Une cellule qui porte un nom porte du texte, pas un nombre : elle s'aligne a
@@ -4344,13 +4355,12 @@ td .empty, th .empty { background: none; border: none; }
   table.cols-nom-chiffres td:last-child,
   table.cols-nom-chiffres th:last-child { width: 34px; }
 
-  /* Nom a gauche et menu a droite ne tiennent pas cote a cote : le menu porte
-     les noms de toutes les lignes du portefeuille, et il reste au libelle une
-     colonne ou « GraniteShares 2x Long NVDA Daily ETF » se coupe net, sans
-     ellipse, en courant sous le menu. Deux colonnes serrees valent moins
-     qu'une ligne empilee : le nom prend toute la largeur, le menu se pose
-     dessous et devient une vraie cible pour le pouce. C'est le motif que le
-     reste de l'application applique deja sous 768 px. */
+  /* Nom a gauche et action a droite ne tiennent pas cote a cote : il reste au
+     libelle une colonne ou « GraniteShares 2x Long NVDA Daily ETF » se coupe
+     net, sans ellipse, en courant sous l'action. Deux colonnes serrees valent
+     moins qu'une ligne empilee : le nom prend toute la largeur, l'action se
+     pose dessous et devient une vraie cible pour le pouce. C'est le motif que
+     le reste de l'application applique deja sous 768 px. */
   table.cols-nom-action, table.cols-nom-action tbody,
   table.cols-nom-action tr, table.cols-nom-action td { display: block; width: auto; }
   table.cols-nom-action tr {
@@ -4360,7 +4370,8 @@ td .empty, th .empty { background: none; border: none; }
   table.cols-nom-action td { border: none; padding: 0; text-align: left; white-space: normal; }
   table.cols-nom-action td.name { overflow-wrap: anywhere; }
   table.cols-nom-action td:last-child { margin-top: 8px; }
-  table.cols-nom-action select { width: 100%; }
+  table.cols-nom-action select,
+  table.cols-nom-action .btn { width: 100%; }
 
   /* la colonne figée mangerait la moitié de l'écran */
   .sticky-col { position: static; }

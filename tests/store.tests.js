@@ -14107,14 +14107,15 @@ suite('L’interface tient ses seuils', () => {
        4,3 et 4,6, et c'est pourtant la frontiere.
 
        L'orange s'y est ajoute : il ecrit les ecarts au budget, il n'est pas
-       qu'un aplat. */
+       qu'un aplat. L'accent aussi : il ecrit l'horizon retenu de la projection,
+       donc il change de seuil. */
     const memoire = document.documentElement.dataset.theme;
     const fautes = [];
     try {
       for (const theme of ['light', 'dark']) {
         document.documentElement.dataset.theme = theme;
         const fonds = ['--surface-1', '--surface-2', '--page'].map(n => [n, jeton(n)]);
-        for (const encre of ['--muted', '--text-secondary', '--serious']) {
+        for (const encre of ['--muted', '--text-secondary', '--serious', '--accent']) {
           const c = jeton(encre);
           vrai(c, `${encre} doit être lisible en ${theme}`);
           for (const [nom, fond] of fonds) {
@@ -14484,5 +14485,241 @@ suite('Une démonstration montre la même chose à tout le monde', () => {
       'et la somme de ses paliers de disponibilité');
     pres(p.net, p.brut - p.dettes, 'le net est le brut moins les crédits');
     vrai(p.brut > 0, 'et le jeu porte bien des montants');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Chercher un titre, c'est en ajouter un
+   ------------------------------------------------------------------ */
+suite('Chercher un titre, c’est en ajouter un', () => {
+
+  /* La recherche de symbole, du montage jusqu'a la section suivante du
+     fichier : tout ce qui suit appartient a Allocation. */
+  const recherche = () => {
+    const src = lireSource('assets/app.js');
+    return src.slice(src.indexOf('function mountSymbolSearch('),
+                     src.indexOf('function viewAllocation('));
+  };
+
+  test('un résultat porte un bouton, pas un menu de destinations', () => {
+    const bloc = recherche();
+    vrai(!/[Aa]ssigner/.test(bloc),
+      'plus de menu « Assigner à… » : on ne choisit pas entre créer et compléter');
+    vrai(!/Store\.state\.positions\.map\(/.test(bloc),
+      'les lignes déjà détenues ne sont plus proposées comme destination');
+    vrai(/<button class="btn sm assign-target"/.test(bloc),
+      'chaque résultat porte un bouton d’ajout');
+    vrai(/bouton\.addEventListener\('click'/.test(bloc),
+      'et c’est un clic qui crée la ligne, plus un changement de menu');
+  });
+
+  test('compléter une ligne déjà détenue reste possible, depuis sa fiche', () => {
+    /* Le menu retire portait un second usage : poser un symbole sur une ligne
+       deja creee. Le retrait serait une perte si ce chemin n'existait pas
+       ailleurs — la fiche de la ligne verifie son ISIN et pose le symbole
+       trouve. C'est la porte que la carte de recherche n'a plus a doubler. */
+    const src = lireSource('assets/app.js');
+    vrai(/posIsinVerif/.test(src), 'la fiche d’une ligne vérifie son ISIN');
+    vrai(/p2\.symbol = best\.symbol/.test(src),
+      'et pose sur la ligne le symbole que la vérification trouve');
+  });
+
+  test('la fenêtre demande le compte avant la classe et le rôle', () => {
+    const bloc = recherche();
+    const rang = cle => bloc.indexOf('cle: \'' + cle + '\'');
+    for (const cle of ['account', 'assetClass', 'role', 'dateAchat']) {
+      vrai(rang(cle) > 0, 'le champ ' + cle + ' est là');
+    }
+    vrai(rang('account') < rang('assetClass'),
+      'le compte se demande en premier : c’est la question à laquelle on sait '
+      + 'répondre en arrivant');
+    vrai(rang('account') < rang('role'), 'et avant le rôle');
+    vrai(rang('assetClass') < rang('role'), 'la classe reste avant le rôle');
+  });
+
+  test('la liste des comptes suit toujours la classe', () => {
+    /* L'ordre a l'ecran ne defait pas la dependance : une action ne se loge pas
+       sur un portefeuille de cryptomonnaies, et changer la classe refait la
+       liste au-dessus d'elle. */
+    const bloc = recherche();
+    vrai(/lie: \{ de: 'assetClass', vers: 'account'/.test(bloc),
+      'les deux champs restent liés');
+    vrai(/options: comptesPourListe\(cat\)/.test(bloc),
+      'et la liste s’ouvre déjà filtrée par la classe déduite du type');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La reserve fiscale se dit une fois, dans une bulle
+   ------------------------------------------------------------------ */
+suite('La réserve fiscale se dit dans une bulle', () => {
+
+  const journal = () => {
+    const src = lireSource('assets/app.js');
+    return src.slice(src.indexOf('function salesCard('),
+                     src.indexOf('function viewAllocation('));
+  };
+
+  test('elle vit sur le titre de la carte, plus sous la liste', () => {
+    const bloc = journal();
+    vrai(/\$\{aide\(trad\('Résultat brut, avant frais et fiscalité/.test(bloc),
+      'la réserve est une bulle du titre : elle vaut pour chaque ligne du '
+      + 'journal, et ne se relit pas');
+    vrai(!/<p class="hint"[^>]*>\$\{trad\('Résultat brut/.test(bloc),
+      'et plus une phrase en pied de carte, qui prenait trois lignes d’écran');
+  });
+
+  test('et sa traduction reste celle qui existait', () => {
+    /* La cle ne bouge pas en changeant de place : une bulle qui perd sa
+       traduction s'afficherait en francais dans la version anglaise, et c'est
+       exactement le defaut que cette phrase-la a deja eu. */
+    const phrase = 'Résultat brut, avant frais et fiscalité : le traitement fiscal '
+      + 'dépend de l’enveloppe (PEA, CTO) et de ta situation.';
+    enLangue('en', () => {
+      vrai(/^Gross result/.test(trad(phrase)), 'la version anglaise répond');
+    });
+  });
+});
+
+/* ------------------------------------------------------------------
+   L'horizon retenu se marque sans se nommer
+   ------------------------------------------------------------------ */
+suite('L’horizon retenu se marque sans se nommer', () => {
+
+  test('le libellé quitte la colonne la plus étroite', () => {
+    const src = lireSource('assets/app.js');
+    vrai(!/trad\('horizon retenu'\)/.test(src),
+      'le libellé élargissait la première colonne, et « Après inflation » '
+      + 'sortait de l’écran à 375 px');
+    vrai(!/"horizon retenu"/.test(lireSource('assets/i18n.js')),
+      'sa clé de traduction part avec lui : une clé que personne n’appelle '
+      + 'survit à tous les nettoyages');
+  });
+
+  test('la correspondance avec le réglage reste visible', () => {
+    /* Sans marque, changer la duree dans le pied du tableau deplace le
+       graphique et le total de la premiere carte sans qu'on voie ou le choix a
+       atterri ici : une ligne de plus au milieu des jalons, indistincte de ses
+       voisines. */
+    const src = lireSource('assets/app.js');
+    vrai(/class="\$\{retenu \? 'jalon-retenu' : ''\}"/.test(src),
+      'la ligne du réglage porte une classe');
+    vrai(/retenu \? ' aria-current="true"' : ''/.test(src),
+      'et le dit à qui n’a pas les yeux dessus');
+  });
+
+  test('le marquage ne coûte aucun pixel de colonne', () => {
+    const css = lireSource('assets/styles.css');
+    const regles = css.match(/tr\.jalon-retenu[^{]*\{[^}]*\}/g);
+    vrai(!!regles, 'la règle CSS existe : une classe posée sans règle ne peint rien');
+    const tout = regles.join(' ');
+    vrai(/color: var\(--accent\)/.test(tout),
+      'c’est l’encre qui désigne la ligne du réglage');
+    vrai(!/border|padding|width|box-shadow/.test(tout),
+      'ni bordure, ni remplissage, ni filet : chacun élargirait la colonne, donc '
+      + 'repousserait la dernière hors de l’écran, ce que ce marquage répare');
+    vrai(/\.muted \{ color: var\(--accent\)/.test(tout),
+      'l’année suit le libellé : une étiquette ne se coupe pas en deux encres');
+  });
+
+  test('le menu ne repropose pas les jalons du tableau', () => {
+    /* Le menu s'ouvre sous les jalons : lui faire redire 5, 10, 15 et 20, c'est
+       offrir de choisir la ligne qu'on a sous les yeux, et imposer quatre crans
+       de defilement avant la premiere option qui apprend quelque chose. */
+    eq(PROJECTION_CHOICES[0], 25, 'la liste commence après le dernier jalon fixe');
+    const doublons = PROJECTION_HORIZONS.filter(h => PROJECTION_CHOICES.includes(h));
+    eq(doublons.join(', '), '', 'ces horizons sont déjà des lignes du tableau');
+    vrai(PROJECTION_CHOICES.includes(80), 'et la liste couvre toujours 80 ans');
+  });
+
+  test('mais il affiche toujours l’horizon en cours', () => {
+    /* La fonction ne depend que de la liste, de `trad` et de l'horizon : on la
+       reconstruit depuis sa source et on la joue, plutot que de chercher un
+       motif dans une chaine. */
+    const src = lireSource('assets/app.js');
+    const debut = src.indexOf('const selecteurHorizon = () => {');
+    const corps = src.slice(debut, src.indexOf('let hypoOuvert', debut));
+    vrai(debut > 0 && corps.length > 100, 'le sélecteur se relit depuis sa source');
+    const rendre = h => new Function('PROJECTION_CHOICES', 'trad', 'projHorizon',
+      corps + ' return selecteurHorizon();')(PROJECTION_CHOICES, trad, h);
+    /* Vingt ans est le defaut, et le tableau le porte : la liste ne l'offre
+       donc plus. Un menu qui n'offre pas sa propre valeur affiche la premiere
+       venue, et annoncerait 25 ans pendant que la ligne marquee dit 20. */
+    vrai(/value="20" selected/.test(rendre(20)),
+      'au défaut, le menu montre bien vingt ans');
+    const a30 = rendre(30);
+    vrai(/value="30" selected/.test(a30), 'et trente ans quand c’est trente ans');
+    vrai(!/value="20"/.test(a30),
+      'vingt ans quitte alors la liste : le tableau le porte déjà');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La demonstration ne porte aucune enveloppe francaise
+   ------------------------------------------------------------------ */
+suite('La démonstration ne porte aucune enveloppe française', () => {
+
+  /* Tout ce que la graine donne a lire : les identifiants restent hors du
+     compte, ils ne s'affichent nulle part et ce sont les colonnes de seize
+     mois de releves. */
+  const libelles = () => {
+    const out = [];
+    for (const t of SEED_ACCOUNT_TYPES) out.push(t.label);
+    for (const a of SEED_ACCOUNTS) out.push(a.label, a.short, a.broker, a.alloc || '');
+    for (const m of SEED_MONTHLY) out.push(m.comment || '');
+    for (const mod of SEED_STRATEGY.models) {
+      for (const l of mod.lines) out.push(l.label, l.vehicles);
+    }
+    return out.filter(Boolean);
+  };
+
+  test('aucun libellé ne dit « PEA »', () => {
+    /* La demonstration s'ouvre en anglais pour qui ne parle pas francais, et un
+       PEA n'y existe pas : le lecteur y voit un sigle qu'aucune traduction ne
+       peut lui rendre. */
+    const fautifs = libelles().filter(m => /PEA/.test(m));
+    eq(fautifs.join(' · '), '', 'ces libellés portent encore une enveloppe française');
+  });
+
+  test('l’enveloppe quitte la démonstration, pas l’application', () => {
+    vrai(!SEED_ACCOUNT_TYPES.some(t => t.id === 'pea'),
+      'la graine n’offre plus ce type');
+    vrai(!!TYPES_COMPTE.find(t => t.id === 'pea'),
+      'mais qui saisit son propre patrimoine le garde dans la liste : c’est le '
+      + 'jeu de démonstration qui est international, pas l’application');
+  });
+
+  test('chaque compte de la graine tombe sur un type qui existe', () => {
+    for (const a of SEED_ACCOUNTS) {
+      vrai(SEED_ACCOUNT_TYPES.some(t => t.id === a.type)
+        || !!TYPES_COMPTE.find(t => t.id === a.type),
+        'le compte ' + a.id + ' porte un type inconnu : ' + a.type);
+    }
+  });
+
+  test('les deux comptes de titres restent distincts', () => {
+    /* Deux enveloppes de meme intitule ne se relisent pas : la colonne courte
+       est tout ce qu'un tableau serre affiche. */
+    const titres = SEED_ACCOUNTS.filter(a => a.holdings);
+    vrai(titres.length >= 2, 'la démonstration en porte bien deux');
+    eq(new Set(titres.map(a => a.short)).size, titres.length,
+      'deux intitulés courts identiques');
+    eq(new Set(SEED_ACCOUNTS.map(a => a.short)).size, SEED_ACCOUNTS.length,
+      'et aucun doublon sur l’ensemble des comptes');
+  });
+
+  test('après migration, rien à l’écran ne se nomme PEA', () => {
+    /* Le libelle affiche ne vient pas de la graine mais du type projete : c'est
+       `typeCompte` qui repond, et un compte reste sur son ancien type si on ne
+       le change pas. Le controle porte donc sur ce que la vue lirait. */
+    Store.state = structuredClone(SEED);
+    Store.migrate();
+    refreshAccounts();
+    for (const a of ACCOUNTS) {
+      vrai(!/PEA/.test([a.label, a.short, a.broker].join(' ')),
+        'le compte ' + a.id + ' se nomme encore PEA');
+      vrai(!/PEA/.test(typeCompte(a.type).label),
+        'le compte ' + a.id + ' porte une enveloppe nommée PEA');
+    }
   });
 });

@@ -172,6 +172,7 @@ const I18N = {
     "Charge d’un bien immobilier ?": "Cost of a property?",
     "Classe d’actif": "Asset class",
     "Comptes d’investissement": "Investment accounts",
+    "Créer une ligne de titres pour ce résultat": "Create a holding from this result",
     "Crédits en cours": "Outstanding loans",
     "Date de clôture": "Closing date",
     "Date de la vente": "Sale date",
@@ -1255,7 +1256,6 @@ const I18N = {
     ", du premier point au dernier. Leur remboursement n’est pas projeté : la courbe sous-estime ton patrimoine, elle ne le surestime jamais.": ", from the first point to the last. Their repayment is not projected: the curve underestimates your wealth, it never overestimates it.",
     ", et le détail au-dessus": ", and the detail above",
     "Apports": "Contributions",
-    "horizon retenu": "chosen horizon",
     "« Apports » : ce que tu as déjà,": "“Contributions”: what you already have,",
     "aujourd’hui, plus ce que tu verses. Chaque horizon est compté à partir d’aujourd’hui, donc à la même période de l’année.": "today, plus what you pay in. Every horizon starts today, so it lands at the same time of year.",
 

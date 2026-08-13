@@ -4860,9 +4860,17 @@ function salesYears() {
 /* Jalons du tableau : les repères courants d'une projection. */
 const PROJECTION_HORIZONS = [3, 5, 10, 15, 20];
 
-/* Horizons proposés dans la liste déroulante, de 5 en 5 jusqu'à 80 ans —
-   de quoi couvrir une vie d'épargne entière. */
-const PROJECTION_CHOICES = Array.from({ length: 16 }, (_, i) => (i + 1) * 5);
+/* Horizons proposés dans la liste déroulante, de 5 en 5 jusqu'à 80 ans — de
+   quoi couvrir une vie d'épargne entière, moins ceux que le tableau porte
+   déjà. Le menu s'ouvre sous les jalons et redonnait ses quatre premières
+   lignes : choisir « 10 ans » y désignait la ligne qu'on avait sous les yeux,
+   et il fallait dérouler quatre crans avant la première option qui apprend
+   quelque chose.
+   La liste se dérive des repères, elle ne les recopie pas : deux listes
+   écrites à la main pour une seule vérité finissent par se contredire, et
+   c'est celle qu'on oublie de changer qui ment. */
+const PROJECTION_CHOICES = Array.from({ length: 16 }, (_, i) => (i + 1) * 5)
+  .filter(h => !PROJECTION_HORIZONS.includes(h));
 
 function projectionSettings() {
   const m = Store.state.meta;

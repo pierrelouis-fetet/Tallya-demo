@@ -1923,11 +1923,21 @@ Object.defineProperty(window, 'projHorizon', {
    l'horizon courant à ses jalons, donc choisir 60 ans fait apparaître la ligne
    60 ans dans le tableau, à sa place chronologique, et le graphique et le total
    de la première carte y vont avec. */
-const selecteurHorizon = () => `
+const selecteurHorizon = () => {
+  /* L'horizon courant figure toujours dans la liste, même quand les jalons du
+     tableau le portent déjà. Un menu qui n'offre pas sa propre valeur affiche
+     la première venue : il annoncerait alors un horizon qui n'est pas celui du
+     graphique ni de la ligne marquée. Le défaut, vingt ans, est exactement ce
+     cas — et il disparaît de la liste dès qu'on en choisit un autre. */
+  const choix = PROJECTION_CHOICES.includes(projHorizon)
+    ? PROJECTION_CHOICES
+    : [...PROJECTION_CHOICES, projHorizon].sort((a, b) => a - b);
+  return `
   <select data-action-change="proj-horizon" style="width:auto">
-    ${PROJECTION_CHOICES.map(h => `<option value="${h}" ${h === projHorizon ? 'selected' : ''}>
+    ${choix.map(h => `<option value="${h}" ${h === projHorizon ? 'selected' : ''}>
       ${h} ${trad('ans')}, ${new Date().getFullYear() + h}</option>`).join('')}
   </select>`;
+};
 
 /* Le depliant des hypotheses. Ferme par defaut : le resume des valeurs sert
    de poignee, on ne deplie que pour regler. */
@@ -2498,18 +2508,19 @@ function viewObjective() {
                les textes d'aide, ou il explique ce que celui-ci veut dire. -->
           <th>${trad('Patrimoine')}</th><th>${trad('Après inflation')}</th>
         </tr></thead>
-        <!-- La ligne de l'horizon retenu se nomme. Sans elle, changer la durée
-             dans le pied du tableau faisait bouger le graphique et le total de
-             la première carte sans qu'on voie où le choix avait atterri ici :
-             une nouvelle ligne apparaissait au milieu des jalons, indistincte
-             de ses voisines. C'est ce qui rend la correspondance visible entre
-             les deux portes du même réglage. -->
+        <!-- La ligne de l'horizon retenu se marque, elle ne se nomme pas. La
+             correspondance entre le reglage du pied et la ligne qui bouge doit
+             se voir, sinon changer la duree deplace le graphique et le total de
+             la premiere carte sans qu'on sache ou le choix a atterri ici. Mais
+             la nommer coutait la largeur d'une phrase dans la colonne la plus
+             etroite : a 375 px, « Après inflation » sortait de l'ecran et il
+             fallait faire defiler pour lire la seule colonne que cette carte
+             ajoute a la precedente. Un filet d'accent ne coute aucun pixel. -->
         <tbody>${p.jalons.map(j => {
           const retenu = j.horizon === projHorizon;
           return `
-          <tr>
-            <td class="name">${j.horizon} ${trad('ans')} <span class="muted">· ${j.year}</span>${
-              retenu ? ` <span class="hint">${trad('horizon retenu')}</span>` : ''}</td>
+          <tr class="${retenu ? 'jalon-retenu' : ''}"${retenu ? ' aria-current="true"' : ''}>
+            <td class="name">${j.horizon} ${trad('ans')} <span class="muted">· ${j.year}</span></td>
             <td class="large-seulement">${fmtEUR0(j.contributed)}</td>
             <td class="up large-seulement">${fmtEUR0(j.gains)}</td>
             <td><b>${fmtEUR0(j.total)}</b></td>
@@ -3391,7 +3402,16 @@ function salesCard() {
   return `
   <div class="card" data-anchor="ventes">
     <div class="card-head">
-      <h2>${trad('Journal des ventes')}</h2>
+      <!-- La reserve fiscale est une bulle et non une phrase en pied de carte :
+           elle vaut pour chaque ligne du journal, elle ne se lit qu'une fois, et
+           posee en clair sous la liste elle occupait trois lignes d'ecran pour
+           dire ce qu'on ne relit jamais. Sur le titre, elle reste a portee du
+           doigt de qui se demande ce que ces montants comptent.
+           Les noms d'enveloppes restent tels quels dans les deux langues : PEA
+           et CTO sont des produits francais, les traduire inventerait des noms
+           qui n'existent pas. -->
+      <h2>${trad('Journal des ventes')}${aide(trad('Résultat brut, avant frais et fiscalité : '
+        + 'le traitement fiscal dépend de l’enveloppe (PEA, CTO) et de ta situation.'))}</h2>
       ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
         st.count === toutes.length ? '' : ` ${trad('sur.total', 'sur')} ${toutes.length}`}</span>
       ${plages}` : ''}
@@ -3494,14 +3514,7 @@ function salesCard() {
           }).join('');
         })()}
       </div>
-    </details>` : `<p class="empty">${trad('Aucune vente sur cette période.')}</p>`}
-    <!-- La reserve fiscale s'affichait en francais dans les deux langues : elle
-         etait posee sans passer par la traduction, donc invisible au rattrapage,
-         et c'est la seule phrase de cette carte qui l'etait. Les noms d'enveloppes
-         restent tels quels dans les deux versions : PEA et CTO sont des produits
-         francais, les traduire inventerait des noms qui n'existent pas. -->
-    <p class="hint" style="margin-top:12px">${trad('Résultat brut, avant frais et fiscalité : '
-      + 'le traitement fiscal dépend de l’enveloppe (PEA, CTO) et de ta situation.')}</p>`}
+    </details>` : `<p class="empty">${trad('Aucune vente sur cette période.')}</p>`}`}
   </div>`;
 }
 
@@ -3933,13 +3946,14 @@ function mountSymbolSearch() {
         ${isinCode ? `<p class="small muted" style="margin:0 0 8px">ISIN valide · ${res.length}
            cotation${res.length > 1 ? 's' : ''} trouvée${res.length > 1 ? 's' : ''}, la première
            correspond à ta place privilégiée.</p>` : ''}
-        <!-- Deux colonnes, pas trois. La place et le type occupaient la
-             leur, ce qui poussait le menu « Assigner à… » hors de la carte :
-             ses options portent tous les noms de lignes du portefeuille, donc
-             il réclame une largeur que 343 px ne donnent pas. Le tableau
-             n'ayant pas de conteneur défilant, et la page coupant net ce qui
-             dépasse, le menu devenait inatteignable sur téléphone. Place et
-             type descendent sous le nom, où ils se lisent aussi bien.
+        <!-- Un bouton, et non un menu de destinations : chercher un titre,
+             c'est en ajouter un. Une ligne deja detenue se complete depuis sa
+             fiche, ou la verification de l'ISIN pose le symbole ; deux portes
+             sur le meme geste, c'est le defaut que ce projet defait ailleurs.
+             Deux colonnes, pas trois : la place et le type descendent sous le
+             nom, ou ils se lisent aussi bien. Le tableau n'a pas de conteneur
+             defilant et la page coupe net ce qui depasse, donc une troisieme
+             colonne rendrait l'action inatteignable a 343 px.
              (Aucun guillemet oblique ici : ce commentaire vit dans un
              littéral de gabarit, un backtick y fermerait la chaîne.) -->
         <table class="table-serree cols-nom-action"><tbody>${res.map(r => `
@@ -3947,78 +3961,72 @@ function mountSymbolSearch() {
           <td class="name">${esc(r.symbol)}${r.symbol === bestSymbol ? ' <span class="tag">retenu</span>' : ''}
               <span class="sub">${esc(r.name)}${[r.exchange, r.type].filter(Boolean).length
                 ? ` · ${esc([r.exchange, r.type].filter(Boolean).join(' · '))}` : ''}</span></td>
-          <td><select class="assign-target" data-symbol="${esc(r.symbol)}"
+          <td><button class="btn sm assign-target" data-symbol="${esc(r.symbol)}"
                       data-nom="${esc(r.name || '')}" data-isin="${esc(isinCode || '')}"
-                      data-type="${esc(r.type || '')}">
-            <option value="">Assigner à…</option>
-            <option value="new">➕ Nouvelle ligne</option>
-            ${Store.state.positions.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('')}
-          </select></td>
+                      data-type="${esc(r.type || '')}"
+                      title="${trad('Créer une ligne de titres pour ce résultat')}">+ ${trad('Ajouter')}</button></td>
         </tr>`).join('')}</tbody></table>`;
 
-      out.querySelectorAll('.assign-target').forEach(sel => {
-        sel.addEventListener('change', async () => {
-          if (sel.value === '') return;
+      out.querySelectorAll('.assign-target').forEach(bouton => {
+        bouton.addEventListener('click', async () => {
+          /* Le titre doit atterrir quelque part, et pas n'importe ou : la
+             categorie se deduit du type renvoye par la recherche, et le compte
+             se limite a ceux qui peuvent la porter.
 
-          // « Nouvelle ligne » demande d'abord ou la ranger
-          let i = sel.value;
-          if (i === 'new') {
-            /* Le titre doit atterrir quelque part, et pas n'importe ou : la
-               categorie se deduit du type renvoye par la recherche, et le
-               compte se limite a ceux qui peuvent la porter. Avant, la ligne
-               etait creee en silence sur le compte par defaut, en « STOCK »
-               meme pour un bitcoin. */
-            const cat = classeDuType(sel.dataset.type);
-            const v = await askForm({
-              titre: sel.dataset.nom || sel.dataset.symbol,
-              sous: trad('Où ranger cette ligne ?'),
-              ok: 'Créer la ligne',
-              lie: { de: 'assetClass', vers: 'account', options: comptesPourListe,
-                     vide: 'aucun compte ne peut porter cette classe' },
-              champs: [
-                { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
-                  options: OPTIONS_CLASSE, valeur: cat,
-                  aide: sel.dataset.type ? `déduite de ${guill(sel.dataset.type)}` : '' },
-                { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE,
-                  valeur: 'satellite', aide: trad('coeur de portefeuille ou pari satellite') },
-                { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
-                  valeur: defaultHoldingAccount(), aide: trad('limité aux comptes compatibles') },
-                /* Proposee au jour, parce qu'on cree une ligne le jour ou l'on
-                   achete — et changeable, parce qu'on la cree aussi en
-                   installant l'application sur un portefeuille deja constitue.
-                   Le champ est pose ici plutot que laisse a la fiche : deux
-                   chiffres en dependent, et l'un d'eux se trompe le jour meme
-                   si personne ne repond. */
-                { cle: 'dateAchat', label: trad('Date d’achat'), type: 'date', valeur: todayISO(),
-                  aide: DATE_ACHAT_AIDE },
-              ],
-            });
-            sel.value = '';                       // la liste redevient neutre
-            if (!v) return;
-            if (!v.account) { toast(trad('Ouvre d’abord un compte qui accepte cette catégorie')); return; }
-            Store.state.positions.push({
-              id: 'p' + Date.now(), name: '', isin: '', symbol: '', currency: 'EUR',
-              /* `fxBuy: null` et non 1 : la devise n'est pas encore choisie, donc
-                 le taux d'achat n'est pas connu. Un 1 pose ici se figeait pour
-                 toujours, et un titre en dollars comptait ensuite son prix de
-                 revient sans conversion. */
-              qty: 0, buyPrice: 0, price: 0, fx: 1, fxBuy: null,
-              assetClass: v.assetClass, role: v.role, account: v.account, manual: false,
-              dateAchat: v.dateAchat || '',
-            });
-            i = Store.state.positions.length - 1;
-          }
-          const p = Store.state.positions[+i];
+             Le compte se demande en premier : c'est la question a laquelle on
+             sait repondre en arrivant — j'achete ce titre sur tel compte — la
+             ou la classe et le role sont des reglages de rangement. La liste
+             des comptes depend malgre tout de la classe, et se refait quand on
+             la change. */
+          const cat = classeDuType(bouton.dataset.type);
+          const v = await askForm({
+            titre: bouton.dataset.nom || bouton.dataset.symbol,
+            sous: trad('Où ranger cette ligne ?'),
+            ok: 'Créer la ligne',
+            lie: { de: 'assetClass', vers: 'account', options: comptesPourListe,
+                   vide: 'aucun compte ne peut porter cette classe' },
+            champs: [
+              { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
+                valeur: defaultHoldingAccount(), aide: trad('limité aux comptes compatibles') },
+              { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
+                options: OPTIONS_CLASSE, valeur: cat,
+                aide: bouton.dataset.type ? `déduite de ${guill(bouton.dataset.type)}` : '' },
+              { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE,
+                valeur: 'satellite', aide: trad('coeur de portefeuille ou pari satellite') },
+              /* Proposee au jour, parce qu'on cree une ligne le jour ou l'on
+                 achete — et changeable, parce qu'on la cree aussi en installant
+                 l'application sur un portefeuille deja constitue. Le champ est
+                 pose ici plutot que laisse a la fiche : deux chiffres en
+                 dependent, et l'un d'eux se trompe le jour meme si personne ne
+                 repond. */
+              { cle: 'dateAchat', label: trad('Date d’achat'), type: 'date', valeur: todayISO(),
+                aide: DATE_ACHAT_AIDE },
+            ],
+          });
+          if (!v) return;
+          if (!v.account) { toast(trad('Ouvre d’abord un compte qui accepte cette catégorie')); return; }
+          Store.state.positions.push({
+            id: 'p' + Date.now(), name: '', isin: '', symbol: '', currency: 'EUR',
+            /* `fxBuy: null` et non 1 : la devise n'est pas encore choisie, donc
+               le taux d'achat n'est pas connu. Un 1 pose ici se figeait pour
+               toujours, et un titre en dollars comptait ensuite son prix de
+               revient sans conversion. */
+            qty: 0, buyPrice: 0, price: 0, fx: 1, fxBuy: null,
+            assetClass: v.assetClass, role: v.role, account: v.account, manual: false,
+            dateAchat: v.dateAchat || '',
+          });
+          const i = Store.state.positions.length - 1;
+          const p = Store.state.positions[i];
 
-          p.symbol = sel.dataset.symbol;
-          if (sel.dataset.isin) p.isin = sel.dataset.isin;
-          if (sel.dataset.nom && (!p.name || p.name === 'Nouvelle ligne')) p.name = sel.dataset.nom;
+          p.symbol = bouton.dataset.symbol;
+          if (bouton.dataset.isin) p.isin = bouton.dataset.isin;
+          if (bouton.dataset.nom) p.name = bouton.dataset.nom;
           Store.save();
           toast(`${p.name || p.symbol} ${trad('ajouté')}`);
           render();
 
           // complète devise, cours et taux de change
-          await lookupSymbol(+i);
+          await lookupSymbol(i);
         });
       });
     } catch (e) {

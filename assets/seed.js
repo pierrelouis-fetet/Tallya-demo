@@ -15,9 +15,13 @@
 
 /* Types de compte. `group` pilote tous les calculs (cash de vie / bourse /
    private market) ; `label` n'est qu'un regroupement d'affichage. */
+/* Aucune enveloppe francaise ici. La demonstration s'ouvre en anglais pour qui
+   ne parle pas francais, et un PEA n'existe pas dans ce monde-la : le lecteur y
+   voit un sigle qu'aucune traduction ne peut lui rendre. Les enveloppes de la
+   table `TYPES_COMPTE` restent, elles, offertes a qui saisit son propre
+   patrimoine. */
 const SEED_ACCOUNT_TYPES = [
   { id: 'banque',       label: 'Banks',        group: 'cash' },
-  { id: 'pea',          label: 'PEA',            group: 'bourse' },
   { id: 'cto',          label: 'CTO',            group: 'bourse' },
   { id: 'crypto',       label: 'Crypto',         group: 'bourse' },
   { id: 'levier',       label: 'Leverage / debt', group: 'bourse' },
@@ -30,7 +34,7 @@ const SEED_ACCOUNT_TYPES = [
    Ce numero se compare a celui range dans l'etat : quand il change, la
    demonstration propose de se recharger. A incrementer des qu'on touche aux
    montants de cette graine. */
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
 
 const SEED_ACCOUNTS = [
   // --- Cash de vie -------------------------------------------------
@@ -42,11 +46,19 @@ const SEED_ACCOUNTS = [
   // Les deux poches de cash d'un compte titres : de l'argent deja verse au
   // courtier mais pas encore investi. Il compte dans les liquidites, pas
   // dans les actifs de marche.
-  { id: 'cashPea',  label: 'Cash PEA',       short: 'Cash PEA', group: 'bourse', broker: 'Broker', type: 'pea', role: 'cash', alloc: 'Cash PEA/CTO' },
-  { id: 'cashCto',  label: 'Cash CTO',       short: 'Cash CTO', group: 'bourse', broker: 'Broker', type: 'cto', role: 'cash', alloc: 'Cash PEA/CTO' },
-  { id: 'pea',      label: 'PEA',            short: 'PEA',      group: 'bourse', broker: 'Broker', holdings: true, type: 'pea' },
-  { id: 'cto',      label: 'Compte titres',  short: 'CTO',      group: 'bourse', broker: 'Broker', holdings: true, type: 'cto' },
-  { id: 'crypto',   label: 'Crypto portfolio', short: 'Crypto', group: 'bourse', broker: 'Broker', type: 'crypto', holdings: true, alloc: 'Crypto' },
+  //
+  // Deux courtiers plutot qu'un, et c'est ce qui distingue les deux comptes de
+  // titres : deux enveloppes chez le meme etablissement se liraient comme un
+  // doublon, la ou deux courtiers montrent le regroupement par etablissement.
+  //
+  // Les identifiants ne s'affichent nulle part : ce sont les colonnes des
+  // releves mensuels, et les renommer reecrirait seize mois d'historique sans
+  // qu'un ecran change.
+  { id: 'cashPea',  label: 'Cash · Broker B', short: 'Cash B',  group: 'bourse', broker: 'Broker B', type: 'cto', role: 'cash', alloc: 'Brokerage cash' },
+  { id: 'cashCto',  label: 'Cash · Broker A', short: 'Cash A',  group: 'bourse', broker: 'Broker A', type: 'cto', role: 'cash', alloc: 'Brokerage cash' },
+  { id: 'pea',      label: 'Stocks · Broker B', short: 'Stocks B', group: 'bourse', broker: 'Broker B', holdings: true, type: 'cto' },
+  { id: 'cto',      label: 'Stocks · Broker A', short: 'Stocks A', group: 'bourse', broker: 'Broker A', holdings: true, type: 'cto' },
+  { id: 'crypto',   label: 'Crypto portfolio', short: 'Crypto', group: 'bourse', broker: 'Broker A', type: 'crypto', holdings: true, alloc: 'Crypto' },
 
   // --- Private market ----------------------------------------------
   { id: 'fondsNonCote', label: 'Unlisted fund', short: 'Unlisted', group: 'pe', broker: 'Fund manager', type: 'pe', alloc: 'Private Equity' },
@@ -94,7 +106,7 @@ const SEED_MONTHLY = [
     v: { courant:1206, livret:4532, especes:111, cashPea:2520, cashCto:1386, pea:11141, cto:5984, crypto:1380, fondsNonCote:1000, appart:145000 } },
   { date: '2024-04-01', comment: '', dettes: 85395,
     v: { courant:1252, livret:4782, especes:114, cashPea:2880, cashCto:1584, pea:11904, cto:6341, crypto:1469, fondsNonCote:2000, appart:145000 } },
-  { date: '2024-05-01', comment: 'First scheduled payment into the PEA', dettes: 85010,
+  { date: '2024-05-01', comment: 'First scheduled payment into the stocks account', dettes: 85010,
     v: { courant:1298, livret:5032, especes:117, cashPea:324, cashCto:1782, pea:12667, cto:6698, crypto:1558, fondsNonCote:2000, appart:145000 } },
   { date: '2024-06-01', comment: '', dettes: 84625,
     v: { courant:1344, livret:5282, especes:120, cashPea:684, cashCto:1980, pea:13430, cto:7055, crypto:1647, fondsNonCote:2000, appart:145000 } },
@@ -340,7 +352,7 @@ const SEED_STRATEGY = {
   ],
   models: [
     { name: 'Core-Satellite', note: 'Un socle large, quelques convictions autour', lines: [
-      { label: 'Core ETF World',         pct: 45, vehicles: 'ETF MSCI World éligible PEA' },
+      { label: 'Core ETF World',         pct: 45, vehicles: 'ETF MSCI World capitalisant' },
       { label: 'Core ETF Nasdaq',        pct: 15, vehicles: 'ETF Nasdaq-100' },
       { label: 'Satellites convictions', pct: 15, vehicles: '3 à 5 lignes maximum' },
       { label: 'Or',                     pct: 8,  vehicles: 'ETC or physique' },

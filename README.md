@@ -189,9 +189,9 @@ fuite : dépenses sous-déclarées, ou charges oubliées dans le budget.
 
 - **Tout est éditable en place.** Tu tapes dans une case, la valeur est
   enregistrée immédiatement ; les totaux se recalculent quand tu quittes le champ.
-- **Une seule source de vérité.** Les comptes titres (Courtier B PEA, Courtier B CTO, TR CTO)
-  sont calculés à partir des positions — pas de double saisie. Les autres comptes
-  se saisissent dans **Comptes** ou dans **Positions** pour le cash.
+- **Une seule source de vérité.** Un compte titres est calculé à partir des
+  positions qu'il porte — pas de double saisie. Les autres comptes se saisissent
+  dans **Comptes**, ou dans **Positions** pour le cash qui y dort.
 - **Valeur calculée ou manuelle.** Par défaut `valeur = quantité × cours × FX`.
   Coche « Man. » pour saisir directement la valeur et le montant investi
   (c'est le cas de l'or, dont le cours affiché ne correspond pas au support détenu).
