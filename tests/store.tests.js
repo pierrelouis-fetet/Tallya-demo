@@ -14537,6 +14537,31 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     vrai(rang('assetClass') < rang('role'), 'la classe reste avant le rôle');
   });
 
+  test('elle demande aussi ce qu’on a acheté, et combien', () => {
+    /* Quantite et prix paye a zero obligeaient a rouvrir la fiche juste apres,
+       pour la seule ligne qu'on vienne de creer. Ils vivent sous le compte,
+       parce que c'est le meme geste : j'ai achete tant de titres, a tel prix,
+       sur tel compte. La classe et le role, qui rangent, viennent apres. */
+    const bloc = recherche();
+    const rang = cle => bloc.indexOf('cle: \'' + cle + '\'');
+    for (const cle of ['qty', 'buyPrice']) vrai(rang(cle) > 0, 'le champ ' + cle + ' est là');
+    vrai(rang('account') < rang('qty'), 'la quantité suit le compte');
+    vrai(rang('qty') < rang('buyPrice'), 'puis le prix payé');
+    vrai(rang('buyPrice') < rang('assetClass'),
+      'et les deux viennent avant les champs de rangement');
+    /* Le zero reste accepte : on cree aussi une ligne avant de l'acheter. */
+    vrai(!/cle: 'qty'[^}]*requis/.test(bloc) && !/cle: 'buyPrice'[^}]*requis/.test(bloc),
+      'aucun des deux n’est obligatoire');
+  });
+
+  test('et ce qu’elle demande atterrit sur la ligne créée', () => {
+    /* Un champ qu'on remplit et que la creation ignore est pire que pas de
+       champ : il fait croire que c'est saisi. */
+    const bloc = recherche();
+    vrai(/qty: v\.qty, buyPrice: v\.buyPrice/.test(bloc),
+      'la quantité et le prix saisis sont ceux de la ligne, pas des zéros');
+  });
+
   test('la liste des comptes suit toujours la classe', () => {
     /* L'ordre a l'ecran ne defait pas la dependance : une action ne se loge pas
        sur un portefeuille de cryptomonnaies, et changer la classe refait la
@@ -14573,6 +14598,59 @@ suite('Chercher un titre, c’est en ajouter un', () => {
                             src.indexOf('function mountSymbolSearch('));
     vrai(!/>Chercher</.test(carte), 'plus de libellé posé en dur');
     enLangue('en', () => { eq(trad('Chercher'), 'Search', 'la clé répond en anglais'); });
+  });
+
+  test('la carte ne donne pas son propre mode d’emploi', () => {
+    /* Le renvoi d'en-tete disait « cherche, puis "+ Nouvelle ligne" » : il
+       nommait un controle qu'on a sous les yeux, donc le premier a changer de
+       nom l'a rendu faux — et un mode d'emploi faux se lit avant le controle
+       qu'il decrit. Un renvoi de carte porte ce que la carte ne montre pas. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf('function symbolSearchCard('),
+                            src.indexOf('function mountSymbolSearch('));
+    vrai(!/class="hint"/.test(carte), 'pas de renvoi en tête de la carte d’ajout');
+    vrai(!/Nouvelle ligne/.test(carte),
+      'et plus une seule mention du choix de menu retiré');
+    vrai(!/Nouvelle ligne »/.test(lireSource('assets/i18n.js')),
+      'sa clé de traduction part avec lui');
+  });
+
+  test('le tableau des lignes ne porte pas de colonne de suppression', () => {
+    /* Une croix par ligne, collee contre le nom qu'on clique pour lire, met un
+       geste irreversible a portee de pouce du geste de lecture — et cinq croix
+       alignees font une colonne de destruction la ou le tableau sert a
+       comparer. Meme regle que l'annulation, sortie du journal des ventes. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    vrai(!/del-position/.test(src),
+      'ni la colonne ni l’action qui la servait : une action sans porte est la '
+      + 'moitié qu’on oublie en retirant un affichage');
+    /* La suppression n'est pas perdue : elle vit dans la fiche de la ligne,
+       avec les autres actes. Le retrait serait une perte sans elle. */
+    vrai(/posDelete/.test(src), 'la fiche d’une ligne porte toujours sa suppression');
+    /* Le compte de colonnes doit avoir suivi : un colspan qui ment laisse une
+       cellule vide en trop sous le tableau, et l'etat vide deborde. */
+    const enTetes = (vue.match(/sortableTh\(/g) || []).length;
+    vrai(/colspan="9" class="empty"/.test(vue),
+      `l’état vide couvre ${enTetes} colonnes, pas une de plus`);
+    vrai(!/<th><\/th>/.test(vue), 'plus d’en-tête vide pour une colonne disparue');
+  });
+
+  test('sous 768 px, le bouton d’ajout ne s’étire pas sur toute la carte', () => {
+    /* La regle valait pour le menu qu'il remplace : un menu s'etire parce que
+       ses options portent de longs noms et qu'il les tronque sans rien dire. Un
+       libelle de deux mots etendu sur toute la carte devient un aplat clair par
+       resultat, et six titres cherches se lisent comme six boutons separes par
+       du texte. */
+    const css = lireSource('assets/styles.css');
+    const regles = css.match(/table\.cols-nom-action[^{]*\{[^}]*\}/g) || [];
+    const etires = regles.filter(r => /width:\s*100%/.test(r));
+    for (const r of etires) {
+      vrai(!/\.btn/.test(r), 'le bouton d’ajout ne doit pas prendre toute la largeur : ' + r);
+    }
+    vrai(etires.some(r => /select/.test(r)),
+      'le menu, lui, garde sa pleine largeur : il tronque ses options sans le dire');
   });
 });
 

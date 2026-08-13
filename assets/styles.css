@@ -4370,8 +4370,13 @@ td .empty, th .empty { background: none; border: none; }
   table.cols-nom-action td { border: none; padding: 0; text-align: left; white-space: normal; }
   table.cols-nom-action td.name { overflow-wrap: anywhere; }
   table.cols-nom-action td:last-child { margin-top: 8px; }
-  table.cols-nom-action select,
-  table.cols-nom-action .btn { width: 100%; }
+  /* Un menu s'etire parce que ses options portent de longs noms et qu'il les
+     tronque sans rien dire. Un bouton de deux mots n'a rien a etirer : etendu
+     sur toute la carte, il devient un aplat clair par resultat, et six titres
+     cherches se lisent comme six boutons separes par du texte. Il garde donc sa
+     largeur naturelle ; `btn sm` fait deja plus de 24 px de haut, la cible du
+     doigt est tenue. */
+  table.cols-nom-action select { width: 100%; }
 
   /* la colonne figée mangerait la moitié de l'écran */
   .sticky-col { position: static; }

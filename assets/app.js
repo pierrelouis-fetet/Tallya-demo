@@ -2908,7 +2908,14 @@ function viewPositions() {
        la fiche, et deux surfaces pour la meme donnee se contredisent tot ou tard.
 
        L'identite de la ligne passe sous son nom, comme dans la liste du
-       telephone — meme phrase, meme ordre. */
+       telephone — meme phrase, meme ordre.
+
+       Pas de colonne de suppression. Une croix par ligne, collee contre le nom
+       qu'on clique pour lire, met un geste irreversible a portee de pouce du
+       geste de lecture — et cinq croix alignees font une colonne de destruction
+       la ou le tableau sert a comparer. La suppression vit dans la fiche, avec
+       les autres actes de la ligne : c'est la meme regle qui a sorti
+       l'annulation du journal des ventes. */
     return `<tr>
       <td class="name sticky-col"><button type="button" class="mois-lien"
             data-action="open-position" data-i="${i}"
@@ -2929,7 +2936,6 @@ function viewPositions() {
       <td class="${cls(pe)}">${fmtSigned(pe)}</td>
       <td class="${cls(pp)}">${arrow(pp)} ${fmtSignedPct(pp)}</td>
       <td class="muted">${fmtPct(stockBase ? v / stockBase * 100 : 0)}</td>
-      <td><button class="btn icon" data-action="del-position" data-i="${i}" title="${trad('Supprimer cette ligne')}">✕</button></td>
     </tr>`;
   }).join('');
 
@@ -3312,15 +3318,14 @@ function viewPositions() {
           ${sortableTh('poids', '% portef.', '',
             'La part de cette ligne dans le portefeuille de titres, pas dans tes avoirs. '
             + 'Le classement est celui de la valeur : le dénominateur est le même pour toutes.')}
-          <th></th>
         </tr></thead>
-        <tbody>${rows || `<tr><td colspan="10" class="empty">Aucune position</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="9" class="empty">Aucune position</td></tr>`}</tbody>
         <tfoot><tr>
           <td class="sticky-col">Total</td><td colspan="3"></td>
           <td>${fmtEUR(pnl.value)}</td><td>${fmtEUR(pnl.invested)}</td>
           <td class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</td>
           <td class="${cls(pnl.pnl)}">${pnl.pct == null ? '' : fmtSignedPct(pnl.pct)}</td>
-          <td colspan="2"></td>
+          <td></td>
         </tr></tfoot>
       </table>
     </div>
@@ -3858,8 +3863,13 @@ function symbolSearchCard() {
   const on = Quotes.isOnline();
   return `
     <div class="card">
-      <div class="card-head"><h2>${trad('Ajouter une ligne')}</h2>
-        <span class="hint">${trad('Cherche, puis « ➕ Nouvelle ligne »')}</span></div>
+      <!-- Pas de renvoi en tete. Il donnait le mode d'emploi de la carte,
+           « cherche, puis ... », donc il nommait un controle qu'on a sous les
+           yeux : le premier a changer de nom l'a rendu faux, et un mode
+           d'emploi faux se lit avant le controle qu'il decrit. Un renvoi de
+           carte porte ce que la carte ne montre pas, jamais l'ordre des gestes
+           qu'elle affiche. -->
+      <div class="card-head"><h2>${trad('Ajouter une ligne')}</h2></div>
       <!-- Le recours, et pas l'inverse. Ce formulaire etait le chemin principal,
            offert par le bouton de l'en-tete du tableau, alors qu'il fait taper a
            la main ce que la recherche remplit seule. Il garde sa raison d'etre :
@@ -3975,6 +3985,16 @@ function mountSymbolSearch() {
             champs: [
               { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
                 valeur: defaultHoldingAccount(), aide: trad('limité aux comptes compatibles') },
+              /* La quantite et le prix paye se demandent ici, sous le compte,
+                 parce qu'ils font partie du meme geste : j'ai achete tant de
+                 titres, a tel prix, sur tel compte. Les laisser a zero
+                 obligeait a rouvrir la fiche juste apres, pour la seule ligne
+                 qu'on vienne de creer. Zero reste accepte : on cree aussi une
+                 ligne avant de l'acheter, et le champ n'est pas requis. */
+              { cle: 'qty', label: 'Quantité', type: 'nombre', exemple: '0',
+                aide: trad('laisse zéro si tu n’as pas encore acheté') },
+              { cle: 'buyPrice', label: trad('Prix de revient unitaire'), type: 'nombre', exemple: '0',
+                aide: trad('le prix payé par titre, dans la devise du titre') },
               { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
                 options: OPTIONS_CLASSE, valeur: cat,
                 aide: bouton.dataset.type ? `déduite de ${guill(bouton.dataset.type)}` : '' },
@@ -3998,7 +4018,7 @@ function mountSymbolSearch() {
                le taux d'achat n'est pas connu. Un 1 pose ici se figeait pour
                toujours, et un titre en dollars comptait ensuite son prix de
                revient sans conversion. */
-            qty: 0, buyPrice: 0, price: 0, fx: 1, fxBuy: null,
+            qty: v.qty, buyPrice: v.buyPrice, price: 0, fx: 1, fxBuy: null,
             assetClass: v.assetClass, role: v.role, account: v.account, manual: false,
             dateAchat: v.dateAchat || '',
           });
@@ -8468,13 +8488,6 @@ const ACTIONS = {
     });
     Store.save(); render();
     toast(`${guill(v.name)} ${trad('ajoutée')}`);
-  },
-  async 'del-position'(btn) {
-    const i = +btn.dataset.i;
-    const p = Store.state.positions[i];
-    if (!await askConfirm(`${trad('Supprimer la position')} ${guill(p.name)} ?\n\n${trad('Réversible avec Ctrl+Z. Une sauvegarde du jour existe dans l’onglet Données.')}`)) return;
-    Store.state.positions.splice(i, 1);
-    Store.save(); render(); toast(trad('Position supprimée'));
   },
   /* Depuis une tuile : on change de vue, on descend à la bonne carte,
      et on la fait clignoter une fois pour qu'on la repère. */
