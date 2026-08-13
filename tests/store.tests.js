@@ -14554,6 +14554,30 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'aucun des deux n’est obligatoire');
   });
 
+  test('elle nomme la devise du prix qu’elle demande', () => {
+    /* La bulle disait « dans la devise du titre » alors que rien a l'ecran ne
+       disait laquelle : la recherche de Yahoo ne rend ni cours ni devise. Le
+       symbole retenu est donc interroge au clic, un appel pour celui qu'on
+       designe plutot que vingt-cinq pour la liste entiere. */
+    const src = lireSource('assets/app.js');
+    const bloc = recherche();
+    vrai(/const cote = await coteDuSymbole\(bouton\.dataset\.symbol\)/.test(bloc),
+      'le cours du titre choisi est demandé avant l’ouverture de la fenêtre');
+    vrai(/\$\{trad\('Prix de revient unitaire'\)\} \(\$\{cote\.currency\}\)/.test(bloc),
+      'la devise se lit sur l’intitulé du champ, là où est l’unité du nombre tapé');
+    vrai(/exemple: cote \? String\(cote\.price\)/.test(bloc),
+      'le cours du jour meuble le champ sans le remplir : un prix de revient '
+      + 'pré-rempli au cours d’aujourd’hui serait faux et aurait l’air officiel');
+    /* Un repere absent ne doit rien empecher : sans passerelle, la fenetre
+       s'ouvre quand meme, avec l'intitule neutre. */
+    const aide = src.slice(src.indexOf('async function coteDuSymbole('),
+                           src.indexOf('function mountSymbolSearch('));
+    vrai(/return null/.test(aide) && /catch/.test(aide),
+      'la cote rend null plutôt que de lever : la fenêtre s’ouvre sans le repère');
+    vrai(/cote \? .* : trad\('le prix payé par titre/s.test(bloc),
+      'et l’intitulé retombe sur sa version neutre');
+  });
+
   test('et ce qu’elle demande atterrit sur la ligne créée', () => {
     /* Un champ qu'on remplit et que la creation ignore est pire que pas de
        champ : il fait croire que c'est saisi. */

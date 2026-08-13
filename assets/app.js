@@ -3908,6 +3908,26 @@ function symbolSearchCard() {
     </div>`;
 }
 
+/* Le cours et la devise d'un symbole, ou `null`.
+   Rend `null` a la moindre difficulte — passerelle endormie, symbole sans
+   cotation, reponse illisible — parce que l'appelant s'en sert pour meubler
+   une question, jamais pour calculer : un repere absent laisse la fenetre
+   s'ouvrir, une exception l'empecherait. */
+async function coteDuSymbole(symbole) {
+  const sym = String(symbole || '').trim().toUpperCase();
+  if (!sym) return null;
+  if (Quotes.isOnline() === null) await Quotes.health();
+  if (Quotes.isOnline() === false) return null;
+  try {
+    const r = await fetch(`${Quotes.BASE}/api/quotes?symbols=${encodeURIComponent(sym)}`,
+                          { cache: 'no-store' });
+    const q = (await r.json()).quotes?.[0];
+    return q && !q.error && num(q.price) ? q : null;
+  } catch {
+    return null;
+  }
+}
+
 function mountSymbolSearch() {
   const btn = $('#symSearch'), input = $('#symQuery'), out = $('#symResults');
   if (!btn) return;
@@ -3966,6 +3986,18 @@ function mountSymbolSearch() {
 
       out.querySelectorAll('.assign-target').forEach(bouton => {
         bouton.addEventListener('click', async () => {
+          /* Le cours du titre choisi, avant d'ouvrir la fenetre.
+             Elle demande un prix de revient « par titre », et sans la devise ni
+             un ordre de grandeur la question se pose a l'aveugle : la recherche
+             de Yahoo ne rend ni l'un ni l'autre. Les chercher pour les vingt-cinq
+             resultats couterait vingt-cinq appels pour un seul qu'on retient ;
+             sur celui qu'on vient de designer, c'en est un.
+             L'echec n'empeche rien : la fenetre s'ouvre sans le repere plutot
+             que de refuser d'ouvrir parce que la passerelle dort. */
+          bouton.disabled = true;
+          const cote = await coteDuSymbole(bouton.dataset.symbol);
+          bouton.disabled = false;
+
           /* Le titre doit atterrir quelque part, et pas n'importe ou : la
              categorie se deduit du type renvoye par la recherche, et le compte
              se limite a ceux qui peuvent la porter.
@@ -3993,8 +4025,21 @@ function mountSymbolSearch() {
                  ligne avant de l'acheter, et le champ n'est pas requis. */
               { cle: 'qty', label: 'Quantité', type: 'nombre', exemple: '0',
                 aide: trad('laisse zéro si tu n’as pas encore acheté') },
-              { cle: 'buyPrice', label: trad('Prix de revient unitaire'), type: 'nombre', exemple: '0',
-                aide: trad('le prix payé par titre, dans la devise du titre') },
+              /* La devise se lit sur l'intitule, pas dans une bulle : c'est
+                 l'unite du nombre qu'on tape, et une unite se pose contre le
+                 champ. Le cours du jour sert de repere en fond de champ, sans
+                 jamais remplir : un prix de revient est ce qu'on a paye, et
+                 pre-remplir avec le cours d'aujourd'hui donnerait une valeur
+                 fausse a l'air officiel, que personne ne relit. */
+              { cle: 'buyPrice', type: 'nombre',
+                label: cote && cote.currency
+                  ? `${trad('Prix de revient unitaire')} (${cote.currency})`
+                  : trad('Prix de revient unitaire'),
+                exemple: cote ? String(cote.price) : '0',
+                aide: cote
+                  ? `${trad('cours du jour')} ${fmtCur(cote.price, cote.currency)} · ${
+                      trad('ce que tu as payé peut être différent')}`
+                  : trad('le prix payé par titre, dans la devise du titre') },
               { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
                 options: OPTIONS_CLASSE, valeur: cat,
                 aide: bouton.dataset.type ? `déduite de ${guill(bouton.dataset.type)}` : '' },

@@ -173,6 +173,8 @@ const I18N = {
     "Chercher": "Search",
     "laisse zéro si tu n’as pas encore acheté": "leave at zero if you have not bought yet",
     "le prix payé par titre, dans la devise du titre": "the price paid per unit, in the security’s own currency",
+    "cours du jour": "today’s price",
+    "ce que tu as payé peut être différent": "what you actually paid may differ",
     "Classe d’actif": "Asset class",
     "Comptes d’investissement": "Investment accounts",
     "Créer une ligne de titres pour ce résultat": "Create a holding from this result",
