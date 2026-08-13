@@ -14547,6 +14547,33 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     vrai(/options: comptesPourListe\(cat\)/.test(bloc),
       'et la liste s’ouvre déjà filtrée par la classe déduite du type');
   });
+
+  test('la barre de recherche est posée, pas dépliée', () => {
+    /* Un depliant coute un clic pour reveler ce que le titre de la carte
+       annonce deja, et son resume redisait mot pour mot le champ qu'il
+       cachait. Un panneau se replie quand il porte des reglages qu'on ne
+       touche qu'une fois ; celui-ci porte le geste pour lequel on vient. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf('function symbolSearchCard('),
+                            src.indexOf('function mountSymbolSearch('));
+    vrai(carte.length > 100, 'la carte se relit depuis sa source');
+    vrai(!/<details/.test(carte), 'plus de dépliant sur la carte d’ajout');
+    vrai(/id="symQuery"/.test(carte), 'le champ est posé directement');
+    vrai(!/outilsAjoutOuvert|pliAjout/.test(src),
+      'et l’état du dépliant ne survit pas au dépliant : une variable que plus '
+      + 'personne ne lit est la moitié qu’on oublie en retirant un affichage');
+  });
+
+  test('le bouton de recherche parle la langue de la page', () => {
+    /* Il etait pose sans passer par la traduction, donc invisible au
+       rattrapage : « Chercher » s'affichait en francais dans les deux
+       versions, au milieu d'une carte entierement anglaise. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf('function symbolSearchCard('),
+                            src.indexOf('function mountSymbolSearch('));
+    vrai(!/>Chercher</.test(carte), 'plus de libellé posé en dur');
+    enLangue('en', () => { eq(trad('Chercher'), 'Search', 'la clé répond en anglais'); });
+  });
 });
 
 /* ------------------------------------------------------------------

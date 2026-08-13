@@ -3681,13 +3681,9 @@ async function mountReperes() {
   box.scrollLeft = 0;
 }
 
-/* Les deux panneaux d'outillage de la page Marchés. Fermes par defaut : six
-   cartes dont deux de reglages, c'etait l'outillage qui occupait la place du
-   contenu. Le motif est celui des hypotheses de Projection. */
-let outilsAjoutOuvert = false;
-/* Pose par l'action « ajouter une ligne », consomme par `render()` : le
-   depliant de recherche n'existe pas encore au moment du clic si l'on
-   arrive d'une autre vue. */
+/* Pose par l'action « ajouter une ligne », consomme par `render()` : la carte
+   de recherche n'existe pas encore au moment du clic si l'on arrive d'une
+   autre vue. */
 let ouvrirRechercheApresRendu = false;
 
 function mountPositions() {
@@ -3700,29 +3696,20 @@ function mountPositions() {
      de lui-meme si la carte n'est pas la — c'est le cas sans compte capable de
      porter un titre. */
   mountSymbolSearch();
-  /* La recherche demandee depuis l'en-tete du tableau : on ouvre, on s'y rend,
-     on donne le focus. `focusChamp` se tait sur ecran tactile, ce qui est voulu
-     — le clavier ne doit pas recouvrir la carte a laquelle on vient d'arriver. */
+  /* La recherche demandee depuis l'en-tete du tableau : on s'y rend, on donne
+     le focus. `focusChamp` se tait sur ecran tactile, ce qui est voulu — le
+     clavier ne doit pas recouvrir la carte a laquelle on vient d'arriver. */
   if (ouvrirRechercheApresRendu) {
     ouvrirRechercheApresRendu = false;
-    const pli = $('#pliAjout');
-    if (pli) pli.open = true;
+    const champ = $('#symQuery');
     /* Le defilement attend la fin de l'animation d'entree de la vue. Celle-ci
        deplace `.view` par un `transform`, et `scrollIntoView` appele pendant
        calcule sa cible sur la position transformee : la carte finissait hors de
        l'ecran une fois l'animation retombee. Le focus, lui, peut partir tout de
        suite : il ne depend pas de la geometrie. */
-    focusChamp($('#symQuery'));
-    if (pli) setTimeout(() => pli.scrollIntoView({ block: 'center', behavior: 'smooth' }), 320);
-  }
-
-  /* Le panneau d'outillage retient son etat, comme les hypotheses de Projection :
-     chaque reglage relance render(). Ici aussi, avant la sortie : la carte existe
-     dans l'etat vide, son depliant doit s'y souvenir de la meme facon. */
-  for (const [id, poser] of [
-                             ['pliAjout', v => { outilsAjoutOuvert = v; }]]) {
-    const d = $('#' + id);
-    if (d) d.addEventListener('toggle', () => poser(d.open));
+    focusChamp(champ);
+    const carte = champ && champ.closest('.card');
+    if (carte) setTimeout(() => carte.scrollIntoView({ block: 'center', behavior: 'smooth' }), 320);
   }
 
   /* Ce qui suit a besoin du tableau et de ses voisins : sans une seule ligne, la
@@ -3881,14 +3868,15 @@ function symbolSearchCard() {
         ${trad('Pas d’ISIN, ou un titre coté nulle part ?')}
         <button class="lien-nu" data-action="add-position">${trad('Saisir la ligne à la main')}</button>
       </p>
-      <details class="pli-reglages" id="pliAjout" ${outilsAjoutOuvert ? 'open' : ''}>
-        <summary>
-          <span class="pli-valeurs">${trad('ISIN ou nom du titre, la fiche se remplit seule')}</span>
-          <span class="pli-action">Chercher</span>
-        </summary>
+      <!-- La barre est posee, pas depliee. Un depliant coute un clic pour
+           reveler ce que le titre de la carte annonce deja, et son resume
+           redisait mot pour mot le champ qu'il cachait : « ISIN ou nom du
+           titre » au-dessus de « ISIN ou nom, ex. ... ». Un panneau se replie
+           quand il porte des reglages qu'on ne touche qu'une fois ; celui-ci
+           porte le geste pour lequel on vient. -->
       <div class="barre-recherche" style="margin-top:12px">
         <input id="symQuery" placeholder="${trad('ISIN ou nom, ex. IE000OJ5TQP4')}" style="text-align:left">
-        <button class="btn sm" id="symSearch" ${on === false ? 'disabled' : ''}>Chercher</button>
+        <button class="btn sm" id="symSearch" ${on === false ? 'disabled' : ''}>${trad('Chercher')}</button>
         <select class="menu-serre" data-path="meta.preferredExchange"
                 title="${trad('Place privilégiée quand un ISIN est coté sur plusieurs marchés')}">
           ${(() => {
@@ -3907,7 +3895,6 @@ function symbolSearchCard() {
         <b>${trad('Colle plutôt l\'ISIN de ton relevé')}</b>${trad(' : la ligne se remplit alors entièrement.')}${aide(trad("Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout."))}
       </p>
       <div id="symResults" class="small" style="margin-top:12px"></div>
-      </details>
     </div>`;
 }
 
@@ -8430,10 +8417,9 @@ const ACTIONS = {
      carte, pour un titre sans ISIN ou cote nulle part.
 
      Le drapeau plutot qu'un `requestAnimationFrame` : changer de vue passe par
-     `hashchange`, donc le depliant n'existe pas encore au retour de cette
+     `hashchange`, donc le champ n'existe pas encore au retour de cette
      fonction. `render()` le consomme quand la carte est posee. */
   'ajouter-ligne'() {
-    outilsAjoutOuvert = true;
     ouvrirRechercheApresRendu = true;
     if (location.hash.startsWith('#/positions')) render();
     else location.hash = '#/positions';
