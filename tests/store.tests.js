@@ -15013,6 +15013,36 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'la somme des lignes fait le total, même avec un montant réservé');
   });
 
+  test('l’assurance emprunteur ne rembourse pas le capital', () => {
+    /* Elle vaut couramment 0,3 a 0,4 % du capital emprunte par an, elle est
+       prelevee avec l'echeance, et le modele la comptait comme du
+       remboursement : sur 250 000 EUR, c'est 75 EUR par mois qui faisaient
+       descendre la dette dans la projection alors qu'ils partent en prime. */
+    const credit = assurance => ({ id: 'd', libelle: 'Prêt', montant: 200000,
+      initial: 250000, taux: 3.5, mensualite: 1251,
+      ...(assurance ? { tauxAssurance: 0.36 } : {}), verifieLe: '2025-08-17' });
+    auJour('2026-08-17', () => {
+      const sans = projectionCredit(credit(false));
+      const avec = projectionCredit(credit(true));
+      eq(sans.moisDepuis, 12, 'douze mois projetés');
+      vrai(avec.projete > sans.projete,
+        'avec l’assurance, la dette descend moins vite : la prime ne rembourse rien');
+      /* 250 000 x 0,36 % / 12 = 75 EUR par mois qui ne remboursent pas. Sur
+         douze mois, la difference de capital restant du s'en approche, aux
+         interets pres que ces 75 EUR n'ont pas evites. */
+      const ecart = avec.projete - sans.projete;
+      vrai(ecart > 900 && ecart < 950,
+        `douze primes de 75 € font ${Math.round(ecart)} € de dette en plus`);
+    });
+    /* Sans capital initial connu, la base est le restant du : la prime est
+       sous-estimee, ce qui est le bon sens de l'erreur. */
+    auJour('2026-08-17', () => {
+      const d = { ...credit(true) }; delete d.initial;
+      vrai(projectionCredit(d).projete > projectionCredit(credit(false)).projete,
+        'et sans capital initial, elle compte quand même');
+    });
+  });
+
   test('de l’argent déjà promis ne travaille pas trente ans', () => {
     /* Le cash portait deja « Projet prevu », mais l'affectation s'arretait au
        cash : le cas le plus courant est ailleurs, l'assurance-vie qui financera

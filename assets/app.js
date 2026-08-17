@@ -4080,6 +4080,20 @@ function mountSymbolSearch() {
                   ? `${trad('cours du jour')} ${fmtCur(cote.price, cote.currency)} · ${
                       trad('ce que tu as payé peut être différent')}`
                   : trad('le prix payé par titre, dans la devise du titre') },
+              /* Acheter sort de l'argent, ici comme ailleurs. Renforcer une
+                 ligne demandait deja « Paye depuis » et debitait le cash du
+                 compte choisi ; la creation, qui demande desormais une quantite
+                 et un prix, faisait naitre des titres sans que rien ne parte.
+                 Le meme geste doit avoir le meme effet, sinon le cash d'un
+                 compte-titres ne baisse jamais et le total de l'enveloppe monte
+                 tout seul. Le dernier choix reste « ne rien toucher », pour la
+                 ligne qu'on installe sans venir de l'acheter. */
+              ...(cashTargets().length ? [{
+                cle: 'cash', label: trad('Payé depuis'), type: 'liste',
+                options: [...cashTargets().map(c => [c.id, sousNom('', nomCompteV2(c), nomEtabDe(c))]),
+                          ['', trad('Aucun compte, ne pas toucher aux espèces')]],
+                valeur: '',
+                aide: trad('laisse vide si tu déclares une ligne que tu détiens déjà') }] : []),
               deduite
                 ? { cle: 'assetClass', label: trad('Classe d’actif'), lecture: true,
                     valeur: ASSET_CLASSES[cat] || cat,
@@ -4128,6 +4142,23 @@ function mountSymbolSearch() {
 
           // complète devise, cours et taux de change
           await lookupSymbol(i);
+
+          /* Le debit vient APRES la resolution du symbole, et c'est la seule
+             place juste : a la creation, `fx` vaut 1 par defaut et la devise
+             n'est pas encore connue. Debiter avant aurait compte des dollars
+             comme des euros. `lookupSymbol` pose la devise et le taux, donc le
+             cout se convertit ici pour de vrai. */
+          const achete = num(v.qty) * num(v.buyPrice);
+          if (v.cash && achete) {
+            const cc = compteById(v.cash);
+            if (cc) {
+              const enEuros = achete * (num(Store.state.positions[i]?.fx) || 1);
+              const e = cashInvestirEntree(cc, true);
+              e.montant = round2(num(e.montant) - enEuros);
+              Store.save(); render();
+              toast(`${fmtEUR0(enEuros)} ${trad('débité de')} ${ACC[v.cash]?.short || 'cash'}`);
+            }
+          }
         });
       });
     } catch (e) {
@@ -9510,6 +9541,8 @@ const ACTIONS = {
           aide: trad('facultatif, mais c’est elle qui entre dans ton budget') },
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, il sert à suivre le capital qui reste') },
+        { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre', exemple: '0',
+          aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
           aide: trad('seulement si tu renseignes une mensualité : elle entrera dans ton ')
               + 'budget sous ce nom' },
@@ -9579,6 +9612,7 @@ const ACTIONS = {
           libelle: `Crédit ${nomContenant()}`.trim(),
           montant: num(e3.credit), preteur: e3.preteur || '', note: '',
           mensualite: num(e3.mensualite) || null, taux: num(e3.taux) || null,
+          tauxAssurance: num(e3.tauxAssurance) || null,
           verifieLe: todayISO() });
         /* La charge fixe dans le meme geste : c'est le seul moment ou l'on a la
            mensualite en tete. `creerChargeDuCredit()` ne fait rien sans elle. */
@@ -9987,6 +10021,8 @@ const ACTIONS = {
         { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: trad('facultatif') },
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, noté pour mémoire') },
+        { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre', exemple: '0',
+          aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
           suggestions: valeursConnues('preteur') },
         { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
@@ -10003,6 +10039,7 @@ const ACTIONS = {
     e.dettes.push({ id: 'd' + Date.now(),
       libelle: v.libelle, montant: num(v.montant), initial: num(v.initial) || null,
       mensualite: num(v.mensualite) || null, taux: num(v.taux) || null,
+      tauxAssurance: num(v.tauxAssurance) || null,
       preteur: v.preteur || '', note: '', verifieLe: todayISO() });
     Store.save(); render();
     /* La charge fixe dans le meme geste, si la case est restee cochee et qu'une
@@ -10071,6 +10108,8 @@ const ACTIONS = {
               + 'ne sera alors saisi qu’une fois' }]),
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre',
           valeur: num(d.taux) || '', aide: trad('facultatif, noté pour mémoire') },
+        { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre',
+          valeur: num(d.tauxAssurance) || '', aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', valeur: d.preteur || '',
           exemple: 'ex. Crédit Agricole', suggestions: valeursConnues('preteur') },
         /* Pas de case quand une charge rembourse deja : il n'y a rien a creer, et
@@ -10108,6 +10147,7 @@ const ACTIONS = {
     d.initial = num(v.initial) || null;
     if (v.mensualite !== undefined) d.mensualite = num(v.mensualite) || null;
     d.taux = num(v.taux) || null;
+    d.tauxAssurance = num(v.tauxAssurance) || null;
     d.preteur = v.preteur || '';
     Store.save(); render();
     /* Le sens compte : une dette qui baisse fait monter le patrimoine net

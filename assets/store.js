@@ -1039,9 +1039,24 @@ function projectionCredit(d) {
      ne se rembourse pas par echeances et grossit tout seul. Le meme piege que le
      rappel du releve mensuel : le chiffre le plus faux est celui qu'on croit
      stable. */
+  /* L'assurance emprunteur sort de la mensualite sans rembourser un euro.
+
+     Elle vaut couramment 0,3 a 0,4 % du capital emprunte par an, elle est
+     prelevee avec l'echeance, et le modele la comptait comme du remboursement :
+     sur un pret de 250 000 EUR, c'est 75 EUR par mois qui faisaient descendre la
+     dette dans la projection alors qu'ils partent en prime. L'ecart se creuse a
+     chaque mois projete.
+
+     La prime se calcule sur le capital EMPRUNTE, pas sur le restant du : c'est
+     la formule de la grande majorite des contrats, et elle donne une prime
+     constante. A defaut de capital initial connu, le restant du sert de base —
+     la prime est alors sous-estimee, ce qui est le bon sens de l'erreur. */
+  const assurance = num(d.tauxAssurance)
+    ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
+  const rembourse = Math.max(0, mens - assurance);
   let capital = reste;
   for (let i = 0; i < mois && capital > 0; i++) {
-    capital = Math.max(0, capital + capital * taux - mens);
+    capital = Math.max(0, capital + capital * taux - rembourse);
   }
   return { moisDepuis: mois, projete: capital, ecart: reste - capital,
            sens: capital > reste ? 'monte' : capital < reste ? 'baisse' : 'stable' };
