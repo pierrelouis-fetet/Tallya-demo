@@ -2951,23 +2951,37 @@ function allocationByAsset({ credits = true } = {}) {
 /* --- allocation par compte : les placements, compte par compte ---------
    Les espèces n'y figurent pas : « investi » au dénominateur les exclut,
    les inclure au numérateur gonflait chaque part. */
+/* Le liquide entre dans cette repartition, et la base devient les avoirs.
+
+   Elle l'excluait deux fois : les comptes du groupe `cash` etaient ecartes, et
+   `lignesDe()` ne voit pas le cash pose sur un compte-titres. Une page qui
+   s'appelle « Allocation » et qui cache quinze mille euros de liquidites ne
+   montre pas une allocation, elle montre un portefeuille — et le cash est une
+   classe d'actif, celle qu'on choisit quand on ne choisit pas.
+
+   La base suit : `invested` valait le brut moins le cash, donc y ajouter le cash
+   aurait fait des parts qui depassent cent pour cent. C'est `valeurCompte()` qui
+   somme desormais, cash compris, et le total est le brut. */
 function allocationByAccount() {
-  const invested = nowTotals().invested;
+  const base = nowTotals().brut;
   return comptesOuverts()
-    .filter(c => typeCompte(c.type).groupe !== 'cash')
     /* La couleur suit la classe dominante du compte : un PEA d'actions se
        lit vert comme les actions ailleurs, un compte de non coté violet. Le
        compte n'est qu'un contenant, c'est ce qu'il porte qui compte. */
     .map(c => {
       const lignes = lignesDe(c);
-      const parClasse = new Map();
+      /* Le cash du compte pese dans la classe dominante comme le reste : un
+         livret est entierement liquide, un compte-titres a moitie investi se
+         colore de ce qu'il porte le plus. */
+      const parClasse = new Map([['liquidites', cashCompte(c)]]);
       for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
       const dominante = [...parClasse.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      return { label: nomCompteV2(c), value: lignes.reduce((s, l) => s + l.valeur, 0),
+      return { label: nomCompteV2(c), value: valeurCompte(c),
+               etab: nomEtabDe(c), type: trad(typeCompte(c.type).label),
                couleur: CLASSE_COULEURS[dominante] || CLASSE_COULEURS.nonCote };
     })
     .filter(r => r.value)
-    .map(r => ({ ...r, pct: invested ? r.value / invested * 100 : 0 }))
+    .map(r => ({ ...r, pct: base ? r.value / base * 100 : 0 }))
     .sort((a, b) => b.value - a.value);
 }
 
@@ -3655,13 +3669,15 @@ const couleurClasse = ac =>
    donc `typeCompte('levier').groupe` ne vaut rien et le filtre sur le groupe ne
    l'ecarte pas. Il faut le nommer. Une premiere version de cette fonction l'a
    oublie, et le test l'a rattrapee. */
+/* Meme base et meme perimetre que `allocationByAccount()`, un cran au-dessus :
+   les deux graphiques de la carte sont deux granularites d'un seul total, et
+   deux bases differentes en auraient fait deux cartes qui se contredisent. */
 function byAccountType() {
-  const invested = nowTotals().invested;
+  const base = nowTotals().brut;
   const parType = new Map();
   for (const c of comptesOuverts()) {
     if (c.type === 'levier') continue;
-    if (typeCompte(c.type).groupe === 'cash') continue;
-    const v = lignesDe(c).reduce((s, l) => s + l.valeur, 0);
+    const v = valeurCompte(c);
     if (!v) continue;
     parType.set(c.type, (parType.get(c.type) || 0) + v);
   }
@@ -3669,7 +3685,7 @@ function byAccountType() {
     .filter(([, value]) => Math.abs(value) > 0.005)
     .map(([type, value]) => ({
       label: trad(typeCompte(type).label),
-      value, pct: invested ? value / invested * 100 : 0,
+      value, pct: base ? value / base * 100 : 0,
     }))
     .sort((a, b) => b.value - a.value);
 }

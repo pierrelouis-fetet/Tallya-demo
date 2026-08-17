@@ -537,6 +537,8 @@ const I18N = {
     "douze caractères, laisse vide si tu saisis le cours à la main": "twelve characters, leave empty if you enter the price by hand",
     "elle donne l’ancienneté, que la fiche affiche : cinq ans pour un PEA, huit pour une assurance-vie": "it gives the age of the wrapper, shown on its panel: five years for a PEA, eight for a life-insurance contract",
     "Ouvert depuis": "Open for",
+    "Où est placé ton argent": "Where your money sits",
+    "Par enveloppe": "By wrapper",
     "Réservé à un projet": "Set aside for a plan",
     "cet argent est déjà promis : la projection le porte à plat au lieu de le faire travailler": "this money is already spoken for: the projection carries it flat instead of compounding it",
     "Pour quand ?": "For when?",

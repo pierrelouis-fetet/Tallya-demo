@@ -4624,12 +4624,12 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
     const parCompte = allocationByAccount().reduce((s, x) => s + x.value, 0);
     pres(parType, parCompte,
       'le même argent vu par type et vu par compte doit faire le même total');
-    pres(parType, nowTotals().invested, 'et c’est « Placé », la base annoncée');
-    /* Le cash pose sur le PEA en attente d'un achat n'en fait pas partie : il
-       gonflait la part de l'enveloppe sans qu'un euro soit place. */
-    vrai(parType < comptesOuverts().filter(c => typeCompte(c.type).groupe === 'bourse')
-      .reduce((s, c) => s + valeurCompte(c), 0) + nowTotals().invested,
-      'et le cash des comptes-titres en reste dehors');
+    /* La base est desormais les avoirs, liquidites comprises. Elle excluait le
+       cash deux fois — les comptes du groupe `cash` etaient ecartes, et
+       `lignesDe()` ne voit pas le cash pose sur un compte-titres — et une page
+       qui s'appelle « Allocation » cachait ainsi quinze mille euros. Le cash est
+       une classe d'actif, celle qu'on choisit quand on ne choisit pas. */
+    pres(parType, nowTotals().brut, 'et c’est « Tes avoirs », la base annoncée');
     pres(byAccountType().reduce((s, x) => s + x.pct, 0), 100, 'les parts font 100 %');
   });
 
@@ -4650,30 +4650,32 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
       'aucune enveloppe « levier » dans la répartition');
   });
 
-  test('« Comptes & enveloppes » vaut tout ce qui est placé', () => {
+  test('« Par compte » vaut tous les avoirs, liquidités comprises', () => {
     Fixture.poser();
     const lignes = allocationByAccount();
-    pres(lignes.reduce((s, x) => s + x.value, 0), nowTotals().invested,
-      'la base annoncée est « Placé » : c’est nowTotals().invested');
+    pres(lignes.reduce((s, x) => s + x.value, 0), nowTotals().brut,
+      'la base annoncée est « Tes avoirs » : c’est le brut');
     pres(lignes.reduce((s, x) => s + x.pct, 0), 100, 'les parts font 100 %');
-    pres(nowTotals().invested, Fixture.BRUT - nowTotals().cash,
-      'placé = brut − liquidités');
+    /* Le liquide y figure vraiment, et des deux endroits ou il se pose : un
+       compte de cash entier, et la poche de cash d'un compte-titres. */
+    const cash = comptesOuverts().filter(c => typeCompte(c.type).groupe === 'cash');
+    vrai(cash.length, 'la fixture porte bien des comptes de liquidités');
+    for (const c of cash) {
+      if (!valeurCompte(c)) continue;
+      vrai(lignes.some(l => l.label === nomCompteV2(c)),
+        `${nomCompteV2(c)} doit apparaître dans la répartition`);
+    }
   });
 
-  test('les deux bases s’emboîtent, elles ne se contredisent pas', () => {
-    /* Placé ⊂ avoirs, et l'écart entre les deux vaut exactement les liquidités.
-
-       Il y avait trois bases sur cette page, et « bourse ⊂ placé ⊂ avoirs » se
-       vérifiait ici. La lecture par type d'enveloppe partage désormais la base
-       de sa voisine — c'est la correction du 5 août 2026 — donc il n'en reste
-       que deux, et une carte de moins à réconcilier de tête en lisant la page. */
+  test('les deux lectures de la carte partagent leur base', () => {
+    /* Par enveloppe et par compte sont deux granularites d'un seul total : deux
+       bases differentes en feraient deux cartes qui se contredisent sous un
+       meme titre. Il y avait trois bases sur cette page, il n'en reste qu'une. */
     Fixture.poser();
     const parType = byAccountType().reduce((s, x) => s + x.value, 0);
-    const place = allocationByAccount().reduce((s, x) => s + x.value, 0);
-    const avoirs = patrimoine().brut;
-    pres(parType, place, 'les deux lectures par enveloppe partagent leur base');
-    vrai(place < avoirs, 'placé ⊂ avoirs');
-    pres(avoirs - place, nowTotals().cash, 'et l’écart avec les avoirs : les liquidités');
+    const parCompte = allocationByAccount().reduce((s, x) => s + x.value, 0);
+    pres(parType, parCompte, 'les deux lectures partagent leur base');
+    pres(parType, patrimoine().brut, 'et cette base est le brut');
   });
 });
 

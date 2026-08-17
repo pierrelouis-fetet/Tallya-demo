@@ -4341,11 +4341,18 @@ function viewAllocation() {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>${trad('Par compte')}</h2>
-      <span class="hint">${mentionBase(BASES.place, t.invested)}</span></div>
+    <!-- Un titre pour une chose. La carte s'appelait « Par compte » et son
+         premier graphique repartissait par TYPE de compte : « Assurance-vie »
+         y apparaissait comme s'il s'agissait d'un compte, alors que c'est
+         l'enveloppe qui en contient. Le second, lui, etait le vrai.
+         « Enveloppe » est deja le mot du projet pour une assurance-vie ou un
+         PER, et il dit exactement ce que ce graphique regroupe. -->
+    <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2>
+      <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
+    <h3 class="sous-titre-carte">${trad('Par enveloppe')}</h3>
     <div class="chart" id="aType"></div>
-    ${tbl(byType, BASES.place.nom, byType.reduce((s, i) => s + i.value, 0))}
-    <h3 class="sous-titre-carte">${trad('Compte par compte')}</h3>
+    ${tbl(byType, BASES.avoirs.nom, byType.reduce((s, i) => s + i.value, 0))}
+    <h3 class="sous-titre-carte">${trad('Par compte')}</h3>
     <div class="chart" id="aAcct"></div>
   </div>
 
