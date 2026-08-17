@@ -534,7 +534,15 @@ const Charts = (() => {
         const montrer = () => {
           const it = items[+node.dataset.i];
           tip.hidden = false;
+          /* Le sous-titre dit ou vit cette part, quand la barre le sait : chez
+             quel etablissement et dans quelle enveloppe. Un nom de compte seul
+             ne suffit pas des qu'on en a deux du meme type — « CTO » et « CTO »
+             se lisaient pareil, et il fallait retourner sur la page Actifs pour
+             savoir lequel. La barre porte deja l'information, elle ne la
+             montrait pas. */
+          const sous = [it.etab, it.type].filter(Boolean).join(' · ');
           tip.innerHTML = `<div class="tt-head">${esc(it.label)}</div>
+            ${sous ? `<div class="tt-sous">${esc(sous)}</div>` : ''}
             <div class="tt-row">${esc(opts.valueLabel || trad('Montant'))}<b>${fmtEUR(it.value)}</b></div>
             ${it.average != null ? `<div class="tt-row">${trad('Par mois')}<b>${fmtEUR(it.average)}</b></div>` : ''}
             <div class="tt-row">${trad('Part')}<b>${fmtPct(it.pct ?? 0)}</b></div>`;

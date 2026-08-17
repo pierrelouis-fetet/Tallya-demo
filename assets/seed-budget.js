@@ -24,7 +24,7 @@ const SEED_BUDGET = {
      revenu variable se saisit à son plancher, le surplus se lit ensuite dans
      l'écart entre l'épargne théorique et la croissance réelle. */
   income: [
-    { label: 'Salary', amount: 2800 },
+    { label: 'Salary', amount: 3400 },
     { label: 'Flatmate’s share', amount: 450 },
   ],
 

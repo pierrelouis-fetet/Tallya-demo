@@ -2856,6 +2856,44 @@ function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, 
 
    `suffixe` porte l'unite (« dev. »), qui fait partie de l'intitule et reste
    donc dans la zone cliquable. */
+/* Le tri de la carte du jour. Meme geste a trois temps que le tableau des
+   lignes, et meme raison de vivre dans une variable de module plutot que dans
+   l'etat : c'est un reglage d'affichage, il n'a pas a etre synchronise ni
+   sauvegarde. */
+let jourSort = null;
+
+/* L'intitule d'une colonne de la carte du jour : un bouton de tri, et son aide
+   si la colonne en a une. Les deux cohabitent — l'aide etait le declencheur, le
+   tri s'y ajoute sans le remplacer. */
+function triJourTh(key, label, explication = '') {
+  const on = jourSort && jourSort.key === key;
+  const sens = !on ? trad('décroissant')
+             : jourSort.dir === 'desc' ? trad('croissant') : trad('aucun tri');
+  return `<span class="tri-jour ${on ? jourSort.dir : ''}">`
+       + `<button type="button" class="th-tri" data-action="sort-jour" data-key="${key}"`
+       + ` title="${trad('Trier par')} ${esc(trad(label))}, ${trad('ordre')} ${sens}">${esc(trad(label))}</button>`
+       + (explication ? `<i class="col-aide" data-aide="${esc(trad(explication))}" tabindex="0" role="button">?</i>` : '')
+       + `</span>`;
+}
+
+/* Les lignes du jour dans l'ordre demande. Sans tri, l'ordre naturel de
+   `dayPerformance()`, qui est deja celui de l'ampleur du mouvement. */
+function trierJour(lignes) {
+  if (!jourSort) return lignes;
+  const cle = {
+    nom: l => String(l.name || '').toLowerCase(),
+    poids: l => poidsLigne(l),
+    pct: l => (l.horsSeance ? -Infinity : num(l.pct)),
+    eur: l => (l.horsSeance ? -Infinity : num(l.eur)),
+  }[jourSort.key];
+  if (!cle) return lignes;
+  const signe = jourSort.dir === 'asc' ? 1 : -1;
+  return lignes.slice().sort((a, b) => {
+    const x = cle(a), y = cle(b);
+    return typeof x === 'string' ? signe * x.localeCompare(y) : signe * (x - y);
+  });
+}
+
 function sortableTh(key, label, extraClass = '', explication = '', suffixe = '') {
   const on = posSort && posSort.key === key;
   const sens = !on ? trad('décroissant') : posSort.dir === 'desc' ? trad('croissant') : trad('aucun tri');
@@ -3087,13 +3125,21 @@ function viewPositions() {
              declencheur : voir la note de monteAides(). Un paragraphe de cinq
              lignes vivait sous ce tableau et disait la meme chose. Il chargeait
              l'ecran a chaque visite pour un texte qu'on lit une fois. -->
+        <!-- Les quatre colonnes se trient, du meme geste a trois temps que le
+             tableau des lignes : decroissant, croissant, puis retour a l'ordre
+             naturel. La carte repond a « qu'est-ce qui a bouge aujourd'hui »,
+             et la reponse n'est pas la meme selon qu'on cherche la plus forte
+             variation ou le plus gros effet en euros — l'une se lit en
+             pourcentage sur une petite ligne, l'autre en euros sur une grosse.
+             L'explication de chaque colonne reste ou elle etait, sur son
+             intitule : le tri s'ajoute au declencheur, il ne le remplace pas. -->
         <div class="jour-ligne entete">
-          <span>${trad('Ligne')}</span>
-          <span><i class="col-aide" data-aide="${trad('La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}" tabindex="0" role="button">${trad('Poids')}</i></span>
-          <span><i class="col-aide" data-aide="${trad('La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd’hui se compare à ton prix d’achat, et le dit sous son nom : tu ne la détenais pas hier soir.')}" tabindex="0" role="button">${trad('Var.')}</i></span>
-          <span><i class="col-aide" data-aide="${trad('Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage.')}" tabindex="0" role="button">${trad('Effet')}</i></span>
+          ${triJourTh('nom', 'Ligne')}
+          ${triJourTh('poids', 'Poids', 'La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}
+          ${triJourTh('pct', 'Var.', 'La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd’hui se compare à ton prix d’achat, et le dit sous son nom : tu ne la détenais pas hier soir.')}
+          ${triJourTh('eur', 'Effet', 'Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage.')}
         </div>
-        ${j.lignes.map(l => `
+        ${trierJour(j.lignes).map(l => `
           <div class="jour-ligne">
             <!-- l.index vient de dayPerformance : la ligne porte sa position,
                  on ne la retrouve plus par son nom. Deux titres homonymes sur
@@ -8934,6 +8980,13 @@ const ACTIONS = {
     const v = sel?.value ?? sel?.dataset?.year;
     if (v == null || v === posCompte) return;
     posCompte = v; render();
+  },
+  'sort-jour'(btn) {
+    const key = btn.dataset.key;
+    if (!jourSort || jourSort.key !== key) jourSort = { key, dir: 'desc' };
+    else if (jourSort.dir === 'desc') jourSort = { key, dir: 'asc' };
+    else jourSort = null;                      // 3e clic : retour à l'ordre naturel
+    render();
   },
   'sort-positions'(th) {
     const key = th.dataset.key;

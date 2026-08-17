@@ -15013,6 +15013,30 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'la somme des lignes fait le total, même avec un montant réservé');
   });
 
+  test('la carte du jour se trie par chacune de ses colonnes', () => {
+    /* La carte repond a « qu'est-ce qui a bouge aujourd'hui », et la reponse
+       n'est pas la meme selon qu'on cherche la plus forte variation ou le plus
+       gros effet en euros : l'une se lit en pourcentage sur une petite ligne,
+       l'autre en euros sur une grosse. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function trierJour('),
+                         src.indexOf('function sortableTh('));
+    for (const cle of ['nom', 'poids', 'pct', 'eur']) {
+      vrai(new RegExp(`\\b${cle}:`).test(fn), `la colonne « ${cle} » se trie`);
+    }
+    /* Trois temps, comme le tableau des lignes : le troisieme clic rend
+       l'ordre naturel plutot que de bloquer sur un tri qu'on ne peut plus
+       defaire. */
+    const action = src.slice(src.indexOf("'sort-jour'("), src.indexOf("'sort-positions'("));
+    vrai(/jourSort = \{ key, dir: 'desc' \}/.test(action), 'premier clic : décroissant');
+    vrai(/dir: 'asc'/.test(action), 'deuxième : croissant');
+    vrai(/jourSort = null/.test(action), 'troisième : retour à l’ordre naturel');
+    /* Les lignes hors seance vont en queue dans les deux sens numeriques :
+       elles n'ont pas varie, un zero les melangerait aux lignes stables. */
+    vrai(/horsSeance \? -Infinity/.test(fn),
+      'une ligne sans cotation du jour ne se classe pas comme une ligne à plat');
+  });
+
   test('l’assurance emprunteur ne rembourse pas le capital', () => {
     /* Elle vaut couramment 0,3 a 0,4 % du capital emprunte par an, elle est
        prelevee avec l'echeance, et le modele la comptait comme du
@@ -15387,6 +15411,32 @@ suite('La démonstration ne porte aucune enveloppe française', () => {
     }
     return out.filter(Boolean);
   };
+
+  test('le rythme de la démonstration s’explique par son budget', () => {
+    /* Les releves mensuels ont ete ecrits a la main, chaque compte montant d'un
+       pas regulier, sans que la somme de ces pas soit jamais rapprochee du
+       budget. Le patrimoine grimpait de 1 900 EUR par mois quand le budget n'en
+       degageait que 1 048 : la carte « Epargne et croissance » annonçait alors
+       un « ce qui ne vient pas du budget » plus gros que le budget lui-meme, et
+       une demonstration qui montre ça donne l'impression que l'application
+       compte mal.
+
+       L'ecart doit rester dans ce qu'un marche peut produire. La demonstration
+       porte environ 60 000 EUR d'actifs de marche : 600 EUR par mois font
+       12 % l'an, deja genereux, et c'est la borne. */
+    Store.state = structuredClone(SEED); Store.migrate(); refreshAccounts();
+    const theorique = savingsReconciliation().theoretical;
+    vrai(theorique > 0, 'le budget de la démonstration dégage une épargne');
+    const tous = monthlyPace().points;
+    for (const [nom, n] of [['un an', 12], ['trois ans', 36], ['tout', tous.length]]) {
+      const rythme = statsRythme(tous.slice(-n)).average;
+      const ecart = Math.abs(rythme - theorique);
+      vrai(ecart < 600,
+        `sur ${nom}, le patrimoine croît de ${Math.round(rythme)} € par mois quand le `
+        + `budget en dégage ${Math.round(theorique)} : ${Math.round(ecart)} € d’écart `
+        + `mensuel qu’aucun marché ne produit`);
+    }
+  });
 
   test('aucun nom réel n’a repris place dans la graine', () => {
     /* La graine est fictive, et rien ne l'empechait de cesser de l'etre : coller

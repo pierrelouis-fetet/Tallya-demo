@@ -34,7 +34,7 @@ const SEED_ACCOUNT_TYPES = [
    Ce numero se compare a celui range dans l'etat : quand il change, la
    demonstration propose de se recharger. A incrementer des qu'on touche aux
    montants de cette graine. */
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 
 const SEED_ACCOUNTS = [
   // --- Cash de vie -------------------------------------------------
