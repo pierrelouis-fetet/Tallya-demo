@@ -14800,6 +14800,36 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'et la réponse est celle qui est rangée sur la ligne');
   });
 
+  test('un fonds euros a une porte pour entrer', () => {
+    /* La poche existait, la projection la traitait, et aucun ecran ne
+       permettait d'y ranger quoi que ce soit : la classe manquait dans la liste
+       des contrats, donc le menu des supports ne l'offrait pas. Une poche sans
+       porte est une poche qui reste vide.
+
+       Et `pocheDeClasse('garanti')` retombait sur le defaut « actions », ce qui
+       faisait proposer un PEA pour y loger un fonds euros. */
+    eq(pocheDeClasse('garanti'), 'garanti',
+      'une poche passée en catégorie se rend elle-même');
+    for (const id of ['av', 'per']) {
+      const t = TYPES_COMPTE.find(x => x.id === id);
+      vrai(t.classes.includes('garanti'), `${t.label} accepte un capital garanti`);
+    }
+    /* Le menu des supports se derive de cette liste : il l'offre donc. */
+    const t = TYPES_COMPTE.find(x => x.id === 'av');
+    const possibles = t.classes.filter(x => x !== 'liquidites');
+    vrai(possibles.includes('garanti'),
+      'le menu « Support » d’un contrat propose « Capital garanti »');
+    /* Et seuls les comptes qui l'acceptent sont proposes : un PEA n'y est pas. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av2', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2020-01-01', cash: [], lignes: [] });
+    });
+    const ids = comptesPourCategorie('garanti').map(c => c.id);
+    vrai(ids.includes('c_av2'), 'le contrat est proposé');
+    vrai(!ids.includes('c_pea'), 'le PEA ne l’est pas : on n’y loge pas de fonds euros');
+  });
+
   test('un capital garanti ne capitalise pas au taux du marché', () => {
     /* Le defaut qui a motive la poche. La projection repartit le patrimoine par
        poche, et un fonds euros tombait dans « marche » : 8 % l'an sur un

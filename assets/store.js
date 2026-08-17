@@ -240,8 +240,8 @@ const TYPES_COMPTE = [
      d'autonomie. Le drapeau ne touche pas a `classes` : « liquidites » y sert
      aussi a accepter un support monetaire, qui est un placement et non du cash.
      Deux choses sous un seul mot, d'ou deux reglages. */
-  { id: 'av',      label: 'Assurance-vie',  classes: ['liquidites', 'actions', 'obligations', 'immobilier', 'nonCote'], defaut: 'investir', groupe: 'bourse', titres: true, melange: true, sansCash: true, dateSensible: true },
-  { id: 'per',     label: 'Plan d’épargne retraite (PER)', classes: ['liquidites', 'actions', 'obligations', 'immobilier', 'nonCote'], defaut: 'investir', groupe: 'bourse', titres: true, melange: true, sansCash: true, dateSensible: true },
+  { id: 'av',      label: 'Assurance-vie',  classes: ['liquidites', 'garanti', 'actions', 'obligations', 'immobilier', 'nonCote'], defaut: 'investir', groupe: 'bourse', titres: true, melange: true, sansCash: true, dateSensible: true },
+  { id: 'per',     label: 'Plan d’épargne retraite (PER)', classes: ['liquidites', 'garanti', 'actions', 'obligations', 'immobilier', 'nonCote'], defaut: 'investir', groupe: 'bourse', titres: true, melange: true, sansCash: true, dateSensible: true },
   { id: 'crypto',  label: 'Portefeuille de cryptomonnaies', classes: ['crypto'], defaut: 'investir', groupe: 'bourse', titres: true },
   /* Deux metiers que le mot « crowdfunding » melange, et qui n'ont pas les memes
      champs. On prete, ou on prend des parts.
@@ -602,7 +602,14 @@ const POCHE_DE_CLASSE = {
   crypto:         'crypto',
   monetaire:      'liquidites',
 };
-const pocheDeClasse = ac => POCHE_DE_CLASSE[CLASSES_ALIAS[ac] || ac] || 'actions';
+/* Une poche du patrimoine passee ici se rend elle-meme : `comptesPourCategorie`
+   appelle cette fonction avec ce que le menu des supports lui donne, et le menu
+   parle en poches. Sans ce renvoi, « capital garanti » retombait sur le defaut
+   « actions » et l'application proposait un PEA pour y ranger un fonds euros. */
+const pocheDeClasse = ac => {
+  const cle = CLASSES_ALIAS[ac] || ac;
+  return POCHE_DE_CLASSE[cle] || (cle in CLASSES_ACTIFS ? cle : 'actions');
+};
 
 /* Le chemin inverse : une ligne manuelle porte le nom d'une poche interne
    (« nonCote », « liquidites »), pas celui d'une classe d'actif. Sans cette
