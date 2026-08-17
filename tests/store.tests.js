@@ -10176,9 +10176,9 @@ suite('La page Actifs range ce qu’on tient chez un tiers et ce qu’on tient s
        elle-meme ? », et le non cote dit non — une part de societe a un emetteur
        en face, et une plateforme la tient pour toi.
 
-       Le premier jet de la page lisait `estUnBien()`, et Plateforme C et Plateforme A se
-       rangeaient sous « Biens et especes » alors que ce sont des plateformes.
-       Mesure du 8 aout 2026. */
+       Le premier jet de la page lisait `estUnBien()`, et les plateformes de
+       financement participatif se rangeaient sous « Biens et especes » alors
+       que ce sont des plateformes. Mesure du 8 aout 2026. */
     vrai(estDetenuEnDirect(typeCompte('immo')), 'un appartement se tient soi-même');
     vrai(estDetenuEnDirect(typeCompte('bienValeur')), 'une montre aussi');
     vrai(!estDetenuEnDirect(typeCompte('nonCote')),
@@ -11198,7 +11198,7 @@ suite('Une vente déclarée n’écrit que le journal', () => {
 suite('Marchés : le filtre de compte suit les règles du filtre de rôle', () => {
 
   test('il agit sur la liste, se dérive des positions, et se tait seul', () => {
-    /* « Si je mets CTO Courtier B, je ne vois que les positions de ce compte. »
+    /* « Si je choisis un compte, je ne vois que les positions de ce compte. »
        Meme regime que le filtre Core / Satellite : la liste des lignes, pas
        les tuiles du haut — une valeur de portefeuille qui changerait selon un
        filtre d affichage serait un piege. */

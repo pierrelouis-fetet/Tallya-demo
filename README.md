@@ -180,7 +180,7 @@ dépenses moyennes de l'année. Il la compare à la **croissance réelle** de to
 patrimoine, mesurée sur l'historique de l'onglet Historique.
 
 Les deux chiffres ne coïncident jamais exactement, et c'est normal : la
-performance des marchés et les apports non salariaux (Plateforme C, PK) creusent
+performance des marchés et les apports qui ne viennent pas du salaire creusent
 l'écart. Un écart **positif** signifie que ton patrimoine grandit plus vite que
 ce que ton salaire seul explique. Un écart durablement **négatif** signale une
 fuite : dépenses sous-déclarées, ou charges oubliées dans le budget.
