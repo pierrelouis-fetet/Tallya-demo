@@ -1659,6 +1659,26 @@ const Store = {
       s.meta.detailRetire = true;
     }
 
+    /* Les parts de cash fantomes des contrats.
+
+       L'assistant a pose, sur les assurances-vie et les PER, une part a zero
+       sans affectation : il lisait trois champs que l'etape 3 ne posait plus
+       pour ces types. La carte de tresorerie ne se masquant que lorsqu'elle est
+       vide, elle reapparaissait avec son menu, et « Cash disponible » revenait
+       sur un contrat qui n'en a pas.
+
+       On n'efface que ce que personne n'a saisi : montant nul ET affectation
+       absente. Une part avec un montant reste, meme sur un contrat — retirer un
+       ecran n'emporte pas ce qu'on y avait mis, et ces euros-la doivent pouvoir
+       etre reclasses a la main.
+
+       Idempotente : au second passage il n'y a plus rien a retirer. */
+    for (const c of (s.comptes || [])) {
+      if (!Array.isArray(c.cash) || !c.cash.length) continue;
+      if (!typeCompte(c.type).sansCash) continue;
+      c.cash = c.cash.filter(e => num(e.montant) || e.affectation);
+    }
+
     if (!s.meta.typesEnrichis) {
       const nouveaux = [
         { id: 'av',      label: 'Assurance vie',       group: 'bourse' },
@@ -2545,20 +2565,23 @@ function historySeries({ includeNow = true } = {}) {
     /* `total` doit egaler la somme des trois poches, comme pour un releve
        passe : la courbe suit la valeur des avoirs, les credits se lisent
        dans le patrimoine net du bandeau. */
-    /* Le capital garanti rejoint la bourse ICI, et nulle part ailleurs.
+    /* Le capital garanti a sa bande, et il ne rejoint pas la bourse.
 
-       Ce graphique trace des poches de COMPTE, pas des classes de ligne : un
-       releve mensuel note des montants par compte, et rien n'y dit quelle part
-       d'une assurance-vie etait en fonds euros il y a huit mois. Le passe ne se
-       decoupe donc pas, et c'est deja pour cette raison qu'il n'y a jamais eu de
-       bande « Obligations » alors que la carte des classes en montre une.
+       Il l'a fait un temps, au motif que ce graphique trace des poches de compte
+       et que le passe ne se decoupe pas par classe. Le motif etait bon, la
+       conclusion fausse : les obligations sont dans « Actifs de marche » et
+       l'etiquette dit vrai, un fonds euros n'est pas un actif de marche et elle
+       ment. Un patrimoine entierement en fonds euros s'affichait a 100 %
+       d'actifs de marche, sous une carte qui annonçait 100 % de capital garanti.
 
-       `nowTotals()` sort le capital garanti de la bourse parce que la projection
-       en a besoin pour lui appliquer son taux. Le reprendre ici garde la courbe
-       continue : sans cela, le dernier point perdait ces euros face a tous les
-       precedents, et la pile cessait de faire le total annonce. */
-    pts.push({ label: "Auj.", date: todayISO(), cash: t.cash,
-               bourse: num(t.bourse) + num(t.garanti),
+       Ce qu'on ne peut toujours pas faire, et qu'il faut savoir : un releve
+       mensuel note des montants PAR COMPTE, donc rien ne dit quelle part d'une
+       assurance-vie etait en fonds euros il y a huit mois. La bande commence le
+       jour ou l'on classe ses supports, pas le jour ou l'argent est arrive. Une
+       etiquette juste sur un debut tardif vaut mieux qu'une etiquette fausse sur
+       toute la courbe. */
+    pts.push({ label: "Auj.", date: todayISO(), cash: t.cash, bourse: t.bourse,
+               garanti: t.garanti,
                crypto: t.crypto, pe: t.pe, immo: t.immo, biens: t.biens,
                total: t.brut, comment: 'Photo actuelle' });
   }

@@ -11009,25 +11009,27 @@ suite('Un bien de valeur compte partout', () => {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     Fixture.poser();
-    /* Une poche peut n'avoir aucune bande, à une condition : que le point
-       « Auj. » la replie explicitement dans une autre. C'est le cas du capital
-       garanti, qui rejoint la bourse — ce graphique trace des poches de compte,
-       et un relevé mensuel ne dit pas quelle part d'une assurance-vie était en
-       fonds euros il y a huit mois. Le repli est déclaré ici, et vérifié dans la
-       source : sans lui, la poche disparaîtrait de la pile sans un mot. */
-    const REPLIEES = { garanti: 'bourse' };
+    /* Chaque poche a sa bande, sans exception. Le capital garanti en a été
+       privé un temps, replié dans la bourse au motif que le passé ne se découpe
+       pas par classe : le motif était bon, la conclusion fausse. Les obligations
+       SONT des actifs de marché, donc les fondre dans cette bande dit vrai ; un
+       fonds euros n'en est pas un, et un patrimoine entièrement en fonds euros
+       s'affichait à 100 % d'actifs de marché. Une étiquette juste sur un début
+       tardif vaut mieux qu'une étiquette fausse sur toute la courbe. */
     for (const cle of Object.keys(nowByGroup())) {
-      if (REPLIEES[cle]) {
-        vrai(new RegExp(`${REPLIEES[cle]}: num\\(t\\.${REPLIEES[cle]}\\) \\+ num\\(t\\.${cle}\\)`)
-          .test(lireSource('assets/store.js')),
-          `la poche « ${cle} » se replie dans « ${REPLIEES[cle]} », et ça doit se voir`);
-        continue;
-      }
       vrai(new RegExp(`key: '${cle}'`).test(src),
         `la poche « ${cle} » n’a pas de bande dans SERIES_PATRIMOINE`);
     }
-    vrai(/'immo', 'biens', 'pe', 'crypto', 'bourse', 'cash'/.test(src),
-      'la cascade des dettes du tracé net visite aussi les biens');
+    /* La cascade des dettes du tracé net visite CHAQUE bande, du moins liquide
+       au plus liquide : une poche oubliée là, et la dette cesse d'être
+       entièrement retranchée dès qu'elle dépasse les poches visitées. Dérivée
+       plutôt qu'écrite en dur, sinon la poche suivante manquera aussi — c'est
+       exactement ce qui vient d'arriver au capital garanti. */
+    const cascade = (src.match(/for \(const cle of \[('[a-z]+'(?:, )?)+\]\)/) || [''])[0];
+    for (const cle of Object.keys(nowByGroup())) {
+      vrai(cascade.includes(`'${cle}'`),
+        `la cascade des dettes saute la poche « ${cle} »`);
+    }
     vrai(/q\.total = SERIES_PATRIMOINE\(\)\.reduce/.test(src),
       'et le total du point se dérive des séries tracées');
   });
@@ -14953,9 +14955,10 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     const bloc = src.slice(src.indexOf('const SERIES_PATRIMOINE = () => ['),
                            src.indexOf('function seriesUtiles('));
     const cles = [...bloc.matchAll(/key: '([a-z]+)'/g)].map(m => m[1]);
-    vrai(cles.length >= 6, 'les bandes se relisent depuis la source');
-    vrai(!cles.includes('garanti'),
-      'pas de bande « capital garanti » : le passé ne se découpe pas par classe');
+    vrai(cles.length >= 7, 'les bandes se relisent depuis la source');
+    vrai(cles.includes('garanti'),
+      'le capital garanti a sa bande : le fondre dans « Actifs de marché » '
+      + 'affichait un patrimoine entièrement en fonds euros comme 100 % de marché');
     for (const p of historySeries()) {
       const somme = cles.reduce((s, k) => s + num(p[k]), 0);
       pres(somme, num(p.total), `la pile de ${p.label} doit faire son total`);

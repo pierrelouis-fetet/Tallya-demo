@@ -582,13 +582,14 @@ const SERIES_PATRIMOINE = () => [
      dans le total du graphique sans appartenir a aucune bande, et la pile
      cessait de faire le total. seriesUtiles() la tait chez qui n'a rien. */
   { key: 'biens',  label: trad('Biens de valeur'),  color: Charts.cssv('--series-9') },
-  /* Pas de bande « Capital garanti », et c'est la meme raison qui prive ce
-     graphique d'une bande « Obligations » : il trace des poches de COMPTE, la
-     ou la carte des classes trace des classes de ligne. Un releve mensuel note
-     des montants par compte, et rien n'y dit quelle part d'une assurance-vie
-     etait en fonds euros il y a huit mois — le passe ne se decoupe pas.
-     Une bande a zero sur douze mois puis sautant a dix mille au dernier point
-     dirait que cet argent vient d'arriver. */
+  /* Le capital garanti a sa bande, et il la merite pour une raison que les
+     obligations n'ont pas : celles-ci SONT des actifs de marche, donc les fondre
+     dans cette bande-la dit vrai. Un fonds euros n'en est pas un, et l'y fondre
+     mentait — un patrimoine entierement en fonds euros s'affichait a 100 %
+     d'actifs de marche sous une carte annonçant 100 % de capital garanti.
+     Sa bande commence le jour ou l'on classe ses supports : un releve mensuel
+     note des montants par compte, et le passe ne se decoupe pas. */
+  { key: 'garanti', label: trad('Capital garanti'), color: Charts.cssv('--series-8') },
 ];
 function seriesUtiles(points) {
   return SERIES_PATRIMOINE().filter(s => s.key === 'cash'
@@ -627,7 +628,7 @@ function pointsEvolution() {
     const q = { ...p };
     /* `biens` juste apres l'immobilier : un pret sur un bien (une voiture)
        se retranche de lui avant d'entamer les placements. */
-    for (const cle of ['immo', 'biens', 'pe', 'crypto', 'bourse', 'cash']) {
+    for (const cle of ['immo', 'biens', 'pe', 'crypto', 'bourse', 'garanti', 'cash']) {
       const pris = Math.min(reste, q[cle] || 0);
       q[cle] = (q[cle] || 0) - pris;
       reste -= pris;
@@ -9576,6 +9577,14 @@ const ACTIONS = {
            mensualite en tete. `creerChargeDuCredit()` ne fait rien sans elle. */
         if (e3.charge) creerChargeDuCredit(et.dettes[et.dettes.length - 1]);
       }
+    } else if (t.sansCash) {
+      /* Un contrat nait sans part de cash. L'etape 3 ne pose plus les trois
+         champs pour ces types-la, mais la creation les lisait quand meme : elle
+         ecrivait une part a zero portant une affectation `undefined`. La carte
+         de tresorerie, qui ne se masque que lorsqu'elle est vide, reapparaissait
+         donc aussitot avec son menu — « Cash disponible » sur une assurance-vie,
+         exactement ce que `sansCash` devait retirer. Ne rien ecrire est la seule
+         facon de ne rien montrer. */
     } else {
       cash.push({ montant: num(e3.montant), affectation: e3.usage });
       if (e3.scinder) {
