@@ -14985,8 +14985,73 @@ suite('Chercher un titre, c’est en ajouter un', () => {
                                   ['liquidites', /trad\('Liquidités'\)/]]) {
       vrai(motif.test(panneau), `la poche ${poche} a sa ligne dans le panneau`);
     }
-    pres(q.marche + q.autres, q.marche + q.nonCote + q.liquidites + q.garanti,
+    pres(q.marche + q.autres,
+      q.marche + q.nonCote + q.liquidites + q.garanti + q.projet,
       'le total du panneau est bien la somme des poches qu’il liste');
+    /* Et avec une ligne reservee, la ou le double comptage guettait : ces euros
+       doivent quitter leur poche d'origine, sinon ils figurent deux fois. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2018-09-01', cash: [],
+        lignes: [{ id: 'r', classe: 'actions', libelle: 'Apport', projet: true,
+                   valeur: 40000, prixDeRevient: 40000 }] });
+    });
+    const t2 = nowTotals(), q2 = pochesProjection(t2);
+    eq(Math.round(q2.projet), 40000, 'la poche du réservé porte les 40 000 €');
+    /* Les lignes du panneau, reconstituees comme la vue les calcule. */
+    const lignes = [num(t2.bourse) - num(t2.projetParPoche.bourse),
+                    q2.garanti,
+                    num(t2.crypto) - num(t2.projetParPoche.crypto),
+                    q2.nonCote, q2.liquidites, q2.projet];
+    pres(lignes.reduce((a, b) => a + b, 0), q2.marche + q2.autres,
+      'la somme des lignes fait le total, même avec un montant réservé');
+  });
+
+  test('de l’argent déjà promis ne travaille pas trente ans', () => {
+    /* Le cash portait deja « Projet prevu », mais l'affectation s'arretait au
+       cash : le cas le plus courant est ailleurs, l'assurance-vie qui financera
+       l'apport d'un achat dans deux ans. Ces euros se lisaient comme du
+       patrimoine long terme et entraient dans la projection a trente ans.
+
+       Ce n'est pas le reglage de disponibilite, qui vit a cote : celui-la dit
+       quand on POURRAIT vendre, celui-ci dit que c'est deja engage. */
+    const poser = reserve => Fixture.poser(s => {
+      s.meta.projRate = 8; s.meta.projRateAutres = 0; s.meta.projRateGaranti = 0;
+      s.meta.projMonthly = 0; s.meta.projInflation = 0;
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2018-09-01', cash: [],
+        lignes: [{ id: 'l1', classe: 'actions', libelle: 'ETF Monde',
+                   valeur: 40000, prixDeRevient: 40000, ...(reserve ? { projet: true } : {}) }] });
+    });
+
+    poser(false);
+    const libre = capitalisation({ years: 10 }).points[10];
+    poser(true);
+    const q = pochesProjection();
+    eq(Math.round(q.projet), 40000, 'les 40 000 € réservés ont leur poche');
+    /* Et ils ont quitte celle qui les portait, sinon ils compteraient deux fois :
+       la base de la projection vaut toujours le brut moins ce qui est porte a
+       plat par ailleurs, l'immobilier et les biens. */
+    const t = nowTotals();
+    pres(q.marche + q.autres, num(t.brut) - num(t.immo) - num(t.biens),
+      'la base de la projection ne double ni ne perd rien');
+    const promis = capitalisation({ years: 10 }).points[10];
+    /* Portes a plat : dix ans plus tard, toujours 40 000 de cette ligne. */
+    vrai(promis.total < libre.total,
+      'un argent promis ne produit pas ce qu’il produisait en capitalisant');
+    pres(libre.total - promis.total, 40000 * (Math.pow(1.08, 10) - 1),
+      'la différence vaut exactement ce que 8 % pendant dix ans lui donnaient');
+    /* La ligne reste dans sa classe partout ailleurs, et le brut ne bouge pas :
+       reserver ne deplace rien et ne fait rien disparaitre. C'est toujours un
+       ETF, l'allocation doit le dire, seule la projection change de traitement. */
+    poser(false);
+    const avant = { brut: patrimoine().brut, actions: patrimoine().classes.actions };
+    poser(true);
+    pres(patrimoine().classes.actions, avant.actions,
+      'l’allocation continue de la compter en actifs de marché');
+    pres(patrimoine().brut, avant.brut, 'et le patrimoine brut est le même');
   });
 
   test('un capital garanti ne capitalise pas au taux du marché', () => {

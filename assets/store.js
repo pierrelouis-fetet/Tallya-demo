@@ -2337,9 +2337,41 @@ function nowByGroup() {
   };
 }
 
+/* Ce qui est reserve a un projet, et depuis quelle poche de projection.
+
+   Une ligne marquee quitte la poche qui la portait pour etre portee a plat :
+   il faut donc savoir de laquelle elle vient, sinon la soustraction se ferait
+   au hasard et un total cesserait d'egaler la somme de ses parts.
+
+   L'immobilier et les biens n'y entrent pas : ils sont deja portes a plat par
+   `partPlate()`, et les marquer ne changerait rien qu'un double comptage. */
+function reserveProjet() {
+  /* Les poches sont celles de `nowByGroup`, une par une, et non la poche
+     « marche » de la projection qui en fusionne deux : la fenetre de la base
+     affiche une ligne pour la bourse et une pour la crypto, et chacune doit
+     pouvoir retrancher ce qui lui a ete reserve. Fusionner ici obligeait a
+     defusionner la-bas, et la somme des lignes cessait de faire le total. */
+  const out = { total: 0, bourse: 0, crypto: 0, nonCote: 0, garanti: 0 };
+  for (const c of comptesOuverts()) {
+    for (const l of lignesDe(c)) {
+      if (!l.projet) continue;
+      const poche = l.classe === 'nonCote' ? 'nonCote'
+                  : l.classe === 'garanti' ? 'garanti'
+                  : l.classe === 'crypto' ? 'crypto'
+                  : (l.classe === 'actions' || l.classe === 'obligations') ? 'bourse'
+                  : null;
+      if (!poche) continue;
+      out[poche] += num(l.valeur);
+      out.total += num(l.valeur);
+    }
+  }
+  return out;
+}
+
 function nowTotals() {
   const p = patrimoine();
   const g = nowByGroup();
+  const reserve = reserveProjet();
   /* Le brut se derive de patrimoine(), il ne se refait pas en sommant les
      poches : deux additions du meme fait finissent par diverger, et c'est
      arrive — voir la note de nowByGroup(). Les poches servent l'affichage,
@@ -2355,6 +2387,9 @@ function nowTotals() {
               disponible ». Les trois parts faisaient quand même le brut — la
               double soustraction compensait la double addition — donc rien ne
               le signalait. */
+           /* Deux formes du meme fait : le total pour l'afficher, le detail par
+              poche pour que `pochesProjection` sache ou soustraire. */
+           projet: reserve.total, projetParPoche: reserve,
            invested: brut - g.cash };
 }
 
@@ -5161,17 +5196,28 @@ function partPlate(t = nowTotals()) {
    le cash a investir est un etat de fait. */
 function pochesProjection(t = nowTotals()) {
   return {
-    marche: num(t.bourse) + num(t.crypto),
-    nonCote: num(t.pe),
+    /* Chaque poche est amputee de ce qu'elle a de reserve : sans cela le total
+       compterait ces euros deux fois, ici et dans `projet`. La regle de la
+       maison, litteralement — un total egale la somme de ses parts. */
+    marche: num(t.bourse) + num(t.crypto)
+          - num(t.projetParPoche?.bourse) - num(t.projetParPoche?.crypto),
+    nonCote: num(t.pe) - num(t.projetParPoche?.nonCote),
     liquidites: num(t.cash),
     /* Le capital garanti a son taux, comme le non cote a le sien : il ne suit
        ni le marche, dont il ne prend pas le risque, ni les liquidites, qui ne
        rapportent rien. Sans cette poche il rejoignait « marche » et un fonds
        euros capitalisait a 8 % l'an. */
-    garanti: num(t.garanti),
-    /* `autres` reste rendu, somme des trois : plusieurs appelants la lisent, et
+    garanti: num(t.garanti) - num(t.projetParPoche?.garanti),
+    /* Ce qui est deja promis ne travaille pas trente ans. Une ligne marquee
+       « reserve a un projet » quitte la poche qui la portait et se pose ici, ou
+       elle est portee a plat : l'apport d'un achat prevu dans deux ans n'a pas
+       a capitaliser au taux des actions. Elle reste dans sa classe partout
+       ailleurs — c'est toujours une SCPI ou un fonds euros, et l'allocation
+       doit le dire. */
+    projet: num(t.projet),
+    /* `autres` reste rendu, somme des quatre : plusieurs appelants la lisent, et
        un total doit continuer d'egaler la somme de ses parts. */
-    get autres() { return this.nonCote + this.liquidites + this.garanti; },
+    get autres() { return this.nonCote + this.liquidites + this.garanti + this.projet; },
     plat: partPlate(t),
   };
 }
@@ -5199,7 +5245,11 @@ function capitalisation(opts = {}) {
   const part = q => (poches.autres ? q / poches.autres : 0);
   const departNonCote = resteAutres * part(poches.nonCote);
   const departGaranti = resteAutres * part(poches.garanti);
-  const departLiquides = resteAutres - departNonCote - departGaranti;
+  /* Le reserve rejoint les liquidites : toutes deux traversent la projection a
+     plat, et un argent deja promis ne produit rien pour celui qui le doit. Il
+     garde sa propre part pour que la fenetre puisse le nommer. */
+  const departProjet = resteAutres * part(poches.projet);
+  const departLiquides = resteAutres - departNonCote - departGaranti - departProjet;
   const departAutres = resteAutres;
 
   const annees = opts.years || Math.max(...PROJECTION_HORIZONS);
@@ -5223,7 +5273,7 @@ function capitalisation(opts = {}) {
                     contributed: start + plat, gains: 0,
                     total: start + plat, real: start + plat }];
   let capital = departMarche, verse = departMarche;
-  let nonCote = departNonCote, liquides = departLiquides, garanti = departGaranti;
+  let nonCote = departNonCote, liquides = departLiquides + departProjet, garanti = departGaranti;
 
   /* Ou va le versement mensuel : une hypothese declaree, plus un choix code en
      dur.
@@ -5265,7 +5315,7 @@ function capitalisation(opts = {}) {
     const cumul = mois * s.monthly;
     const misMarche = departMarche + (vers === 'marche' ? cumul : 0);
     const misNonCote = departNonCote + (vers === 'nonCote' ? cumul : 0);
-    const misLiquides = departLiquides + (vers === 'liquidites' ? cumul : 0);
+    const misLiquides = departLiquides + departProjet + (vers === 'liquidites' ? cumul : 0);
     /* Le capital garanti ne reçoit rien : ce qu'on y a mis est ce qu'il y avait
        au depart, et tout le reste est un gain. */
     const misGaranti = departGaranti;

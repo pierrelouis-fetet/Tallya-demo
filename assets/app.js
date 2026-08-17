@@ -8505,6 +8505,22 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
         valeur: l ? statutLigne(l) : 'encours',
         aide: trad('à déclarer : une échéance dépassée ne veut pas dire en retard') },
     ] : []),
+    /* De l'argent deja promis n'est pas de l'argent qui travaille trente ans.
+
+       Le cash porte deja cette notion — l'affectation « Projet prevu » — mais
+       elle s'arretait au cash, alors que le cas le plus courant est ailleurs :
+       l'assurance-vie qui financera l'apport d'un achat dans deux ans. Ces
+       euros se lisaient comme du patrimoine long terme et entraient dans la
+       projection a trente ans, sans que rien ne dise qu'ils sont deja depenses.
+
+       Ce n'est pas le reglage de disponibilite, qui vit a cote : celui-la dit
+       quand on POURRAIT vendre, celui-ci dit que c'est deja engage. */
+    { cle: 'projet', label: trad('Réservé à un projet'), type: 'case',
+      valeur: l ? !!l.projet : false,
+      aide: trad('cet argent est déjà promis : la projection le porte à plat au lieu de le faire travailler') },
+    { cle: 'projetLe', label: trad('Pour quand ?'), type: 'date',
+      valeur: l ? (l.projetLe || '') : '',
+      aide: trad('facultatif, sans effet sur les calculs') },
   ];
 }
 
@@ -8519,6 +8535,8 @@ function litPlacement(v, base) {
     ...(v.taux !== undefined ? { taux: num(v.taux) || null } : {}),
     ...(v.echeance !== undefined ? { echeance: v.echeance || '' } : {}),
     ...(v.statut !== undefined ? { statut: v.statut || 'encours' } : {}),
+    ...(v.projet !== undefined ? { projet: !!v.projet } : {}),
+    ...(v.projetLe !== undefined ? { projetLe: v.projetLe || '' } : {}),
   };
 }
 
@@ -13219,11 +13237,18 @@ const APERCUS = {
          quatre lignes qui en faisaient 76 551. La somme des parts fait le
          total, ou elle ne dit rien. */
       lignes: [
-        { label: trad('Actifs de marché'), meta: tauxM, valeur: num(t.bourse) },
+        /* Chaque ligne retranche ce qui lui a ete reserve, sinon ces euros
+           figurent deux fois : dans leur poche d'origine et dans « Reserve a un
+           projet ». La somme des lignes doit faire le total, et le total ne
+           compte le reserve qu'une fois. */
+        { label: trad('Actifs de marché'), meta: tauxM,
+          valeur: num(t.bourse) - num(t.projetParPoche?.bourse) },
         { label: trad('Capital garanti'), meta: tauxG, valeur: q.garanti },
-        { label: trad('Cryptomonnaies'), meta: tauxM, valeur: num(t.crypto) },
+        { label: trad('Cryptomonnaies'), meta: tauxM,
+          valeur: num(t.crypto) - num(t.projetParPoche?.crypto) },
         { label: trad('Non coté'), meta: tauxNC, valeur: q.nonCote },
         { label: trad('Liquidités'), meta: A_PLAT, valeur: q.liquidites },
+        { label: trad('Réservé à un projet'), meta: A_PLAT, valeur: q.projet },
       ].filter(l => Math.abs(l.valeur) > 0.005),
       vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
