@@ -202,8 +202,21 @@ const TYPES_COMPTE = [
   { id: 'livret',  label: 'Livret',         classes: ['liquidites'], defaut: 'precaution', groupe: 'cash' },
   { id: 'pea',     label: 'PEA',            classes: ['liquidites', 'actions'], defaut: 'investir', groupe: 'bourse', titres: true, dateSensible: true },
   { id: 'cto',     label: 'Compte-titres (CTO)', classes: ['liquidites', 'actions', 'obligations'], defaut: 'investir', groupe: 'bourse', titres: true },
-  { id: 'av',      label: 'Assurance-vie',  classes: ['liquidites', 'actions', 'obligations'], defaut: 'investir', groupe: 'bourse', titres: true, dateSensible: true },
-  { id: 'per',     label: 'Plan d’épargne retraite (PER)', classes: ['liquidites', 'actions', 'obligations'], defaut: 'investir', groupe: 'bourse', titres: true, dateSensible: true },
+  /* Une enveloppe, et non un compte-titres. Ces deux-la portent tout ce que le
+     contrat propose : un ETF monde qui cote, un fonds euros qui ne cote nulle
+     part, une SCPI, un fonds maison sans ISIN. D'ou deux differences avec un
+     CTO.
+
+     La liste des classes va donc jusqu'a l'immobilier et au non cote : sans
+     `immobilier`, `comptesPourCategorie()` n'offrait jamais l'assurance-vie a
+     qui ajoute une SCPI, et la part restait sans domicile.
+
+     `melange` dit que `titres` n'est pas exclusif ici. Ailleurs, un compte qui
+     porte des titres ne porte que des titres, et sa fiche renvoie a Marches ou
+     les cours arrivent seuls. Sur un contrat, la moitie des supports n'a pas de
+     cours a aller chercher : il faut les deux portes sur la meme fiche. */
+  { id: 'av',      label: 'Assurance-vie',  classes: ['liquidites', 'actions', 'obligations', 'immobilier', 'nonCote'], defaut: 'investir', groupe: 'bourse', titres: true, melange: true, dateSensible: true },
+  { id: 'per',     label: 'Plan d’épargne retraite (PER)', classes: ['liquidites', 'actions', 'obligations', 'immobilier', 'nonCote'], defaut: 'investir', groupe: 'bourse', titres: true, melange: true, dateSensible: true },
   { id: 'crypto',  label: 'Portefeuille de cryptomonnaies', classes: ['crypto'], defaut: 'investir', groupe: 'bourse', titres: true },
   /* Deux metiers que le mot « crowdfunding » melange, et qui n'ont pas les memes
      champs. On prete, ou on prend des parts.
@@ -220,10 +233,17 @@ const TYPES_COMPTE = [
   { id: 'pe',      label: 'Placements non cotés', classes: ['nonCote'], defaut: 'investir', groupe: 'pe' },
   { id: 'crowdfunding', label: 'Financement participatif', classes: ['nonCote'],
     defaut: 'investir', groupe: 'pe', prete: true },
-  /* `direct` : on le detient soi-meme, le contenant EST la chose. */
+  /* `direct` : on le detient soi-meme, le contenant EST la chose.
+
+     `bienImmo` : ce type EST un bien immobilier, il ne fait pas qu'en porter.
+     La distinction manquait, et « peut porter de l'immobilier » lui servait de
+     tenant-lieu : le jour ou une assurance-vie accepte une SCPI, le contrat
+     entier devenait un bien, avec le vocabulaire qui va avec — « Dans quel bien
+     le ranger ? » pour un contrat d'assurance. Un fait qui commande trois
+     ecrans se declare, il ne se devine pas d'un effet de bord. */
   { id: 'immo',    label: 'Immobilier',     classes: ['immobilier'], defaut: 'investir',
-    groupe: 'pe', direct: true },
-  { id: 'scpi',    label: 'SCPI',           classes: ['immobilier'], defaut: 'investir', groupe: 'pe' },
+    groupe: 'pe', direct: true, bienImmo: true },
+  { id: 'scpi',    label: 'SCPI',           classes: ['immobilier'], defaut: 'investir', groupe: 'pe', bienImmo: true },
   /* Les billets dans un portefeuille. C'est le seul argent que personne ne
      tient pour vous : pour le noter, il fallait inventer une banque appelee
      « Espèces », et se demander pourquoi l'application reclamait un
@@ -352,6 +372,16 @@ const CONTENANTS = {
             aide: 'Une banque déjà enregistrée, ou une nouvelle.',
             exemple: 'ex. Fortuneo', nouveau: 'Nouvelle banque ou courtier',
             contenu: 'compte' },
+  /* Une assurance-vie ou un PER ne se tiennent pas « dans une banque ». Le
+     contrat est chez un assureur, distribue par un courtier, parfois par une
+     banque qui n'en est que le guichet : le nom qu'on reconnait et qu'on saisit
+     ici est l'un des trois, et « banque » n'est pas le mot qui les couvre.
+     `contenu` dit « contrat » pour la meme raison : on n'ouvre pas un compte
+     chez un assureur, on souscrit. */
+  assureur:{ titre: 'Assureur ou courtier', question: 'Chez qui le contrat est-il tenu ?',
+            aide: 'Un organisme déjà enregistré, ou un nouveau.',
+            exemple: 'ex. Linxea', nouveau: 'Nouvel assureur ou courtier',
+            contenu: 'contrat' },
 };
 
 /* Premiere lettre en capitale, pour un mot qui ouvre un titre ou un bouton.
@@ -368,10 +398,15 @@ function motContenu(etabId, n) {
   return trad(`${mot}${n > 1 ? 's' : ''}`);
 }
 
-const contenantDuType = typeId =>
-  (typeId === 'immo' || typeId === 'scpi') ? CONTENANTS.bien
-  : (typeId === 'pe' || typeId === 'crowdfunding') ? CONTENANTS.societe
-  : CONTENANTS.banque;
+/* Le mot suit un drapeau du type, plus une liste d'identifiants ecrite ici :
+   celui qu'on ajoutera demain n'aura qu'a se declarer. */
+const contenantDuType = typeId => {
+  const t = typeCompte(typeId);
+  return t.bienImmo ? CONTENANTS.bien
+    : (typeId === 'pe' || typeId === 'crowdfunding') ? CONTENANTS.societe
+    : t.melange ? CONTENANTS.assureur
+    : CONTENANTS.banque;
+};
 
 /* Pour une fiche : le mot suit les comptes reellement rattaches. Un
    etablissement qui n'heberge que de l'immobilier est un bien ; s'il melange,
@@ -4263,7 +4298,7 @@ function chargesProposees(compte) {
    fenetres de revenus et de charges pour le rattachement. Derivee des types, pas
    ecrite a la main — un type immobilier ajoute demain entre tout seul. */
 function comptesBiens() {
-  return comptesOuverts().filter(c => typeCompte(c.type).classes.includes('immobilier'));
+  return comptesOuverts().filter(c => typeCompte(c.type).bienImmo);
 }
 
 /* --- les rentrees exceptionnelles ---------------------------------------

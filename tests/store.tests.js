@@ -6639,8 +6639,22 @@ suite('Un bien locatif dit son cash-flow et son rendement', () => {
     eq(ids.join(','), 'c_immo', 'le studio, et pas le crowdfunding ni le PEA');
     /* Un type immobilier ajouté demain entre tout seul : la liste lit
        TYPES_COMPTE, elle ne se réécrit pas. */
-    for (const t of TYPES_COMPTE.filter(x => x.classes.includes('immobilier'))) {
+    for (const t of TYPES_COMPTE.filter(x => x.bienImmo)) {
       vrai(['immo', 'scpi'].includes(t.id), `${t.label} est bien un type de bien`);
+    }
+    /* Le drapeau dit « est un bien », jamais « peut en porter ». La nuance
+       n'existait pas, et « peut porter de l'immobilier » lui tenait lieu : le
+       jour ou une assurance-vie accepte une SCPI, le contrat entier devenait un
+       bien immobilier — vocabulaire compris, « Dans quel bien le ranger ? »
+       pour un contrat d'assurance. */
+    const porteurs = TYPES_COMPTE.filter(x => x.classes.includes('immobilier'));
+    vrai(porteurs.length > 2,
+      'une enveloppe peut porter de l’immobilier sans être un bien');
+    for (const t of porteurs.filter(x => !x.bienImmo)) {
+      vrai(!comptesBiens().some(c => c.type === t.id),
+        `${t.label} porte de l’immobilier mais n’est pas un bien`);
+      eq(contenantDuType(t.id).titre === 'Bien immobilier', false,
+        `${t.label} ne demande pas « dans quel bien le ranger »`);
     }
   });
 });
@@ -13902,11 +13916,23 @@ suite('Les boutons d’une fiche ont une géométrie et une place', () => {
   test('un en-tête de carte ne mélange pas un lien et des boutons', () => {
     const src = lireSource('assets/app.js');
     const css = lireSource('assets/styles.css');
-    /* Le renvoi vers Marches etait un lien souligne au milieu de boutons. */
+    /* Le renvoi vers Marches etait un lien souligne au milieu de boutons. Il
+       n'est plus un renvoi du tout : la fiche porte le geste, un bouton qui
+       ouvre la recherche en visant ce compte. Une page qui doit donner
+       l'itineraire vers son propre geste dit que le geste est mal place, et
+       habiller le lien en bouton ne reglait que la geometrie. */
     vrai(!/<a class="hint lien-vue" href="#\/positions">\$\{trad\('Gérer dans Marchés'\)\}/.test(src),
       'le renvoi vers Marchés n’est plus un lien nu');
-    vrai(/<a class="btn sm ghost" href="#\/positions">/.test(src),
-      'il porte la même géométrie que ses voisins');
+    /* Borne a la fiche : l'accueil garde un vrai renvoi de navigation vers
+       Marches, dans un en-tete qui ne porte aucun bouton. Ce n'est pas le meme
+       objet, et l'interdire partout aurait interdit la navigation. */
+    const fiche = src.slice(src.indexOf('function viewFicheCompte('),
+                            src.indexOf('function viewFicheEtab('));
+    vrai(fiche.length > 1000, 'la fiche d’un compte se relit depuis sa source');
+    vrai(!/href="#\/positions"/.test(fiche),
+      'la fiche d’un compte ne renvoie plus vers Marchés : elle porte le geste');
+    vrai(/data-action="ajouter-ligne" data-compte=/.test(fiche),
+      'et ce geste emporte le compte d’où il part');
     /* Et un lien qui porte la classe d'un bouton ne se souligne pas. */
     const regle = (css.match(/^\.btn \{[^}]*\}/m) || [''])[0];
     vrai(/text-decoration: none/.test(regle), 'la classe .btn retire le soulignement');
@@ -14659,6 +14685,79 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     vrai(/colspan="9" class="empty"/.test(vue),
       `l’état vide couvre ${enTetes} colonnes, pas une de plus`);
     vrai(!/<th><\/th>/.test(vue), 'plus d’en-tête vide pour une colonne disparue');
+  });
+
+  test('une enveloppe porte les deux natures de support', () => {
+    /* Une assurance-vie et un PER ne sont pas des comptes-titres : ils portent
+       un ETF qui cote, un fonds euros qui ne cote nulle part, une SCPI, un
+       fonds maison sans ISIN. Le modele le permettait deja — `lignesDe()`
+       fusionne les lignes cotees et les lignes manuelles — mais trois listes
+       blanches le contredisaient. */
+    for (const id of ['av', 'per']) {
+      const t = TYPES_COMPTE.find(x => x.id === id);
+      vrai(t.titres, `${t.label} porte des titres cotés`);
+      vrai(t.melange, `${t.label} porte aussi des supports qui ne cotent pas`);
+      for (const classe of ['actions', 'obligations', 'immobilier', 'nonCote']) {
+        vrai(t.classes.includes(classe), `${t.label} accepte ${classe}`);
+      }
+    }
+  });
+
+  test('et une SCPI trouve enfin son contrat', () => {
+    /* Sans `immobilier` dans la liste, `comptesPourCategorie()` n'offrait jamais
+       l'assurance-vie a qui ajoute une part de SCPI : la ligne restait sans
+       domicile, et rien ne disait pourquoi. */
+    Fixture.poser(s => {
+      s.comptes.push({ id: 'c_av', etabId: s.etabs[0].id, type: 'av', statut: 'actif',
+                       cash: [], lignes: [] });
+    });
+    const ids = comptesPourCategorie('immobilier').map(c => c.id);
+    vrai(ids.includes('c_av'), 'le contrat est proposé pour une SCPI');
+    /* Et il reste proposé pour ce qui cote : c'est le point de départ. */
+    vrai(comptesPourCategorie('actions').map(c => c.id).includes('c_av'),
+      'comme pour un MSCI World, qui marchait déjà');
+  });
+
+  test('mais un contrat n’est pas un bien immobilier pour autant', () => {
+    /* La nuance n'existait pas : « peut porter de l'immobilier » servait a dire
+       « est un bien », donc le contrat entier serait devenu un bien, vocabulaire
+       compris. */
+    Fixture.poser(s => {
+      s.comptes.push({ id: 'c_av', etabId: s.etabs[0].id, type: 'av', statut: 'actif',
+                       cash: [], lignes: [] });
+    });
+    vrai(!comptesBiens().some(c => c.id === 'c_av'),
+      'le contrat ne rejoint pas la liste des biens');
+    eq(contenantDuType('av').titre, 'Assureur ou courtier',
+      'et on ne lui demande pas dans quelle banque le tenir');
+    eq(contenantDuType('per').titre, 'Assureur ou courtier', 'le PER non plus');
+    eq(contenantDuType('cto').titre, 'Banque ou courtier', 'un CTO garde son mot');
+    eq(contenantDuType('immo').titre, 'Bien immobilier', 'et un bien le sien');
+  });
+
+  test('la fiche d’une enveloppe porte les deux portes', () => {
+    const src = lireSource('assets/app.js');
+    const fiche = src.slice(src.indexOf('function viewFicheCompte('),
+                            src.indexOf('function viewFicheEtab('));
+    vrai(/t\.titres \?.*data-action="ajouter-ligne"/s.test(fiche),
+      'ce qui cote passe par la recherche');
+    vrai(/!t\.titres \|\| t\.melange \?.*data-action="ajouter-placement"/s.test(fiche),
+      'ce qui ne cote pas se saisit sur place, et seulement là où c’est vrai');
+  });
+
+  test('le support se demande quand le type en accepte plusieurs', () => {
+    /* `t.classes.find(x => x !== 'liquidites')` rendait « actions » : sur une
+       enveloppe, un fonds euros et une SCPI tombaient tous deux en actifs de
+       marche sans que rien ne le dise. Un fait se declare. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf("async 'ajouter-placement'"),
+                           src.indexOf("async 'ajouter-placement'") + 2000);
+    vrai(/const possibles = \(t\.classes \|\| \[\]\)\.filter/.test(bloc),
+      'les supports possibles se dérivent de la liste du type');
+    vrai(/demandeSupport = possibles\.length > 1/.test(bloc),
+      'la question ne se pose que s’il y a plusieurs réponses');
+    vrai(/classe = demandeSupport \? \(v\.classe \|\| parDefaut\) : parDefaut/.test(bloc),
+      'et la réponse est celle qui est rangée sur la ligne');
   });
 
   test('sous 768 px, le bouton d’ajout ne s’étire pas sur toute la carte', () => {

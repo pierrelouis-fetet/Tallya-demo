@@ -3690,6 +3690,12 @@ async function mountReperes() {
    de recherche n'existe pas encore au moment du clic si l'on arrive d'une
    autre vue. */
 let ouvrirRechercheApresRendu = false;
+/* Le compte d'ou l'on est parti, quand on vient de la fiche d'un compte. La
+   fenetre de creation s'ouvre dessus au lieu du compte par defaut : on vient de
+   dire ou l'on veut poser le titre, le redemander serait poser deux fois la
+   meme question. Vide des qu'une ligne est creee, sinon le compte d'hier
+   deciderait de la ligne d'aujourd'hui. */
+let compteVisePourAjout = null;
 
 function mountPositions() {
   /*    Le montage de « Performance par ligne » est parti avec sa carte : c'était
@@ -4016,7 +4022,8 @@ function mountSymbolSearch() {
                    vide: 'aucun compte ne peut porter cette classe' },
             champs: [
               { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
-                valeur: defaultHoldingAccount(), aide: trad('limité aux comptes compatibles') },
+                valeur: compteVisePourAjout || defaultHoldingAccount(),
+                aide: trad('limité aux comptes compatibles') },
               /* La quantite et le prix paye se demandent ici, sous le compte,
                  parce qu'ils font partie du meme geste : j'ai achete tant de
                  titres, a tel prix, sur tel compte. Les laisser a zero
@@ -4057,6 +4064,7 @@ function mountSymbolSearch() {
           });
           if (!v) return;
           if (!v.account) { toast(trad('Ouvre d’abord un compte qui accepte cette catégorie')); return; }
+          compteVisePourAjout = null;      // la visee ne vaut que pour ce geste
           Store.state.positions.push({
             id: 'p' + Date.now(), name: '', isin: '', symbol: '', currency: 'EUR',
             /* `fxBuy: null` et non 1 : la devise n'est pas encore choisie, donc
@@ -5714,7 +5722,7 @@ function mountAccounts() {
    page pour les onze types donnait à chacun deux cartes vides et une carte
    mal nommée.
    ------------------------------------------------------------ */
-const estBien = t => t.classes.includes('immobilier');
+const estBien = t => !!t.bienImmo;
 
 /* Les crédits qui financent ce compte. Le modèle les range sur l'établissement
    qui porte le bien — c'est là que la valeur nette se lit — donc on remonte à
@@ -6423,18 +6431,38 @@ function viewFicheCompte(id) {
          listes de la carte font la meme chose — une par ligne aurait repete la
          meme phrase autant de fois qu'il y a de placements. Le mot
          « Disponibilite » sert de titre de colonne, ce qui manquait aussi. -->
-    <div class="card-head"><h2>${trad(t.titres ? 'Lignes de titres' : 'Placements détenus')}</h2>
+    <!-- « Supports » sur une enveloppe : la carte y porte les deux natures, et
+         « Lignes de titres » en nommait une seule — le fonds euros et la SCPI
+         qui vivent dessous auraient ete annonces comme des titres. C'est aussi
+         le mot du contrat, celui qu'on lit sur son releve d'assurance. -->
+    <div class="card-head"><h2>${trad(t.melange ? 'Supports du contrat'
+      : t.titres ? 'Lignes de titres' : 'Placements détenus')}</h2>
       <span class="hint">${trad('Disponibilité')}${aide(trad("Sous combien de temps chaque placement redevient de l’argent disponible. Elle alimente la carte « Autonomie financière » de l’accueil. « Auto » suit la règle du type de compte : un PEA de moins de cinq ans est bloqué, un compte-titres se vend en séance. La règle se trompe parfois : un non coté peut se revendre sur un marché secondaire, c’est pourquoi chaque ligne peut la contredire."))}</span>
-      ${t.titres ? `<a class="btn sm ghost" href="#/positions">${trad('Gérer dans Marchés')} →</a>`
-        : `<button class="btn sm ghost" data-action="ajouter-placement" data-id="${esc(c.id)}"
-                   title="${trad('Ajouter un placement à ce compte')}">${trad('+ Placement')}</button>`}
+      <!-- Le geste, jamais l'itineraire. Un compte a titres renvoyait a Marches
+           par un lien : quand une page doit donner le chemin vers son propre
+           geste, c'est le geste qui est mal place. Le bouton ouvre la recherche
+           en visant ce compte, et la ligne creee y atterrit sans qu'on ait a le
+           rechoisir.
+           Deux boutons sur une enveloppe, celle que son type dit melangee : la
+           moitie de ses supports cote et l'autre non, il faut les deux portes.
+           Un compte-titres n'en garde qu'une, sinon on saisirait a la main un
+           titre dont le cours arrive seul, et cette ligne-la ne se mettrait
+           plus jamais a jour.
+           (Aucun backtick ici : ce commentaire vit dans un litteral de gabarit,
+           et le premier refermerait la chaine.) -->
+      ${t.titres ? `<button class="btn sm ghost" data-action="ajouter-ligne" data-compte="${esc(c.id)}"
+                   title="${trad('Chercher un titre coté et le poser sur ce compte')}">${trad('+ Titre coté')}</button>` : ''}
+      ${!t.titres || t.melange ? `<button class="btn sm ghost" data-action="ajouter-placement" data-id="${esc(c.id)}"
+                   title="${trad('Ajouter un placement à ce compte')}">${trad('+ Placement')}</button>` : ''}
     </div>
     ${lignes.length ? lignes.map(l => lignePlacement(l, c, true)).join('')
       : `<div class="empty">
-          <p style="margin:0 0 12px">${trad('Aucun placement pour l’instant.')} ${trad(t.titres
+          <p style="margin:0 0 12px">${trad('Aucun placement pour l’instant.')} ${trad(t.melange
+            ? 'Un contrat porte ce qu’il propose : un ETF qui cote, un fonds euros qui ne cote nulle part, une SCPI. Les deux boutons ci-dessus mènent chacun à l’un des deux.'
+            : t.titres
             ? 'Les lignes se créent dans l’onglet Marchés, rattachées à ce compte.'
             : 'Un prêt participatif, une part de société, un projet : chacun sa ligne, avec son échéance.')}</p>
-          ${t.titres ? '' : `<button class="btn sm" data-action="ajouter-placement" data-id="${esc(c.id)}"
+          ${t.titres && !t.melange ? '' : `<button class="btn sm" data-action="ajouter-placement" data-id="${esc(c.id)}"
                    >${trad('+ Ajouter un placement')}</button>`}
         </div>`}
   </div>`}
@@ -8484,7 +8512,8 @@ const ACTIONS = {
      Le drapeau plutot qu'un `requestAnimationFrame` : changer de vue passe par
      `hashchange`, donc le champ n'existe pas encore au retour de cette
      fonction. `render()` le consomme quand la carte est posee. */
-  'ajouter-ligne'() {
+  'ajouter-ligne'(btn) {
+    compteVisePourAjout = btn?.dataset.compte || null;
     ouvrirRechercheApresRendu = true;
     if (location.hash.startsWith('#/positions')) render();
     else location.hash = '#/positions';
@@ -9663,14 +9692,31 @@ const ACTIONS = {
     const c = compteById(btn.dataset.id);
     if (!c) return;
     const t = typeCompte(c.type);
-    const classe = t.classes.find(x => x !== 'liquidites') || 'nonCote';
+    /* Une seule nature possible : la deduire est juste, et la demander serait
+       poser une question qui n'a qu'une reponse. Une enveloppe en porte cinq,
+       et la deduire revient a tirer au sort — `find()` rendait « actions », donc
+       un fonds euros et une SCPI tombaient tous deux en actifs de marche sans
+       que rien ne le dise. La question se pose alors, et ses options se derivent
+       de la liste du type : celle qu'on y ajoutera demain y apparaitra sans
+       qu'on y pense. */
+    const possibles = (t.classes || []).filter(x => x !== 'liquidites');
+    const parDefaut = possibles[0] || 'nonCote';
+    const demandeSupport = possibles.length > 1;
     const v = await askForm({
       titre: `Placement dans ${nomCompteV2(c)}`,
-      sous: `${CLASSES_ACTIFS[classe] || classe} · c’est toi qui en donnes la valeur`,
+      sous: demandeSupport
+        ? trad('c’est toi qui en donnes la valeur')
+        : `${CLASSES_ACTIFS[parDefaut] || parDefaut} · ${trad('c’est toi qui en donnes la valeur')}`,
       ok: 'Ajouter',
-      champs: champsPlacement(classe, null, t.prete, t),
+      champs: [
+        ...(demandeSupport ? [{ cle: 'classe', label: trad('Support'), type: 'liste',
+              valeur: parDefaut, options: possibles.map(x => [x, CLASSES_ACTIFS[x] || x]),
+              aide: trad('ce que le contrat propose : un fonds actions, un fonds euros, une SCPI') }] : []),
+        ...champsPlacement(parDefaut, null, t.prete, t),
+      ],
     });
     if (!v) return;
+    const classe = demandeSupport ? (v.classe || parDefaut) : parDefaut;
     c.lignes = c.lignes || [];
     c.lignes.push(litPlacement(v, { id: 'l' + Date.now().toString(36), classe }));
     refreshAccounts(); Store.save(); render();
