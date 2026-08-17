@@ -385,7 +385,15 @@ const Charts = (() => {
 
         tip.hidden = false;
         tip.innerHTML = `<div class="tt-head">${esc(p.label)}</div>` +
-          series.map(sr => `<div class="tt-row"><span class="sw" style="background:${sr.color}"></span>${esc(sr.label)}<b>${fmtEUR0(p[sr.key] || 0)}</b></div>`).join('') +
+          /* Une bande a zero sur ce mois-la ne se dit pas. `seriesUtiles()`
+             garde une serie des qu'elle porte quelque chose QUELQUE PART, ce
+             qui est juste pour la legende : sans cela une poche disparaitrait
+             de la pile le mois ou elle se vide. Mais point par point, « Capital
+             garanti 0 € » sur douze mois est une ligne qui n'apprend rien et
+             qui fait douter — l'infobulle du mois dit ce qu'il y avait ce
+             mois-la, et rien n'y etait. */
+          series.filter(sr => Math.abs(Number(p[sr.key]) || 0) > 0.005)
+            .map(sr => `<div class="tt-row"><span class="sw" style="background:${sr.color}"></span>${esc(sr.label)}<b>${fmtEUR0(p[sr.key] || 0)}</b></div>`).join('') +
           `<div class="tt-row tt-total">Total<b>${fmtEUR0(totals[i])}</b></div>` +
           (p.comment ? `<div class="tt-note">${esc(p.comment)}</div>` : '');
         const left = Math.min(Math.max(x(i) * (r.width / W) - tip.offsetWidth / 2, 4), r.width - tip.offsetWidth - 4);
