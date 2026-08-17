@@ -15353,6 +15353,29 @@ suite('La démonstration ne porte aucune enveloppe française', () => {
     return out.filter(Boolean);
   };
 
+  test('aucun nom réel n’a repris place dans la graine', () => {
+    /* La graine est fictive, et rien ne l'empechait de cesser de l'etre : coller
+       un patrimoine reel dedans est le chemin le plus court quand on veut « des
+       donnees realistes pour tester », et ce depot est public.
+
+       Le controle liste ce qui est ATTENDU plutot que ce qui est interdit. Une
+       liste d'interdits ne protege que de ce qu'on a deja vu, et il faudrait y
+       ecrire les vrais noms — dans un depot public, ce serait les publier pour
+       les interdire. La liste des etablissements de la demonstration est courte
+       et connue : tout ce qui n'y est pas est rouge, y compris le nom qu'on
+       n'avait pas prevu. */
+    const ATTENDUS = ['Online bank', 'Cash on hand', 'Broker A', 'Broker B',
+                      'Fund manager', 'Flat'];
+    const trouves = [...new Set(SEED_ACCOUNTS.map(a => a.broker).filter(Boolean))];
+    const intrus = trouves.filter(n => !ATTENDUS.includes(n));
+    eq(intrus.join(', '), '',
+      'un établissement que la démonstration n’a pas inventé est apparu dans la graine');
+    /* Et l'inverse : un nom attendu qui disparait veut dire que la graine a ete
+       remplacee, ce qui est le geste par lequel un vrai patrimoine y entre. */
+    const manquants = ATTENDUS.filter(n => !trouves.includes(n));
+    eq(manquants.join(', '), '', 'la graine de démonstration a changé d’établissements');
+  });
+
   test('aucun libellé ne dit « PEA »', () => {
     /* La demonstration s'ouvre en anglais pour qui ne parle pas francais, et un
        PEA n'y existe pas : le lecteur y voit un sigle qu'aucune traduction ne

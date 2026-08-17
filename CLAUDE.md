@@ -478,6 +478,24 @@ personne réelle, aucune donnée de santé, jamais.
 Un chiffre réel commité ici part en ligne au push suivant, et un dépôt public
 ne se dépublie pas. Le fixture des tests est synthétique, et il doit le rester.
 
+**Et la règle porte sur l'historique, pas seulement sur le fichier.** Une graine
+peut être fictive aujourd'hui et ne pas l'avoir toujours été : ce sont les
+commits qu'un dépôt public expose, pas l'état de l'arbre. Trois conséquences, à
+tenir :
+
+1. **Une branche de travail ne va jamais sur un dépôt public.** Son historique
+   porte tout ce qu'on a essayé puis retiré, et personne ne relit six cents
+   commits avant un push. Ici, seule `public-propre:main` est publiable, et son
+   historique a été reparti de zéro le 9 août pour cette raison exacte.
+2. **Avant de pousser vers un distant public, on regarde ce que la branche
+   porte**, et pas seulement ce que l'arbre montre. `git log -S"<un nom>"` coûte
+   trois secondes et répond.
+3. Un test tient la graine (« aucun nom réel n'a repris place dans la graine »).
+   Il liste ce qui est **attendu** plutôt que ce qui est interdit : une liste
+   d'interdits demanderait d'écrire ici les vrais noms, donc de les publier pour
+   les interdire. Et il ne remplace pas la règle : un historique ne se teste pas,
+   il se contrôle avant d'être publié.
+
 **Les captures du README se regénèrent par `python captures.py`**, jamais à la
 main. Les quatre doivent montrer le même patrimoine : prises à des moments
 différents, elles se contredisaient de 918,83 € et un lecteur attentif en
