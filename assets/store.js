@@ -2510,7 +2510,20 @@ function historySeries({ includeNow = true } = {}) {
     /* `total` doit egaler la somme des trois poches, comme pour un releve
        passe : la courbe suit la valeur des avoirs, les credits se lisent
        dans le patrimoine net du bandeau. */
-    pts.push({ label: "Auj.", date: todayISO(), cash: t.cash, bourse: t.bourse,
+    /* Le capital garanti rejoint la bourse ICI, et nulle part ailleurs.
+
+       Ce graphique trace des poches de COMPTE, pas des classes de ligne : un
+       releve mensuel note des montants par compte, et rien n'y dit quelle part
+       d'une assurance-vie etait en fonds euros il y a huit mois. Le passe ne se
+       decoupe donc pas, et c'est deja pour cette raison qu'il n'y a jamais eu de
+       bande « Obligations » alors que la carte des classes en montre une.
+
+       `nowTotals()` sort le capital garanti de la bourse parce que la projection
+       en a besoin pour lui appliquer son taux. Le reprendre ici garde la courbe
+       continue : sans cela, le dernier point perdait ces euros face a tous les
+       precedents, et la pile cessait de faire le total annonce. */
+    pts.push({ label: "Auj.", date: todayISO(), cash: t.cash,
+               bourse: num(t.bourse) + num(t.garanti),
                crypto: t.crypto, pe: t.pe, immo: t.immo, biens: t.biens,
                total: t.brut, comment: 'Photo actuelle' });
   }

@@ -582,11 +582,13 @@ const SERIES_PATRIMOINE = () => [
      dans le total du graphique sans appartenir a aucune bande, et la pile
      cessait de faire le total. seriesUtiles() la tait chez qui n'a rien. */
   { key: 'biens',  label: trad('Biens de valeur'),  color: Charts.cssv('--series-9') },
-  /* La septieme bande, nee avec la poche. Elle se pose apres les actifs de
-     marche dans la lecture, mais l'ordre de cette table est celui de la pile :
-     le capital garanti voisine les liquidites, qui est ce dont il est le plus
-     proche pour l'oeil, sans en etre. */
-  { key: 'garanti', label: trad('Capital garanti'), color: Charts.cssv('--series-8') },
+  /* Pas de bande « Capital garanti », et c'est la meme raison qui prive ce
+     graphique d'une bande « Obligations » : il trace des poches de COMPTE, la
+     ou la carte des classes trace des classes de ligne. Un releve mensuel note
+     des montants par compte, et rien n'y dit quelle part d'une assurance-vie
+     etait en fonds euros il y a huit mois — le passe ne se decoupe pas.
+     Une bande a zero sur douze mois puis sautant a dix mille au dernier point
+     dirait que cet argent vient d'arriver. */
 ];
 function seriesUtiles(points) {
   return SERIES_PATRIMOINE().filter(s => s.key === 'cash'
@@ -13204,13 +13206,21 @@ const APERCUS = {
     const q = pochesProjection(t);
     const tauxM = `${fmtPct(s.rate)} ${trad('par an')}`;
     const tauxNC = num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('par an')}` : A_PLAT;
+    const tauxG = num(s.rateGaranti) ? `${fmtPct(s.rateGaranti, 1)} ${trad('par an')}` : A_PLAT;
     return {
       titre: trad('Ce que tu as déjà'),
       sous: trad('La base de la projection') + (num(t.immo) ? trad(', ton immobilier à part') : ''),
       total: q.marche + q.autres,
       totalNote: trad('chaque ligne porte le taux qui lui est appliqué'),
+      /* Une ligne par poche que la projection distingue, et la liste doit les
+         couvrir toutes : le total vient de `q.marche + q.autres`, donc une poche
+         oubliee ici se compte dans le total sans apparaitre nulle part. Le
+         capital garanti a manque, et la fenetre annonçait 86 551 EUR pour
+         quatre lignes qui en faisaient 76 551. La somme des parts fait le
+         total, ou elle ne dit rien. */
       lignes: [
         { label: trad('Actifs de marché'), meta: tauxM, valeur: num(t.bourse) },
+        { label: trad('Capital garanti'), meta: tauxG, valeur: q.garanti },
         { label: trad('Cryptomonnaies'), meta: tauxM, valeur: num(t.crypto) },
         { label: trad('Non coté'), meta: tauxNC, valeur: q.nonCote },
         { label: trad('Liquidités'), meta: A_PLAT, valeur: q.liquidites },

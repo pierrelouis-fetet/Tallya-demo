@@ -11009,7 +11009,20 @@ suite('Un bien de valeur compte partout', () => {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     Fixture.poser();
+    /* Une poche peut n'avoir aucune bande, à une condition : que le point
+       « Auj. » la replie explicitement dans une autre. C'est le cas du capital
+       garanti, qui rejoint la bourse — ce graphique trace des poches de compte,
+       et un relevé mensuel ne dit pas quelle part d'une assurance-vie était en
+       fonds euros il y a huit mois. Le repli est déclaré ici, et vérifié dans la
+       source : sans lui, la poche disparaîtrait de la pile sans un mot. */
+    const REPLIEES = { garanti: 'bourse' };
     for (const cle of Object.keys(nowByGroup())) {
+      if (REPLIEES[cle]) {
+        vrai(new RegExp(`${REPLIEES[cle]}: num\\(t\\.${REPLIEES[cle]}\\) \\+ num\\(t\\.${cle}\\)`)
+          .test(lireSource('assets/store.js')),
+          `la poche « ${cle} » se replie dans « ${REPLIEES[cle]} », et ça doit se voir`);
+        continue;
+      }
       vrai(new RegExp(`key: '${cle}'`).test(src),
         `la poche « ${cle} » n’a pas de bande dans SERIES_PATRIMOINE`);
     }
@@ -14913,6 +14926,67 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     const ids = comptesPourCategorie('garanti').map(c => c.id);
     vrai(ids.includes('c_av2'), 'le contrat est proposé');
     vrai(!ids.includes('c_pea'), 'le PEA ne l’est pas : on n’y loge pas de fonds euros');
+  });
+
+  test('la pile du graphique fait le total, à chaque point', () => {
+    /* Deux enumerations ecrites a la main n'avaient pas suivi la septieme
+       poche. Le point « Auj. » de l'historique liste six poches et annonce
+       `t.brut`, qui en compte sept : la pile perdait le capital garanti et le
+       total le gardait. La courbe et son propre total se contredisaient.
+
+       Le graphique trace des poches de COMPTE, la ou la carte des classes trace
+       des classes de ligne : un releve mensuel note des montants par compte, et
+       rien n'y dit quelle part d'une assurance-vie etait en fonds euros il y a
+       huit mois. Le capital garanti rejoint donc la bourse dans cette courbe,
+       comme les obligations le font depuis toujours. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2018-09-01', cash: [],
+        lignes: [{ id: 'g', classe: 'garanti', libelle: 'Fonds euros',
+                   valeur: 10000, prixDeRevient: 10000 }] });
+    });
+    /* `SERIES_PATRIMOINE` vit dans app.js, que le harnais ne charge pas : les
+       clefs se relisent dans la source, ce qui verifie du meme coup qu'elles y
+       sont bien declarees. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('const SERIES_PATRIMOINE = () => ['),
+                           src.indexOf('function seriesUtiles('));
+    const cles = [...bloc.matchAll(/key: '([a-z]+)'/g)].map(m => m[1]);
+    vrai(cles.length >= 6, 'les bandes se relisent depuis la source');
+    vrai(!cles.includes('garanti'),
+      'pas de bande « capital garanti » : le passé ne se découpe pas par classe');
+    for (const p of historySeries()) {
+      const somme = cles.reduce((s, k) => s + num(p[k]), 0);
+      pres(somme, num(p.total), `la pile de ${p.label} doit faire son total`);
+    }
+  });
+
+  test('et le panneau de la projection aussi', () => {
+    /* Le total vient de `q.marche + q.autres`, donc une poche absente de la
+       liste se compte dans le total sans apparaitre : la fenetre annonçait
+       86 551 EUR pour quatre lignes qui en faisaient 76 551, l'ecart valant
+       exactement le capital garanti. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2018-09-01', cash: [],
+        lignes: [{ id: 'g', classe: 'garanti', libelle: 'Fonds euros',
+                   valeur: 10000, prixDeRevient: 10000 }] });
+    });
+    const q = pochesProjection();
+    /* Les poches que la projection distingue, chacune doit avoir sa ligne. */
+    const src = lireSource('assets/app.js');
+    const panneau = src.slice(src.indexOf('baseProjection: () => {'),
+                              src.indexOf('immobilierNet: () => {'));
+    for (const [poche, motif] of [['marche', /trad\('Actifs de marché'\)/],
+                                  ['garanti', /trad\('Capital garanti'\)/],
+                                  ['nonCote', /trad\('Non coté'\)/],
+                                  ['liquidites', /trad\('Liquidités'\)/]]) {
+      vrai(motif.test(panneau), `la poche ${poche} a sa ligne dans le panneau`);
+    }
+    pres(q.marche + q.autres, q.marche + q.nonCote + q.liquidites + q.garanti,
+      'le total du panneau est bien la somme des poches qu’il liste');
   });
 
   test('un capital garanti ne capitalise pas au taux du marché', () => {
