@@ -708,7 +708,7 @@ function mobiliteLigne(l, compte) {
      quelques mois » promettait une reserve qui n'existe pas. Le reglage par
      ligne reste au-dessus, pour qui vend vraiment et loue ensuite. */
   if (usageLigne(l) === 'principale') return 'habite';
-  return mobilisabilite(l.classe, compte.type, compte.ouvertLe);
+  return mobilisabilite(l.classe, compte.type);
 }
 
 const cashCompte = c => (c.cash || []).reduce((s, e) => s + num(e.montant), 0);
@@ -844,7 +844,51 @@ function ageAnnees(iso) {
   if (!iso) return Infinity;                    // sans date : pas de blocage
   return (Date.now() - new Date(iso)) / (365.25 * 24 * 3600e3);
 }
-function mobilisabilite(classe, typeId, ouvertLe) {
+/* L'anciennete d'une enveloppe, et le seuil qui la rend interessante.
+
+   Cinq ans pour un PEA, huit pour une assurance-vie : ce sont des seuils
+   FISCAUX, pas des barrieres a la sortie — d'ou leur absence de
+   `mobilisabilite`. Mais c'est le repere que tout detenteur d'assurance-vie
+   guette, et l'application connaissait la date sans rien en faire : elle la
+   reclamait a la creation en promettant qu'elle « conditionne la
+   disponibilite », ce qui etait faux, et ne l'affichait nulle part.
+
+   Le PER n'a pas de seuil d'anciennete : ce qui le libere est un evenement, le
+   depart en retraite, et non une duree ecoulee. Il porte donc une echeance
+   declaree plutot qu'un compte a rebours calcule. */
+const SEUIL_ANCIENNETE = { pea: 5, av: 8 };
+
+function ancienneteCompte(c) {
+  const debut = c && c.ouvertLe;
+  const ans = SEUIL_ANCIENNETE[c && c.type];
+  if (!debut || !ans) return null;
+  const d = new Date(debut + 'T00:00:00');
+  if (isNaN(d)) return null;
+  const now = new Date(todayISO() + 'T00:00:00');
+  let mois = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+  if (now.getDate() < d.getDate()) mois--;
+  if (mois < 0) mois = 0;
+  const seuilLe = new Date(d); seuilLe.setFullYear(d.getFullYear() + ans);
+  const moisRestants = Math.max(0, ans * 12 - mois);
+  /* La date se recompose a la main, jamais par `toISOString()` : celui-ci
+     convertit en UTC, et minuit heure locale a l'est de Greenwich retombe la
+     veille. Le seuil des huit ans d'un contrat ouvert un 1er septembre
+     s'affichait au 31 aout. */
+  const iso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`
+                 + `-${String(x.getDate()).padStart(2, '0')}`;
+  return { mois, annees: Math.floor(mois / 12), reste: mois % 12,
+           seuilAns: ans, atteint: mois >= ans * 12, moisRestants,
+           seuilLe: iso(seuilLe) };
+}
+
+/* Pas de date d'ouverture ici, et ce n'est pas un oubli : elle etait reçue et
+   jamais lue. Un PEA de moins de cinq ans n'est pas bloque au sens de
+   l'autonomie — on casse le plan et l'argent arrive en quelques jours, on y perd
+   l'avantage fiscal et non l'acces — et l'anciennete d'une assurance-vie ne
+   change rien non plus a la vitesse d'un rachat. Le parametre laissait croire a
+   une regle qui n'existe pas, et le texte d'aide du champ la promettait. Ce que
+   l'anciennete change vraiment est fiscal, et se lit sur la fiche du compte. */
+function mobilisabilite(classe, typeId) {
   if (typeId === 'per') return 'bloque';
   /* Un PEA de moins de cinq ans n'est pas bloqué au sens de l'autonomie :
      en cas de coup dur on casse le plan et l'argent arrive en quelques
@@ -895,7 +939,7 @@ function poches() {
       const m = num(e.montant);
       p[e.affectation] = (p[e.affectation] || 0) + m;
       p.classes.liquidites += m;
-      p.mobilisable[mobilisabilite('liquidites', c.type, c.ouvertLe)] += m;
+      p.mobilisable[mobilisabilite('liquidites', c.type)] += m;
     }
     for (const l of lignesDe(c)) {
       p.classes[l.classe] = (p.classes[l.classe] || 0) + l.valeur;

@@ -5360,7 +5360,7 @@ function lignePlacement(l, compte, editable = false) {
       <select data-path="${esc(l.refMobilite)}"
               aria-label="${trad('Disponibilité de')} ${esc(l.libelle)}">
         <option value="auto" ${!l.mobilite || l.mobilite === 'auto' ? 'selected' : ''}>
-          ${trad('Auto,')} ${esc(trad(MOBILISABLE_COURT[mobilisabilite(l.classe, compte.type, compte.ouvertLe)]))}</option>
+          ${trad('Auto,')} ${esc(trad(MOBILISABLE_COURT[mobilisabilite(l.classe, compte.type)]))}</option>
         ${Object.entries(MOBILISABLE_COURT).map(([v, lib]) =>
           `<option value="${v}" ${l.mobilite === v ? 'selected' : ''}>${esc(trad(lib))}</option>`).join('')}
       </select>
@@ -6385,6 +6385,26 @@ function viewFicheCompte(id) {
       ${[...parClasse.entries()].filter(([, v]) => v).map(([k, v]) =>
         `<dt>${esc(CLASSES_ACTIFS[k] || k)}</dt><dd>${fmtEUR(v)}</dd>`).join('')}
     </dl>
+    <!-- L'anciennete, la ou elle compte : huit ans pour une assurance-vie, cinq
+         pour un PEA. L'application reclamait la date d'ouverture a la creation
+         en promettant qu'elle « conditionne la disponibilite » — ce qui etait
+         faux — et ne l'affichait ensuite nulle part. Le seuil est fiscal, la
+         phrase le dit, et le compte a rebours est le repere que tout detenteur
+         d'assurance-vie guette. -->
+    ${(() => {
+      const a = ancienneteCompte(c);
+      if (!a) return '';
+      const duree = `${a.annees} ${trad(a.annees > 1 ? 'ans' : 'an')}${
+        /* « mois » est invariable en francais : la clef au pluriel porte un
+           repli, sinon `trad()` rend la clef elle-meme et l'ecran affiche
+           « 11 mois.pl ». Meme motif que `trad('sur.total', 'sur')`. */
+        a.reste ? ` ${trad('et')} ${a.reste} ${trad(a.reste > 1 ? 'mois.pl' : 'mois', 'mois')}` : ''}`;
+      return `<p class="hint" style="margin:12px 0 0">${trad('Ouvert depuis')} ${duree} · ${
+        a.atteint
+          ? `<b class="up">${trad('seuil des')} ${a.seuilAns} ${trad('ans atteint')}</b>`
+          : `${trad('seuil des')} ${a.seuilAns} ${trad('ans le')} ${fmtDate(a.seuilLe)}`
+      }${aide(trad('Un seuil fiscal, pas une barrière à la sortie : avant lui, retirer reste possible, on y perd l’avantage d’impôt et non l’accès à l’argent. C’est pourquoi la disponibilité affichée plus bas n’en dépend pas.'))}</p>`;
+    })()}
   </div>
 
   ${espaceBien(c, idx, t)}
@@ -6608,7 +6628,7 @@ function viewFicheCompte(id) {
         <dd>${num(c.plafond) ? fmtEUR(c.plafond)
               : `<span class="muted">${trad('non renseigné')}</span>`}</dd>` : ''}
         ${t.dateSensible ? `
-        <dt>${trad('Date d’ouverture')}${aide(trad("Elle conditionne la disponibilité : un PEA se débloque à cinq ans, une assurance-vie à huit, un PER à la retraite. C’est pour cela qu’elle est demandée ici et pas sur les autres types de compte."))}</dt>
+        <dt>${trad('Date d’ouverture')}${aide(trad("Elle donne l’ancienneté du contrat, affichée en tête de cette fiche : cinq ans pour un PEA, huit pour une assurance-vie. Ce sont des seuils d’impôt, pas des barrières à la sortie : avant eux, retirer reste possible, on y perd l’avantage fiscal et non l’accès à l’argent. C’est pour cela qu’elle est demandée ici et pas sur les autres types de compte."))}</dt>
         <dd>${c.ouvertLe ? esc(fmtDate(c.ouvertLe))
               : `<span class="muted">${trad('à renseigner')}</span>`}</dd>`
         : c.ouvertLe ? `<dt>${motDateCompte(t)}</dt><dd>${esc(fmtDate(c.ouvertLe))}</dd>` : ''}
@@ -9230,8 +9250,9 @@ const ACTIONS = {
 
   /* Création en trois étapes — une décision par écran. Les champs
      secondaires (numéro, notes) vivent dans la fiche ; seule la date
-     d'ouverture d'un PEA ou d'un PER est demandée ici, parce qu'elle
-     conditionne la disponibilité. */
+     d'ouverture d'une enveloppe a seuil est demandée ici, parce qu'elle donne
+     l'anciennete que sa fiche affiche. Elle ne commande aucune disponibilite :
+     ces seuils sont fiscaux, et `mobilisabilite()` ne lit aucune date. */
   /* `data-etab` : depuis la fiche d'un établissement, le contenant est déjà
      connu. On saute l'étape 2 plutôt que de faire rechoisir son établissement
      à quelqu'un qui est justement sur la page de cet établissement. */
@@ -9456,7 +9477,7 @@ const ACTIONS = {
           aide: trad('deux usages sur le même compte, sans le dupliquer') },
         ]),
         ...(t.dateSensible ? [{ cle: 'ouvertLe', label: trad('Date d’ouverture'), type: 'date',
-          aide: trad('elle conditionne la disponibilité, cinq ans pour un PEA') }] : []),
+          aide: trad('elle donne l’ancienneté, que la fiche affiche : cinq ans pour un PEA, huit pour une assurance-vie') }] : []),
       ],
     });
     if (!e3) return;

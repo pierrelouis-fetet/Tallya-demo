@@ -14800,6 +14800,51 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'et la réponse est celle qui est rangée sur la ligne');
   });
 
+  test('la date d’ouverture ne promet plus une règle qui n’existe pas', () => {
+    /* Le champ annonçait « elle conditionne la disponibilite, cinq ans pour un
+       PEA ». C'etait faux, et volontairement : un PEA de moins de cinq ans
+       n'est pas bloque au sens de l'autonomie, on casse le plan et l'argent
+       arrive en quelques jours. `mobilisabilite` recevait donc une date qu'elle
+       ne lisait jamais — un parametre mort qui faisait croire a une regle. */
+    const src = lireSource('assets/store.js');
+    const fn = src.slice(src.indexOf('function mobilisabilite('),
+                         src.indexOf('function mobilisabilite(') + 2000);
+    vrai(!/ouvertLe/.test(fn.slice(0, fn.indexOf('\n}'))),
+      'la disponibilité ne dépend d’aucune date, signature comprise');
+    vrai(!/conditionne la disponibilité/.test(lireSource('assets/app.js')),
+      'et le texte d’aide ne prétend plus qu’une date conditionne la disponibilité');
+    /* La preuve par le comportement : deux PEA d'anciennetes opposees. */
+    eq(mobilisabilite('actions', 'pea'), mobilisabilite('actions', 'pea'),
+      'la fonction ne prend plus que la classe et le type');
+    eq(mobilisabilite('actions', 'per'), 'bloque',
+      'seul le PER reste fermé, et par sa nature, pas par sa date');
+  });
+
+  test('mais l’ancienneté sert enfin à quelque chose', () => {
+    /* Huit ans pour une assurance-vie, cinq pour un PEA : le repere que tout
+       detenteur guette, et l'application connaissait la date sans rien en
+       faire. Ce sont des seuils fiscaux, pas des barrieres a la sortie, et la
+       bulle le dit — sinon on retomberait dans la promesse d'avant. */
+    auJour('2026-08-17', () => {
+      const av = ancienneteCompte({ type: 'av', ouvertLe: '2018-09-01' });
+      eq(av.seuilAns, 8, 'une assurance-vie vise huit ans');
+      eq(av.annees, 7, 'ouverte depuis sept ans');
+      eq(av.reste, 11, 'et onze mois');
+      eq(av.atteint, false, 'le seuil n’est pas encore atteint');
+      eq(av.seuilLe, '2026-09-01', 'il tombe le 1er septembre 2026');
+      const pea = ancienneteCompte({ type: 'pea', ouvertLe: '2019-01-01' });
+      eq(pea.seuilAns, 5, 'un PEA vise cinq ans');
+      eq(pea.atteint, true, 'et celui-là les a passés');
+    });
+    /* Les types sans seuil d'anciennete ne rendent rien : un PER se libere sur
+       un evenement, pas sur une duree, et un compte courant n'a pas de seuil. */
+    for (const type of ['per', 'cto', 'courant', 'immo']) {
+      eq(ancienneteCompte({ type, ouvertLe: '2015-01-01' }), null,
+        `${type} n’a pas de seuil d’ancienneté`);
+    }
+    eq(ancienneteCompte({ type: 'av' }), null, 'et sans date, rien à afficher');
+  });
+
   test('un fonds euros a une porte pour entrer', () => {
     /* La poche existait, la projection la traitait, et aucun ecran ne
        permettait d'y ranger quoi que ce soit : la classe manquait dans la liste
