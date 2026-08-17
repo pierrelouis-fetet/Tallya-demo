@@ -6375,7 +6375,11 @@ function viewFicheCompte(id) {
 
   <!-- Un studio n'a pas de trésorerie : la carte ne s'affiche que pour les
        enveloppes qui peuvent en porter, ou celles qui en portent déjà. -->
-  ${!t.classes.includes('liquidites') && !(c.cash || []).length ? '' : `
+  <!-- Un contrat n'a pas de poche de cash : l'argent verse est sur un support
+       des son arrivee. La carte disparait donc, sauf si elle porte deja quelque
+       chose — retirer un ecran ne doit pas emporter ce que quelqu'un y avait
+       saisi, et ces euros-la doivent pouvoir etre reclasses a la main. -->
+  ${(t.sansCash || !t.classes.includes('liquidites')) && !(c.cash || []).length ? '' : `
   <div class="card">
     <div class="card-head"><h2>${BASES.liquidites.nom} ${trad('sur ce compte')}</h2>
       <button class="btn sm ghost" data-action="scinder-cash" data-id="${esc(c.id)}"
@@ -8373,12 +8377,26 @@ function optionsBiens() {
    non cote — un bien immobilier n'a pas de date de remboursement, et une SCPI
    n'en a pas non plus. */
 /* `type` : le type du compte qui porte la ligne, pas seulement sa classe. */
+/* L'exemple suit la classe du support, parce qu'il enseigne autant qu'il
+   illustre : « ex. Projet Bordeaux » sous l'intitule d'un fonds euros ne dit pas
+   ce qu'on attend, il fait douter d'etre au bon endroit. Le motif est celui des
+   autres exemples de l'application, qui nomment tous une chose de leur espece. */
+const EXEMPLE_PLACEMENT = {
+  actions:     'ex. ETF MSCI World',
+  obligations: 'ex. Fonds euros',
+  liquidites:  'ex. Fonds monétaire',
+  immobilier:  'ex. SCPI de rendement',
+  nonCote:     'ex. Projet Bordeaux',
+  crypto:      'ex. Bitcoin',
+};
+
 function champsPlacement(classe, l = null, prete = false, type = null) {
   const echeancier = !!prete;
   const estime = estDetenuEnDirect(type);
   return [
     { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
-      valeur: l ? (l.libelle || '') : '', exemple: 'ex. Projet Bordeaux' },
+      valeur: l ? (l.libelle || '') : '',
+      exemple: EXEMPLE_PLACEMENT[classe] || 'ex. Projet Bordeaux' },
     { cle: 'valeur',
       label: `${estime ? 'Valeur estimée' : 'Valeur aujourd’hui'} (€)`, type: 'nombre',
       valeur: l ? num(l.valeur) : '', exemple: '0',
@@ -9254,10 +9272,23 @@ const ACTIONS = {
        propose plus. */
     else if (!etabId && estDetenuEnDirect(t)) etabId = '__nouveau';
     else if (!etabId) {
-      const proposables = ETABS().filter(e => {
-        const siens = COMPTES().filter(c => c.etabId === e.id);
-        return !siens.length || contenantDeLEtab(e.id).titre === mot.titre;
-      });
+      /* Un contenant vide reste proposable, mais en dernier et jamais choisi
+         d'avance.
+
+         Il n'a plus de famille : `contenantDeLEtab` la derive des comptes
+         rattaches, et sans compte elle retombe sur « banque ou courtier ». Un
+         « Studio » dont le bien a ete supprime se proposait donc partout, et
+         `proposables[0]` en faisait le choix par defaut : la fenetre qui demande
+         chez quel assureur tenir un contrat s'ouvrait sur un studio. Le retirer
+         d'office serait pire — on retaperait un nom qui existe, et deux
+         etablissements homonymes vivraient cote a cote — mais rien n'oblige a
+         le mettre en tete ni a le preselectionner. */
+      const memeFamille = e => contenantDeLEtab(e.id).titre === mot.titre;
+      const aDesComptes = e => COMPTES().some(c => c.etabId === e.id);
+      const proposables = [
+        ...ETABS().filter(e => aDesComptes(e) && memeFamille(e)),
+        ...ETABS().filter(e => !aDesComptes(e)),
+      ];
       /* Un contenant vide se dit vide.
 
          On continue de le proposer : on peut vouloir le repeupler, et le retirer
@@ -9269,9 +9300,13 @@ const ACTIONS = {
         ok: 'Continuer',
         champs: [{ cle: 'etab', label: mot.question, type: 'liste', aide: mot.aide,
           options: [...proposables.map(e => [e.id,
-            COMPTES().some(c => c.etabId === e.id) ? e.nom : `${e.nom} (aucun compte)`]),
+            aDesComptes(e) ? e.nom : `${e.nom} (aucun compte)`]),
             ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
-          valeur: proposables[0]?.id || '__nouveau' }],
+          /* Le defaut ne tombe que sur un contenant de la bonne famille. Sans
+             lui, mieux vaut ouvrir sur « + Nouveau » que sur un nom qui ne
+             veut rien dire ici : on valide une fenetre a trois champs sans
+             relire celui qui etait deja rempli. */
+          valeur: proposables.find(e => aDesComptes(e) && memeFamille(e))?.id || '__nouveau' }],
       });
       if (!e2) return;
       etabId = e2.etab;
@@ -9297,11 +9332,13 @@ const ACTIONS = {
     const e3 = await askForm({
       titre: bien ? (estDetenuEnDirect(t) ? 'Valeur estimée'
                   : `Valeur ${t.classes.includes('nonCote') ? 'de la participation' : 'du bien'}`)
+                  : t.sansCash ? trad('Nommer le contrat')
                   : `${BASES.liquidites.nom} ${trad('sur ce compte')}`,
       /* Le compte des étapes suit le parcours réellement suivi : annoncer
          « 3 sur 3 » après un « 1 sur 2 » ferait douter d'en avoir sauté une. */
       sous: `${trad('Étape')} ${etapes} ${trad('sur.etape', 'sur')} ${etapes}${bien
-        ? `, ${trad('la plus-value se calcule sur ces deux montants')}` : ''}`,
+        ? `, ${trad('la plus-value se calcule sur ces deux montants')}`
+        : t.sansCash ? `, ${trad('sa valeur viendra des supports que tu y ajouteras')}` : ''}`,
       ok: 'Créer',
       champs: bien ? [
         /* Le nom, pour un bien sans contenant.
@@ -9384,15 +9421,23 @@ const ACTIONS = {
            Seuls les comptes tenus par une banque le demandent. Pour un bien ou
            une part de societe, l'etape 2 a deja nomme la chose elle-meme, et
            redemander ici ferait deux champs pour une seule valeur. */
-        { cle: 'libelle', label: trad('Nom du compte'), type: 'texte',
+        { cle: 'libelle', label: trad(t.sansCash ? 'Nom du contrat' : 'Nom du compte'), type: 'texte',
           valeur: `${t.label} ${nomContenant()}`.trim(),
-          aide: trad('c’est lui qui distingue deux comptes du même type') },
+          aide: trad(t.sansCash ? 'c’est lui qui distingue deux contrats du même type'
+                                : 'c’est lui qui distingue deux comptes du même type') },
+        /* Un contrat ne porte pas de poche de cash : ces trois questions y
+           inventaient une affectation pour de l'argent qui est deja sur un
+           support, au pire le fonds euros. Sa valeur vient donc de ce qu'on y
+           ajoutera, et la fenetre le dit plutot que de demander un montant qui
+           n'aurait nulle part ou se ranger. */
+        ...(t.sansCash ? [] : [
         { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', exemple: '0' },
         { cle: 'usage', label: trad('À quoi sert cet argent ?'), type: 'liste',
           options: AFFECTATIONS, valeur: t.defaut,
           aide: trad('pré-rempli selon le type de compte, modifiable librement') },
         { cle: 'scinder', label: trad('Scinder : déclarer un second usage'), type: 'case',
           aide: trad('deux usages sur le même compte, sans le dupliquer') },
+        ]),
         ...(t.dateSensible ? [{ cle: 'ouvertLe', label: trad('Date d’ouverture'), type: 'date',
           aide: trad('elle conditionne la disponibilité, cinq ans pour un PEA') }] : []),
       ],

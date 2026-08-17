@@ -14760,6 +14760,66 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'et la réponse est celle qui est rangée sur la ligne');
   });
 
+  test('un contrat n’a pas de poche de cash', () => {
+    /* L'argent verse sur une assurance-vie est sur un support des son arrivee,
+       au pire le fonds euros : « Cash a investir » y inventait une poche qui
+       n'existe pas, comptee ensuite dans les liquidites de l'accueil et dans
+       les paliers d'autonomie. */
+    for (const id of ['av', 'per']) {
+      const t = TYPES_COMPTE.find(x => x.id === id);
+      vrai(t.sansCash, `${t.label} ne porte pas de cash`);
+      /* Mais « liquidites » reste dans la liste : le mot y sert aussi a
+         accepter un support monetaire, qui est un placement et non du cash.
+         Deux choses sous un seul mot, d'ou deux reglages — les confondre
+         aurait interdit le fonds monetaire en voulant retirer la poche. */
+      vrai(t.classes.includes('liquidites'),
+        `${t.label} accepte toujours un support monétaire`);
+    }
+    eq(!!TYPES_COMPTE.find(x => x.id === 'cto').sansCash, false,
+      'un compte-titres garde la sienne : le cash y attend vraiment d’être investi');
+  });
+
+  test('mais le cash déjà saisi ne disparaît pas avec la carte', () => {
+    /* Retirer un ecran ne doit pas emporter ce que quelqu'un y avait saisi :
+       la carte reste des qu'elle porte quelque chose, pour qu'on puisse
+       reclasser ces euros a la main. */
+    const src = lireSource('assets/app.js');
+    vrai(/\(t\.sansCash \|\| !t\.classes\.includes\('liquidites'\)\) && !\(c\.cash \|\| \[\]\)\.length \? ''/.test(src),
+      'la carte de trésorerie ne se masque que si elle est vide');
+    /* Et l'assistant ne pose plus les trois questions du cash. */
+    vrai(/\.\.\.\(t\.sansCash \? \[\] : \[/.test(src),
+      'les trois champs du cash sautent à la création');
+    vrai(/t\.sansCash \? trad\('Nommer le contrat'\)/.test(src),
+      'et l’étape dit ce qu’elle demande vraiment');
+  });
+
+  test('un contenant vide n’est jamais le choix par défaut', () => {
+    /* Sans compte rattache, `contenantDeLEtab` n'a plus de famille a deriver et
+       retombe sur « banque ou courtier » : un « Studio » dont le bien a ete
+       supprime se proposait partout, et `proposables[0]` en faisait le defaut —
+       la fenetre qui demande chez quel assureur tenir un contrat s'ouvrait sur
+       un studio. On continue de le proposer, en dernier : le retirer ferait
+       retaper un nom qui existe, donc deux etablissements homonymes. */
+    const src = lireSource('assets/app.js');
+    vrai(/\.\.\.ETABS\(\)\.filter\(e => aDesComptes\(e\) && memeFamille\(e\)\),\s*\.\.\.ETABS\(\)\.filter\(e => !aDesComptes\(e\)\)/.test(src),
+      'ceux qui ont des comptes et la bonne famille passent devant');
+    vrai(/valeur: proposables\.find\(e => aDesComptes\(e\) && memeFamille\(e\)\)\?\.id \|\| '__nouveau'/.test(src),
+      'et le défaut ne tombe que sur l’un d’eux, sinon sur « + Nouveau »');
+  });
+
+  test('l’exemple d’un support parle de son espèce', () => {
+    /* « ex. Projet Bordeaux » sous l'intitule d'un fonds euros ne dit pas ce
+       qu'on attend : il fait douter d'etre au bon endroit. */
+    const src = lireSource('assets/app.js');
+    const table = (src.match(/const EXEMPLE_PLACEMENT = \{[^}]*\}/) || [''])[0];
+    vrai(table, 'la table des exemples existe');
+    for (const [classe, mot] of [['obligations', 'Fonds euros'], ['actions', 'MSCI World'],
+                                 ['immobilier', 'SCPI'], ['nonCote', 'Projet Bordeaux']]) {
+      vrai(new RegExp(`${classe}:\\s*'ex\\. [^']*${mot}`).test(table),
+        `${classe} propose un exemple de son espèce`);
+    }
+  });
+
   test('sous 768 px, le bouton d’ajout ne s’étire pas sur toute la carte', () => {
     /* La regle valait pour le menu qu'il remplace : un menu s'etire parce que
        ses options portent de longs noms et qu'il les tronque sans rien dire. Un
