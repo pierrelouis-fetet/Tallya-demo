@@ -4029,13 +4029,27 @@ function mountSymbolSearch() {
              ou la classe et le role sont des reglages de rangement. La liste
              des comptes depend malgre tout de la classe, et se refait quand on
              la change. */
+          /* La classe se deduit quand la recherche a rendu un type, et elle ne
+             se demande pas alors : qu'un titre soit une action ou un ETF est un
+             fait de l'instrument, pas une preference, et poser la question
+             donnait a choisir une reponse qu'on connait deja. Elle s'affiche
+             donc en lecture, avec d'ou elle vient.
+
+             Le chemin de correction ne disparait pas pour autant, et il le
+             faut : une classe n'est pas toujours un fait — un ETC sur l'or est
+             « metaux » ici et « actions » ailleurs. La fiche de la ligne porte
+             le menu, et la bulle dit ou aller.
+
+             Sans type renvoye, la question redevient une vraie question, et le
+             lien qui refait la liste des comptes revient avec elle. */
           const cat = classeDuType(bouton.dataset.type);
+          const deduite = !!bouton.dataset.type;
           const v = await askForm({
             titre: bouton.dataset.nom || bouton.dataset.symbol,
             sous: trad('Où ranger cette ligne ?'),
             ok: 'Créer la ligne',
-            lie: { de: 'assetClass', vers: 'account', options: comptesPourListe,
-                   vide: 'aucun compte ne peut porter cette classe' },
+            ...(deduite ? {} : { lie: { de: 'assetClass', vers: 'account', options: comptesPourListe,
+                   vide: 'aucun compte ne peut porter cette classe' } }),
             champs: [
               { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
                 valeur: compteVisePourAjout || defaultHoldingAccount(),
@@ -4063,9 +4077,13 @@ function mountSymbolSearch() {
                   ? `${trad('cours du jour')} ${fmtCur(cote.price, cote.currency)} · ${
                       trad('ce que tu as payé peut être différent')}`
                   : trad('le prix payé par titre, dans la devise du titre') },
-              { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
-                options: OPTIONS_CLASSE, valeur: cat,
-                aide: bouton.dataset.type ? `déduite de ${guill(bouton.dataset.type)}` : '' },
+              deduite
+                ? { cle: 'assetClass', label: trad('Classe d’actif'), lecture: true,
+                    valeur: ASSET_CLASSES[cat] || cat,
+                    aide: `${trad('déduite de')} ${guill(bouton.dataset.type)}${
+                      trad(', modifiable sur la fiche de la ligne')}` }
+                : { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste',
+                    options: OPTIONS_CLASSE, valeur: cat },
               { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE,
                 valeur: 'satellite', aide: trad('coeur de portefeuille ou pari satellite') },
               /* Proposee au jour, parce qu'on cree une ligne le jour ou l'on
@@ -4088,7 +4106,11 @@ function mountSymbolSearch() {
                toujours, et un titre en dollars comptait ensuite son prix de
                revient sans conversion. */
             qty: v.qty, buyPrice: v.buyPrice, price: 0, fx: 1, fxBuy: null,
-            assetClass: v.assetClass, role: v.role, account: v.account, manual: false,
+            /* Un champ en lecture ne rend aucune valeur : `askForm` ne lit que
+               les champs qui portent un element. La classe deduite vient donc
+               de `cat`, jamais de la reponse, sinon la ligne naissait sans
+               classe et retombait en « actions » pour tout le monde. */
+            assetClass: deduite ? cat : v.assetClass, role: v.role, account: v.account, manual: false,
             dateAchat: v.dateAchat || '',
           });
           const i = Store.state.positions.length - 1;
@@ -7692,7 +7714,16 @@ function viewBudget(section = 'depenses') {
 
     <div class="grid" style="gap:16px; align-content:start">
       <div class="card">
-        <div class="card-head"><h2>${trad('Épargne mensuelle')}</h2><span class="hint">${trad('théorique vs réelle')}</span></div>
+        <!-- Le titre nomme les deux natures, parce que la carte en porte deux et
+             qu'une seule s'appelle « epargne ». Le haut est un flux de budget :
+             ce que les revenus laissent une fois les charges et les depenses
+             retirees. Le bas est la variation du patrimoine net d'un mois sur
+             l'autre, qui contient les marches, les apports exterieurs et le
+             capital rembourse d'un credit. Sous un titre unique « Epargne
+             mensuelle », le second se lisait comme de l'epargne, ce qu'il
+             n'est pas. -->
+        <div class="card-head"><h2>${trad('Épargne et croissance')}</h2>
+          <span class="hint">${trad('ce que le budget prévoit, ce que le patrimoine fait')}</span></div>
         <dl class="kv">
           <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
           <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
@@ -7705,7 +7736,14 @@ function viewBudget(section = 'depenses') {
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
           <dl class="kv">
             <dt>${trad('Croissance réelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif."))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
-            <dt>${trad('Écart avec la théorie')}${aide(trad("Différence entre ce que ton patrimoine a réellement gagné et ce que ton budget prévoyait. Un écart positif vient souvent des marchés ou d'un apport supplémentaire : ce n'est pas une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
+            <!-- « Ce qui ne vient pas du budget » et non « Écart avec la
+                 théorie ». Le mot « écart » invitait à lire une erreur de
+                 saisie, alors que cette différence est faite de marchés,
+                 d'apports extérieurs et de capital remboursé : des choses que le
+                 budget ne peut pas prévoir parce qu'elles ne le traversent pas.
+                 Un intitulé dit ce qu'il compte, et celui-là comptait tout ce
+                 que l'épargne n'explique pas. -->
+            <dt>${trad('Ce qui ne vient pas du budget')}${aide(trad("Ce qui sépare la croissance de ton patrimoine de l'épargne que ton budget dégage : les marchés, un apport extérieur, le capital d'un crédit que tu rembourses. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n'est une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
           </dl>
           <p class="small muted" style="margin:12px 0 0">
             ${trad('Mesuré sur les')} ${rec.monthsSpan} ${trad('derniers mois clos. Le mois en cours est '

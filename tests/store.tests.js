@@ -14652,6 +14652,46 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'la quantité et le prix saisis sont ceux de la ligne, pas des zéros');
   });
 
+  test('la classe déduite se lit, elle ne se choisit pas', () => {
+    /* Qu'un titre soit une action ou un ETF est un fait de l'instrument, pas
+       une preference, et la recherche le renvoie deja : poser la question
+       donnait a choisir une reponse connue. Elle s'affiche donc, avec sa
+       provenance.
+
+       Mais une classe n'est pas toujours un fait — un ETC sur l'or est
+       « metaux » ici et « actions » ailleurs — donc le chemin de correction
+       doit survivre, et la bulle dit ou il est. */
+    const bloc = recherche();
+    vrai(/deduite = !!bouton\.dataset\.type/.test(bloc),
+      'la déduction dépend du type que la recherche a rendu');
+    vrai(/deduite\s*\?\s*\{ cle: 'assetClass'[^}]*lecture: true/s.test(bloc),
+      'quand le type est connu, la classe est une ligne en lecture');
+    vrai(/modifiable sur la fiche de la ligne/.test(bloc),
+      'et la bulle dit où la corriger');
+    /* Sans type, la question redevient une vraie question, avec son menu. */
+    vrai(/: \{ cle: 'assetClass', label: trad\('Classe d’actif'\), type: 'liste'/.test(bloc),
+      'sans type renvoyé, le menu revient');
+    /* Un champ en lecture ne rend aucune valeur : la creation doit prendre la
+       classe deduite, sinon la ligne naissait sans classe. */
+    vrai(/assetClass: deduite \? cat : v\.assetClass/.test(bloc),
+      'la ligne créée porte bien la classe déduite');
+    /* Et la fiche d'une ligne porte toujours le menu, qui est ce chemin. */
+    vrai(/OPTIONS_CLASSE\.map/.test(lireSource('assets/app.js')),
+      'la fiche d’une ligne garde le choix de la classe');
+  });
+
+  test('le lien classe vers comptes ne survit pas à un champ en lecture', () => {
+    /* `askForm` cable `lie` sur `#f_assetClass`. Un champ en lecture ne pose
+       aucun element de ce nom : garder le lien aurait leve une exception a
+       l'ouverture de la fenetre, c'est-a-dire sur le chemin le plus frequent
+       de l'application. */
+    const bloc = recherche();
+    vrai(/\.\.\.\(deduite \? \{\} : \{ lie: \{ de: 'assetClass', vers: 'account'/.test(bloc),
+      'le lien n’est posé que quand la classe est un vrai champ');
+    vrai(/const source = \$\(`#f_\$\{lie\.de\}`\)/.test(lireSource('assets/app.js')),
+      'askForm attend bien un élément pour la source du lien');
+  });
+
   test('la liste des comptes suit toujours la classe', () => {
     /* L'ordre a l'ecran ne defait pas la dependance : une action ne se loge pas
        sur un portefeuille de cryptomonnaies, et changer la classe refait la
@@ -14909,6 +14949,32 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'à 2,5 %, il produit ce que 2,5 % produisent');
     vrai(avec.gainsGaranti < 30000,
       'très loin des 116 000 € que le taux du marché lui aurait prêtés');
+  });
+
+  test('une carte qui porte deux natures ne s’appelle pas d’une seule', () => {
+    /* Le haut de la carte est un flux de budget : ce que les revenus laissent
+       une fois les charges et les depenses retirees. Le bas est la variation du
+       patrimoine net d'un mois sur l'autre, qui contient les marches, les
+       apports exterieurs et le capital rembourse d'un credit. Sous le titre
+       « Epargne mensuelle », le second se lisait comme de l'epargne.
+
+       Et « Ecart avec la theorie » invitait a y voir une erreur de saisie, la
+       ou il n'y a que ce que le budget ne peut pas prevoir. Un intitule dit ce
+       qu'il compte. */
+    const src = lireSource('assets/app.js');
+    vrai(/<h2>\$\{trad\('Épargne et croissance'\)\}<\/h2>/.test(src),
+      'le titre nomme les deux natures');
+    vrai(!/trad\('Écart avec la théorie'\)/.test(src),
+      'plus d’« écart », qui se lisait comme une erreur');
+    vrai(/trad\('Ce qui ne vient pas du budget'\)/.test(src),
+      'l’intitulé dit ce que la ligne compte');
+    /* Les deux montants restent ceux du calcul : renommer ne recalcule rien. */
+    Fixture.poser();
+    const rec = savingsReconciliation();
+    if (rec.realPerMonth != null) {
+      pres(rec.gap, rec.realPerMonth - rec.theoretical,
+        'la ligne reste la différence entre le constaté et le prévu');
+    }
   });
 
   test('un contrat plein d’ETF ne compte pas comme de la pierre', () => {
