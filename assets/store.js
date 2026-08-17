@@ -1140,7 +1140,15 @@ function refreshAccounts() {
          la poche « non cote » pour les regles metier, mais merite sa propre
          bande dans le graphique — 150 000 EUR de studio noyes dans du
          crowdfunding ne se lisent pas. */
-      const gAff = t.classes.includes('immobilier') ? 'immo'
+      /* `bienImmo` et non « peut porter de l'immobilier ». La nuance decide de
+         la bande du graphique et de la poche de projection : une enveloppe qui
+         accepte une SCPI parmi cinq classes s'affichait entierement en
+         immobilier, ETF compris, et sa valeur quittait la poche « marche » pour
+         celle des biens. Un contrat de 50 000 EUR d'ETF monde comptait comme de
+         la pierre sur toute la page d'accueil.
+         C'est le meme drapeau que `comptesBiens()` et `estBien()` : ce type EST
+         de l'immobilier, il ne fait pas qu'en porter. */
+      const gAff = t.bienImmo ? 'immo'
                  : t.classes.includes('crypto') ? 'crypto'
                  /* Une montre n'est pas du non cote : la ranger dans la poche
                     `pe` ferait porter au libelle « Non coté » un objet qui n'a

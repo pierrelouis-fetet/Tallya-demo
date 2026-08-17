@@ -14760,6 +14760,38 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'et la réponse est celle qui est rangée sur la ligne');
   });
 
+  test('un contrat plein d’ETF ne compte pas comme de la pierre', () => {
+    /* Le defaut coutait cher et ne se voyait nulle part : `gAff`, la poche
+       d'affichage, se derivait de « peut porter de l'immobilier ». Une
+       enveloppe qui accepte une SCPI parmi cinq classes basculait donc en
+       entier dans la bande immobilier du graphique, ETF compris, et sa valeur
+       quittait la poche « marche » de la projection pour celle des biens.
+
+       Le controle porte sur les totaux, la ou il se voyait le moins : la somme
+       ne bougeait pas, seule sa repartition mentait. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2020-01-01', cash: [],
+        lignes: [{ id: 'l_av', classe: 'actions', libelle: 'ETF Monde',
+                   valeur: 50000, prixDeRevient: 40000 }] });
+    });
+    eq(ACC['c_av'].gAff, 'bourse',
+      'un contrat s’affiche avec les actifs de marché, pas avec les biens');
+    const avant = nowTotals();
+    /* Et la meme enveloppe qui porte vraiment une SCPI n'y bascule pas non plus :
+       c'est la ligne qui est de l'immobilier, pas le contrat. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2020-01-01', cash: [],
+        lignes: [{ id: 'l_av', classe: 'immobilier', libelle: 'SCPI',
+                   valeur: 50000, prixDeRevient: 50000 }] });
+    });
+    eq(ACC['c_av'].gAff, 'bourse', 'le contenant reste un contrat');
+    vrai(num(avant.bourse) > 0, 'et la poche de marché porte bien le contrat');
+  });
+
   test('un contrat n’a pas de poche de cash', () => {
     /* L'argent verse sur une assurance-vie est sur un support des son arrivee,
        au pire le fonds euros : « Cash a investir » y inventait une poche qui
