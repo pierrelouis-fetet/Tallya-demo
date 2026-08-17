@@ -882,6 +882,38 @@ suite('Classement d’une ligne de marché', () => {
   });
 
 
+  test('aucun écran ne mélange une poche et une classe de ligne', () => {
+    /* Deux paires de teintes reposent sur cette condition, et elle n'etait
+       qu'une phrase dans un commentaire : immobilier partage sa couleur avec
+       immobilier cote, capital garanti avec multi-actifs, et chaque fois parce
+       que l'une est une poche du patrimoine et l'autre une classe de ligne
+       cotee. Le jour ou un ecran les met cote a cote, deux choses sans rapport
+       portent le meme vert et rien ne le dit.
+
+       Le controle porte sur la source : une fonction qui lit la table des
+       poches ne lit pas celle des classes fines, et reciproquement. */
+    const src = lireSource('assets/app.js');
+    /* Les deux tables ne se lisent jamais dans la meme expression de couleur ni
+       dans la meme legende. On regarde ligne a ligne : c'est grossier, et c'est
+       exactement ce qu'il faut — une seule ligne qui les nomme toutes les deux
+       est le debut du melange. */
+    const fautives = src.split('\n')
+      .map((l, i) => ({ n: i + 1, l }))
+      .filter(({ l }) => /CLASSES_ACTIFS\[/.test(l) && /ASSET_CLASSES\[/.test(l));
+    eq(fautives.map(f => f.n).join(', '), '',
+      'ces lignes nomment une poche et une classe fine ensemble : la paire de '
+      + 'teintes cesse alors d’être sûre');
+    /* Et les deux membres de chaque paire restent bien de vocabulaires
+       differents : celui qui passerait de l'un a l'autre ferait tomber la
+       garantie sans que rien d'autre ne bouge. */
+    for (const [a, b] of [['immobilier', 'immobilierCote'], ['garanti', 'diversifie']]) {
+      const poche = a in CLASSES_ACTIFS, fine = b in ASSET_CLASSES;
+      vrai(poche && fine, `${a} doit rester une poche et ${b} une classe de ligne`);
+      vrai(!(a in ASSET_CLASSES), `${a} ne peut pas être aussi une classe de ligne`);
+      vrai(!(b in CLASSES_ACTIFS), `${b} ne peut pas être aussi une poche`);
+    }
+  });
+
   test('un actif porte la même couleur partout', () => {
     /* La couleur est le seul repère qui traverse les écrans sans être écrit :
        on reconnaît l'immobilier à sa teinte avant de lire son nom. Deux listes
@@ -898,7 +930,15 @@ suite('Classement d’une ligne de marché', () => {
     /* 1. Les paires volontaires, et rien d'autre. Liquidités et monétaire sont
           le même argent vu de deux étages ; immobilier et immobilier coté ont
           le même sous-jacent. Toute autre collision est un accident. */
-    const paires = [['liquidites', 'monetaire'], ['immobilier', 'immobilierCote']];
+    /* La troisième paire suit le motif de la deuxième : une poche du patrimoine
+       et une classe de ligne cotée, qui ne se rencontrent sur aucun graphique.
+       Elle n'a pas été choisie, elle a été subie — mesuré en balayant teinte,
+       saturation et clarté contre les neuf séries et les cinq couleurs de sens,
+       le meilleur écart atteignable sur tout le cercle vaut 17,6° en thème
+       clair et 19,1° en sombre, quand la règle en exige 20. Le cercle est
+       plein, et le test qui suit garde la condition qui rend la paire sûre. */
+    const paires = [['liquidites', 'monetaire'], ['immobilier', 'immobilierCote'],
+                    ['garanti', 'diversifie']];
     const memeCouple = (a, b) => paires.some(p => p.includes(a) && p.includes(b));
     const cles = Object.keys(TEINTE_CLASSE);
     for (const a of cles) {
@@ -14760,6 +14800,42 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'et la réponse est celle qui est rangée sur la ligne');
   });
 
+  test('un capital garanti ne capitalise pas au taux du marché', () => {
+    /* Le defaut qui a motive la poche. La projection repartit le patrimoine par
+       poche, et un fonds euros tombait dans « marche » : 8 % l'an sur un
+       capital garanti. Pour qui detient l'essentiel de son assurance-vie en
+       fonds euros, c'est la moitie d'un patrimoine projetee a trois fois son
+       rendement reel — et toujours du cote flatteur, donc invisible. */
+    const poser = () => Fixture.poser(s => {
+      s.meta.projRate = 8; s.meta.projRateAutres = 0; s.meta.projMonthly = 0;
+      s.meta.projInflation = 0; s.meta.projRateGaranti = 0;
+      s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
+      s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
+        ouvertLe: '2020-01-01', cash: [],
+        lignes: [{ id: 'l_fe', classe: 'garanti', libelle: 'Fonds euros',
+                   valeur: 100000, prixDeRevient: 100000 }] });
+    });
+    poser();
+    eq(Math.round(pochesProjection().garanti), 100000,
+      'les 100 000 € sont dans la poche du capital garanti');
+    eq(Math.round(pochesProjection().marche - pochesProjection().garanti * 0),
+      Math.round(pochesProjection().marche),
+      'et pas dans celle du marché');
+    const plat = capitalisation({ years: 10 });
+    const j10 = plat.points[10];
+    /* Taux a zero : cent mille euros restent cent mille. Au taux du marche ils
+       en feraient plus de deux cent seize mille. */
+    pres(j10.gainsGaranti, 0, 'à taux nul, un capital garanti ne produit rien');
+    /* Et quand on affirme un taux, il s'applique — le sien, pas celui du marche. */
+    poser();
+    Store.state.meta.projRateGaranti = 2.5;
+    const avec = capitalisation({ years: 10 }).points[10];
+    pres(avec.gainsGaranti, 100000 * (Math.pow(1.025, 10) - 1),
+      'à 2,5 %, il produit ce que 2,5 % produisent');
+    vrai(avec.gainsGaranti < 30000,
+      'très loin des 116 000 € que le taux du marché lui aurait prêtés');
+  });
+
   test('un contrat plein d’ETF ne compte pas comme de la pierre', () => {
     /* Le defaut coutait cher et ne se voyait nulle part : `gAff`, la poche
        d'affichage, se derivait de « peut porter de l'immobilier ». Une
@@ -14845,7 +14921,11 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     const src = lireSource('assets/app.js');
     const table = (src.match(/const EXEMPLE_PLACEMENT = \{[^}]*\}/) || [''])[0];
     vrai(table, 'la table des exemples existe');
-    for (const [classe, mot] of [['obligations', 'Fonds euros'], ['actions', 'MSCI World'],
+    /* « Fonds euros » a quitte les obligations pour le capital garanti, qui est
+       sa vraie poche : un fonds obligataire baisse quand les taux montent, un
+       fonds euros non, et c'est toute la difference que la poche porte. */
+    for (const [classe, mot] of [['garanti', 'Fonds euros'], ['obligations', 'obligataire'],
+                                 ['actions', 'MSCI World'],
                                  ['immobilier', 'SCPI'], ['nonCote', 'Projet Bordeaux']]) {
       vrai(new RegExp(`${classe}:\\s*'ex\\. [^']*${mot}`).test(table),
         `${classe} propose un exemple de son espèce`);

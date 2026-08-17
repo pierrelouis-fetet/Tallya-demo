@@ -582,6 +582,11 @@ const SERIES_PATRIMOINE = () => [
      dans le total du graphique sans appartenir a aucune bande, et la pile
      cessait de faire le total. seriesUtiles() la tait chez qui n'a rien. */
   { key: 'biens',  label: trad('Biens de valeur'),  color: Charts.cssv('--series-9') },
+  /* La septieme bande, nee avec la poche. Elle se pose apres les actifs de
+     marche dans la lecture, mais l'ordre de cette table est celui de la pile :
+     le capital garanti voisine les liquidites, qui est ce dont il est le plus
+     proche pour l'oeil, sans en etre. */
+  { key: 'garanti', label: trad('Capital garanti'), color: Charts.cssv('--series-8') },
 ];
 function seriesUtiles(points) {
   return SERIES_PATRIMOINE().filter(s => s.key === 'cash'
@@ -2293,6 +2298,17 @@ function viewObjective() {
         ${champ('Rendement du non coté', 'meta.projRateAutres', paliers(20, 1),
                 v => v ? `${fmtPct(v, 0)} ${trad('par an')}` : trad('aucun, porté à plat'),
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} ${trad('de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application')}`)}
+        <!-- Le capital garanti a son taux, et il le fallait : sans poche a lui,
+             un fonds euros tombait dans les actifs de marche et capitalisait a
+             8 % l'an. Pour qui detient l'essentiel de son assurance-vie en
+             fonds euros, c'etait la moitie d'un patrimoine projetee a trois
+             fois son rendement reel, et toujours du cote flatteur.
+             Zero par defaut, comme le non cote : un fonds euros rapporte, mais
+             son taux est annonce en janvier pour l'annee ecoulee. L'application
+             ne devine pas un chiffre que le detenteur seul connait. -->
+        ${champ('Rendement du capital garanti', 'meta.projRateGaranti', paliers(8, 0.5),
+                v => v ? `${fmtPct(v, 1)} ${trad('par an')}` : trad('aucun, porté à plat'),
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`)}
         <!-- La troisieme poche, dite sans etre reglable.
 
              Deux taux se reglaient, trois poches existaient, et la derniere
@@ -8383,7 +8399,8 @@ function optionsBiens() {
    autres exemples de l'application, qui nomment tous une chose de leur espece. */
 const EXEMPLE_PLACEMENT = {
   actions:     'ex. ETF MSCI World',
-  obligations: 'ex. Fonds euros',
+  garanti:     'ex. Fonds euros',
+  obligations: 'ex. Fonds obligataire',
   liquidites:  'ex. Fonds monétaire',
   immobilier:  'ex. SCPI de rendement',
   nonCote:     'ex. Projet Bordeaux',

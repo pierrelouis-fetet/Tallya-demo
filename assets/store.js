@@ -157,6 +157,23 @@ const CLASSES_ACTIFS = {
    cote.*/
   actions:     trad('Actifs de marché'),
   obligations: trad('Obligations'),
+  /* Le capital garanti : un fonds euros, le fonds en euros d'un PER, le support
+     garanti d'un contrat luxembourgeois. Une poche a lui, et il l'a fallu.
+
+     Ce n'est pas du cash : ces euros ne sont pas disponibles tout de suite, et
+     les compter dans les liquidites gonflait l'epargne de precaution de
+     l'accueil d'un argent qu'on ne peut pas sortir dans la journee.
+
+     Ce ne sont pas des obligations non plus, et c'est la que ça coutait cher :
+     la poche decide du taux de la projection, et un fonds euros y capitalisait
+     au taux du marche. Pour qui detient l'essentiel de son assurance-vie en
+     fonds euros, c'est la moitie d'un patrimoine projetee a trois fois son
+     rendement reel — et toujours du cote flatteur, donc invisible.
+
+     Le nom dit un comportement et non un produit, comme toutes les classes
+     d'ici : « Fonds euros » aurait laisse dehors le fonds en euros d'un PER et
+     le support garanti d'ailleurs, qui se comportent pareil. */
+  garanti:     trad('Capital garanti'),
   crypto:      trad('Cryptomonnaies'),
   nonCote:     trad('Placements non cotés'),
   immobilier:  trad('Immobilier'),
@@ -526,6 +543,11 @@ const ASSET_CLASSES = {
   crypto:         'Crypto',
   monetaire:      trad('Monétaire'),
 };
+/* Pas de « capital garanti » ici, et le test l'a rappele avant moi : cette
+   table est le vocabulaire des lignes COTEES, et chacune de ses classes doit
+   tomber dans une poche rapide a vendre. Un fonds euros ne cote pas et ne se
+   vend pas en seance — il vit dans `CLASSES_ACTIFS`, la table des poches, ou
+   les lignes saisies a la main puisent leur classe. */
 /* Pas de « non coté » ici, et c'est volontaire.
    `assetClass` qualifie une ligne de marché — une ligne cotée, par
    construction. Lui proposer « non coté » était une contradiction dans les
@@ -591,6 +613,7 @@ const CLASSE_DE_POCHE = {
   actions: 'actions',
   obligations: 'obligations',
   crypto: 'crypto',
+  garanti: 'garanti',
 };
 const classeDePoche = poche => CLASSE_DE_POCHE[poche] || null;
 
@@ -2255,6 +2278,11 @@ function nowByGroup() {
     pe: p.classes.nonCote,
     immo: p.classes.immobilier,
     biens: p.classes.bienValeur,
+    /* Septieme poche, et elle sort de « bourse » : un capital garanti n'est pas
+       un actif de marche, et c'est cette poche-la que la projection lit pour
+       choisir un taux. Le test qui exige que la somme des poches fasse le brut
+       la couvre des sa premiere lecture. */
+    garanti: p.classes.garanti,
   };
 }
 
@@ -3457,6 +3485,21 @@ const TEINTE_CLASSE = {
   metaux: 6,
   obligations: 7,
   diversifie: 8,
+  /* La teinte de « multi-actifs », et c'est une paire volontaire de plus.
+
+     Aucune couleur neuve n'etait possible : mesure contre les neuf series et
+     les cinq couleurs de sens, en balayant teinte, saturation et clarte, le
+     meilleur ecart atteignable sur tout le cercle vaut 17,6 degres en theme
+     clair et 19,1 en sombre, quand la regle en exige vingt. Le cercle est
+     plein.
+
+     La paire suit exactement le motif d'immobilier et immobilier cote : l'une
+     est une poche du patrimoine, l'autre une classe de ligne cotee, et les deux
+     vocabulaires ne se rencontrent sur aucun graphique — `repartitionClasses()`
+     dessine les poches, les cibles et les listes de lignes dessinent les
+     classes fines. Un controle le verifie desormais, pour que l'hypothese cesse
+     d'en etre une. */
+  garanti: 8,
   /* La neuvieme, un mauve rose : elle etait en reserve, et c'est la premiere
      classe a en reclamer une. Franchement a cote du rose du non cote, avec
      lequel elle voisine dans toutes les barres de repartition. */
@@ -4940,6 +4983,11 @@ function projectionSettings() {
    calculateurs pour une page d'hypotheses, c'est deux de trop. Elles sont
    donc portees a plat, sans reglage — une constante n'a pas besoin d'un menu.*/
     rateAutres: num(m.projRateAutres),
+    /* Le taux du capital garanti, zero par defaut comme celui du non cote et
+       pour la meme raison : un fonds euros rapporte, mais son taux est annonce
+       en janvier pour l'annee ecoulee. L'application ne devine pas un rendement
+       que le detenteur seul connait. */
+    rateGaranti: num(m.projRateGaranti),
     /* Ou va le versement mensuel. Le marche par defaut, ce qui etait le
        comportement code en dur : aucun etat existant ne change de courbe a la
        mise a jour. */
@@ -5052,9 +5100,14 @@ function pochesProjection(t = nowTotals()) {
     marche: num(t.bourse) + num(t.crypto),
     nonCote: num(t.pe),
     liquidites: num(t.cash),
-    /* `autres` reste rendu, somme des deux nouvelles : plusieurs appelants la
-       lisent, et un total doit continuer d'egaler la somme de ses parts. */
-    get autres() { return this.nonCote + this.liquidites; },
+    /* Le capital garanti a son taux, comme le non cote a le sien : il ne suit
+       ni le marche, dont il ne prend pas le risque, ni les liquidites, qui ne
+       rapportent rien. Sans cette poche il rejoignait « marche » et un fonds
+       euros capitalisait a 8 % l'an. */
+    garanti: num(t.garanti),
+    /* `autres` reste rendu, somme des trois : plusieurs appelants la lisent, et
+       un total doit continuer d'egaler la somme de ses parts. */
+    get autres() { return this.nonCote + this.liquidites + this.garanti; },
     plat: partPlate(t),
   };
 }
@@ -5075,9 +5128,14 @@ function capitalisation(opts = {}) {
      `start` est impose — la fiche « horizon », des tests — tout va au marche et
      ces deux poches sont vides : l'ancien comportement, a l'identique. */
   const resteAutres = start - departMarche;
-  const partNonCote = poches.autres ? poches.nonCote / poches.autres : 0;
-  const departNonCote = resteAutres * partNonCote;
-  const departLiquides = resteAutres - departNonCote;
+  /* Trois poches se partagent le reste, au prorata de ce qu'elles pesent. La
+     derniere prend le solde plutot que sa propre part : trois arrondis qui ne
+     tombent pas juste laisseraient le total sous la somme de ses parts, et
+     c'est exactement le defaut que ce fichier traque partout. */
+  const part = q => (poches.autres ? q / poches.autres : 0);
+  const departNonCote = resteAutres * part(poches.nonCote);
+  const departGaranti = resteAutres * part(poches.garanti);
+  const departLiquides = resteAutres - departNonCote - departGaranti;
   const departAutres = resteAutres;
 
   const annees = opts.years || Math.max(...PROJECTION_HORIZONS);
@@ -5086,6 +5144,11 @@ function capitalisation(opts = {}) {
      un rendement pour lui. Les liquidites, elles, ne capitalisent jamais : pas
      de taux, pas de reglage, elles traversent la projection telles quelles. */
   const rMoisNonCote = Math.pow(1 + num(s.rateAutres) / 100, 1 / 12) - 1;
+  /* Meme regle pour le capital garanti : zero tant que personne n'a affirme un
+     rendement. Un fonds euros en rapporte un, mais il n'est connu qu'apres coup
+     — annonce en janvier pour l'annee ecoulee — donc l'application ne le
+     devine pas. Le zero se trompe du cote prudent, ce qui est le bon cote. */
+  const rMoisGaranti = Math.pow(1 + num(s.rateGaranti) / 100, 1 / 12) - 1;
   const anneeDebut = new Date().getFullYear();
 
   /* `total` doit toujours egaler `contributed` + `gains`. La part plate compte
@@ -5096,7 +5159,7 @@ function capitalisation(opts = {}) {
                     contributed: start + plat, gains: 0,
                     total: start + plat, real: start + plat }];
   let capital = departMarche, verse = departMarche;
-  let nonCote = departNonCote, liquides = departLiquides;
+  let nonCote = departNonCote, liquides = departLiquides, garanti = departGaranti;
 
   /* Ou va le versement mensuel : une hypothese declaree, plus un choix code en
      dur.
@@ -5117,6 +5180,11 @@ function capitalisation(opts = {}) {
     capital = capital * (1 + rMois) + (vers === 'marche' ? s.monthly : 0);
     verse += s.monthly;
     nonCote = nonCote * (1 + rMoisNonCote) + (vers === 'nonCote' ? s.monthly : 0);
+    /* Le capital garanti capitalise, mais ne reçoit aucun versement : les trois
+       destinations offertes restent marche, non cote et liquidites. En ajouter
+       une quatrieme demanderait une question de plus a chacun, pour un cas que
+       personne n'a demande. */
+    garanti = garanti * (1 + rMoisGaranti);
     /* Les liquidites ne capitalisent jamais : pas de taux, pas de reglage. Un
        versement s'y accumule donc a plat, ce qui est exactement ce qu'un livret
        non remunere fait — et le seul endroit ou la projection dit la verite a
@@ -5124,7 +5192,7 @@ function capitalisation(opts = {}) {
     if (vers === 'liquidites') liquides += s.monthly;
     if (mois % 12) continue;
     const an = mois / 12;
-    const autres = nonCote + liquides;
+    const autres = nonCote + liquides + garanti;
     /* Ce qui a ete MIS dans chaque poche, depart compris : c'est la seule base
        qui donne un gain juste quand le versement ne va pas au marche.
        `capital - verse` supposait le contraire — un versement sur livret aurait
@@ -5134,17 +5202,21 @@ function capitalisation(opts = {}) {
     const misMarche = departMarche + (vers === 'marche' ? cumul : 0);
     const misNonCote = departNonCote + (vers === 'nonCote' ? cumul : 0);
     const misLiquides = departLiquides + (vers === 'liquidites' ? cumul : 0);
+    /* Le capital garanti ne reçoit rien : ce qu'on y a mis est ce qu'il y avait
+       au depart, et tout le reste est un gain. */
+    const misGaranti = departGaranti;
     const gainsMarche = capital - misMarche;
-    const gainsAutres = autres - (misNonCote + misLiquides);
+    const gainsAutres = autres - (misNonCote + misLiquides + misGaranti);
     points.push({
       year: anneeDebut + an, label: String(anneeDebut + an),
-      contributed: misMarche + misNonCote + misLiquides + plat,
+      contributed: misMarche + misNonCote + misLiquides + misGaranti + plat,
       gains: gainsMarche + gainsAutres,
       gainsMarche, gainsAutres,
       /* Le detail par poche, pour que la fiche des hypotheses puisse dire ce que
          chaque taux a produit sans refaire le calcul a cote. */
       gainsNonCote: nonCote - misNonCote,
       gainsLiquidites: liquides - misLiquides,
+      gainsGaranti: garanti - misGaranti,
       total: capital + autres + plat,
       // pouvoir d'achat d'aujourd'hui, une fois l'inflation retirée
       real: (capital + autres + plat) / Math.pow(1 + s.inflation / 100, an),
