@@ -5544,9 +5544,21 @@ function viewAccounts() {
   const filtre = compteRecherche.trim().toLowerCase();
   const correspond = texte => !filtre || texte.toLowerCase().includes(filtre);
 
-  const ouverts = comptesOuverts().filter(c =>
+  /* Un seul propriétaire pour « ce compte correspond à la recherche ».
+     Les comptes ouverts se filtraient ici, le groupe des archivés se
+     construisait cent cinquante lignes plus bas sans rien filtrer du tout : la
+     page répondait « Rien ne correspond à "Aaa" » en laissant les archivés
+     dessous. Deux endroits pour une seule règle, et seul le premier la tenait. */
+  const correspondAuCompte = c =>
     correspond(nomCompteV2(c)) || correspond(nomEtabDe(c)) ||
-    lignesDe(c).some(l => correspond(l.libelle)));
+    lignesDe(c).some(l => correspond(l.libelle));
+
+  const ouverts = comptesOuverts().filter(correspondAuCompte);
+  /* Calculé ici et non au moment du rendu du groupe, parce que le message
+     « Rien ne correspond » se décide plus haut : un compte archivé qui porte le
+     mot cherché est une réponse, et annoncer l'absence juste au-dessus de lui
+     serait la contredire dans la même page. */
+  const archives = COMPTES().filter(c => c.statut === 'archive' && correspondAuCompte(c));
 
   /* Un groupe : en-tête collant (total, part du brut), lignes repliables. */
   /* `teinte` : la couleur d'un groupe n'est tirée de son nom que faute de
@@ -5618,7 +5630,7 @@ function viewAccounts() {
   if (!ouverts.some(c => !typeCompte(c.type).interne) && !filtre) {
     corps = `<div class="card">${invitePremierPas('comptes')
       || `<p class="empty">${trad('Aucun compte pour l’instant.')}</p>`}</div>`;
-  } else if (!ouverts.length) {
+  } else if (!ouverts.length && !archives.length) {
     corps = `<div class="card"><p class="empty">Rien ne correspond à ${guill(esc(compteRecherche))}.
       Essaie avec le nom de la banque ou du placement.</p></div>`;
   } else if (compteVue === 'banque') {
@@ -5805,7 +5817,6 @@ function viewAccounts() {
        Le total est celui de ces comptes, et le sous-titre dit qu'il ne compte
        nulle part ailleurs. L'écrire sans le dire aurait posé un montant qui ne
        s'additionne à rien de ce que la page affiche. */
-    const archives = COMPTES().filter(c => c.statut === 'archive');
     if (!archives.length) return '';
     /* Aucun montant sur un compte archivé, ni ici ni dans sa fiche.
 

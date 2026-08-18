@@ -1741,6 +1741,30 @@ const Store = {
        format sur un etat converti par une version precedente. Elle porte sa
        propre garde. */
     this.migrerCibles(s);
+    /* --- les contenants restés vides d'avant le correctif -------------------
+       Supprimer le dernier compte d'un établissement emporte désormais
+       l'établissement (`supprimer-compte`), parce qu'un contenant sans compte
+       n'apparaît plus sur aucun écran : la liste des comptes saute les
+       établissements vides. Il ne ressortait qu'à l'étape 2 d'un ajout, où la
+       règle propose les vides sous n'importe quel type — d'où l'impression
+       d'une mémoire résiduelle, un bien supprimé qui revient proposer de s'y
+       rattacher, y compris dans la fenêtre « Assureur ou courtier ».
+
+       Le correctif ne valait que pour les suppressions à venir. Les contenants
+       déjà orphelins sont restés dans les données, invisibles et
+       indéboulonnables : aucun écran ne les montre, donc aucun écran ne permet
+       de les retirer. Un correctif qui ne regarde que l'avenir laisse le défaut
+       en place chez ceux qui l'ont déjà subi.
+
+       Un établissement qui porte une dette reste, lui, même sans compte : le
+       contrôle de cohérence « Crédit sans bien » a besoin de le nommer, et
+       cette dette se soustrait toujours du patrimoine net. La supprimer ici
+       effacerait un chiffre au lieu de le signaler.
+
+       Idempotente : au second passage il n'y a plus rien d'orphelin. */
+    s.etabs = (s.etabs || []).filter(e =>
+      (s.comptes || []).some(c => c.etabId === e.id)
+      || (e.dettes || []).some(d => num(d.montant)));
     refreshAccounts();
   },
 

@@ -14522,6 +14522,103 @@ suite('La licence ne ment pas', () => {
     vrai(licence.includes('GNU AFFERO GENERAL PUBLIC LICENSE'),
       'le README annonce l’AGPL, le fichier LICENSE porte autre chose');
   });
+
+  test('aucun document publié ne porte de marqueur de conflit', () => {
+    /* Une fusion du depot prive s'est arretee au milieu du README et le
+       resultat a ete commite tel quel : `<<<<<<< HEAD`, deux lignes anglaises,
+       `=======`, puis cent vingt lignes francaises decrivant l'application
+       privee — ses lanceurs `.cmd`, son dossier, ses feuilles Google — et
+       `>>>>>>> principal/main`. C'est reste cinq jours en tete du depot public,
+       ou la section « Run it locally » ne montrait plus comment lancer quoi que
+       ce soit.
+
+       Un marqueur de conflit ne se rattrape par aucune relecture de code : il
+       vit dans la prose, la ou personne ne repasse. Le controle est donc
+       mecanique, et il porte sur les documents que GitHub affiche en premier. */
+    ['README.md', 'ETAT.md', 'CLAUDE.md', 'DEPLOY.md'].forEach(nom => {
+      const texte = lireSource(nom);
+      if (texte === null) return;   // un document peut disparaitre, pas mentir
+      const marqueur = texte.split('\n')
+        .findIndex(l => /^(<{7}|={7}|>{7})(\s|$)/.test(l));
+      eq(marqueur, -1,
+        `${nom} porte un marqueur de conflit ligne ${marqueur + 1} : `
+        + 'une fusion a ete commitee sans etre finie');
+    });
+  });
+});
+
+suite('Un contenant vide ne survit pas à son dernier compte', () => {
+
+  test('la migration retire un établissement sans compte ni dette', () => {
+    /* Un etablissement sans compte est invisible sur toute la page Comptes,
+       qui saute les contenants vides, et proposable a l'etape 2 de chaque
+       ajout — y compris dans la fenetre « Assureur ou courtier » d'un contrat
+       d'assurance-vie. Le nom d'un bien supprime revenait donc proposer de s'y
+       rattacher, sans qu'aucun ecran ne permette de le retirer.
+
+       La suppression d'un compte emporte desormais son etablissement, mais ce
+       correctif ne valait que pour l'avenir : les contenants deja orphelins
+       restaient dans les donnees. Un correctif qui ne regarde que l'avenir
+       laisse le defaut chez ceux qui l'ont deja subi. */
+    Fixture.poser();
+    Store.state.etabs.push({ id: 'contenant-orphelin', nom: 'Studio', dettes: [] });
+    Store.migrate();
+    vrai(!Store.state.etabs.some(e => e.id === 'contenant-orphelin'),
+      'un contenant sans compte ni dette doit partir : rien ne le montre, '
+      + 'donc rien ne permet de le retirer à la main');
+  });
+
+  test('mais il reste s’il porte encore une dette', () => {
+    /* Le credit orphelin se soustrait toujours du patrimoine net, et le
+       controle de coherence « Credit sans bien » a besoin de nommer son
+       etablissement. Le supprimer ici effacerait un chiffre au lieu de le
+       signaler : exactement le defaut que ce controle existe pour attraper. */
+    Fixture.poser();
+    Store.state.etabs.push({ id: 'contenant-endette', nom: 'Studio',
+      dettes: [{ libelle: 'Prêt', montant: 42000 }] });
+    Store.migrate();
+    vrai(Store.state.etabs.some(e => e.id === 'contenant-endette'),
+      'un contenant qui porte une dette reste : sa dette compte encore');
+  });
+
+  test('et la migration se rejoue sans rien casser', () => {
+    /* Idempotence : c'est la condition pour qu'une migration puisse tourner a
+       chaque chargement. Deux passages doivent laisser le meme nombre de
+       contenants, sinon elle mange les etablissements legitimes au second. */
+    Fixture.poser();
+    Store.migrate();
+    const apres1 = Store.state.etabs.length;
+    Store.migrate();
+    eq(Store.state.etabs.length, apres1,
+      'un second passage ne doit retirer aucun établissement de plus');
+    vrai(apres1 > 0, 'la fixture porte bien des établissements rattachés');
+  });
+});
+
+suite('La recherche vaut aussi pour les comptes archivés', () => {
+  test('un archivé hors recherche quitte la page', () => {
+    /* La page filtrait les comptes ouverts et construisait le groupe des
+       archives cent cinquante lignes plus bas sans rien filtrer : elle
+       repondait « Rien ne correspond a "Aaa" » en laissant le groupe dessous.
+       Deux endroits pour une seule regle, et seul le premier la tenait.
+
+       Le controle se derive de la source : la vue est un gabarit de plusieurs
+       centaines de lignes, mais la regle tient dans le predicat, et c'est lui
+       qui doit etre appele aux deux endroits. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewAccounts()'),
+                          src.indexOf('function mountAccounts()'));
+    vrai(vue.length > 1000, 'la vue des comptes doit se relire depuis sa source');
+    const appels = vue.split('correspondAuCompte').length - 1;
+    vrai(appels >= 3,
+      `le prédicat de recherche n'est appelé qu'à ${appels - 1} endroit(s) : `
+      + 'les comptes ouverts et les archivés doivent tous deux y passer');
+    vrai(/statut === 'archive' && correspondAuCompte\(c\)/.test(vue),
+      'le groupe des archivés doit filtrer sur la recherche, comme les ouverts');
+    vrai(/!ouverts\.length && !archives\.length/.test(vue),
+      '« Rien ne correspond » ne doit s’afficher que si les archivés non plus '
+      + 'ne correspondent pas : sinon la page se contredit dans le même écran');
+  });
 });
 
 /* ------------------------------------------------------------------
