@@ -1,7 +1,13 @@
 # Tallya — consignes de travail
 
-Lire `ETAT.md` en premier : il porte l'état réel du projet, les décisions
-prises et les pièges rencontrés. Ce fichier-ci ne dit que les règles.
+Lire `ETAT.md` en premier s'il est présent : il porte l'état réel du projet,
+les décisions prises et les pièges rencontrés. Ce fichier-ci ne dit que les
+règles.
+
+Ce journal n'est pas publié : il décrit le profil d'investisseur du
+propriétaire, ce qu'un dépôt public n'a pas à porter. Il vit dans le dépôt
+privé et, ici, hors du suivi Git. Un clone du dépôt public ne l'a pas, et
+c'est normal.
 
 ## Avant chaque push, sans exception
 

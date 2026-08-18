@@ -526,7 +526,7 @@ suite('Classement d’une ligne de marché', () => {
     /* La detection lisait `/\b(etf|ucits|msci|s&p|index|indice|world)\b/` : sept
        noms de fonds courants sur quatorze passaient pour des actions en direct,
        dont « Future of Defence », une ligne reelle du portefeuille de
-       le propriétaire. Il a demande si le champ Nature ne devrait pas etre
+       Le propriétaire. Il a demande si le champ Nature ne devrait pas etre
        automatique et verrouille — la reponse est non, parce qu'une regle sur un
        nom se trompe, mais elle ne doit pas se tromper une fois sur deux.
 
@@ -8416,7 +8416,7 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
 
   /* « J'ai encore mis des trucs aujourd'hui, des nouveaux montants. J'ai cliqué
      sur enregistrer. Et quand je reviens sur l'app ils ont disparu. »
-     le propriétaire, 12 aout 2026 — avec la preuve dans ses sauvegardes : six
+     Le propriétaire, 12 aout 2026 — avec la preuve dans ses sauvegardes : six
      « avant adoption de la version en ligne » dans la meme journee.
 
      Le repere ne mentait pas cette fois. Ce qui etait faux, c'est la conclusion
@@ -9449,7 +9449,7 @@ suite('Une fiche de ligne garde son ordre', () => {
 suite('Le panneau des notifications n’est pas rogné par sa barre', () => {
 
   /* « Le bouton notifications ne marche plus sur téléphone, rien ne s'affiche. »
-     le propriétaire, 6 août 2026. Il marchait : le panneau s'ouvrait, on ne le
+     Le propriétaire, 6 août 2026. Il marchait : le panneau s'ouvrait, on ne le
      voyait pas.
 
      La cause est une régression du correctif de la veille. La barre latérale a
@@ -10855,7 +10855,7 @@ suite('Un loyer se rattache depuis le bien, pas depuis une liste', () => {
        trois gestes, dans un ecran qui ne parle pas du bien, et dont l'intitule
        — « Revenus fixes » — ne ressemble pas au bouton clique. « Il n'y a pas
        vraiment de bouton pour rattacher un loyer, j'arrive sur revenu fixe »,
-       le propriétaire, 8 aout 2026.
+       Le propriétaire, 8 aout 2026.
 
        La carte « Financement » juste en dessous montrait la bonne forme depuis
        le debut : « + Credit » cree le credit rattache, sans detour. */
@@ -10941,7 +10941,7 @@ suite('Un loyer se rattache depuis le bien, pas depuis une liste', () => {
 
    « J'ai teste l'ajout d'une montre a 10 000 EUR mais mon patrimoine net
    n'augmente pas ! Et n'apparait pas dans allocation - patrimoine. »
-   le propriétaire, 9 aout 2026.
+   Le propriétaire, 9 aout 2026.
 
    patrimoine() comptait la montre depuis le 6 aout — son brut se derive de
    toutes les classes. Mais nowByGroup() sommait cinq poches ecrites a la
