@@ -356,11 +356,12 @@ const VIEWS = {
     : sousOngletActif.budget === 'cadre' ? viewBudgetCadre()
     : viewBudget()) },
   positions:  { cle: 'positions',   render: () =>
-    barreSousOnglets('positions') + (sousOngletActif.positions === 'performance'
-      ? viewPerformance() : viewPositions()) },
+    barreSousOnglets('positions') + (
+      sousOngletActif.positions === 'performance' ? viewPerformance()
+      : sousOngletActif.positions === 'cible' ? viewRebalance()
+      : viewPositions()) },
   allocation: { cle: 'allocation',  render: () =>
-    barreSousOnglets('allocation') + (sousOngletActif.allocation === 'cible'
-      ? viewRebalance() : viewAllocation()) },
+    barreSousOnglets('allocation') + viewAllocation() },
   accounts:   { cle: 'accounts',    render: viewAccounts },
   /* Données et Préférences ont chacune leur entrée de menu depuis que le tiroir
      ne montre plus les doublons de la barre du bas. Deux portes et une barre de
@@ -379,7 +380,7 @@ const REDIRECTIONS = {
      `#/objective` : l'entree du menu la porte, elle est dans des signets, et
      c'est aussi la route de l'onglet. */
   objective:   ['overview', 'overview', 'projection'],
-  rebalance:   ['allocation', 'allocation', 'cible'],
+  rebalance:   ['positions', 'positions', 'cible'],
   /* `#/patrimoine` est la route de l'onglet, `#/allocation` l'adresse de base
      de la vue : les deux doivent mener au meme endroit, sinon un signet pose
      avant que Patrimoine ait sa propre adresse tomberait sur Objectifs sans
@@ -447,34 +448,37 @@ const SOUS_ONGLETS = {
      « Positions » couvre une action, un ETF, une obligation et un bitcoin sans
      en privilegier aucun, c'est le mot des courtiers, et c'est deja l'adresse
      de la vue : le libelle dit enfin ce que dit la route. */
-  positions:  [['portefeuille', 'Positions', 'positions'], ['performance', 'Performance', 'performance']],
-  /* « Réel » et « Cible » ne disaient pas ce qu'on y trouve : deux adjectifs
-     sans sujet, qui obligeaient a ouvrir pour comprendre. Les deux onglets
-     repondent a deux questions, ils en portent desormais le nom.
-     Pas de « Pilotage » ici : c'est deja le titre d'une section du menu.
+  positions:  [['portefeuille', 'Positions', 'positions'], ['performance', 'Performance', 'performance'],
+               ['cible', 'Cible', 'rebalance']],
+  /* Allocation n'a plus qu'un onglet, et plus de barre : `barreSousOnglets`
+     s'efface sous deux choix.
 
-     « Cible » est revenu contre « Objectifs », pour une raison que le premier
-     choix n'avait pas vue : le mot « objectif » designe deja deux autres
-     choses ailleurs — l'objectif mensuel de depenses, et l'objectif de
-     patrimoine a fin d'annee. Trois objectifs pour trois calculs. Et tout ce
-     que la page contient s'appelle « cible » : la colonne, les menus, la base
-     des pourcentages, jusqu'a sa route. L'onglet parle enfin la langue de son
-     contenu.
+     Cible a rejoint Marches, et c'est son calcul qui l'y envoyait depuis le
+     debut. `rebalanceRows()` part de `stockTotals()` : l'immobilier et le non
+     cote sortent de sa base, comme toute classe qu'on met hors jeu. La page ne
+     pilote que le portefeuille investissable, cash a investir compris.
 
-     Patrimoine en premier, donc c'est lui qui s'ouvre : `currentView()` remet
-     toujours l'adresse de base sur le premier onglet de la liste, et c'est donc
-     cet ordre qui decide de l'atterrissage.
+     La paire « Patrimoine | Cible » avait donc l'air d'opposer le reel au vise
+     alors qu'elle comparait deux perimetres differents : l'un montrait tout,
+     l'autre les seuls titres. Deux bases sous une meme barre, ce que ce projet
+     s'interdit ailleurs. Ce qui reste ici repond a une seule question — ou est
+     l'argent — et une page a une question n'a pas besoin d'un selecteur.
 
-     C'est aussi ce que l'application decide partout ailleurs : « Aujourd'hui »
-     porte le constat et vient avant « Projection », qui porte le cap.
+     Le nom du menu ne bouge pas. « Allocation » nommait la paire, mais c'est
+     aussi le mot que l'utilisateur emploie pour la chose elle-meme.
 
-     Patrimoine porte son adresse propre, `#/patrimoine`, et Cible la sienne,
-     `#/rebalance` : aucun des deux ne depend de l'adresse de base, donc cet
-     ordre peut changer sans rendre un onglet inatteignable. Ce n'etait pas le
-     cas avant — le jour ou Cible est passe devant, Patrimoine, dont la route
-     ETAIT l'adresse de base, ne s'ouvrait plus. L'ancienne adresse reste servie
-     par REDIRECTIONS. */
-  allocation: [['reel', 'Patrimoine', 'patrimoine'], ['cible', 'Cible', 'rebalance']],
+     « Cible » plutot que « Objectifs » : le mot « objectif » designe deja
+     l'objectif mensuel de depenses et l'objectif de patrimoine a fin d'annee,
+     et tout ce que la page contient s'appelle « cible » — la colonne, les
+     menus, la base des pourcentages, jusqu'a sa route.
+
+     Aucun onglet ne depend de l'adresse de base : `#/patrimoine`, `#/rebalance`
+     et `#/positions` portent chacun la leur, donc l'ordre peut changer sans
+     rendre un onglet inatteignable. Ce n'etait pas le cas avant. L'ancienne
+     adresse de Cible reste servie par REDIRECTIONS, qui la mene desormais a
+     Marches : un signet pose du temps d'Allocation continue d'ouvrir la bonne
+     page. */
+  allocation: [['reel', 'Patrimoine', 'patrimoine']],
   /* Budget portait 4 344 px de haut pour huit cartes, et melangeait deux
      sujets : ce qui se repete chaque mois, et ce qui a ete reellement
      depense. Les relevés, seule autre page ou l'on saisit, les rejoignent.
@@ -549,6 +553,16 @@ function barreCommutateur(choix, actif, action, cle) {
 function barreSousOnglets(vue) {
   const choix = SOUS_ONGLETS[vue];
   if (!choix) return '';
+  /* Un selecteur a un seul choix n'est pas un selecteur : c'est un bouton
+     enfonce qui ne mene nulle part, et il occupe la hauteur d'une barre pour ne
+     rien offrir. Allocation est passee a un onglet le jour ou Cible a rejoint
+     Marches — la cible ne pilote que le portefeuille investissable, son calcul
+     sort l'immobilier et le non cote de sa base.
+
+     La regle est generale et non un cas particulier d'Allocation : toute page
+     qui perd un onglet perd sa barre, et toute page qui en gagne un second la
+     retrouve sans qu'on y pense. */
+  if (choix.length < 2) return '';
   const on = sousOngletActif[vue];
   return `
   <div class="sous-onglets">
@@ -11115,8 +11129,9 @@ const MOUNTS = {
      portefeuille sur une page qui montre la performance chercherait des
      conteneurs absents. */
   overview: () => sousOngletActif.overview === 'projection' ? mountObjective() : mountOverview(),
-  positions: () => sousOngletActif.positions === 'performance' ? mountPerformance() : mountPositions(),
-  allocation: () => sousOngletActif.allocation === 'cible' ? mountRebalance() : mountAllocation(),
+  positions: () => sousOngletActif.positions === 'performance' ? mountPerformance()
+    : sousOngletActif.positions === 'cible' ? mountRebalance() : mountPositions(),
+  allocation: mountAllocation,
   /* Les préférences n'ont rien à monter : leurs réglages passent tous par
      `data-path` et `data-action`, câblés une fois pour toute l'application. */
   data: () => { if (sousOngletActif.data !== 'preferences') mountData(); },

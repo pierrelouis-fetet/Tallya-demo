@@ -2258,18 +2258,46 @@ suite('Pièges de source', () => {
 
     /* Le cas concret qui a casse, verifie nommement.
 
-       L'ordre s'est inverse le 5 aout 2026 : Patrimoine ouvre Allocation, Cible
-       est a un geste. Une cible se regle deux fois par an, un patrimoine se
-       regarde toutes les semaines — et quelqu'un qui ne fait pas de bourse
-       tombait d'emblee sur un ecran qui ne lui parle pas.
+       Cible a quitte Allocation pour Marches : son calcul part de
+       `stockTotals()` et sort l'immobilier et le non cote de sa base, donc elle
+       ne pilote que le portefeuille investissable. La paire
+       « Patrimoine | Cible » avait l'air d'opposer le reel au vise alors
+       qu'elle comparait deux perimetres, ce que ce projet s'interdit ailleurs.
 
-       Ce qui rend l'inversion possible est justement ce que ce test protege :
-       les deux onglets portent leur propre route, donc aucun ne depend d'etre
-       le premier. C'est le contraire qui avait casse. */
+       Ce qui rend le deplacement possible est justement ce que ce test protege :
+       chaque onglet porte sa propre route, donc aucun ne depend d'etre le
+       premier ni de rester dans sa vue d'origine. C'est le contraire qui avait
+       casse, le jour ou un onglet dont la route ETAIT l'adresse de base est
+       passe en second. */
     eq(onglets.allocation[0][0], 'reel', 'Patrimoine ouvre Allocation');
-    eq(onglets.allocation[1][2], 'rebalance', 'et Cible a sa propre adresse');
+    eq(onglets.allocation.length, 1, 'et Allocation n’a plus que lui');
+    eq(onglets.positions[2][2], 'rebalance', 'Cible a sa propre adresse, dans Marchés');
     eq(redirections.patrimoine[2], 'reel', 'l’ancienne adresse mène toujours à Patrimoine');
-    eq(redirections.rebalance[2], 'cible', 'et celle de Cible à son onglet');
+    eq(redirections.rebalance[0], 'positions', 'et l’ancienne adresse de Cible mène à Marchés');
+    eq(redirections.rebalance[2], 'cible', 'sur son onglet');
+  });
+
+  test('une vue à un seul onglet n’affiche pas de barre', () => {
+    /* Un selecteur a un seul choix n'est pas un selecteur : c'est un bouton
+       enfonce qui ne mene nulle part, et il prend la hauteur d'une barre pour
+       n'offrir aucune alternative. Allocation est passee a un onglet le jour ou
+       Cible a rejoint Marches.
+
+       La regle se derive de la source et non d'une liste de vues : toute page
+       qui perd un onglet perd sa barre, et toute page qui en gagne un second la
+       retrouve sans qu'on y pense. Ecrire « Allocation n'a pas de barre »
+       aurait fige le cas du jour au lieu de la regle. */
+    vrai(source, 'assets/app.js doit être lisible pour ce contrôle');
+    const corps = source.slice(source.indexOf('function barreSousOnglets'),
+                               source.indexOf('function barreSousOnglets') + 1400);
+    vrai(/choix\.length < 2\)\s*return ''/.test(corps),
+      'barreSousOnglets doit s’effacer sous deux onglets : une vue à un seul '
+      + 'onglet afficherait un sélecteur qui ne sélectionne rien');
+    const onglets = litteral('SOUS_ONGLETS');
+    const seules = Object.entries(onglets).filter(([, l]) => l.length < 2).map(([v]) => v);
+    vrai(seules.includes('allocation'),
+      'Allocation n’a qu’un onglet depuis que Cible est parti : si ce n’est plus '
+      + 'vrai, ce test a perdu son sujet');
   });
 
   test('l’onglet qui s’ouvre est le premier de sa liste', () => {
