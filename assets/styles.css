@@ -3382,7 +3382,21 @@ select.annee {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   color: var(--muted); padding-bottom: 4px;
 }
-.jour-ligne.entete span:not(:first-child) { text-align: right; }
+/* `justify-content` et non `text-align` : l'en-tete triable EST un conteneur
+   flex — `.tri-jour` porte `display: inline-flex`, blockifie en `flex` par la
+   grille qui le contient. `text-align: right` ne deplace donc aucun de ses
+   enfants, et la regle etait inerte depuis qu'elle existait : les intitules
+   restaient colles a gauche pendant que les chiffres s'alignaient a droite.
+   « Les noms des colonnes sont pas centres. »
+
+   Mesure a 852 px : la colonne « Poids » finit a 183, son en-tete s'arretait a
+   168 — quinze pixels de decalage, et le bloc du nom, large, rendait l'ecart
+   visible sur toute la rangee.
+
+   `text-align: right` reste : il sert aux cellules qui ne sont pas des
+   conteneurs flex, et les deux ensemble couvrent les deux cas sans qu'on ait a
+   savoir lequel s'applique. */
+.jour-ligne.entete span:not(:first-child) { text-align: right; justify-content: flex-end; }
 .jl-nom { font-weight: 600; overflow: hidden; }
 .jl-nom .sub {
   display: flex; align-items: center; gap: 5px;

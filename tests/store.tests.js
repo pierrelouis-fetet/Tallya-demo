@@ -14645,6 +14645,30 @@ suite('Une flèche de tri ne quitte pas son intitulé', () => {
       + 'son aide (5) et l’écart (4) en demandent 52, et c’est le débordement qui '
       + 'faisait chercher un endroit où couper');
   });
+
+  test('l’intitulé d’une colonne s’aligne sur ses chiffres', () => {
+    /* « Les noms des colonnes sont pas centres. » Ils etaient colles a gauche
+       pendant que les chiffres s'alignaient a droite : mesure a 852 px, la
+       colonne « Poids » finissait a 183 et son en-tete a 168.
+
+       La regle existait pourtant — `text-align: right` sur les cellules d'en-tete
+       — mais elle etait inerte. L'en-tete triable EST un conteneur flex :
+       `.tri-jour` porte `display: inline-flex`, blockifie en `flex` par la grille
+       qui le contient, et `text-align` ne deplace aucun enfant d'un conteneur
+       flex. La regle etait donc morte depuis qu'elle existait, sans que rien ne
+       le dise : elle avait l'air juste a la lecture.
+
+       C'est pourquoi le controle porte sur `justify-content` et non sur la
+       presence d'une regle d'alignement : la premiere formulation aurait ete
+       satisfaite par celle qui ne marchait pas. */
+    const css = lireSource('assets/styles.css');
+    const i = css.indexOf('.jour-ligne.entete span:not(:first-child)');
+    vrai(i > 0, 'la règle d’alignement des en-têtes doit exister');
+    const regle = css.slice(i, css.indexOf('}', i) + 1);
+    vrai(/justify-content:\s*flex-end/.test(regle),
+      'les en-têtes triables sont des conteneurs flex : seul `justify-content` '
+      + 'les aligne sur leurs chiffres, `text-align` n’y fait rien');
+  });
 });
 
 suite('Un libellé, un montant', () => {
