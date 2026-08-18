@@ -250,13 +250,39 @@ const TYPES_COMPTE = [
      en capital, un pacte d'associes, des parts de SAS. Pas d'echeance, pas de
      taux : on sort le jour d'un rachat, d'une introduction en bourse, ou jamais.
 
-     « Financement participatif » : on prete a un taux, avec une date de
+     « Pret participatif » : on prete a un taux, avec une date de
      remboursement. Homunity, October, la promotion immobiliere. Ce sont ces
      lignes-la qui portent une echeance, un taux annonce et un etat — en cours, en
      retard, en defaut — et c'est `prete: true` qui le dit, plutot qu'une liste de
-     types ecrite dans la vue. */
-  { id: 'pe',      label: 'Placements non cotés', classes: ['nonCote'], defaut: 'investir', groupe: 'pe' },
-  { id: 'crowdfunding', label: 'Financement participatif', classes: ['nonCote'],
+     types ecrite dans la vue.
+
+     Le nom disait « Financement participatif », et il a induit son proprietaire
+     en erreur : « pourtant mon investissement en crowdfunding j'ai bien des
+     actions, c'est quand meme du financement participatif ? ». Oui, au sens
+     courant. Mais le mot couvre les deux metiers, et il en nommait un seul, si
+     bien que des parts achetees sur une plateforme semblaient devoir aller la —
+     ou l'application aurait reclame une echeance et un taux qui n'existent pas,
+     et aurait pu declarer « en retard » une ligne qui n'a rien a rembourser.
+
+     L'anglais disait deja « Crowdlending », precis. C'est le francais qui
+     flottait. « Parts » contre « pret » : la distinction se lit en un coup
+     d'oeil, et l'axe du modele apparait enfin — Tallya ne separe pas par
+     plateforme mais par ce qu'on detient. */
+  /* « Parts de société » et non « Placements non cotés » : ce dernier est le nom
+     de la CLASSE `nonCote`, et un type de compte qui le reprenait faisait porter
+     le meme libelle a deux montants differents sur le meme ecran. La carte
+     « Par enveloppe » lisait 11 100 EUR sous ce nom, la carte des classes
+     11 600 EUR sous le meme — l'ecart etant le compte de financement
+     participatif, qui est du non cote lui aussi.
+
+     Le calcul etait juste des deux cotes. C'est le nom du contenant qui mentait,
+     et c'est exactement ce que ce projet s'interdit : un libelle, un montant.
+
+     Un type nomme donc ce qu'on ouvre, une classe ce qu'on detient. « Parts de
+     societe » fait la paire avec « Pret participatif » : l'un est du capital,
+     l'autre du pret, et tous deux se rangent dans le non cote. */
+  { id: 'pe',      label: 'Parts de société', classes: ['nonCote'], defaut: 'investir', groupe: 'pe' },
+  { id: 'crowdfunding', label: 'Prêt participatif', classes: ['nonCote'],
     defaut: 'investir', groupe: 'pe', prete: true },
   /* `direct` : on le detient soi-meme, le contenant EST la chose.
 
@@ -266,7 +292,13 @@ const TYPES_COMPTE = [
      entier devenait un bien, avec le vocabulaire qui va avec — « Dans quel bien
      le ranger ? » pour un contrat d'assurance. Un fait qui commande trois
      ecrans se declare, il ne se devine pas d'un effet de bord. */
-  { id: 'immo',    label: 'Immobilier',     classes: ['immobilier'], defaut: 'investir',
+  /* « Bien immobilier » et non « Immobilier » : ce dernier est le nom de la
+     CLASSE `immobilier`, que ce type partage avec les SCPI. Deux enveloppes pour
+     une classe, et l'une portait le nom de la classe : la carte « Par enveloppe »
+     aurait affiche le seul bien sous un intitule que la carte des classes
+     employait pour le bien ET les SCPI. Le meme defaut que « Placements non
+     cotes », trouve par le test qui interdisait le premier. */
+  { id: 'immo',    label: 'Bien immobilier', classes: ['immobilier'], defaut: 'investir',
     groupe: 'pe', direct: true, bienImmo: true },
   { id: 'scpi',    label: 'SCPI',           classes: ['immobilier'], defaut: 'investir', groupe: 'pe', bienImmo: true },
   /* Les billets dans un portefeuille. C'est le seul argent que personne ne

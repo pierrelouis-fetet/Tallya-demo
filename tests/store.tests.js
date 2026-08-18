@@ -14575,6 +14575,154 @@ suite('La licence ne ment pas', () => {
   });
 });
 
+suite('La page Allocation dit la base qu’elle emploie', () => {
+  test('elle n’en annonce qu’une, et c’est celle des cartes', () => {
+    /* « Ça c'est faux maintenant non ? » L'infobulle de tete promettait « trois
+       bases sur cette page » et expliquait que « ce qui est place » ecarte les
+       liquidites. C'etait vrai la veille. Le matin meme, les cartes par
+       enveloppe et par compte ont ete rebasees sur les avoirs et le cash y a ete
+       ajoute : il ne restait qu'une base, et le texte decrivait une page qui
+       n'existait plus.
+
+       C'est la deuxieme fois dans la meme journee qu'un texte d'aide survit a ce
+       qu'il decrit — un commentaire perime est un mensonge, et une infobulle
+       aussi. Le controle se derive donc de la source : ce que la vue emploie
+       reellement doit correspondre a ce que son entete promet.
+
+       Le nombre de cartes ne se compte pas ici, et volontairement : la premiere
+       redaction disait « les quatre cartes » alors qu'il y en avait trois, faux
+       des l'ecriture. Un chiffre qui vieillit tout seul n'a pas sa place dans un
+       texte affiche. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible');
+    const debut = src.indexOf('function viewAllocation()');
+    const vue = src.slice(debut, src.indexOf('function mountAllocation', debut));
+    vrai(vue.length > 500, 'la vue doit se relire depuis sa source');
+
+    const bases = [...vue.matchAll(/mentionBase\(BASES\.([a-zA-Z]+)/g)].map(m => m[1]);
+    vrai(bases.length > 0, 'la page doit annoncer au moins une base');
+    const distinctes = [...new Set(bases)];
+    eq(distinctes.length, 1,
+      `la page emploie ${distinctes.length} bases (${distinctes.join(', ')}) alors que `
+      + 'son infobulle en annonce une seule : remettre le texte d’accord avec les cartes');
+    eq(distinctes[0], 'avoirs', 'et c’est « Tes avoirs » que le texte nomme');
+
+    const tete = vue.slice(vue.indexOf('perimetre-tete'), vue.indexOf('perimetre-tete') + 900);
+    vrai(/Une seule base sur cette page/.test(tete),
+      'l’infobulle de tête doit annoncer une base unique');
+    vrai(!/Trois bases|Ce qui est placé » écarte/.test(tete),
+      'l’ancien texte à trois bases décrit une page qui n’existe plus');
+  });
+});
+
+suite('Une flèche de tri ne quitte pas son intitulé', () => {
+  test('l’en-tête triable ne se replie pas', () => {
+    /* « Ma fleche de poids se met en dessous, c'est pas pratique. » La fleche est
+       un `::after` dont le contenu commence par une espace, et cette espace est
+       secable. Dans la colonne « Poids », large de 50 px au telephone, le
+       navigateur coupait la : l'intitule sur une ligne, la fleche en dessous, et
+       la cellule passait de 15 a 28 px de haut. Mesure a 375 px.
+
+       Une fleche separee de son intitule ne dit plus de quoi elle parle : elle
+       flotte sous une colonne et pourrait aussi bien designer la voisine.
+
+       Deux regles se tiennent, et le test verifie les deux. `nowrap` empeche la
+       coupure ; la largeur de colonne empeche le debordement qui la provoquait.
+       Corriger la premiere sans la seconde aurait pousse l'intitule hors de sa
+       cellule au lieu de le replier. */
+    const css = lireSource('assets/styles.css');
+    vrai(css, 'la feuille de style doit être lisible');
+    const bloc = css.slice(css.indexOf('.tri-jour .th-tri {'),
+                           css.indexOf('.tri-jour .th-tri {') + 320);
+    vrai(/white-space:\s*nowrap/.test(bloc),
+      'l’intitulé triable et sa flèche doivent rester sur une ligne');
+    const mob = css.slice(css.indexOf('@media (max-width: 460px)'),
+                          css.indexOf('@media (max-width: 460px)') + 900);
+    const cols = (mob.match(/\.jour-ligne \{ grid-template-columns: minmax\(0, 1fr\) (\d+)px/) || [])[1];
+    vrai(cols, 'la grille du jour doit déclarer ses colonnes au téléphone');
+    vrai(Number(cols) >= 58,
+      `la colonne « Poids » fait ${cols} px : son intitulé (34), sa flèche (9), `
+      + 'son aide (5) et l’écart (4) en demandent 52, et c’est le débordement qui '
+      + 'faisait chercher un endroit où couper');
+  });
+});
+
+suite('Un libellé, un montant', () => {
+
+  test('aucun type de compte ne porte le nom d’une classe d’actif', () => {
+    /* « D'un cote j'ai 500 balles en financement participatif qui passe en
+       placement non cote. » Le type `pe` s'appelait « Placements non cotes »,
+       exactement comme la classe `nonCote`. La carte « Par enveloppe » affichait
+       donc 11 100 EUR sous ce nom et la carte des classes 11 600 EUR sous le
+       meme, a deux cartes d'ecart sur le meme ecran. L'ecart etait le compte de
+       pret participatif, qui est du non cote lui aussi.
+
+       Les deux calculs etaient justes. C'est le nom du contenant qui mentait, et
+       c'est la faute que ce projet traque depuis le debut : le meme libelle
+       valant deux montants differents.
+
+       Un type nomme ce qu'on ouvre, une classe ce qu'on detient. Le controle
+       vaut pour toute la table, donc il protege aussi les types qu'on ajoutera
+       demain — c'est la collision qui est interdite, pas le cas du jour. */
+    /* La collision ne ment que si la classe peut porter plusieurs enveloppes.
+       `bienValeur` n'en a qu'une, et elle est `direct` : le contenant EST la
+       chose, les deux cartes montreront toujours le meme nombre, et exiger deux
+       mots la forcerait a en inventer un. La regle porte donc sur ce qui rend le
+       defaut possible, et non sur l'homonymie seule. Une seconde enveloppe
+       ajoutee demain a `bienValeur` fera tomber ce test : c'est exactement le
+       moment ou le renommage devient necessaire. */
+    const parClasse = {};
+    for (const ty of TYPES_COMPTE) for (const c of (ty.classes || []))
+      (parClasse[c] = parClasse[c] || []).push(ty.id);
+    const nomDeClasse = new Map(Object.entries(CLASSES_ACTIFS)
+      .map(([cle, lab]) => [String(lab).toLowerCase(), cle]));
+    for (const ty of TYPES_COMPTE) {
+      const classe = nomDeClasse.get(String(ty.label).toLowerCase());
+      if (!classe) continue;
+      eq((parClasse[classe] || []).length, 1,
+        `le type « ${ty.id} » s'appelle « ${ty.label} », le nom de la classe `
+        + `« ${classe} », que se partagent ${(parClasse[classe] || []).join(', ')} : `
+        + 'la carte « Par enveloppe » et celle des classes afficheraient deux '
+        + 'montants différents sous ce libellé');
+    }
+  });
+
+  test('deux types de compte ne portent pas le même nom', () => {
+    /* Le corollaire, et il ne coute rien : deux enveloppes homonymes rendraient
+       la carte « Par enveloppe » illisible, sans qu'aucun total soit faux. */
+    const vus = new Map();
+    for (const t of TYPES_COMPTE) {
+      const cle = String(t.label).toLowerCase();
+      vrai(!vus.has(cle),
+        `les types « ${vus.get(cle)} » et « ${t.id} » portent le même libellé « ${t.label} »`);
+      vus.set(cle, t.id);
+    }
+  });
+
+  test('les deux métiers du non coté se distinguent à la lecture', () => {
+    /* Le second malentendu, une fois le premier corrige : « pourtant mon
+       investissement en crowdfunding j'ai bien des actions, c'est quand meme du
+       financement participatif ? ». Oui, au sens courant — et c'est le probleme.
+       Le mot couvrait les deux metiers en n'en nommant qu'un.
+
+       Tallya ne separe pas par plateforme mais par ce qu'on detient : des parts,
+       ou une creance. Les deux types partagent la classe `nonCote`, seul
+       `prete` les distingue dans le calcul ; leurs noms doivent le dire aussi,
+       sinon on range des parts la ou l'application reclame une echeance. */
+    const parts = TYPES_COMPTE.find(t => t.id === 'pe');
+    const pret = TYPES_COMPTE.find(t => t.id === 'crowdfunding');
+    vrai(parts && pret, 'les deux types du non coté doivent exister');
+    eq(parts.classes.join(), 'nonCote', 'les parts de société sont du non coté');
+    eq(pret.classes.join(), 'nonCote', 'le prêt participatif aussi');
+    vrai(!parts.prete, 'des parts ne se remboursent pas à une date');
+    vrai(!!pret.prete, 'un prêt porte une échéance, un taux et un état');
+    vrai(/parts?/i.test(parts.label),
+      `« ${parts.label} » doit dire qu'on détient des parts`);
+    vrai(/prêt|pret/i.test(pret.label),
+      `« ${pret.label} » doit dire qu'on prête : c'est ce qui le sépare de son voisin`);
+  });
+});
+
 suite('Un contenant vide ne survit pas à son dernier compte', () => {
 
   test('la migration retire un établissement sans compte ni dette', () => {

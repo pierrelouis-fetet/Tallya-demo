@@ -4374,7 +4374,7 @@ function viewAllocation() {
    ce commentaire vit dans un litteral de gabarit, un backtick y fermerait la
    chaine.)-->
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${trad('tout est compté')}</b> :
-    ${fmtEUR0(t.brut)}, <span class="sans-veuve">${trad('non coté compris')}${aide(trad("Trois bases sur cette page, et c’est normal : elles répondent à trois questions. « Tes avoirs » est tout ce que tu possèdes. « Patrimoine net » retire tes crédits. « Ce qui est placé » écarte les liquidités, parce qu’une répartition par enveloppe ne dit rien de l’argent qui dort sur un compte courant. La mention grise en tête de chaque carte donne la sienne, avec son montant."))}.</span></p>
+    ${fmtEUR0(t.brut)}, <span class="sans-veuve">${trad('non coté compris')}${aide(trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
 
   <div class="card repart">
     ${disponibilite.map(x => `
@@ -6744,9 +6744,9 @@ function viewFicheCompte(id) {
           + 'à tout moment : l’historique des relevés suit le compte, il ne se '
           + 'perd pas. Un changement qui laisserait un placement sans place est '
           + 'refusé, en disant lequel déplacer. '
-          + 'Non coté : deux types, deux métiers. « Placements non cotés » pour des '
-          + 'parts de société, Plateforme A ou un pacte d’associés : on sort au rachat, '
-          + 'pas à une date. « Financement participatif » pour un prêt à un taux, '
+          + 'Non coté : deux types, deux métiers. « Parts de société » pour des '
+          + 'parts de société ou un pacte d’associés : on sort au rachat, '
+          + 'pas à une date. « Prêt participatif » pour un prêt à un taux, '
           + 'avec une échéance et un état : ces lignes-là portent une date de '
           + 'remboursement, et l’application te rappelle celles qui l’ont dépassée.'))}</dt>
         <dd>${esc(trad(t.label))}${t.interne ? trad(', sans établissement') : ''}</dd>

@@ -2171,9 +2171,19 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    du tableau des lignes, pour que le geste se reconnaisse d'une carte a
    l'autre. */
 .tri-jour { display: inline-flex; align-items: baseline; gap: 4px; }
+/* `nowrap` : la fleche de tri est un `::after` dont le contenu commence par une
+   espace, et cette espace est secable. Dans la colonne « Poids », large de 50 px
+   au telephone, le navigateur coupait donc la : l'intitule sur une ligne, la
+   fleche en dessous, et la cellule passait de 15 a 28 px de haut — mesure a
+   375 px. « Ma fleche de poids se met en dessous, c'est pas pratique. »
+
+   Une fleche separee de son intitule ne dit plus de quoi elle parle : elle
+   flotte sous une colonne et pourrait aussi bien designer la voisine. Les deux
+   ne se separent plus. */
 .tri-jour .th-tri {
   background: none; border: 0; padding: 0; cursor: pointer;
   font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+  white-space: nowrap;
 }
 /* Sous le garde-fou : au doigt, un survol reste peint apres l'appui, et
    l'intitule paraissait alors trie alors qu'on l'avait seulement touche. */
@@ -3473,7 +3483,16 @@ select.annee {
    chiffres reprennent donc l'aise qu'il leur faut pour que « −0,20 % » et
    « −11 € » ne frôlent pas leur bord. */
 @media (max-width: 460px) {
-  .jour-ligne { grid-template-columns: minmax(0, 1fr) 50px 70px 74px; column-gap: 8px; }
+  /* 58 px et non 50 pour « Poids » : son intitule fait 34 px, la fleche de tri
+     9, l'aide 5, plus 4 d'ecart — 52 px, que 50 ne contenaient pas. C'est ce
+     debordement qui faisait chercher au navigateur un endroit ou couper.
+
+     Les huit pixels viennent de la colonne du nom, qui les rend sans rien
+     perdre : elle coupe deja les intitules trop longs par des points de
+     suspension, et un nom tronque reste reconnaissable la ou une fleche
+     orpheline ne veut plus rien dire. La ligne entiere ouvre la fiche, qui
+     porte le nom complet. */
+  .jour-ligne { grid-template-columns: minmax(0, 1fr) 58px 70px 74px; column-gap: 8px; }
 }
 
 /* --------- Sélecteur de période ---------
