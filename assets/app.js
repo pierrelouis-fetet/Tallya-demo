@@ -11584,7 +11584,18 @@ function askSale(indexInitial) {
           <span class="hint" id="veDispo"></span></div>
         <div class="field" data-vente="reelle"><label>${trad('Prix de vente unitaire')}</label>
           <input type="number" step="any" id="vePrice" autocomplete="off">
-          <span class="hint" id="veDev"></span></div>
+          <span class="hint" id="veDev"></span>
+          <!-- « Si quelqu'un ajoute une vente dans l'app un mois apres, le cours
+               peut avoir change. » Il a change, et rien ne le disait : le prix et
+               le taux se pre-remplissent au cours du jour, la date se recule
+               librement, et la plus-value se calculait alors sur un cours qui n'a
+               jamais ete celui de la vente. Un chiffre faux que rien ne trahit.
+
+               L'avertissement pointe, il ne bloque pas : c'est peut-etre le bon
+               prix, saisi a la main. Il nomme aussi la porte d'a cote, « une vente
+               passee », qui ne demande ni cours ni taux mais les deux montants du
+               releve — donc rien qui puisse vieillir. -->
+          <span class="hint" id="veVieux" hidden></span></div>
         <div class="field" data-vente="reelle" id="veFxWrap" hidden><label>${trad('Taux de change à la vente')}</label>
           <input type="number" step="any" id="veFx" autocomplete="off">
           <span class="hint">${trad('1 unité de devise = ce montant en euros')}</span></div>
@@ -11647,6 +11658,7 @@ function askSale(indexInitial) {
         `<option value="${c.id}" ${c.id === defaut ? 'selected' : ''}>${esc(sousNom('', nomCompteV2(c), nomEtabDe(c)))}</option>`).join('')
         + `<option value="">Ne rien créditer</option>`;
       majApercuVente();
+      avisCoursDuJour();
     };
 
     const majApercuVente = () => {
@@ -11695,7 +11707,25 @@ function askSale(indexInitial) {
     };
 
     sel.onchange = chargerLigne;
-    for (const el of [qte, prix, fx, $('#vePasNom'), $('#vePasGross'), $('#vePasPnl')]) el.oninput = majApercuVente;
+    /* Le cours propose est celui du jour : des que la date recule, il faut le
+       dire. Le controle se refait a chaque frappe sur la date et sur le prix,
+       parce que corriger l'un doit pouvoir eteindre l'avis. */
+    const avisCoursDuJour = () => {
+      const avis = $('#veVieux');
+      if (!avis) return;
+      const p = ps[+sel.value];
+      const recule = !passee() && $('#veDate').value && $('#veDate').value < todayISO();
+      if (!recule || !p) { avis.hidden = true; return; }
+      const auJour = num(p.price);
+      const saisi = num(prix.value);
+      avis.hidden = false;
+      avis.textContent = Math.abs(saisi - auJour) < 1e-9
+        ? `${trad('C’est le cours d’aujourd’hui, pas celui de cette date. Corrige-le, ou choisis « une vente passée » : elle demande le montant encaissé, qui ne vieillit pas.')}`
+        : trad('Prix saisi à la main : l’application ne le compare plus au cours du jour.');
+    };
+    for (const el of [qte, prix, fx, $('#vePasNom'), $('#vePasGross'), $('#vePasPnl')])
+      el.oninput = () => { majApercuVente(); avisCoursDuJour(); };
+    $('#veDate').oninput = avisCoursDuJour;
     chargerLigne();
     /* Le premier champ de la nature choisie, et non toujours la quantite : sans
        ligne a vendre, le curseur tombait dans un champ cache. */
@@ -11897,20 +11927,20 @@ function askPosition(index) {
             ? `<span class="sub">${trad('achetée aujourd’hui : c’est aussi ton résultat du jour')}</span>` : ''}`,
             `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
             + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
-        <!-- Sur une ligne en devise, le total ne se lit pas sans ses deux
-             causes. Le courtier annonce le titre seul, dans sa monnaie ; cette
-             application compte en euros, change compris. Les deux ont raison, et
-             sans cette ligne on croit l'un des deux faux.
+        <!-- Sur une ligne en devise, le total ne se lit pas seul : le courtier
+             en annonce un autre, et sans cette ligne on croit l'un des deux faux.
+             Celle-ci porte le mouvement du titre dans sa monnaie, exactement ce
+             que le courtier affiche, et elle ne demande aucun taux de change.
 
-             Les deux parts se composent et ne s'additionnent pas : le mot
-             « dont » le dit assez, un signe plus aurait promis une somme. -->
+             La part du change a vecu ici une journee. Elle avait besoin du taux
+             du jour de l'achat, que rien n'enregistre : deux lignes achetees a
+             des mois d'ecart portaient le meme. Le total reste en euros, change
+             compris, parce que c'est ce qui est sorti du compte. -->
         ${(() => {
-          const parts = posPerfParts(p);
-          if (!parts) return '';
+          const titre = posPerfTitre(p);
+          if (titre == null) return '';
           return ligne(`<span class="muted">${trad('dont le titre')}, ${esc(p.currency)}</span>`,
-                   `<span class="muted">${fmtSignedPct(parts.titre, 2)}</span>`)
-               + ligne(`<span class="muted">${trad('dont le change')}</span>`,
-                   `<span class="muted">${fmtSignedPct(parts.change, 2)}</span>`);
+                   `<span class="muted">${fmtSignedPct(titre, 2)}</span>`);
         })()}
         ${(() => {
           /* La duree de detention, comme un fait — et non comme un taux.

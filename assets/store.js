@@ -2154,37 +2154,35 @@ function posPerfPct(p) {
 }
 function posPerfEur(p) { return posValue(p) - posInvested(p); }
 
-/* --- d'ou vient la plus-value d'une ligne en devise ----------------------
-   « Je pense que la perf par rapport au PRU est fausse, je n'ai pas la meme
-   perf sur son courtier. Par exemple ici je pense que c'est plutot -8 %, pas -10 %. »
+/* --- la part de la plus-value qui ne doit rien au change -----------------
+   « Je pense que la perf par rapport au PRU est fausse, je n'ai pas la meme perf
+   chez son courtier, plutot -7 que -9. » Les deux chiffres etaient justes : le courtier
+   convertit ses deux jambes au taux du jour, donc son pourcentage est le
+   mouvement du titre dans sa propre monnaie ; cette application gele le taux de
+   l'achat, donc le sien porte aussi le change. Rien n'y disait lequel on lisait.
 
-   Les deux chiffres etaient justes. Sur une ligne en dollars, le courtier
-   mesure en dollars — le titre seul — et cette application mesure en euros,
-   change compris, parce que c'est en euros que le patrimoine se lit. Sur la
-   ligne en question : -8,65 % pour le titre, -2,38 % pour un dollar qui a
-   baisse depuis l'achat, et 0,9135 x 0,9762 = -10,82 % au total.
+   Ce que rend cette fonction, c'est le mouvement du titre seul, et il ne demande
+   AUCUN taux : (cours - revient) / revient. Le prix de revient se saisit une fois
+   a la creation de la ligne et ne se retouche jamais. Il n'y a donc rien a tenir.
 
-   Ce qui manquait n'etait donc pas un calcul mais une phrase : la fiche
-   annoncait « Prix de revient (USD) 590 » puis « -10,82 % » juste en dessous,
-   et la lecture naturelle est « -10,82 % par rapport a 590 $ ». Rien n'y
-   apprenait que le change etait dedans.
+   La part du change a existe ici pendant une journee, puis elle est partie :
+   « c'est l'enfer de gerer le taux de change ». Elle avait besoin de `fxBuy`, et
+   `fxBuy` est fige au premier cours connu de la ligne — pas au jour de l'achat,
+   qu'aucun champ n'enregistre. Deux lignes achetees des mois d'ecart portaient le
+   meme taux. Un calcul exact sur une entree fausse rend un chiffre faux presente
+   avec assurance, et c'est pire que de ne rien montrer.
 
-   Les deux parts se composent, elles ne s'additionnent pas : un titre a -8,65 %
-   dans une devise qui perd 2,38 % ne fait pas -11,03 %. C'est pourquoi la
-   fonction rend les deux facteurs et non deux ecarts en euros, qu'on serait
-   tente de sommer.
+   Le total, lui, reste en euros, change compris : c'est ce qui est sorti du compte,
+   et c'est le seul chiffre qui s'additionne avec le reste du patrimoine. L'ecart
+   entre les deux se voit a l'oeil, sans que l'application pretende le chiffrer.
 
-   Rend `null` sur une ligne en euros : il n'y a rien a decomposer, et une part
-   de change a 0 % se lirait comme une information. */
-function posPerfParts(p) {
+   Rend `null` sur une ligne en euros : il n'y a qu'un seul chiffre, et le repeter
+   sous le total ne dirait rien. */
+function posPerfTitre(p) {
   if ((p.currency || 'EUR') === 'EUR' || p.manual) return null;
   const achat = num(p.buyPrice), cours = num(p.price);
-  const fxA = tauxAchat(p), fxJ = num(p.fx) || 1;
-  if (!achat || !cours || !fxA || !fxJ) return null;
-  return {
-    titre: (cours / achat - 1) * 100,
-    change: (fxJ / fxA - 1) * 100,
-  };
+  if (!achat || !cours) return null;
+  return (cours / achat - 1) * 100;
 }
 
 /* --- performance du jour -----------------------------------------------

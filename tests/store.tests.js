@@ -13165,50 +13165,103 @@ suite('Un montant n’a qu’un porteur', () => {
 /* ------------------------------------------------------------------
    Performance ne dit que ce qu'elle peut prouver
    ------------------------------------------------------------------ */
-suite('Une plus-value en devise dit d’où elle vient', () => {
+suite('Une vente datee dans le passe ne prend pas le cours du jour', () => {
 
-  test('les deux parts composent le total, elles ne s’additionnent pas', () => {
-    /* Le courtier mesure en dollars — le titre seul — et cette application en
-       euros, change compris, parce que c'est en euros que le patrimoine se lit.
-       Les deux chiffres etaient justes ; ce qui manquait etait la phrase qui dit
-       lequel on regarde. La fiche annoncait « Prix de revient (USD) 590 » puis
-       « -10,82 % » juste dessous, et la lecture naturelle est « -10,82 % par
-       rapport a 590 $ ». */
-    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 538.97, fx: 0.8581, fxBuy: 0.879 };
-    const parts = posPerfParts(p);
-    vrai(parts, 'une ligne en devise doit se décomposer');
-    pres(parts.titre, -8.65, 'le titre seul, ce que le courtier annonce');
-    pres(parts.change, -2.38, 'et la devise qui a baissé depuis l’achat');
+  test('la fenetre avertit quand la date recule', () => {
+    /* « Si quelqu'un ajoute une vente dans l'app un mois apres, le cours peut
+       avoir change. » Il a change, et rien ne le disait : le prix et le taux se
+       pre-remplissent au cours du jour, la date se recule librement, et la
+       plus-value realisee se calculait alors sur un cours qui n'a jamais ete
+       celui de la vente. Un chiffre faux que rien ne trahit — la faute que ce
+       projet traque depuis le debut.
 
-    /* La regle qui compte : les deux parts se COMPOSENT. Un titre a -8,65 % dans
-       une devise qui perd 2,38 % ne fait pas -11,03 %. La fonction rend donc deux
-       facteurs et non deux ecarts en euros, qu'on serait tente de sommer — et la
-       fiche ecrit « dont », jamais un signe plus. */
-    const compose = ((1 + parts.titre / 100) * (1 + parts.change / 100) - 1) * 100;
-    pres(compose, posPerfPct(p), 'la composition doit redonner le total affiché');
-    vrai(Math.abs((parts.titre + parts.change) - posPerfPct(p)) > 0.15,
-      'et leur somme ne le redonne pas : si elle y arrivait, ce test ne prouverait '
-      + 'plus que la composition est le bon modèle');
-  });
+       Le mode « vente passee » etait deja a l'abri : il ne demande ni cours ni
+       taux, mais le montant encaisse et la plus-value en euros, les deux
+       chiffres du releve. C'est le mode normal, avec sa date libre, qui laissait
+       passer.
 
-  test('une ligne en euros n’a rien à décomposer', () => {
-    /* Une part de change a 0,00 % se lirait comme une information — « le change
-       ne t'a rien coute » — alors qu'il n'y a pas de change du tout. */
-    eq(posPerfParts({ currency: 'EUR', qty: 1, buyPrice: 10, price: 12, fx: 1 }), null,
-      'pas de décomposition sur une ligne en euros');
-    eq(posPerfParts({ currency: 'USD', qty: 1, buyPrice: 10, price: 12, fx: 1, manual: true }), null,
-      'ni sur une valeur saisie à la main, dont le cours n’est pas le sujet');
-  });
-
-  test('la fiche l’affiche, et sans promettre une somme', () => {
+       L'avis pointe et ne bloque pas : c'est peut-etre le bon prix, saisi a la
+       main. Il nomme la porte d'a cote, dont les chiffres ne vieillissent pas. */
     const src = lireSource('assets/app.js');
-    const i = src.indexOf("trad('Plus / moins-value')");
-    vrai(i > 0, 'la ligne de plus-value doit être trouvable');
-    const bloc = src.slice(i, i + 1600);
-    vrai(/posPerfParts/.test(bloc),
-      'la fiche doit appeler la décomposition, là où le total se lit');
-    vrai(/dont le titre/.test(bloc) && /dont le change/.test(bloc),
-      '« dont » et non un signe plus : les deux parts se composent');
+    vrai(src, 'assets/app.js doit etre lisible');
+    vrai(/id="veVieux" hidden/.test(src),
+      'la fenetre de vente porte un avis, muet par defaut');
+    const f = src.slice(src.indexOf('const avisCoursDuJour'),
+                        src.indexOf('const avisCoursDuJour') + 1200);
+    vrai(f.length > 200, 'le controle doit se relire depuis sa source');
+
+    /* Les trois conditions, chacune verifiee : le mode, la date, et le fait que
+       le prix soit reste celui qu'on a propose. Sans la premiere, l'avis
+       s'afficherait sur une vente passee qui n'utilise aucun cours ; sans la
+       troisieme, il crierait sur un prix deja corrige. */
+    vrai(/!passee\(\)/.test(f),
+      'pas d’avis en mode « vente passee » : elle ne lit aucun cours');
+    vrai(/< todayISO\(\)/.test(f),
+      'l’avis se declenche sur une date anterieure a aujourd’hui');
+    vrai(/Math\.abs\(saisi - auJour\)/.test(f),
+      'et il change de texte quand le prix a ete corrige a la main');
+
+    /* Il se rejoue sur la date ET sur le prix : corriger l’un doit pouvoir
+       eteindre l’avis, sinon il reste allume sur une saisie devenue juste. */
+    vrai(/\$\('#veDate'\)\.oninput = avisCoursDuJour/.test(src),
+      'la date rejoue le controle');
+    vrai(/majApercuVente\(\); avisCoursDuJour\(\);/.test(src),
+      'le prix aussi');
+  });
+});
+
+suite('Une plus-value en devise dit ce que le courtier dit', () => {
+
+  test('la part du titre ne demande aucun taux de change', () => {
+    /* Le courtier convertit ses deux jambes au taux du jour, donc son
+       pourcentage est le mouvement du titre dans sa propre monnaie ; cette
+       application gele le taux de l'achat, donc le sien porte aussi le change.
+       Rien ne disait lequel on lisait.
+
+       Ce que rend cette fonction est exactement ce que le courtier affiche, et il
+       ne demande AUCUN taux : le prix de revient se saisit une fois a la creation
+       et ne se retouche jamais. */
+    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 546.03, fx: 0.8554, fxBuy: 0.879 };
+    pres(posPerfTitre(p), -7.45, 'le titre seul, ce que le courtier annonce');
+
+    /* La preuve que le taux n'entre pas dans ce calcul : on le change du tout au
+       tout, le chiffre ne bouge pas d'un centieme. */
+    const autre = Object.assign({}, p, { fx: 0.5, fxBuy: 1.4 });
+    pres(posPerfTitre(autre), posPerfTitre(p),
+      'aucun taux ne doit entrer dans la part du titre');
+  });
+
+  test('le total reste en euros, change compris', () => {
+    /* Et il DOIT le rester : c'est ce qui est sorti du compte, et le seul chiffre
+       qui s'additionne avec le reste du patrimoine. Convertir le prix de revient
+       au taux du jour, comme le courtier, ferait bouger le montant investi chaque
+       jour sur une ligne qu'on n'a pas touchee — ce que le commentaire de
+       `tauxAchat` interdit depuis longtemps. */
+    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 546.03, fx: 0.8554, fxBuy: 0.879 };
+    pres(posInvested(p), 2074.44, 'le prix de revient est celui du jour de l’achat');
+    pres(posPerfPct(p), -9.937, 'le total porte le change');
+    vrai(Math.abs(posPerfPct(p) - posPerfTitre(p)) > 2,
+      'le total et la part du titre doivent rester distincts : s’ils se '
+      + 'confondaient, le total aurait cessé de compter le change');
+  });
+
+  test('rien a decomposer sur une ligne en euros', () => {
+    eq(posPerfTitre({ currency: 'EUR', qty: 1, buyPrice: 10, price: 12, fx: 1 }), null,
+      'pas de part du titre sur une ligne en euros');
+    eq(posPerfTitre({ currency: 'USD', qty: 1, buyPrice: 10, price: 12, fx: 1, manual: true }), null,
+      'ni sur une valeur saisie a la main, dont le cours n’est pas le sujet');
+  });
+
+  test('la part du change n’existe plus, et c’est voulu', () => {
+    /* Elle a vecu une journee. Elle avait besoin du taux du jour de l'achat, que
+       rien n'enregistre : `fxBuy` se fige au premier cours connu de la ligne, si
+       bien que deux lignes achetees a des mois d'ecart portaient le meme taux. */
+    const src = lireSource('assets/app.js');
+    vrai(!/dont le change/.test(src),
+      'la part du change ne doit pas revenir sans que sa source le permette');
+    const store = lireSource('assets/store.js');
+    vrai(!/posPerfParts/.test(store) && /function posPerfTitre/.test(store),
+      'une seule fonction, et elle ne rend que ce qu’elle peut prouver');
   });
 });
 
