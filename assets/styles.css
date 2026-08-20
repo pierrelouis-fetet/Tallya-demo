@@ -1,5 +1,3 @@
-/* ======================================================   Wealth Dashboard — feuille de style
-   ============================================================= */
 
 /* ---------------------------------------------------------------
    Manrope, et elle seule pour les titres.
@@ -31,8 +29,6 @@
 @font-face {
   font-family: 'Manrope';
   font-style: normal;
-  /* Fichier variable : un seul telechargement porte tout l'intervalle,
-     et 680 — la graisse des titres — s'obtient exactement. */
   font-weight: 500 800;
   /* `swap` et non `optional` : avec le prechargement, la police est la
      avant le premier rendu dans la quasi-totalite des cas. `optional`
@@ -48,25 +44,11 @@
                  U+FFFD;
 }
 
-/* ---------------------------------------------------------------
-   Palette. Neutres franchement froids — un gris financier, pas un
-   papier crème — et des séries validées pour la déficience de vision
-   des couleurs dans les deux thèmes (bande de luminosité, plancher de
-   saturation, séparation deutan/tritan, contraste sur le fond).
-
-   Le vert et le rouge sont réservés au sens « hausse / baisse » et ne
-   servent jamais de couleur de série : sur un tableau de bord
-   financier, une couleur qui signifie une direction ne peut pas
-   signifier aussi une catégorie.
-   --------------------------------------------------------------- */
 :root {
   color-scheme: light;
   --surface-1: #ffffff;
   --surface-2: #f1f4f8;
   --page: #f7f9fb;
-  /* En clair, le menu est clair : un panneau sombre a demeure faisait
-     cohabiter deux themes sur le meme ecran. Les declinaisons du menu ont
-     leurs propres variables, car son fond ne suit pas celui du contenu. */
   --sidebar: #ffffff;
   --sidebar-ink: #0d1117;
   --sidebar-muted: #55606e;
@@ -89,8 +71,6 @@
   --border-strong: rgba(13, 17, 23, .18);
 
   --series-1: #2173c6;
-  /* Les memes teintes, assombries pour tenir sur du blanc : meme ordre, memes
-     roles, meme famille. Voir le bloc sombre pour le raisonnement. */
   --series-2: #048681;
   --series-3: #b8417e;
   --series-4: #9a539d;
@@ -132,11 +112,6 @@
      ne se devine pas, donc elle se declare : `--h-sous-onglets` commande la
      hauteur de la barre autant que le decalage du bandeau, et les deux ne
      peuvent plus se desaccorder. */
-  /* Deux hauteurs et non une : le dessin de la barre, et le dessin plus l'encoche.
-     La premiere est ce que la barre parcourt en se retirant ; la seconde est ce
-     qu'elle occupe. Les separer met l'encoche hors de portee d'une distraction —
-     j'ai deja perdu une fois cette garde en ecrivant un zero, et les sous-onglets
-     sont remontes derriere l'heure de l'iPhone. */
   --h-barre-dessin: 54px;
   --h-barre: calc(var(--h-barre-dessin) + env(safe-area-inset-top, 0px));
   --h-sous-onglets: 53px;
@@ -169,12 +144,6 @@
      du theme actif. */
   --degrade-budget: linear-gradient(90deg, var(--series-1), var(--series-3));
 
-  /* 14 px plutot que 12 : le rayon de tous les gabarits est 12, et deux
-     pixels de plus suffisent a changer la respiration d'une page sans qu'on
-     puisse dire pourquoi. */
-  /*    L'echelle des rayons est fermee : quatre paliers, un role chacun. En deca
-   de 4 px, l'arrondi suit la hauteur de l'element (barres, coches) et reste
-   en dur ; un test interdit les valeurs orphelines.*/
   --radius: 14px;        /* cartes, fenetres, tuiles */
   --radius-sm: 9px;      /* boutons, champs, controles */
   --radius-xs: 6px;      /* badges, petites pastilles carrees */
@@ -189,13 +158,7 @@
   --shadow: 0 1px 2px rgba(13, 17, 23, .04);
   --ombre-flottante: 0 8px 24px rgba(13, 17, 23, .10);
   --ombre-fenetre: 0 20px 50px rgba(13, 17, 23, .16);
-  /* Le niveau flottant retourne : l'ovale du bas est la seule surface ancree
-     au bord inferieur, son ombre remonte sur le contenu qu'il survole. */
   --ombre-ovale: 0 -14px 34px rgba(13, 17, 23, .10);
-  /* La graisse des montants mis en avant. Ils portaient 620, 640, 700, 720,
-     740, 750 et 760 selon l'ecran : sept graisses pour un seul role, aucune
-     visible a l'oeil, toutes suspectes au premier zoom. Une seule, nommee —
-     et 720 reste la graisse des heros de page, declaree la ou ils vivent. */
   --fw-chiffre: 650;
   /*    La police du systeme d'abord, Inter ensuite. Inter etait demandee en
    premier. Elle est excellente et elle est aussi la police par defaut de tous
@@ -207,22 +170,12 @@
    systemes sans police d'interface.*/
   --font: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI",
           Roboto, "Inter", ui-sans-serif, sans-serif;
-  /* Les titres, et rien d'autre. Le repli est la pile du systeme, la meme
-     que le texte courant : pendant le chargement, et sur un navigateur qui
-     refuse la police, un titre reste un titre — il ne clignote pas d'une
-     serif a une autre. */
   --font-titre: 'Manrope', var(--font);
   --font-nb: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  /* Noir presque pur, et des gris neutres. L'ancienne rampe avait une dominante
-     bleue — #0e1116 pour la page, #9aa6b6 pour le texte secondaire : c'est le
-     gris de GitHub sombre, celui de tous les gabarits, et il tirait toute
-     l'application vers le meme air de famille. Un fond qui ne raconte rien
-     laisse la couleur aux seuls chiffres, comme chez les applications de
-     courtage. */
   --surface-1: #101114;
   --surface-2: #181a1f;
   --page: #08090b;
@@ -242,38 +195,11 @@
   --muted: #83858e;
   --grid: #1e2025;
   --axis: #2c2f36;
-  /* Un filet, pas un cadre. Sur un fond presque noir, la difference entre la
-     page et la surface d'une carte suffit a la detacher : la bordure n'a plus
-     qu'a retenir la lumiere sur le bord haut. A 8 % elle dessinait un rectangle
-     autour de chaque bloc, et une page de dix cartes se lisait comme une grille
-     de cases. */
   --border: rgba(255, 255, 255, .045);
   --border-strong: rgba(255, 255, 255, .11);
 
-  /* L'accent, plus clair qu'en theme clair : sur un fond presque noir, le
-     violet du logo tel quel passerait pour du gris fonce. */
   --accent: #9a72e8;
 
-  /* Douze teintes pour les actifs, une par classe et quatre en reserve.
-
-     Froides dominantes, un seul point chaud. C'est ce qu'un accent violet sur
-     du noir reclame : une palette repartie tout autour du cercle se battait
-     avec la marque, et il n'y avait plus de hierarchie. Le chaud est donne a
-     l'immobilier, qui est souvent la plus grosse part d'un patrimoine — un
-     ambre sable tient 83 % d'une barre sans crier, la ou une terre cuite
-     paraissait terne et un jaune sature ecrasait tout.
-
-     La bande violette, de 255 a 290 degres, est interdite aux donnees : elle
-     appartient a l'interface. Le non cote y logeait en magenta, si bien qu'une
-     classe d'actif et un etat actif portaient la meme famille de couleur ; il
-     passe au rose, franchement a cote.
-
-     Toutes autour de la meme clarte, pour qu'aucune barre ne domine ses
-     voisines par sa seule luminosite.
-
-     La table qui les attribue vit dans store.js, TEINTE_CLASSE, et elle est la
-     seule : deux listes ecrites a la main avaient deja divergé, et un studio
-     s'etait peint de la couleur d'un ETC or. */
   --series-1:  #65a7f2;   /* liquidités, monétaire      — azur */
   --series-2:  #35c5be;   /* actions, actifs de marché  — turquoise */
   --series-3:  #e06da4;   /* non coté                   — rose */
@@ -282,23 +208,6 @@
   --series-6:  #b2b867;   /* métaux précieux            — or olive */
   --series-7:  #3fbbd0;   /* obligations                — cyan */
   --series-8:  #8ebe77;   /* multi-actifs               — vert */
-  /* La neuvieme teinte, choisie par mesure et non au jugé.
-
-     Les huit series deja attribuees et les cinq couleurs de sens occupent treize
-     positions du cercle. Le controle de teintes exige vingt degres OKLab entre
-     une classe et n'importe quelle couleur de sens, et les trois teintes gardees
-     « en reserve » ont ete refusees l'une apres l'autre : la neuvieme etait a 19
-     degres du rose du non cote, la dixieme a 8 de l'azur des liquidites, la
-     onzieme a 18 de l'or. Elles avaient ete choisies comme remplissage, pas
-     comme teintes distinctes.
-
-     Un balayage du cercle entier, teinte par teinte et en OKLab comme le fait le
-     controle, ne laisse qu'un creneau : ce bleu-lavande. Il reste hors de la
-     bande violette de 255 a 290 degres, que ce fichier interdit aux donnees
-     parce qu'elle appartient a la marque.
-
-     La palette est donc pleine. La dixieme classe d'actif demandera d'elargir la
-     rampe, pas de piocher dans les reserves. */
   --series-9:  #8d9be2;   /* biens de valeur */
   --series-10: #6b8ca8;
   --series-11: #8fbf5a;
@@ -311,8 +220,6 @@
   --critical: #e0574f;
 
   --shadow: 0 1px 2px rgba(0, 0, 0, .5);
-  /* Sur un fond presque noir, l'ombre doit peser pour se voir : les valeurs
-     claires seraient invisibles ici, et celles-ci ecraseraient le theme clair. */
   --ombre-flottante: 0 8px 24px rgba(0, 0, 0, .45);
   --ombre-fenetre: 0 24px 60px rgba(0, 0, 0, .5);
   --ombre-ovale: 0 -14px 34px rgba(0, 0, 0, .3);
@@ -417,7 +324,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---------------- Sidebar ---------------- */
 /* La barre latérale ne défile pas avec la page, et elle défile en elle-même.
 
    Et il n'y a rien à y gagner. Si la barre du haut se retire sur téléphone,
@@ -452,14 +358,6 @@ body {
   display: flex; gap: 11px; align-items: center; padding: 0 6px 22px;
   text-decoration: none; color: inherit; border-radius: var(--radius-sm);
 }
-/* Au survol, c'est le dessin qui repond, pas le nom.
-
-   L'icone se souleve d'un pixel et s'eclaircit d'un souffle. C'est assez pour
-   accuser reception du survol, et ça ne touche pas au nom. Le halo reprend le
-   violet que l'icone porte deja, il n'introduit aucune couleur.
-
-   Le clavier garde un anneau franc : un survol discret ne doit pas devenir une
-   cible invisible pour qui navigue au Tab. */
 .brand .brand-mark {
   transition: transform .18s cubic-bezier(.34, 1.28, .48, 1),
               box-shadow .18s ease, filter .18s ease;
@@ -504,13 +402,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .brand .brand-mark { transition: none; }
   @media (hover: hover) { .brand:hover .brand-mark { transform: none; } }
-  /* L'appui garde sa couleur, il perd son mouvement : c'est le retour qui
-     compte, pas le deplacement. */
   .brand:active .brand-mark,
   .brand.tape .brand-mark { transform: none; }
 }
-/* La rubrique courante ne sert que quand le menu est replié : sur grand
-   écran, la navigation la montre déjà en surbrillance. */
 .brand-vue { display: none; }
 /* Le rayon suit celui du dessin, mesure sur le fichier source : 204 px de rayon
    sur une tuile de 880, soit 23 %. En pourcentage et non en pixels, parce que la
@@ -527,14 +421,9 @@ body {
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-text strong { font-size: 15px; letter-spacing: -.01em; }
 .brand-text span { font-size: 11.5px; color: var(--sidebar-faible); }
-/* Le mot accentue de la signature, ici comme sur l'ecran de lancement. Le poids
-   monte a peine : a 11,5 px, un gras franc ferait une tache. */
 .brand-sous b { font-weight: 600; color: var(--accent); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
-/* La tête du tiroir n'existe que sur téléphone : sur grand écran, la barre
-   latérale porte déjà le logo en haut et le patrimoine net dans son pied.
-   Affichée partout, elle doublait les deux. */
 .nav-tete { display: none; }
 .nav a {
   display: flex; align-items: center; gap: 10px;
@@ -553,26 +442,14 @@ body {
   stroke-linecap: round; stroke-linejoin: round;
 }
 .nav a { position: relative; }
-/* Le survol reste un lavis neutre. Un lavis violet a ete essaye : il marchait,
-   mais avec le repere de la ligne active, l'onglet courant et les anneaux de
-   focus, ca faisait un quatrieme violet a l'ecran et l'accent perdait sa force.
-   Une couleur de marque ne pese que si elle est rare.
-   Le survol dit « ta souris est la », en gris ; le repere dit « tu es la », en
-   violet. Deux signaux, deux poids. */
 @media (hover: hover) { .nav a:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); } }
 .nav a.active { background: var(--sidebar-active); color: var(--sidebar-ink); font-weight: 600; }
-/* L'actif survole ne se rallume pas davantage : il est deja au maximum, et le
-   voir changer sous la souris laisserait croire qu'un clic ferait quelque
-   chose. */
 @media (hover: hover) { .nav a.active:hover { background: var(--sidebar-active); } }
-/* Un repère vertical plutôt qu'un pavé plus clair : on voit où l'on est du
-   coin de l'œil, sans que la ligne active pèse plus que les autres. */
 .nav a.active::before {
   content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2.5px;
   border-radius: 0 2px 2px 0; background: var(--accent);
 }
 
-/* Intitulé de section : discret, il sépare sans rivaliser avec les liens. */
 .nav-groupe {
   margin: 14px 0 4px; padding: 0 11px;
   font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
@@ -580,16 +457,8 @@ body {
 }
 .nav-groupe:first-child { margin-top: 2px; }
 
-/* Le retour de l'en-tête n'existe qu'avec la barre du haut, comme les deux
-   commandes de droite. Au-dessus de 900 px, c'est le bouton en tête de page qui
-   ramène : le menu latéral occupe la colonne, un chevron au-dessus du logo n'y
-   aurait aucun sens. */
 .retour { display: none; }
 
-/* --- les deux commandes de l'en-tête -------------------------------------
-   Elles n'existent qu'avec la barre du haut, soit sous 900 px. Au-dessus, le
-   menu latéral est déjà déplié et les contrôles de cohérence gardent leur carte
-   au bas de la page Données. */
 .entete-actions { display: none; }
 
 /* --- l'étiquette de démonstration ----------------------------------------
@@ -621,9 +490,6 @@ body {
    parcours. CSS ne sait pas dire « jusqu'au titre suivant » : `~` porte sur
    tous les frères, donc « Pilotage » aurait vu Comptes, trois lignes plus
    bas, et se serait cru encore utile. */
-/* Les doublons du tiroir disparaissent partout ou la barre du bas les porte
-   deja : meme seuil qu'elle, sinon le tiroir montre six entrees dont quatre
-   sont a un doigt en dessous. */
 @media (max-width: 900px) {
   #nav a.dans-barre, #nav .nav-groupe.sans-suite { display: none; }
 }
@@ -651,14 +517,12 @@ body {
 
 .sb-label { font-size: 11px; color: var(--sidebar-faible); text-transform: uppercase; letter-spacing: .06em; }
 .sb-net strong { font-size: 20px; font-weight: 700; letter-spacing: -.03em; color: var(--sidebar-ink); }
-/* la sidebar est toujours sombre : couleurs de delta fixes */
 .sb-delta { font-size: 12px; color: #7d8896; }
 .sb-delta.up { color: var(--good-text); }
 .sb-delta.down { color: var(--critical); }
 .saved { font-size: 10.5px; color: #5d6875; text-align: center; transition: color .2s; }
 .saved.flash { color: var(--good); }
 
-/* ---------------- Menu burger (mobile) ---------------- */
 .burger, .nav-backdrop, .tabbar { display: none; }
 
 .burger {
@@ -667,7 +531,6 @@ body {
   background: var(--sidebar-hover); cursor: pointer;
   place-items: center; position: relative;
 }
-/* Trois traits qui se muent en croix à l'ouverture */
 .burger span, .burger span::before, .burger span::after {
   content: ''; display: block; position: absolute; left: 50%; width: 17px; height: 2px;
   background: var(--sidebar-ink); border-radius: 2px; transform: translateX(-50%);
@@ -680,7 +543,6 @@ body.nav-open .burger span { background: transparent; }
 body.nav-open .burger span::before { transform: translateX(-50%) translateY(6px) rotate(45deg); }
 body.nav-open .burger span::after  { transform: translateX(-50%) translateY(-6px) rotate(-45deg); }
 
-/* ---------------- Main ---------------- */
 .main { min-width: 0; display: flex; flex-direction: column; }
 
 .topbar {
@@ -694,10 +556,6 @@ body.nav-open .burger span::after  { transform: translateX(-50%) translateY(-6px
 .topbar .sub { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
 .topbar-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
 
-/* Mode discret : un oeil sans cadre, presque efface tant qu'on ne le
-   survole pas. Il doit se trouver quand on le cherche, pas attirer l'oeil
-   le reste du temps. Actif, il s'allume — sans quoi on peut oublier que
-   les montants sont masques et croire l'app cassee. */
 /* Pied du menu : les reglages d'affichage, a l'ecart des destinations.
    `margin-top: auto` les pousse tout en bas — d'ou le `flex: 1` sur le menu,
    sans quoi la rangee restait collee sous « Preferences ».
@@ -733,9 +591,6 @@ body.nav-open .burger span::after  { transform: translateX(-50%) translateY(-6px
   stroke-linecap: round; stroke-linejoin: round;
 }
 
-/* L'œil qui remplace un montant masque. Il se dimensionne sur le texte
-   qu'il remplace : minuscule dans une cellule de tableau, grand dans le
-   chiffre de tete, sans un seul reglage par endroit. */
 svg.oeil-masque {
   width: 1.05em; height: 1.05em; vertical-align: -.15em; display: inline-block;
   fill: none; stroke: currentColor; stroke-width: 1.7;
@@ -743,23 +598,13 @@ svg.oeil-masque {
   opacity: .72;
 }
 
-/* La barre se trace au lieu d'apparaitre : le geste dit « je ferme »,
-   et le retour en arriere l'efface dans l'autre sens. */
 :is(.btn-oeil, .btn-oeil-entete) .o-barre {
   stroke-dasharray: 22; stroke-dashoffset: 22;
   transition: stroke-dashoffset .22s ease;
 }
 :is(.btn-oeil, .btn-oeil-entete)[aria-pressed="true"] .o-barre { stroke-dashoffset: 0; }
-/* Oeil barre : la pupille s'efface, sinon les traits se telescopent. */
 :is(.btn-oeil, .btn-oeil-entete)[aria-pressed="true"] .o-pupille { opacity: 0; transition: opacity .15s; }
 
-/* Les cours se rafraichissent seuls au chargement. Un bouton d'action
-   promettait donc un travail deja fait, et deux gros boutons encadres
-   occupaient le coin de l'ecran pour rien. On affiche l'etat — une
-   pastille et l'anciennete — et c'est ce texte qu'on clique pour forcer
-   une mise a jour. L'information d'abord, l'action si besoin. */
-/* Alignee a droite, au-dessus des tuiles : elle date les chiffres qui
-   suivent sans leur voler la premiere ligne du regard. */
 .barre-etat { display: flex; justify-content: flex-end; margin: -8px 0 -10px; }
 
 .etat-cours {
@@ -777,17 +622,12 @@ svg.oeil-masque {
   width: 6px; height: 6px; border-radius: 50%; flex: none;
   background: var(--muted);
 }
-/* Vert : les cours datent de moins d'un quart d'heure. */
 .etat-cours.frais .pt { background: var(--pos, var(--series-2)); }
-/* Ambre : ils vieillissent — cliquer les rafraichit. */
 .etat-cours.tiede .pt { background: var(--warn, #d9a441); }
-/* Rouge eteint : passerelle absente, aucun cours n'arrivera. */
 .etat-cours.hs .pt { background: var(--neg, #d4574e); opacity: .7; }
 .etat-cours.encours .pt { animation: pouls 1s ease-in-out infinite; }
 @keyframes pouls { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 
-/* Discret au repos, franc au survol : la commande ne doit pas attirer l'oeil
-   tant que les cours sont frais, mais se laisser trouver quand ils coincent. */
 .etat-maj { font-size: 13px; line-height: 1; opacity: .45; transition: opacity .15s; }
 @media (hover: hover) { .etat-cours:hover .etat-maj { opacity: 1; } }
 .etat-cours.tiede .etat-maj, .etat-cours.hs .etat-maj { opacity: .9; }
@@ -845,15 +685,11 @@ h1, h2, h3,
   font-family: var(--font-titre);
 }
 
-/* Un montant se lit en colonne : chiffres de largeur fixe et léger
-   resserrement, comme sur un carnet d'ordres. */
 .t-value, .hero-value, .acct-value, .jour-eur, .dep-somme,
 td, th, .sb-net strong {
   font-variant-numeric: tabular-nums;
 }
 .t-value { letter-spacing: -.02em; }
-
-/* ---------------- Boutons & champs ---------------- */
 
 /* Safari iOS peint le texte des <button> en bleu, comme un lien, et le fait
    par `-webkit-text-fill-color` — qui l'emporte sur `color`. Depuis que les
@@ -881,9 +717,6 @@ a[href^="tel:"], a[x-apple-data-detectors] {
   padding: 8px 14px; border-radius: var(--radius-sm);
   border: 1px solid transparent; background: var(--text-primary); color: var(--page);
   cursor: pointer; transition: opacity .12s, background .12s;
-  /* Un lien peut porter cette classe : dans un en-tete de carte, un lien nu au
-     milieu de boutons se lisait comme un oubli. Il faut alors lui retirer le
-     soulignement et le centrer, ce qu'un bouton fait de lui-meme. */
   text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
 }
 @media (hover: hover) { .btn:hover { opacity: .85; } }
@@ -903,9 +736,6 @@ a[href^="tel:"], a[x-apple-data-detectors] {
    travail. Une action qui remplace douze gestes doit occuper la largeur des
    douze. */
 .btn.pleine { display: block; width: 100%; padding: 11px 14px; font-size: 13.5px; }
-/* Le rouge de la palette est calibre pour du texte sur fond sombre ; en
-   aplat sous du blanc il ne donnait que 3,72 de contraste. Assombri, il
-   passe a 4,8 en sombre et 6,1 en clair. */
 .btn.danger { background: color-mix(in oklab, var(--critical) 90%, #000); color: #fff; }
 .btn.icon { padding: 4px 8px; background: transparent; color: var(--muted); border-color: transparent; font-size: 14px; }
 @media (hover: hover) { .btn.icon:hover { color: var(--critical); background: var(--surface-2); } }
@@ -927,11 +757,6 @@ a[href^="tel:"], a[x-apple-data-detectors] {
    sur celle qui ne fait que reporter. Six suffisent : 34 px pour le plus petit
    des boutons-icones, contre 24 demandes. */
 .btn.icon::after { content: ''; position: absolute; inset: -6px; }
-/* Une croix qui supprime se voit avant qu'on la survole. Grise au repos, elle
-   se confondait avec le reste du mobilier : on ne trouvait pas comment
-   retirer une ligne, et on la découvrait par accident. Rouge et discrète, pas
-   rouge et criarde — dans un tableau de douze lignes, douze aplats rouges
-   feraient un écran d'alerte. */
 .btn.icon:is([data-action^="del-"], [data-action^="supprimer"], [data-action^="retirer"]) {
   color: color-mix(in oklab, var(--critical) 72%, var(--muted));
 }
@@ -939,10 +764,6 @@ a[href^="tel:"], a[x-apple-data-detectors] {
   color: #fff; background: color-mix(in oklab, var(--critical) 90%, #000);
 } }
 
-/* La croix qui vide le champ actif. Elle flotte au-dessus de lui : posee
-   dans les gabarits, il aurait fallu la repeter soixante-treize fois et elle
-   aurait elargi chaque colonne de tableau. Le champ gagne une reserve a
-   droite pendant qu'elle est la, pour que le texte ne passe pas dessous. */
 .champ-vider {
   position: fixed; z-index: 60;
   width: 20px; height: 20px; padding: 0;
@@ -953,7 +774,6 @@ a[href^="tel:"], a[x-apple-data-detectors] {
   box-shadow: 0 0 0 1px var(--border-strong);
 }
 @media (hover: hover) { .champ-vider:hover { color: var(--critical); box-shadow: 0 0 0 1px var(--critical); } }
-/* Les fleches natives du champ nombre occupent la meme place que la croix. */
 input.champ-vidable::-webkit-outer-spin-button,
 input.champ-vidable::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input.champ-vidable[type="number"] { -moz-appearance: textfield; }
@@ -973,30 +793,11 @@ input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
 
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 11.5px; color: var(--text-secondary); font-weight: 550; }
-/* Une valeur qui se lit sans se regler, a la place d'un menu.
-
-   Les liquidites traversent la projection a plat : c'est une constante, pas un
-   reglage, donc elle n'a pas de selecteur. Elle garde la place et l'aplomb d'un
-   selecteur pour que les poches se lisent en colonne, mais pas son cadre, qui
-   promettrait qu'on peut la changer. */
 .valeur-figee {
   margin: 0; align-self: start; padding: 7px 0;
   font-size: 13px; color: var(--text-secondary); font-style: italic;
 }
 
-/* Un champ se dimensionne pour ce qu'il reçoit, pas pour la carte qui le
-   contient : un montant ou une date n'a aucune raison de faire 700 px de
-   large. Les champs de texte libre gardent de la place, les tableaux sont
-   exclus (une colonne doit bien remplir sa cellule). */
-/* La largeur d'un champ est une indication : elle annonce ce qu'on attend.
-   Un plafond unique par type d'entree ne suffit pas — « 5 » et « 1 234,56 »
-   sont tous deux des nombres, un ISIN et un nom de fonds tous deux du texte.
-   Trois regles, de la plus precise a la plus generale.
-
-   Elles vont du general au precis, et l'ordre compte : a specificite egale,
-   c'est la derniere qui gagne.
-
-   1. Du texte libre, un nom ou une note : la place lui sert vraiment. */
 /*      Un menu deroulant sait deja quelle largeur il lui faut : celle de sa
         plus longue option. C'est `.field`, colonne flex, qui l'etirait de
         force sur toute la carte — d'ou « 1 000 € » dans une boite de 320 px.
@@ -1038,12 +839,7 @@ input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
    `.field select`, c'est l'ordre qui tranche, et une classe nue perdrait. */
 select.menu-serre { max-width: min(12em, 100%); }
 .field input[type="text"], .field input:not([type]) { max-width: 28em; }
-/*   2. Un nombre : de quoi lire un montant a six chiffres et deux decimales,
-      separateur de milliers compris. Douze em en laissaient la moitie vide. */
 .field :is(input[type="number"], input[type="date"]) { max-width: 9em; }
-/*   3. Le champ declare lui-meme sa longueur : elle prime sur tout le reste.
-      Un ISIN fait douze caracteres, pas un de plus, et sa boite l'annoncait
-      pourtant large comme un nom de societe. */
 .field input[maxlength] { max-width: 11em; }
 table .field :is(input, select) { max-width: none; }
 
@@ -1071,17 +867,7 @@ table .field :is(input, select) { max-width: none; }
 .grid > .field :is(input, select, textarea) {
   max-width: none; width: 100%; align-self: stretch;
 }
-/* Pas de derogation pour le telephone : sous 375 px le conteneur est deja
-   plus etroit que ces plafonds, ils ne mordent plus. Un champ de nombre y
-   garde ses 9 em, ce qui reste une cible confortable et laisse voir le
-   libelle et sa valeur d'un seul coup d'oeil. */
 
-/* ---------------- Cartes ----------------
-   Une carte est une surface posée sur la page, pas un rectangle dessiné
-   dessus. Le dégradé très court en haut — deux pour cent de lumière sur les
-   premiers pixels — suffit à donner l'épaisseur ; au-delà on obtient un
-   panneau qui brille, ce qui vieillit mal. Le liseré clair du haut fait le
-   reste : c'est ainsi qu'une surface attrape la lumière. */
 .card {
   background:
     linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
@@ -1093,14 +879,6 @@ table .field :is(input, select) { max-width: none; }
   box-shadow: var(--shadow);
 }
 .card.tight { padding: 14px 16px; }
-/* Le titre porte la carte : à 14,5 px il se confondait avec le texte courant,
-   et une page de dix cartes se lisait comme une seule coulée grise. Quinze n'a
-   fait que la moitie du chemin. Entre un titre de page a 20 px et un corps a
-   13-14, il ne restait a 15 qu'un pixel et demi d'ecart avec ce qu'il annonce :
-   la hierarchie tenait par la graisse seule, et une graisse ne se lit pas de
-   loin. Seize px pose un vrai palier, 20 / 16 / 13,5, sans allonger aucun
-   en-tete — les vingt-six en-tetes de l'application gardent leur hauteur a
-   375 px, mesure faite. */
 .card-head {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 12px; margin-bottom: 14px;
@@ -1130,26 +908,14 @@ table .field :is(input, select) { max-width: none; }
   display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px;
 }
 
-/* Le second etage d'une carte : le meme sujet vu de plus pres.
-
-   Plus discret que le titre de la carte, et volontairement : ce n'est pas une
-   nouvelle question, c'est la meme posee au detail. La base annoncee en tete
-   vaut donc pour lui aussi, et c'est tout l'interet d'un seul cadre. */
 .sous-titre-carte {
   margin: 22px 0 10px; font-size: 12px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary);
   border-top: 1px solid var(--grid); padding-top: 16px;
 }
 
-/* L'etablissement sous le nom court d'une colonne de releve. Sur sa propre
-   ligne : cote a cote, les deux mots doubleraient la largeur d'une colonne
-   dont il y a une par compte. */
 .th-etab { display: block; font-weight: 500; font-size: 10.5px; color: var(--muted); }
 
-/* Un bouton qui a l'air d'un lien : pour l'action de recours au milieu d'une
-   phrase, la ou un bouton plein se disputerait l'attention avec celle qu'on veut
-   voir choisie. C'est un vrai <button> — l'action n'est pas une navigation — et
-   il n'en garde que le soulignement. */
 .lien-nu {
   padding: 0; border: 0; background: none;
   font: inherit; color: var(--accent); cursor: pointer;
@@ -1158,9 +924,6 @@ table .field :is(input, select) { max-width: none; }
 @media (hover: hover) { .lien-nu:hover { opacity: .75; } }
 .lien-nu:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 
-/* Un champ de fenetre qui se lit sans s'editer. Il porte la hauteur et
-   l'alignement d'une saisie, pour que la colonne des champs reste droite, mais
-   ni cadre ni fond : ce qui n'a pas de bordure ne se clique pas. */
 .champ-lecture {
   margin: 0; padding: 9px 2px; font-size: 13.5px;
   color: var(--text-secondary);
@@ -1187,9 +950,6 @@ table .field :is(input, select) { max-width: none; }
 .btn.icon.snap.snap-avenir { opacity: .3; }
 @media (hover: hover) { .btn.icon.snap.snap-avenir:hover { color: var(--muted); background: none; } }
 
-/* Un avertissement dans une fenetre : ce n'est pas une aide, c'est un fait sur
-   lequel on va agir. Il porte donc la couleur d'alerte et un filet a gauche,
-   au lieu du gris des bulles d'aide, qu'on apprend a ne plus lire. */
 .avert {
   margin: 0 0 14px; padding: 9px 12px;
   border-left: 3px solid var(--warning);
@@ -1209,10 +969,6 @@ table .field :is(input, select) { max-width: none; }
 .g-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .g-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .g-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-/* Cinq tuiles n'entrent pas dans quatre colonnes sans en laisser une seule,
-   orpheline, sur la rangee suivante. On laisse la grille choisir son compte
-   de colonnes selon la place, avec un plancher lisible. 172px : c'est ce qui
-   fait tenir les cinq de front dans la colonne de contenu d'un ecran 1280. */
 .g-auto { grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); }
 /* `align-items: start` : chaque carte prend sa hauteur, pas celle de sa
    voisine. Par defaut une grille etire ses elements, si bien que « Depenses du
@@ -1222,7 +978,6 @@ table .field :is(input, select) { max-width: none; }
 .g-hero { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
 .g-2-1 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 
-/* ---------------- Hero ---------------- */
 .hero {
   background: linear-gradient(180deg,
     color-mix(in oklab, var(--surface-2) 70%, var(--surface-1)), var(--surface-1));
@@ -1234,37 +989,21 @@ table .field :is(input, select) { max-width: none; }
   font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-secondary);
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-/* L'intitule reserve la place de sa variante la plus longue : « PATRIMOINE
-   NET » et « PATRIMOINE BRUT » n'ont pas la meme largeur, et la bascule
-   Net / Brut sautait d'un cote a l'autre a chaque clic — on visait un bouton
-   qui se derobe. 9,8em couvre « PATRIMOINE BRUT » en capitales interlettrees
-   (mesure : 109 px pour 11,5 px de corps), avec une marge pour une police de
-   systeme plus large. */
 .hero-label > span:first-child { min-width: 9.8em; }
-/* L'oeil du masquage, dans l'etiquette du haut. Il se pousse a droite pour ne
-   pas se coller a la bascule net/brut : deux commandes voisines de meme taille
-   se confondent, celle-ci n'a rien a voir avec l'autre. Sa cible de touche
-   fait 34 px de haut alors que le dessin en fait 16, sinon il serait
-   inatteignable au pouce. */
 .hero-oeil { margin-left: auto; padding: 9px; }
 .hero-oeil svg { width: 16px; height: 16px; }
 
-/* Version reduite du controle segmente : il vit dans une etiquette de 11 px,
-   il ne doit pas peser plus lourd que le mot qu'il accompagne. */
 .seg-mini { padding: 1px; }
 .seg-mini button {
   font-size: 10.5px; letter-spacing: .04em; padding: 2px 8px; border-radius: var(--radius-xs);
 }
 .hero-sous { font-size: 12px; margin-top: 2px; text-transform: none; letter-spacing: 0; }
 
-/* Fiche courte d'un bien immobilier, dans la fenêtre d'aperçu. */
 .bien { padding: 12px 0; border-bottom: 1px solid var(--grid); }
 .bien:last-child { border-bottom: none; }
 .bien-tete { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 .bien-tete b { margin-left: auto; font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bien .kv { margin: 0 0 10px; }
-/* Le prêt, modifiable depuis l'aperçu : léger renfoncement pour dire que ce
-   bloc se saisit, là où le reste de la fiche se lit. */
 .pret-vif {
   margin: 4px 0 12px; padding: 8px 10px;
   background: var(--surface-2); border-radius: var(--radius-sm);
@@ -1282,11 +1021,6 @@ table .field :is(input, select) { max-width: none; }
    montants : `font: inherit` neutralise le style que le navigateur impose
    aux <button>, et doit donc ceder ensuite a `.hero-value`. Place apres, il
    ramenait le patrimoine de 52 px a 14 px. */
-/* Le montant est un bouton : il masque les chiffres au clic. Son libelle ne se
-   selectionne donc pas.
-
-   C'est le meme reglage que sur les graphiques, et pour la meme raison : ce
-   qu'on touche pour agir ne doit pas se comporter comme du texte. */
 .val-masquable {
   background: none; border: none; padding: 0; cursor: pointer;
   color: inherit; font: inherit; letter-spacing: inherit; text-align: left;
@@ -1297,22 +1031,7 @@ table .field :is(input, select) { max-width: none; }
 @media (hover: hover) { .val-masquable:hover { opacity: .72; } }
 .val-masquable:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 
-/* Le gros montant en demi-gras plutot qu'en gras. A 52 px, le 700 donnait
-   l'aplat epais des tableaux de bord de gabarit ; un 600 tenu serre lit plus
-   moderne et laisse le chiffre respirer. C'est le reglage des applications de
-   courtage : la taille porte l'importance, pas l'epaisseur. */
 .hero-value { font-size: clamp(38px, 5vw, 54px); font-weight: 600; letter-spacing: -.035em; line-height: 1; margin: 8px 0 0; }
-/* La barre empilee des classes, au pied du hero. Elle remplace une courbe qui
-   redisait la carte d'evolution deux cents pixels plus bas : celle-ci ne redit
-   rien, elle decompose le chiffre juste au-dessus.
-
-   Segments jointifs, sans intervalle : c'est ce qui donne a lire « ces parts
-   font le tout ». Un espace entre eux aurait suggere des quantites separees,
-   et la somme des largeurs plus les espaces aurait depasse la piste.
-
-   Le dernier segment prend le reste de la place : les largeurs sont arrondies
-   au centieme de pourcent et pouvaient laisser un fil de piste nue au bout.
-   L'ecart absorbe se compte en sous-pixels. */
 .hero-barre {
   display: flex; height: 10px; border-radius: var(--radius-pill); overflow: hidden;
   background: var(--grid);
@@ -1342,40 +1061,26 @@ table .field :is(input, select) { max-width: none; }
    porte deja tout le sens, la couleur n'a rien a ajouter. */
 .dette { color: var(--text-secondary); }
 
-/* ---------------- Stat tiles ---------------- */
 .tile {
   background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 15px 16px; display: flex; flex-direction: column; gap: 5px;
   position: relative; overflow: hidden;
   transition: border-color .15s ease, transform .15s ease, background .15s ease;
 }
-/* Le filet de couleur ne borde plus la tuile, il la souligne : moins de
-   décor, et l'œil descend vers le chiffre au lieu de partir sur le côté. */
 .tile::before {
   content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
   background: var(--tile-color, var(--series-1));
   opacity: .85; transition: opacity .15s ease;
 }
-/* Une seule declaration par element. Ces trois regles existaient en deux
-   exemplaires a quarante lignes d'ecart, avec des valeurs contradictoires
-   (23/700 contre 24/620 pour le chiffre) : l'ecran rendait la FUSION des
-   deux, propriete par propriete, et retoucher l'un des exemplaires ne
-   changeait que la moitie du rendu. Valeurs retenues : le surtitre en
-   capitales efface (c'est l'etiquette, pas l'information), le chiffre a la
-   graisse commune des montants, la meta en 11,5 comme les sous-textes du
-   reste de la feuille. */
 .tile .t-label {
   font-size: 10.5px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
   color: var(--muted); display: flex; align-items: center;
 }
 .tile .t-value { font-size: 24px; font-weight: var(--fw-chiffre); letter-spacing: -.02em; line-height: 1.05; }
 .tile .t-meta { font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
-/* Tuile cliquable : mène à l'endroit où le chiffre se modifie */
 .tile-link {
   font: inherit; text-align: left; cursor: pointer; color: var(--text-primary);
 }
-/* Au survol, la tuile se soulève d'un cheveu et son filet s'affirme :
-   assez pour qu'on sente qu'elle répond, trop peu pour distraire. */
 @media (hover: hover) { .tile-link:hover {
   border-color: var(--border-strong);
   background: color-mix(in oklab, var(--tile-color, var(--series-1)) 5%, var(--surface-1));
@@ -1386,16 +1091,12 @@ table .field :is(input, select) { max-width: none; }
 .tile-link:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
-/* Le survol et le focus de la tuile vivent une fois, plus haut : leurs
-   doublons declaraient un focus d'une autre couleur, et c'etait le doublon
-   qui gagnait. L'anneau de focus est a l'accent partout dans l'application. */
 .tile .t-go {
   position: absolute; top: 11px; right: 12px; font-size: 15px; color: var(--muted);
   opacity: 0; transition: opacity .15s ease, transform .15s ease;
 }
 @media (hover: hover) { .tile-link:hover .t-go { opacity: 1; transform: translateX(2px); } }
 
-/* Signale la carte d'arrivée sans la figer dans un état permanent */
 @keyframes flash-target {
   0%, 100% { box-shadow: var(--shadow); }
   15%, 60% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 55%, transparent), var(--shadow); }
@@ -1403,14 +1104,8 @@ table .field :is(input, select) { max-width: none; }
 .flash-target { animation: flash-target 1.6s ease; border-radius: var(--radius); }
 @media (prefers-reduced-motion: reduce) { .flash-target { animation: none; outline: 2px solid var(--accent); } }
 
-/* Le second exemplaire des trois regles de tuile vivait ici. */
-
-/* ---------------- Barre de progression objectif ---------------- */
 .goal { display: flex; flex-direction: column; gap: 10px; }
 
-/* Autonomie financiere : une pile, pas un tableau. Trois colonnes dont une
-   note en toutes lettres reclamaient 606 px pour 311 disponibles, et les
-   montants, en derniere colonne, sortaient entierement de l'ecran. */
 .runway { list-style: none; margin: 14px 0 0; padding: 0; }
 .rw-ligne { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .rw-ligne:last-child { border-bottom: none; padding-bottom: 2px; }
@@ -1433,8 +1128,6 @@ table .field :is(input, select) { max-width: none; }
    propre vide. */
 .goal-top { display: flex; justify-content: flex-start; gap: 12px; align-items: baseline; }
 .goal-top b { font-size: 20px; letter-spacing: -.02em; }
-/* Le chiffre et sa legende cote a cote debordent sous 420 px : on autorise
-   le repli, la legende passe alors sous le chiffre. */
 .goal-top-empile { flex-wrap: wrap; gap: 2px 12px; }
 .goal-top-empile .muted { min-width: 0; font-size: 12.5px; }
 .goal-bar { height: 12px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; border: 1px solid var(--border); }
@@ -1449,18 +1142,12 @@ table .field :is(input, select) { max-width: none; }
    littéralement aucune couleur. */
 .goal-fill { height: 100%; border-radius: var(--radius-pill); background: var(--accent); }
 .goal-foot { display: flex; justify-content: flex-start; gap: 12px; font-size: 12px; color: var(--text-secondary); }
-/* La carte sans objectif : une ligne, pas un pavé. Elle n'annonce rien, elle
-   propose — donc elle ne prend que la hauteur d'une phrase, et l'invitation se
-   range à droite comme le chevron d'une ligne de compte. */
 .goal-vide {
   flex-direction: row; align-items: center; justify-content: space-between;
   gap: 12px; font-size: 13.5px; color: var(--text-secondary);
 }
 .goal-vide .muted { flex: none; }
 
-/* La ligne que la relance attend : un liseré ambre a gauche et un signe
-   dans l'intitule. Le liseré seul disparait des que le tableau defile
-   horizontalement — la colonne des mois est collante, le signe la suit. */
 tr.mois-attendu > td { background: color-mix(in oklab, var(--warning) 9%, transparent); }
 tr.mois-attendu > td.sticky-col { box-shadow: inset 3px 0 0 var(--warning); }
 .marque-attendu { margin-left: 6px; color: var(--warning); font-size: 12px; }
@@ -1469,9 +1156,6 @@ tr.mois-attendu > td.sticky-col { box-shadow: inset 3px 0 0 var(--warning); }
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .note-relance .btn { margin-left: auto; flex: none; }
 
-/* --- Reequilibrage -----------------------------------------------------
-   Le plan d'abord, en tete de page : c'est la seule chose actionnable, elle
-   etait a 1 900 px du haut derriere deux graphiques et trois tableaux. */
 .card.plan { border-color: color-mix(in oklab, var(--accent) 30%, var(--border)); }
 .plan-phrase {
   margin: 0 0 14px; font-size: 14px; line-height: 1.65;
@@ -1484,23 +1168,11 @@ tr.mois-attendu > td.sticky-col { box-shadow: inset 3px 0 0 var(--warning); }
 }
 .plan-cols ul { margin: 0; padding-left: 16px; line-height: 1.85; font-size: 13px; }
 
-/* La barre d'ecart, posee dans la ligne du tableau. Elle remplace un
-   graphique en barres groupees qui devenait illisible des que deux classes
-   differaient d'un facteur dix. Sa longueur se lit sur le plus grand ecart,
-   pas sur le plus gros montant : on compare des ecarts entre eux. */
-/* Une ligne par classe, pensee pour un telephone d'abord : c'est la que
-   l'application est utilisee. Six colonnes de tableau ne tiennent pas dans
-   375 px — la colonne la plus utile, l'ecart, sortait de l'ecran. Tout
-   s'empile ici, et rien ne defile lateralement a aucune largeur. */
-/* Le perimetre, annonce avant les chiffres qu'il conditionne. */
 .perimetre {
   margin: 0 0 12px; font-size: 12.5px; line-height: 1.6;
   color: var(--text-secondary);
 }
 .perimetre.exclues { margin-top: -6px; }
-/* En tete de page, hors carte : elle doit se lire comme une precision de portee
-   et non comme un titre. Un filet a gauche la rattache a ce qui suit, dans la
-   couleur de la marque puisqu'elle parle du perimetre de l'application. */
 .perimetre-tete {
   margin: 0; padding: 2px 0 2px 12px;
   border-left: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
@@ -1511,15 +1183,11 @@ tr.mois-attendu > td.sticky-col { box-shadow: inset 3px 0 0 var(--warning); }
    milieu d'un texte de 11 px. */
 dt .sub .mois-lien { font: inherit; color: inherit; }
 .reeq { list-style: none; margin: 4px 0 0; padding: 0; }
-/* Intitule de groupe dans la liste de reequilibrage. La tresorerie n'est pas
-   une classe d'actif : le filet et le titre disent le changement de nature,
-   la ou huit lignes identiques laissaient croire a huit classes. */
 .reeq-groupe {
   font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   color: var(--muted); padding: 2px 0 6px;
 }
 .reeq-groupe-suite { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border-strong, var(--border)); }
-/* Le premier element d'un groupe ne redouble pas le filet du titre. */
 .reeq-groupe + .reeq-ligne { padding-top: 2px; }
 
 .reeq-ligne { padding: 12px 0; border-bottom: 1px solid var(--border); }
@@ -1530,8 +1198,6 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
 .reeq-droite { flex: none; display: inline-flex; align-items: center; gap: 4px; }
 .reeq-droite .btn.icon.xs { padding: 2px 5px; font-size: 12px; }
 
-/* La jauge : la part reelle en barre, la cible en repere. On voit de quel
-   cote on s'ecarte sans comparer deux nombres. */
 .reeq-jauge {
   position: relative; height: 8px; margin: 8px 0 7px;
   border-radius: var(--radius-pill); background: var(--surface-2);
@@ -1553,22 +1219,6 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
    a dire quelque chose — la cible est atteinte, la seule nouvelle de la carte
    qui merite sa couleur. */
 .reeq-reel { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--radius-pill); }
-/* Un degrade de violet, des deux cotes de la cible.
-
-   Le chemin jusqu'ici valait la peine : bleu au depart — la teinte des
-   liquidites, qui n'avait rien a dire sur une jauge de cible — puis rouge et
-   ambre sur le depassement, faux tous les deux parce que detenir plus que sa
-   cible n'est pas un incident. Puis violet partout, et la page en comptait
-   treize d'un coup. Puis gris, ce qui etait juste mais eteint.
-
-   L'equilibre tient a la rarete, pas a l'absence : le violet reste sur ce qui
-   porte du sens visuel — ces jauges, l'onglet actif, le chevron — et quitte les
-   chiffres, qui n'ont pas besoin de couleur pour se lire. Un montant n'est
-   qu'un montant.
-
-   Meme degrade des deux cotes : le repere de cible est dessine sur la piste,
-   donc le cote se lit a la position de la barre. Le vert reste seul a annoncer
-   quelque chose, la cible atteinte. */
 .reeq-reel.sous, .reeq-reel.sur {
   background: linear-gradient(90deg,
     color-mix(in oklab, var(--accent) 55%, transparent), var(--accent));
@@ -1578,20 +1228,6 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
   position: absolute; top: -3px; bottom: -3px; width: 2px;
   background: var(--text-primary); opacity: .75; border-radius: 2px;
 }
-/* La jauge cliquable : meme dessin, un bouton dessous.
-
-   Elle ouvre les placements qu'elle compte, donc elle doit s'attraper au
-   pouce. Huit pixels de haut ne s'attrapent pas. La zone sensible s'etend
-   au-dessus et au-dessous par un pseudo-element, sans rien deplacer — mais
-   pas plus loin que les marges de la jauge : au-dessus vivent la croix de
-   retrait et le chevron de decoupe, au-dessous la liste deroulante de la
-   cible. Un debordement de deux pixels de plus et la barre volerait leurs
-   appuis. La largeur fait le reste du travail : on vise une bande de 300 px,
-   seule la hauteur est etroite.
-
-   Le survol eclaircit la piste, pas la barre : c'est la piste qui est le
-   bouton. Et il reste neutre, comme partout ailleurs dans l'app, le violet
-   etant garde pour ce qu'on decide. */
 .reeq-jauge.ouvrable {
   display: block; width: 100%; border: 0; padding: 0; cursor: pointer;
   -webkit-appearance: none; appearance: none;
@@ -1612,37 +1248,12 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
 /* Un arbitrage a faire, ni bon ni mauvais : la couleur de la page, pas celle
    d'une alerte. « A la cible » garde le gris de `.muted`, qui dit qu'il n'y a
    rien a lire de plus. */
-/* Ni rouge, ni violet : du texte.
-
-   Ces ecarts ont d'abord ete rouges, ce qui faisait d'une page ou rien ne va mal
-   la plus alarmante de l'application. Ils sont passes au violet, et le compte
-   etait alors de treize violets sur un ecran — l'onglet, quatre jauges, quatre
-   ecarts, deux montants de phrase, la liste du plan, le chevron. Une couleur de
-   marque employee partout ne marque plus rien.
-
-   La regle qui en sort : le violet dit ou l'on agit, une fois par chose. Il
-   reste donc sur l'onglet actif, les jauges et le chevron ; le chiffre, lui,
-   n'est qu'un chiffre. La jauge violette est juste au-dessus de l'ecart, elle
-   porte deja le signal pour cette ligne. */
 .reeq-ecart.a-faire { color: var(--text-secondary); }
 .reeq-ecart.a-faire b, .montant-plan { color: var(--text-primary); font-weight: 650; }
 
-/* Ce qu'il faut ajouter passe au vert : c'est le sens de la croissance, et le
-   geste qu'on vient chercher sur cette page. L'inverse — alleger, placer —
-   reste au neutre, parce qu'il n'annonce rien de mauvais : c'est la lecon des
-   allers-retours precedents, ou le rouge puis l'ambre faisaient d'un arbitrage
-   ordinaire une alerte. Une seule des deux directions se colore, donc la
-   couleur dit encore quelque chose. */
 .reeq-ecart.a-faire b.renfort, .montant-plan.renfort { color: var(--good-text); }
 .reeq-pied { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
 
-/* Les deux barres de role, empilees par classe. */
-/* Une cible se modifie : encore faut-il que ca se voie. Dans un tableau
-   editable, les champs sont volontairement transparents pour ne pas faire
-   grille de saisie — mais ici il n'y a qu'une colonne modifiable au milieu de
-   cinq colonnes calculees, et rien ne la designait. */
-/* Une cible se modifie : encore faut-il que ca se voie. Le champ garde une
-   bordure et un fond, au milieu de chiffres qui, eux, se calculent. */
 /* La cible se choisit dans une liste, plus au clavier : `width: auto` laisse le
    selecteur prendre la largeur de son plus long libelle, « 100 », au lieu des
    3,4 em taillees pour un champ de saisie. */
@@ -1660,18 +1271,9 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
   display: flex; height: 14px; border-radius: var(--radius-pill); overflow: hidden;
   background: var(--surface-2); gap: 2px;
 }
-/* La part du role dans la base, a l'interieur de la piste. La barre montrait
-   la composition et occupait donc toute la largeur : « Core » a 60,6 % et
-   « Satellite » a 23,4 % avaient exactement la meme longueur, ce qui affirmait
-   100 % a cote d'un pourcentage qui disait autre chose. La piste reste pleine,
-   ce bloc vaut la part, et les segments se repartissent dedans. */
 .role-part { display: flex; height: 100%; gap: 2px; border-radius: var(--radius-pill); overflow: hidden; }
 .role-barre i { display: block; height: 100%; background: var(--c, var(--series-1)); }
 .role-barre i.vide { width: 100%; background: var(--surface-2); }
-/* Deux dimensions dans une seule barre : la couleur porte la classe d'actif,
-   la hachure dit « titre en direct ». Une seconde couleur aurait laissé croire
-   à une autre classe ; un motif se lit comme une variante de la même chose, et
-   reste distinguable pour un œil qui confond les teintes. */
 .role-barre i.raye, .role-legende i.raye {
   background-image: repeating-linear-gradient(135deg,
     rgba(0,0,0,.34) 0 3px, transparent 3px 6px);
@@ -1704,8 +1306,6 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
 .role-legende span { display: inline-flex; align-items: center; gap: 5px; }
 .role-legende i { width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--series-1)); }
 
-/* Une ligne de liste : intitule a gauche, chiffres a droite, chevron.
-   Toute la ligne est le bouton. */
 .liste-mobile { display: none; }
 
 /* Une liste qui est la lecture principale, sur tous les ecrans. `.liste-mobile`
@@ -1716,32 +1316,15 @@ dt .sub .mois-lien { font: inherit; color: inherit; }
    une classe qui parlait de la premiere, et a repris `.liste-mobile`, invisible
    sur un ecran large. */
 .liste-principale { display: block; }
-/* Une ligne qui porte un dessin sous ses chiffres : le bouton passe en colonne,
-   et sa premiere rangee garde la mise en page d'une ligne ordinaire. */
 .mlist.mlist-empile { flex-direction: column; align-items: stretch; gap: 9px; }
 .mlist-empile .ml-haut { display: flex; align-items: center; gap: 12px; }
-/* Les poches du mois, empilees a l'horizontale. Meme forme que les barres de
-   role et de repartition : une piste arrondie, des segments colles, la couleur
-   qui dit la poche. Ici la largeur EST la part du total, donc les segments font
-   la piste entiere par construction. */
 .ml-poches {
   display: flex; height: 8px; border-radius: var(--radius-pill); overflow: hidden;
   background: var(--surface-2); gap: 2px;
 }
-/* La longueur de la barre vaut le total, rapporte au plus gros mois affiche ;
-   les segments a l'interieur valent la composition. Sans ce bloc, chaque mois
-   se normalisait sur lui-meme et les douze barres faisaient la meme longueur :
-   on lisait la repartition, jamais la taille. */
 .ml-part { display: flex; height: 100%; gap: 2px; border-radius: var(--radius-pill); overflow: hidden; }
 .ml-poches i { display: block; height: 100%; }
 
-/* Une ligne de tableau entiere ouvre sa fenetre d'edition.
-
-   La grille des depenses portait onze champs par ligne : elle se presentait
-   comme la surface de saisie, alors que la fenetre du mois fait tout ce que les
-   cases ne savent pas faire. Les cases se lisent maintenant, et c'est la ligne
-   qui ouvre — viser huit caracteres quand la ligne en fait mille est un peage
-   inutile. */
 tr.ligne-ouvre { cursor: pointer; }
 @media (hover: hover) { tr.ligne-ouvre:hover { background: var(--surface-2); } }
 tr.ligne-ouvre .mois-lien { pointer-events: none; }
@@ -1752,13 +1335,8 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
   font: inherit; color: var(--text-primary); text-align: left; cursor: pointer;
 }
 .mlist:last-child { border-bottom: none; }
-/* Ces lignes ne servent plus qu'au telephone : la carte du portefeuille les
-   emploie a toute largeur, parce que quatre montants soulignes de pointilles
-   invisibles ne disaient pas qu'ils ouvraient quelque chose. */
 .mlist-groupe { margin-top: 2px; }
 .mlist-groupe > .mlist:last-child { border-bottom: none; }
-/* Un lien d'en-tete de carte vers une autre vue. Il vivait en style en ligne a
-   deux endroits, avec deux couleurs a tenir d'accord. */
 .lien-vue { color: var(--series-1); text-decoration: none; }
 @media (hover: hover) { .lien-vue:hover { text-decoration: underline; } }
 /* Le mois en cours se repere dans la liste comme il se repere dans le
@@ -1779,10 +1357,6 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
 .ml-chiffres span { font-size: 12px; font-weight: 600; }
 .ml-chev { flex: none; color: var(--muted); font-size: 18px; line-height: 1; }
 
-/* La bascule se fait au telephone seulement : au-dessus, l'ecran est assez
-   large pour un tableau, et voir toutes ses lignes d'un coup a de la valeur.
-   Elle etait tombee dans le bloc 900 px, donc une tablette et une petite
-   fenetre de bureau perdaient le tableau sans raison. */
 @media (max-width: 767px) {
   .liste-mobile { display: block; }
   .large-seulement { display: none; }
@@ -1809,9 +1383,6 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
 .flow-bar { height: 9px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
 .flow-bar div { height: 100%; border-radius: var(--radius-pill); }
 .flow-val { font-size: 13.5px; font-variant-numeric: tabular-nums; }
-/* La part du poste dans le total. Elle est a droite du montant et non a sa
-   place : « 1 890 € » et « 77 % » ne repondent pas a la meme question, et sur un
-   loyer on veut les deux. */
 .flow-pct { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 
 /* Une ligne qui porte son cout annuel doit se donner a toucher.
@@ -1837,17 +1408,8 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
   outline: 2px solid var(--accent); outline-offset: 1px; background: var(--surface-2);
 }
 
-/* Le dernier mot et le « ? » qui le suit ne se separent pas. Un rond d'aide
-   tombe seul sur la ligne suivante des que la phrase finit pres du bord, et il
-   se lit alors comme un bouton orphelin plutot que comme la fin d'un texte.
-   Raccourcir la phrase ne suffit pas : il suffirait d'un montant plus long pour
-   que le probleme revienne. */
 .sans-veuve { white-space: nowrap; }
 
-/* ---------------- Interrupteurs ----------------
-   Un reglage a deux etats se lit a la position d'un curseur, pas au mot d'un
-   menu deroulant. « Signaler / Ignorer » demandait deux gestes — ouvrir, puis
-   choisir — pour une chose qui en vaut un, et son etat se lisait en lisant. */
 .bascules { display: flex; flex-direction: column; }
 .bascule {
   display: flex; align-items: center; gap: 14px; width: 100%;
@@ -1885,9 +1447,6 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
   .bascule-piste, .bascule-piste i { transition: none; }
 }
 
-/* Toute la liste ouvre le panneau qui la montre en entier. Un bouton, pour que
-   le clavier et le lecteur d'ecran y arrivent aussi, mais sans aucune allure de
-   bouton : c'est la carte qu'on touche, pas une commande. */
 .flow-lien {
   display: block; width: 100%; text-align: left;
   background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit;
@@ -1896,11 +1455,6 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
 @media (hover: hover) { .flow-lien:hover .flow-val { color: var(--accent); } }
 .flow-lien:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
-/* ---------------- Partage du revenu ----------------
-   Un total, sa barre empilee, sa legende. La forme dit ce que quatre barres
-   paralleles taisaient : les parts font le tout, elles ne sont pas a cote de
-   lui. Le montant est deliberement plus petit que celui de la carte voisine —
-   c'est un cadre, pas le chiffre du mois. */
 .flux-total {
   display: flex; align-items: baseline; gap: 8px; width: 100%;
   background: none; border: none; padding: 2px 0 12px;
@@ -1908,9 +1462,6 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
 }
 .flux-total b { font-size: 24px; font-weight: var(--fw-chiffre); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .flux-total span { font-size: 12.5px; }
-/* Le chevron dit que ça s'ouvre. Un grand montant se lit comme un titre, et
-   celui-ci est la seule porte vers les sources de revenus : sans ce signal, on
-   ne devine pas qu'on peut y ajouter une source. */
 .flux-chev { margin-left: auto; color: var(--muted); font-size: 18px; line-height: 1; }
 @media (hover: hover) { .flux-total:hover b { color: var(--accent); } }
 @media (hover: hover) { .flux-total:hover .flux-chev { color: var(--text-secondary); } }
@@ -1930,7 +1481,6 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
 @media (hover: hover) { .flux-lien:hover .repart-nom { color: var(--accent); } }
 .flux-lien:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
-/* ---------------- Tableaux ---------------- */
 .table-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th {
@@ -1942,13 +1492,6 @@ th:first-child, td:first-child { text-align: left; }
 td { padding: 9px 10px; border-bottom: 1px solid var(--grid); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (hover: hover) { tbody tr:hover td { background: color-mix(in oklab, var(--surface-2) 70%, transparent); } }
 
-/* La ligne qu'un reglage designe, marquee sans un mot. Un libelle dans la
-   premiere colonne elargit celle-ci, donc repousse les dernieres hors de
-   l'ecran : c'est l'encre qui designe, jamais un mot de plus. L'accent porte
-   ici du texte et non un aplat, il franchit donc le seuil de 4,5:1 sur les
-   trois fonds et dans les deux themes, ce qu'un controle calcule.
-   L'annee suit le libelle : « 30 ans » en accent et « · 2056 » en gris
-   couperait en deux une seule et meme etiquette. */
 tr.jalon-retenu td:first-child,
 tr.jalon-retenu td:first-child .muted { color: var(--accent); }
 tr.jalon-retenu td:first-child { font-weight: 650; }
@@ -1969,8 +1512,6 @@ td.prose {
   white-space: normal; text-align: left;
   min-width: 16em; max-width: 26em; overflow-wrap: anywhere;
 }
-/* L'en-tete suit sa colonne : un intitule aligne a droite au-dessus d'un texte
-   aligne a gauche se lit comme une erreur de gabarit, et il l'est. */
 th.prose { text-align: left; }
 
 /* Pastille de couleur devant un libelle : elle rattache la ligne du tableau a
@@ -1984,13 +1525,8 @@ th.prose { text-align: left; }
   background: var(--c, var(--muted));
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--c, var(--muted)) 35%, transparent);
 }
-/* La precision passe a la ligne sous le libelle, pas sous la pastille : elle
-   se decale de la largeur de celle-ci plus sa marge. */
 td.name .teinte ~ .sub { padding-left: 17px; }
 td .sub, dt .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
-/* Une etiquette ne se coupe jamais : serree par un texte voisin qui passe a
-   la ligne, « 10,84 % » se cassait entre le nombre et son signe, et la pilule
-   doublait de hauteur. Elle garde sa largeur et laisse le voisin ceder. */
 .tag {
   display: inline-block; padding: 2px 8px; border-radius: var(--radius-pill); font-size: 10.5px; font-weight: 600;
   background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); letter-spacing: .01em;
@@ -1999,42 +1535,24 @@ td .sub, dt .sub { display: block; font-size: 11px; color: var(--muted); font-we
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 7px; vertical-align: baseline; }
 
 table.editable td { padding: 4px 5px; }
-/* Un champ de tableau doit se voir comme un champ, meme sans souris.
-
-   Il etait entierement transparent et ne se revelait qu'au survol. Sur un
-   telephone il n'y a pas de survol : un montant modifiable y etait donc
-   indiscernable d'un montant affiche, et il fallait deviner qu'on pouvait le
-   toucher. C'est ce qui est arrive sur la table du cash a investir — elle etait
-   editable depuis toujours, personne ne pouvait le savoir.
-
-   Un pointille sous le champ, et rien de plus : le cadre plein reste pour le
-   survol et le focus. Le meme signe que sous le montant reglable de Budget,
-   pour que « on peut toucher ça » se lise partout de la meme facon. */
 table.editable input, table.editable select {
   padding: 5px 7px; font-size: 12.5px; border-color: transparent; background: transparent;
   border-bottom: 1px dashed color-mix(in oklab, currentColor 38%, transparent);
 }
-/* Un champ derive n'est pas a remplir : il montre ce que la resolution a trouve.
-   Pas de pointille, donc, il ne promet pas une saisie. */
 table.editable input.derived { border-bottom-color: transparent; }
 @media (hover: hover) { table.editable input:hover, table.editable select:hover { border-color: var(--border-strong); background: var(--surface-1); } }
 table.editable input:focus, table.editable select:focus { background: var(--surface-1); }
 table.editable td.name input { text-align: left; font-weight: 550; }
 
-/* La fenetre des revenus : la periode se range SOUS son montant. */
 table.editable select.rev-periode {
   display: block; width: auto; max-width: 100%; margin: 4px 0 0 auto;
 }
-/* La case « montant estime » n'est pas un champ de tableau : le pointille
-   des champs editables la deguisait en saisie vide, un rectangle en tirets
-   au-dessus de son libelle. */
 table.editable .rev-estime {
   display: flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 4px;
 }
 table.editable .rev-estime input[type="checkbox"] {
   width: auto; margin: 0; padding: 0; border: none; accent-color: var(--accent);
 }
-/* La fenetre des revenus : une liste de fiches, chaque champ nomme. */
 .rev-liste { display: flex; flex-direction: column; gap: 14px; }
 .rev-source {
   border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -2043,8 +1561,6 @@ table.editable .rev-estime input[type="checkbox"] {
 .rev-tete { display: flex; align-items: flex-end; gap: 8px; }
 .rev-nom { flex: 1; min-width: 0; }
 .rev-suppr { flex: none; margin-bottom: 2px; }
-/* Les champs chiffres se rangent en grille souple : trois de front sur un
-   ecran large, deux ou un sur un telephone, sans jamais deborder. */
 .rev-champs {
   display: grid; gap: 10px; margin-top: 10px;
   grid-template-columns: repeat(auto-fit, minmax(9em, 1fr));
@@ -2054,8 +1570,6 @@ table.editable .rev-estime input[type="checkbox"] {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   margin-top: 10px; font-size: 11.5px;
 }
-/* La case n'est pas un champ de saisie : ni pointille, ni largeur imposee —
-   c'est le defaut qu'elle avait quand elle vivait dans le tableau. */
 .rev-estime { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--muted); }
 .rev-estime input[type="checkbox"] {
   width: auto; margin: 0; padding: 0; border: none; accent-color: var(--accent);
@@ -2066,36 +1580,22 @@ table.editable .rev-estime input[type="checkbox"] {
 }
 .rev-total b { margin-left: auto; font-size: 16px; font-variant-numeric: tabular-nums; }
 
-/* champ dérivé (symbole résolu depuis l'ISIN) : présent mais discret */
 table.editable input.derived { color: var(--text-secondary); font-size: 12px; }
 table.editable input.bad { border-color: var(--critical); background: color-mix(in oklab, var(--critical) 10%, transparent); }
 .sym-cell { white-space: nowrap; }
 .sym-cell input { width: calc(100% - 26px); display: inline-block; }
-/* Une ligne sans ISIN n'a pas le bouton de re-resolution. L'input gardait
-   quand meme sa largeur de 100 % moins la place du bouton, dans une cellule
-   alignee a droite : son bord gauche tombait 25 px plus loin que celui des
-   autres lignes. Seul dans sa cellule, il la prend entiere. */
 .sym-cell input:only-child { width: 100%; }
 .btn.icon.xs { padding: 2px 5px; font-size: 12px; vertical-align: middle; }
 @media (hover: hover) { .btn.icon.xs:hover { color: var(--accent); } }
 
 .sticky-col { position: sticky; left: 0; background: var(--surface-1); z-index: 2; }
 @media (hover: hover) { tbody tr:hover .sticky-col { background: color-mix(in oklab, var(--surface-2) 92%, var(--surface-1)); } }
-/* La meme chose par l'autre bord, pour la colonne qui porte le total.
-
-   Un tableau large qui defile montre ses premieres colonnes et cache la
-   derniere : sur l'evolution du patrimoine, six colonnes pour 311 px de carte,
-   le total etait hors de l'ecran a l'ouverture — le seul chiffre que la courbe
-   au-dessus raconte, et le seul qu'on ne voyait pas. Epingle a droite, il reste
-   la pendant qu'on fait defiler ses parts, et le filet a sa gauche dit d'ou il
-   se detache. Sur grand ecran le tableau tient : la regle ne change rien. */
 .sticky-fin {
   position: sticky; right: 0; background: var(--surface-1); z-index: 2;
   box-shadow: inset 1px 0 0 var(--grid);
 }
 @media (hover: hover) { tbody tr:hover .sticky-fin { background: color-mix(in oklab, var(--surface-2) 92%, var(--surface-1)); } }
 
-/* ---------------- Graphiques ---------------- */
 .chart { position: relative; width: 100%; }
 /* `overflow: visible` laisse les etiquettes d'axe deborder du viewBox, ce
    qui est voulu. Mais il laissait aussi une serie hors echelle peindre par
@@ -2123,16 +1623,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   -webkit-touch-callout: none;
 }
 
-/* Il ne suffit pas de le dire sur le graphique.
-   Un appui long sur une zone declaree non selectionnable ne renonce pas : le
-   navigateur remonte jusqu'au premier ancetre qui accepte la selection, et
-   surligne tout son contenu. L'ancetre etait la carte, d'ou le graphique
-   entier en bleu malgre la regle ci-dessus.
-
-   On coupe donc a la racine, sur la carte qui porte un graphique, et on rend la
-   selection a ce qui vaut la peine d'etre copie : les chiffres des listes
-   cle-valeur, les tableaux, les textes d'aide. Un appui long sur le dessin n'a
-   plus rien a se mettre sous la dent, ni chez lui ni au-dessus. */
 .card:has(> .chart), .card:has(> * > .chart) {
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
@@ -2160,16 +1650,8 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   padding: 9px 11px; box-shadow: var(--shadow); font-size: 12.5px; min-width: 170px;
 }
 .tt-head { font-weight: 650; margin-bottom: 6px; font-size: 12.5px; }
-/* L'etablissement et l'enveloppe, sous le nom : le titre garde le poids, la
-   provenance passe en second plan. Elle remonte contre le titre, dont la marge
-   servait a separer du premier montant. */
 .tt-sous { margin: -4px 0 6px; font-size: 11px; color: var(--text-secondary); }
 
-/* L'intitule triable de la carte du jour. Le bouton herite de la couleur et de
-   la taille de l'en-tete : c'est un intitule qui repond au clic, pas un bouton
-   pose dans un en-tete. La fleche parait a l'etat trie, du meme cote que celle
-   du tableau des lignes, pour que le geste se reconnaisse d'une carte a
-   l'autre. */
 .tri-jour { display: inline-flex; align-items: baseline; gap: 4px; }
 /* `nowrap` : la fleche de tri est un `::after` dont le contenu commence par une
    espace, et cette espace est secable. Dans la colonne « Poids », large de 50 px
@@ -2185,8 +1667,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
   white-space: nowrap;
 }
-/* Sous le garde-fou : au doigt, un survol reste peint apres l'appui, et
-   l'intitule paraissait alors trie alors qu'on l'avait seulement touche. */
 @media (hover: hover) { .tri-jour .th-tri:hover { color: var(--text-primary); } }
 .tri-jour.desc .th-tri::after { content: ' ↓'; }
 .tri-jour.asc  .th-tri::after { content: ' ↑'; }
@@ -2200,15 +1680,11 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-/* L'echantillon d'une bande de scenario : un trait pointille, comme celui du
-   graphique. Un carre plein aurait annonce une serie de plus, alors que c'est
-   le meme calcul a deux rendements pres. */
 .legend i.legend-bande {
   width: 16px; height: 0; border-radius: 0;
   border-top: 1px dashed var(--muted);
 }
 
-/* ---------------- Fenêtre d'aperçu ---------------- */
 .modal {
   position: fixed; inset: 0; z-index: 100;
   display: grid; place-items: center; padding: 20px;
@@ -2237,16 +1713,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   .modal { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 .modal[hidden] { display: none; }
-/* Les durees d'ouverture et de fermeture d'une fenetre, declarees une fois.
-
-   Le rapport entre les deux ne change pas : la sortie reste plus rapide que
-   l'entree. A l'aller on decouvre, au retour on a fini et rien ne se lit en
-   route — c'est la regle deja retenue pour la barre du haut, 200 ms a l'aller
-   et 260 au retour.
-
-   Declarees ici parce qu'elles vivaient a quatre endroits, deux entrees et deux
-   sorties, et qu'un ralentissement applique a trois d'entre elles aurait donne
-   une fenetre qui s'ouvre lentement et se ferme sec. */
 :root {
   --duree-fenetre: .34s;
   --duree-fenetre-sortie: .26s;
@@ -2282,11 +1748,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
      fichier l'applique deja aux bandes collantes du haut. */
   will-change: transform, opacity;
 }
-/* L'en-tete d'une fiche ne se selectionne pas : c'est du mobilier, un titre, un
-   sous-titre et une croix. Un appui long les attrapait tous les trois d'un coup,
-   et on se retrouvait avec l'en-tete surlignee sans avoir rien demande. Le corps
-   de la fiche, lui, reste selectionnable — c'est la que vivent les montants
-   qu'on peut vouloir copier. */
 .modal-head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
   padding: 16px 18px 12px; border-bottom: 1px solid var(--grid);
@@ -2313,26 +1774,12 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   padding: 12px 18px 16px; border-top: 1px solid var(--grid);
   display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
 }
-/* La sortie definitive d'une fiche : supprimer, tout en bas, apres un filet.
-
-   Le filet et la distance font tout le travail. Ce bouton ne se cherche pas en
-   ouvrant une fiche, et il ne doit surtout pas se trouver sous le doigt de
-   quelqu'un qui vise « Enregistrer » : le pied de la fenetre est reserve aux
-   gestes courants, celui-ci vit au bout du contenu, apres le dernier champ.
-
-   Il ne s'etire pas sur toute la largeur. Un bouton pleine largeur se lit comme
-   l'action principale de l'ecran, ce qu'il n'est pas — c'est l'action qu'on ne
-   fait qu'une fois, et jamais par distraction. */
 .fiche-danger {
   margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--grid);
 }
 .fiche-danger .hint { margin: 8px 0 0; }
 
-/* Champs de saisie dans une fenêtre d'aperçu */
 .modal-champs { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 4px; }
-/* Deux champs sur une ligne : une quantite et un prix unitaire forment un
-   produit, les separer en deux lignes cassait la lecture. A 375 px ils tiennent,
-   chacun sur la moitie de la fenetre. */
 .modal-champs.champs-cote { flex-direction: row; gap: 10px; }
 .modal-champs.champs-cote > .field { flex: 1; min-width: 0; }
 .modal-champs.champs-cote input { max-width: 100%; }
@@ -2342,22 +1789,9 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    sinon il partirait seul au bord. Discret comme une unite, jamais comme une
    valeur — c'est le nombre qu'on lit, pas la monnaie. */
 .champ-unite { color: var(--muted); font-size: 12.5px; margin-left: 6px; flex: none; }
-/* Un peu plus large que la version compacte, sans pour autant s'étaler sur
-   toute la carte : de quoi lire un montant à six chiffres. */
 .champ-large { max-width: 11em; margin-left: 0; }
-/* Un champ dont la longueur est connue d'avance : un numero de compte, un IBAN.
-   La regle generale des champs de texte libre leur donnait 28 em, soit une ligne
-   entiere pour vingt-sept caracteres au plus. La largeur d'un champ annonce ce
-   qu'on attend, c'est le principe pose plus haut ; elle mentait ici. */
 .champ-court { max-width: 17em; }
 
-/* Le reste a verser sur un livret plafonne.
-
-   La jauge prend la teinte des liquidites, celle que ce compte porte partout
-   ailleurs dans l'application : un livret est du cash, sa barre doit se lire
-   comme telle. Elle passe a l'ambre quand le plafond est atteint — non pas pour
-   alerter, il n'y a rien de mauvais a remplir un livret, mais parce que c'est le
-   moment ou l'information change de sens : on ne peut plus verser. */
 .plafond { margin-top: 8px; max-width: 22em; }
 .plafond-jauge {
   height: 5px; border-radius: var(--radius-pill); background: var(--surface-2);
@@ -2366,11 +1800,8 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .plafond-jauge > i { display: block; height: 100%; background: var(--series-1); }
 .plafond.plein .plafond-jauge > i { background: var(--warning); }
 
-/* Un tableau de trois colonnes ne doit pas s'étirer sur toute la carte :
-   il en resterait un champ de saisie large comme la moitié de l'écran. */
 .table-compacte { max-width: 38em; }
 
-/* Carte entièrement cliquable (l'objectif) */
 .card-link {
   font: inherit; text-align: left; color: inherit; cursor: pointer; position: relative;
   transition: transform .12s, border-color .12s;
@@ -2379,11 +1810,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card-link .t-go { top: 15px; right: 16px; }
 
-/* Carte entierement cliquable qui contient deja des boutons — les « ? »
-   d'aide. Un <button> autour de tout serait du HTML invalide : le navigateur
-   refermerait l'exterieur au premier bouton interieur et disloquerait la
-   carte. On pose donc un bouton transparent par-dessus, et le contenu laisse
-   passer les clics ; seuls les « ? » les reprennent. */
 .card-cliquable { position: relative; }
 .card-couvre {
   position: absolute; inset: 0; width: 100%; padding: 0;
@@ -2392,9 +1818,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 @media (hover: hover) { .card-couvre:hover { background: color-mix(in oklab, var(--surface-2) 50%, transparent); } }
 .card-couvre:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .card-cliquable > *:not(.card-couvre) { position: relative; pointer-events: none; }
-/* Ce qui garde son propre geste malgré la couverture : les « ? » d'aide, le
-   montant qui masque les chiffres, les bascules net/brut, les plages et l'œil
-   du masquage. */
 .card-cliquable :is(.aide, .val-masquable, .segmented, .plage, .btn-oeil,
                     .hero-delta-reglable, .rappel-sorties,
                     input, select, textarea) { pointer-events: auto; }
@@ -2414,20 +1837,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   border: 0; background: none; padding: 0; margin: 0; font: inherit;
   color: inherit; text-align: left; cursor: pointer;
 }
-/* Le montant est centre sous son intitule. Le pointille prend la largeur de
-   « Objectif mensuel », soit le double de « 1 000 € » : cale a gauche, le
-   chiffre semblait avoir glisse dans un champ trop grand pour lui.
-
-   Il porte l'accent, intitule compris, et un chevron. Le pointille gris seul ne
-   se voyait pas : « on ne voit pas bien ou on peut changer l'objectif », capture
-   a l'appui, et c'etait deja la deuxieme tentative apres un champ etiquete au
-   bas de la carte. Le troisieme essai ne cherche donc plus un signal discret, il
-   reprend celui qui a marche a deux cartes d'ici — le violet et le chevron du
-   montant des revenus, poses pour la meme remarque.
-
-   L'accent sur trois ecarts alignes dont un seul est reglable : c'est
-   exactement ce que la palette lui reserve, « actif, cliquable, selectionne ».
-   Les deux voisins restent en gris, et c'est ce contraste qui designe. */
 .hero-delta-reglable > span { color: var(--accent); }
 .hero-delta-reglable > b {
   color: var(--accent);
@@ -2435,8 +1844,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   text-align: center;
   display: inline-flex; align-items: baseline; gap: 3px; justify-content: center;
 }
-/* Le chevron, plus petit que le montant et un cran en retrait : il annonce
-   l'ouverture, il ne se lit pas avec le chiffre. */
 .hero-delta-reglable .hero-delta-chev {
   font-size: 12px; font-weight: 600; opacity: .75; line-height: 1;
 }
@@ -2451,20 +1858,9 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    regard. L'objectif est redevenu un champ etiquete au bas de la carte, comme
    dans l'onglet Charges fixes, et cette regle est partie avec lui. */
 
-/* Poignee de glissement : sur telephone, une barre en haut de la feuille dit
-   qu'on peut la repousser vers le bas. Sur grand ecran, le geste n'existe pas
-   et la barre n'aurait rien a annoncer. */
 .modal-panel::before { content: none; }
 @media (max-width: 900px) {
   .modal-panel { touch-action: pan-y; }
-  /* La poignee porte desormais le geste de fermeture a elle seule — il ne part
-     plus du contenu, ou il se disputait la surface avec le defilement. Elle a
-     donc besoin d'une vraie zone de prise : le trait reste fin, 4 px, mais son
-     boitier en fait 22, dessine par le remplissage. Un geste dedie sur une cible
-     de 4 px serait une promesse non tenue.
-
-     Le trait est aussi plus visible qu'avant : c'est maintenant le seul endroit
-     qui annonce qu'on peut repousser la feuille. */
   .modal-panel::before {
     content: ''; display: block; width: 44px; height: 4px; border-radius: var(--radius-pill);
     background: var(--border-strong, var(--border));
@@ -2474,13 +1870,8 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   }
 }
 
-/* ======================================================   Espace Comptes — liste hiérarchique repliable
-   ============================================================= */
 .cpt-entete { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 
-/* Une categorie retiree se lit sans se cacher : elle garde sa ligne et ses
-   montants, elle perd juste le contraste. Le tableau reste le seul endroit ou
-   l'on voit tout ce qui existe. */
 .cat-retiree td { opacity: .62; }
 .cat-retiree .tag { margin-left: 8px; }
 /* Les deux gestes d'une categorie tiennent dans une cellule : en colonnes
@@ -2502,32 +1893,16 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   color: var(--text-primary);
 }
 
-/* Le chemin d'un compte vers son etablissement.
-
-   Il porte la pastille teintee, et c'est tout le propos : le point de couleur
-   veut dire « etablissement » partout dans l'application — sur le groupe de la
-   liste, sur le titre de sa fiche, et ici sur le bouton qui y mene. On lit donc
-   sans une phrase ou l'on se trouve : un titre avec pastille est un
-   etablissement, un titre sans pastille est un compte, et la pastille sur un
-   bouton est la porte vers le contenant. */
 .lien-etab { margin-top: 12px; display: inline-flex; align-items: center; gap: 8px; }
 
-/* Resume brut / credits / net en tete de Comptes, quand il y a des credits.
-   Pas dans une carte : trois lignes de texte n'ont pas besoin d'un cadre, et
-   la page doit commencer par ses comptes. */
 .cpt-resume { margin: 0 0 4px; padding: 0 4px; }
 .cpt-net { font-size: clamp(26px, 4vw, 34px); font-weight: 700; letter-spacing: -.03em; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
 
 .cpt-liste { display: flex; flex-direction: column; gap: 14px; }
 .cpt-groupe { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); overflow: clip; }
 
-/* L'en-tête de groupe colle en haut pendant qu'on parcourt ses lignes :
-   on sait toujours dans quel ensemble on lit, et ce qu'il pèse. */
 .cpt-gtitre {
   display: flex; align-items: center; gap: 10px;
-  /* La teinte du groupe, tres diluee en fond et franche sur le liseré : six
-     blocs gris empiles se ressemblaient tous, on ne voyait plus ou l'un
-     finissait. Assez de couleur pour distinguer, pas assez pour crier. */
   background: linear-gradient(to right,
     color-mix(in oklab, var(--teinte) 16%, var(--surface-2)),
     var(--surface-2) 65%);
@@ -2536,7 +1911,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   border-bottom: 1px solid var(--border);
   box-shadow: inset 3px 0 0 var(--teinte);
 }
-/* Le meme point de couleur suit chaque groupe, y compris replie. */
 .cpt-pastille {
   flex: none; width: 9px; height: 9px; border-radius: 3px;
   background: var(--teinte);
@@ -2546,8 +1920,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   background: none; border: none; cursor: pointer;
   padding: 13px 0 13px 14px; font: inherit; color: var(--text-primary); text-align: left;
 }
-/* Le liseré se prolonge le long des lignes du groupe : une ligne lue loin de
-   son en-tete reste rattachee a son etablissement. */
 .cpt-corps { box-shadow: inset 3px 0 0 color-mix(in oklab, var(--teinte) 38%, transparent); }
 
 /*    Le pli anime : une grille dont la rangee passe de 0fr a 1fr. C'est la seule
@@ -2578,10 +1950,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 
 .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
 
-/* Ligne de compte : nom + mini-courbe + valeur + chevron. Le bloc swipe
-   masque le tiroir d'actions révélé au glissement. */
-/* La ligne revendique l'horizontale : le navigateur laisse alors passer le
-   défilement vertical de la page sans que les deux gestes se disputent. */
 .cpt-swipe { position: relative; overflow: hidden; touch-action: pan-y; }
 .cpt-actions {
   position: absolute; inset: 0 0 0 auto; display: flex; align-items: center; gap: 6px;
@@ -2604,7 +1972,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .cpt-val { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; flex: none; }
 .spark-mini { flex: none; opacity: .9; }
 
-/* Ligne feuille : placement ou espèces. */
 .plc-ligne {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 16px; border-bottom: 1px solid var(--border);
@@ -2613,10 +1980,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .plc-ligne:last-child { border-bottom: none; }
 .card > .plc-ligne { padding-left: 0; padding-right: 0; }
 
-/* Ligne de placement : trois colonnes de largeur fixe, sinon la pastille de
-   disponibilite se fait pousser par le montant voisin et chaque ligne la pose
-   ailleurs — « 749,16 € » et « 10 996,90 € » ne decalent pas pareil. Une
-   colonne se lit de haut en bas ou elle ne se lit pas. */
 .plc-placement {
   display: grid; grid-template-columns: minmax(0, 1fr) 12em 8em 0.9em;
   align-items: center; gap: 10px; flex-wrap: nowrap;
@@ -2628,16 +1991,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .plc-placement .plc-dispo {
   justify-self: stretch; min-width: 0; max-width: 100%;
 }
-/* La pastille de disponibilite, reglable sans en avoir l'air.
-
-   Le menu natif est etire par-dessus la pastille et rendu transparent : c'est
-   la pastille qu'on voit, c'est le menu qu'on touche. Un appui ouvre donc le
-   selecteur du systeme, avec sa roue sur telephone, et la ligne ne paie pas la
-   largeur d'un menu deroulant pour un reglage qu'on ne touche presque jamais.
-
-   Le pointille sous la pastille dit qu'elle repond — meme signe que sous les
-   montants modifiables et sous l'objectif de depenses, pour que « on peut
-   toucher ca » se lise partout de la meme facon. */
 .dispo-reglable { position: relative; display: inline-block; max-width: 100%; }
 .dispo-reglable > .tag {
   border-bottom: 1px dashed color-mix(in oklab, currentColor 45%, transparent);
@@ -2647,7 +2000,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0;
   -webkit-appearance: none; appearance: none;
 }
-/* L'anneau de focus se pose sur la pastille, le menu etant invisible. */
 .dispo-reglable:focus-within > .tag {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
@@ -2656,7 +2008,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   overflow: hidden; text-overflow: ellipsis;
 }
 .plc-placement .cpt-val { justify-self: end; }
-/* Ligne cliquable : un bouton qui doit se lire comme la ligne qu'il remplace. */
 .plc-lien {
   width: 100%; font: inherit; font-size: 13px; color: var(--text-primary);
   background: none; border: none; border-bottom: 1px solid var(--border);
@@ -2670,14 +2021,10 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
   color: var(--muted); font-weight: 600; padding-top: 6px; padding-bottom: 6px;
 }
-/* Sous 480 px, trois colonnes ne tiennent plus : la pastille passe sous le
-   nom, ou elle reste alignee sur lui. */
 @media (max-width: 479px) {
   .plc-placement { grid-template-columns: minmax(0, 1fr) auto; }
   .plc-placement .plc-dispo { grid-column: 1; grid-row: 2; }
   .plc-placement .cpt-val { grid-column: 2; grid-row: 1 / span 2; }
-  /* La pastille n'est plus une colonne, mais elle a toujours besoin de son
-     intitulé : il rejoint celui du nom plutôt que de disparaître. */
   .plc-entete .plc-dispo { display: none; }
   .plc-entete > span:first-child::after { content: " · disponibilité"; }
 }
@@ -2696,9 +2043,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 }
 .plc-modif { justify-self: end; white-space: nowrap; }
 @media (max-width: 479px) {
-  /* Deux colonnes, deux rangees : le nom et le montant en haut, la pastille et
-     le bouton en dessous. Le montant cesse d'occuper les deux rangees, sinon il
-     n'y a plus de case pour le bouton. */
   .plc-placement:has(.plc-modif) { grid-template-columns: minmax(0, 1fr) auto; }
   .plc-placement:has(.plc-modif) .cpt-val { grid-column: 2; grid-row: 1; }
   .plc-placement:has(.plc-modif) .plc-dispo { grid-column: 1; grid-row: 2; }
@@ -2709,8 +2053,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .tag.mob-differe  { color: var(--text-secondary); }
 .tag.mob-lent     { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 40%, transparent); }
 .tag.mob-bloque   { color: var(--serious); border-color: color-mix(in oklab, var(--serious) 40%, transparent); }
-/* Le palier hors autonomie se lit comme une note de bas de carte : présent,
-   mais visiblement pas du même ordre que les trois qui comptent. */
 .rw-hors { opacity: .72; }
 
 /* Variante sobre du bouton rouge : la couleur passe dans le texte et le
@@ -2718,9 +2060,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    egale avec la regle du bouton plein, elle en repeignait le texte en rouge
    sans toucher le fond, lui aussi rouge. « Cloturer et supprimer » dans
    Comptes etait illisible. */
-/* Liseré franc plutôt que timide : le bouton se trouve du premier coup
-   d'œil. Il reste en contour et non en aplat — une suppression doit se voir,
-   pas se proposer comme l'action évidente de la page. */
 .btn.ghost.danger {
   background: var(--surface-1); color: var(--critical); font-weight: 600;
   border-color: color-mix(in oklab, var(--critical) 75%, transparent);
@@ -2730,9 +2069,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   color: var(--critical);
 } }
 
-/* Répartition par classe : une ligne par classe, barre de proportion.
-   Remplace la grille de tuiles, qui laissait un trou ou une tuile étirée
-   dès que le nombre de classes était impair — et il le sera souvent. */
 .repart { padding: 6px 16px; }
 .repart-ligne {
   display: flex; flex-direction: column; gap: 6px; width: 100%;
@@ -2752,12 +2088,7 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   background: var(--surface-2); overflow: hidden;
 }
 .repart-barre i { display: block; height: 100%; border-radius: var(--radius-pill); }
-/* Le pied ne s'affiche qu'en presence d'un credit : il dit l'ecart entre
-   la somme des lignes — le brut — et le patrimoine net du bandeau. */
 .repart-pied { margin: 4px 0 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-/* La base des parts, en pied de la liste de l'accueil. Une ligne, pas un
-   rapprochement en trois lignes : le montant des credits n'a pas a s'imposer sous
-   la premiere chose qu'on voit. L'ecart avec le net vit dans l'infobulle. */
 .repart-base { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
 /* Un montant ne se coupe pas apres la virgule. La regle mobile qui fait
    replier les cellules de tableau — necessaire pour les libelles longs —
@@ -2767,10 +2098,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .card .repart-total td:not(:first-child),
 .grid > div > table.repart-total td:not(:first-child) { white-space: nowrap; }
 
-/* Panneau Liquidités : un menu déroulant par usage, comptes modifiables. */
-/* Le sous-titre d'un panneau peut porter une commande de lecture a son bout.
-   Elle ne prend pas de ligne a elle : dans une fenetre qui defile, une rangee
-   pour un seul petit bouton pousse le contenu vers le bas sans rien apporter. */
 .modal-sub.avec-action {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
@@ -2825,11 +2152,9 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    Seule la premiere colonne cede : les montants gardent leur `nowrap`, sans
    quoi « 1 189,00 EUR » se casserait entre le nombre et sa devise. */
 .modal-body table td.name { white-space: normal; }
-/* Ceinture : plus rien ne peut faire glisser le corps d'une fenetre. */
 .modal-body { overflow-x: hidden; }
 
 @media (max-width: 900px) {
-  /* Feuille qui monte du bas : plus naturel au pouce */
   .modal { place-items: end center; padding: 0; }
   .modal-panel {
     width: 100%;
@@ -2864,11 +2189,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    `CLAUDE.md` : a specificite egale, c'est l'ordre qui tranche. */
 .modal-foot .btn-encore { flex: 1 0 100%; justify-content: center; }
 
-/* ---------------- Écran de lancement ----------------
-   Le logo monte de quelques pixels en se révélant, le nom suit d'un souffle.
-   Court : trois dixièmes pour apparaître, et l'écran s'efface dès que
-   l'application est prête. Une animation de démarrage qui se fait attendre
-   devient une porte fermée. */
 .lancement {
   position: fixed; inset: 0; z-index: 200;
   display: grid; place-items: center;
@@ -2890,10 +2210,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   font-size: 17px; font-weight: 680; letter-spacing: -.01em; color: var(--text-primary);
   animation: marque-monte .5s cubic-bezier(.16,1,.3,1) .09s both;
 }
-/* Les trois mots arrivent en dernier, un souffle apres le nom : logo, marque,
-   promesse, dans l'ordre ou on les lit. Ils restent discrets — c'est une
-   signature, pas un titre — et sans italique malgre le <em>, qui est ici pour
-   dire l'accent de sens, pas pour pencher. */
 .lancement-slogan {
   margin-top: -4px;
   font-size: 12.5px; font-style: normal; font-weight: 500;
@@ -2910,14 +2226,11 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
   from { opacity: 0; transform: translateY(10px) scale(.94); }
   to   { opacity: 1; transform: none; }
 }
-/* Rien ne bouge pour qui a demandé que rien ne bouge : l'écran reste, puis
-   disparaît. C'est une préférence système, pas un détail. */
 @media (prefers-reduced-motion: reduce) {
   .lancement-marque img, .lancement-marque span, .lancement-slogan { animation: none; }
   .lancement { transition: opacity .01s; }
 }
 
-/* ---------------- Bandeau « mode fichier » ---------------- */
 .file-banner {
   display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: center;
   margin: 18px 30px -4px; padding: 12px 15px; border-radius: var(--radius-sm);
@@ -2932,7 +2245,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 }
 @media (max-width: 900px) { .file-banner { margin: 14px 16px -4px; } }
 
-/* ---------------- Vue tableau des graphiques ---------------- */
 .data-view { margin-top: 14px; border-top: 1px solid var(--grid); padding-top: 10px; }
 .data-view summary {
   cursor: pointer; font-size: 12px; color: var(--muted); font-weight: 550;
@@ -2945,29 +2257,9 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .data-view table { margin-top: 10px; }
 .data-view .table-wrap { max-height: 320px; overflow-y: auto; }
 
-/* Ouvrir une classe en ses deux roles, et la refermer.
-
-   Deux fleches, « ⇥ » et « ⇤ », vivaient ici. A 22 px elles etaient
-   indistinguables : le bouton de refusion a ete lu comme un bouton de scindage,
-   et la question « pourquoi puis-je scinder deux fois ? » etait la bonne. Un
-   verbe a ete essaye ensuite, « Scinder » et « Reunir » : lisible, mais deux
-   pastilles de texte dans une liste de montants font desordre — on lit des
-   commandes la ou on veut lire des chiffres.
-
-   Le chevron est le seul pictogramme que personne n'a besoin d'apprendre. Ferme
-   il annonce qu'il y a quelque chose dedans, ouvert qu'on peut refermer, et il
-   ne pese rien dans la ligne. Un quart de tour, comme celui des depliants de la
-   page. Violet parce que c'est le seul outil de cette liste qui change la forme
-   des lignes et non un chiffre.
-
-   La cible de touche fait 26 px alors que le dessin en fait douze : un chevron
-   discret doit rester atteignable au pouce. */
 .chevron-role {
   display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; padding: 0;
-  /* Plus gras et un peu plus grand : a la graisse du texte courant, le chevron
-     etait un trait fin que l'oeil ne trouvait pas dans une ligne pleine de
-     chiffres. C'est une commande, elle doit se voir. */
   font: inherit; font-size: 20px; font-weight: 700; line-height: 1;
   background: none; border: none; border-radius: 50%; cursor: pointer;
   color: var(--accent);
@@ -2983,9 +2275,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 @media (hover: hover) { .chevron-role:not(.ouvert):hover { transform: scale(1.08); } }
 .chevron-role:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* Les personnes qui partagent les charges, sur telephone. Des jetons plutot
-   qu'une liste : ce sont des etiquettes courtes, un nom et un total, et elles
-   tiennent a deux ou trois par ligne au lieu d'en occuper une chacune. */
 .contrib-liste {
   display: flex; flex-wrap: wrap; gap: 8px;
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--grid);
@@ -2998,12 +2287,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 }
 .contrib-jeton .muted { font-variant-numeric: tabular-nums; }
 
-/* La poignee d'un depliant de reglages. Le motif .data-view ci-dessus sert aux
-   tableaux de donnees et se fait discret par construction : un chevron gris de
-   12 px, que personne ne voyait sur la carte des hypotheses de Projection. Ici
-   la poignee est LE contrôle de la carte, elle se lit donc comme un bouton :
-   les valeurs courantes a gauche, le verbe et le chevron a droite. Fermee, la
-   carte continue de dire ses hypotheses. */
 details.pli-reglages { margin-top: 2px; }
 details.pli-reglages > summary {
   list-style: none; cursor: pointer;
@@ -3023,11 +2306,6 @@ details.pli-reglages > summary::-webkit-details-marker { display: none; }
 .pli-action::after { content: '▾'; display: inline-block; transition: transform .15s; }
 details.pli-reglages[open] .pli-action::after { transform: rotate(180deg); }
 
-/* Nom de compte modifiable : il se lit comme un titre, et ne se révèle
-   comme un champ qu'au survol. */
-/* Le nom garde une largeur plancher : coincé entre l'étiquette du courtier
-   et deux boutons, il se réduisait à trois lettres. En dessous de cette
-   largeur, l'en-tête passe à la ligne plutôt que d'écraser le titre. */
 .acct-head { flex-wrap: wrap; row-gap: 6px; }
 .acct-nom {
   flex: 1 1 auto; min-width: 9em; width: auto;
@@ -3038,20 +2316,12 @@ details.pli-reglages[open] .pli-action::after { transform: rotate(180deg); }
 @media (hover: hover) { .acct-nom:hover { border-color: var(--border); background: var(--surface-2); } }
 .acct-nom:focus { border-color: var(--accent); background: var(--surface-2); outline: none; }
 
-/* Liste d'année dans un en-tête de carte : compacte, elle tient quel que
-   soit le nombre d'années accumulées. */
 select.annee {
   width: auto; padding: 5px 8px; font-size: 12.5px; font-weight: 550;
   background: var(--surface-2); border: 1px solid var(--border);
   border-radius: var(--radius-sm); color: var(--text-primary);
 }
 
-/* --------- Saisie d'un mois de dépenses ---------
-   Une grille de champs plutôt qu'une ligne de tableau à douze colonnes : on
-   voit ce qu'on remplit, et le total suit la frappe. */
-/*    Le pointille doit se voir. Une affordance qu'on ne voit pas n'existe pas.
-   Ces boutons ouvrent tous quelque chose : il n'y a aucune raison de les
-   cacher.*/
 .mois-lien {
   font: inherit; font-weight: 680; color: var(--text-primary);
   background: none; border: none; padding: 0; cursor: pointer;
@@ -3072,10 +2342,6 @@ select.annee {
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 .dep-grille input { text-align: right; }
-/* Le « + » qui ecrit un « + », a l'interieur du champ de montant. A gauche,
-   parce que les montants sont alignes a droite : a droite il recouvrirait les
-   chiffres. Le champ recule son texte de sa largeur, sinon un montant long passe
-   dessous. */
 .champ-somme { position: relative; display: block; }
 .champ-somme > input { padding-left: 30px; }
 .somme-plus {
@@ -3089,9 +2355,6 @@ select.annee {
 @media (hover: hover) { .somme-plus:hover { color: var(--accent); border-color: var(--accent); } }
 .somme-plus:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* --------- Aide contextuelle ---------
-   Un « ? » qui ne se remarque qu'au besoin, et un panneau qui se place à
-   côté du terme expliqué plutôt qu'au milieu de l'écran. */
 .aide {
   /* `inline-flex` : le « ? » etait centre par le bouton qu'il n'est plus. */
   display: inline-flex; align-items: center; justify-content: center;
@@ -3100,21 +2363,12 @@ select.annee {
   background: var(--surface-2); color: var(--muted);
   font: inherit; font-size: 10px; font-weight: 700; line-height: 1;
   cursor: help; vertical-align: middle; flex-shrink: 0;
-  /* Pour la cible tactile ci-dessous, qui se pose en absolu autour de lui. */
   position: relative;
 }
-/* Quinze pixels de large, dont un de bordure : changer la couleur de ce filet
-   etait le seul signe qu'on venait d'atteindre le « ? » au clavier, et il ne se
-   voyait pas. L'anneau de l'application, comme partout ailleurs. */
 .aide:focus-visible {
   color: var(--text-primary); border-color: var(--text-secondary);
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
-/* La cible du doigt, et non celle de l'oeil. Un « ? » de 15 px se vise mal :
-   le minimum tenable est 24, et l'agrandir pour de vrai en ferait une pastille
-   qui appelle l'attention alors qu'elle doit attendre qu'on la cherche. La
-   boite cliquable s'etend donc en dehors, sans rien deplacer. Elle mord un peu
-   sur l'intitule qui la precede, qui n'est jamais cliquable lui-meme. */
 .aide::after {
   content: ''; position: absolute; inset: -6px;
   border-radius: var(--radius-pill);
@@ -3162,9 +2416,6 @@ select.annee {
    Le disque se remplit de violet quand le seuil est franchi : c'est le signal
    qu'on peut lacher. Sans lui, on tire au hasard en esperant avoir assez tire. */
 .tirer {
-  /* Quatre pixels sous la barre du haut, exprimes depuis sa hauteur : ce disque
-     la suivait par une valeur recopiee, qui aurait cesse d'etre juste au premier
-     changement de hauteur de la barre. */
   position: fixed; left: 50%; top: calc(var(--h-barre) + 4px);
   z-index: 60; opacity: 0; pointer-events: none;
   width: 30px; height: 30px; border-radius: 50%;
@@ -3179,18 +2430,12 @@ select.annee {
 }
 .tirer.prete { border-color: var(--accent); }
 .tirer.prete > i { border-color: var(--accent); border-top-color: transparent; }
-/* Pendant la requete, le disque tourne : la jauge cesse de suivre le doigt et
-   dit qu'elle travaille. */
 .tirer.tourne > i { animation: tirer-tourne .7s linear infinite; }
 @keyframes tirer-tourne { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .tirer.tourne > i { animation-duration: 2s; }
 }
 
-/* --------- Performance du jour ---------
-   Le total domine, les lignes viennent en appui. Les barres sont mises à
-   l'échelle du plus gros mouvement du jour, pour comparer d'un coup d'œil
-   qui a porté la séance. */
 .jour-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px 16px; margin: 4px 0 18px; }
 .jour-eur { font-size: clamp(30px, 6vw, 44px); font-weight: 720; letter-spacing: -.02em; }
 .jour-pct { font-size: 17px; font-weight: 650; }
@@ -3198,9 +2443,6 @@ select.annee {
 .jour-total.up .jour-eur, .jour-total.up .jour-pct { color: var(--good); }
 .jour-total.down .jour-eur, .jour-total.down .jour-pct { color: var(--critical); }
 
-/* Les reperes de marche : une bande qui defile, pas une grille. Sept
-   vignettes tiennent sur un ecran large et se font glisser au doigt sur un
-   telephone — les comprimer aurait rendu les pourcentages illisibles. */
 /* Bandeau de repères, défilement libre.
    Le `scroll-snap-type` accrochait le geste : sept tuiles de 104 px qu'on
    pousse d'un pouce, et le doigt se faisait reprendre à chaque case. Un
@@ -3297,21 +2539,13 @@ select.annee {
   display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px;
   scrollbar-width: none; -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  /* Le doigt doit pouvoir partir en diagonale sans que la page s'en mêle :
-     le navigateur sait alors que ce conteneur revendique l'horizontale. */
   touch-action: pan-x;
 }
 .reperes::-webkit-scrollbar { display: none; }
-/* Le ruban file jusqu'aux bords de l'écran : une tuile coupée par le bord dit
-   qu'il y en a d'autres derrière, là où un ruban qui s'arrête sagement dans la
-   marge donne l'impression d'être complet. */
 @media (max-width: 767px) {
   /* 16 px : la marge laterale de `.view` sous 900 px. */
   .reperes { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; }
 }
-/* Nom a gauche, etat de la place a droite : le glyphe se pose dans la place
-   libre de la ligne du titre plutot que d'ajouter une rangee a une tuile
-   deja compacte. */
 .rp-tete { display: flex; align-items: center; gap: 6px; }
 .rp-tete .rp-nom { flex: 1; min-width: 0; }
 .rp-seance {
@@ -3319,9 +2553,6 @@ select.annee {
   fill: none; stroke: currentColor; stroke-width: 1.9;
   stroke-linecap: round; stroke-linejoin: round;
 }
-/* Ouvert : le meme vert que les hausses, la place vit. Seance etendue : ambre,
-   ca cote hors des heures. Ferme : la lune se remplit, un croissant creux se
-   perdrait a 12 px. */
 .rp-seance.open  { color: var(--good); }
 .rp-seance.pre,
 .rp-seance.post  { color: var(--warning); }
@@ -3332,8 +2563,6 @@ select.annee {
   display: grid; gap: 1px; min-width: 104px;
   padding: 8px 11px; border-radius: var(--radius-sm);
   background: var(--surface-1); border: 1px solid var(--border);
-  /* La tuile est devenue un bouton, elle ouvre sa fiche : on efface les
-     habits par defaut d'un button et on annonce le clic. */
   font: inherit; color: inherit; text-align: left; cursor: pointer;
   transition: border-color .12s;
 }
@@ -3341,20 +2570,10 @@ select.annee {
 .rp-nom { font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .rp-prix { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-/* L'unite se lit avec le prix sans le concurrencer : c'est le nombre qu'on
-   compare d'une tuile a l'autre, l'unite ne fait que le qualifier. */
 .rp-unite { font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
 .rp-var { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .jour-lignes { display: flex; flex-direction: column; gap: 2px; }
-/* Quatre colonnes, et elles tiennent à toutes les largeurs.
-
-   Il y en avait six. Cours et Clôture veille se masquaient sous 720 et 460 px,
-   si bien que sur un téléphone la ligne disait le résultat — « +0,29 % · +3 € »
-   — sans les deux prix qui le produisent. « La brique aujourd'hui donne la perf
-   du jour mais ne donne plus les mouvements du jour. » Elles sont descendues
-   sous le nom, où elles se lisent partout, et les deux règles qui les masquaient
-   sont parties avec elles. */
 .jour-ligne {
   display: grid; align-items: center;
   column-gap: 10px; row-gap: 1px;
@@ -3363,17 +2582,6 @@ select.annee {
   border-bottom: 1px solid color-mix(in oklab, var(--grid) 60%, transparent);
 }
 .jour-ligne:last-child { border-bottom: none; }
-/* Le nom tient sur une ligne, quitte à être coupé.
-
-   « Là c'est moche » : « Future of Defence » et « MSCI World PEA » passaient sur
-   deux lignes, donc chaque ligne du tableau en faisait trois avec le mouvement
-   en dessous, et les pourcentages flottaient au milieu d'un pavé. Deux lignes
-   par titre, pas trois : le nom, puis son mouvement.
-
-   Coupé plutôt que replié : la ligne entière ouvre la fiche, qui porte le nom
-   complet, et un nom tronqué reste reconnaissable là où un nom replié casse la
-   grille. C'est déjà le traitement des libellés longs ailleurs dans cette
-   feuille. */
 .jl-nom, .jl-nom .mois-lien {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: block; max-width: 100%;
@@ -3402,11 +2610,6 @@ select.annee {
   display: flex; align-items: center; gap: 5px;
   font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 1px;
 }
-/* Poids compris, et c'est un correctif : il ne figurait pas dans cette liste,
-   donc ses pourcentages s'alignaient à gauche pendant que leur intitulé
-   s'alignait à droite. « 68,0 % » et « 5,7 % » ne commençaient pas au même
-   endroit et ne finissaient pas au même endroit non plus. Ça ne se voyait pas
-   tant que la colonne était large ; en la resserrant, ça saute aux yeux. */
 .jl-poids, .jl-pct, .jl-eur {
   text-align: right; font-variant-numeric: tabular-nums;
 }
@@ -3454,17 +2657,6 @@ select.annee {
 
    `6.6em` sur la police de ce sous-titre : la valeur la plus large qu'on y
    rencontre est « 588,77 $US », et les chiffres sont tabulaires. */
-/* Un seul prix sur la ligne, et sa couleur dit s'il vit encore.
-
-   Deux montants et une flèche ne tenaient pas : ils débordaient sous la colonne
-   Poids, qui commence à 133 px, et les aligner coûtait une boîte fixe de 73 px
-   qui les y poussait davantage. Le mouvement se lit dans les colonnes Var. et
-   Effet — c'est leur seul travail. Ce que la ligne ajoute est le niveau, et sa
-   fraîcheur.
-
-   Blanc : le prix bouge en ce moment. Gris : c'est une clôture, figée jusqu'à
-   la prochaine séance. La couleur porte ce que le second montant portait, sans
-   sa largeur. */
 .jl-prix { color: var(--text-primary); font-weight: 650; }
 .jl-prix.jl-fige { color: var(--text-secondary); font-weight: 600; }
 /* La mention de fraîcheur se cale à droite, contre le bord de la carte.
@@ -3480,8 +2672,6 @@ select.annee {
    sur la plus longue laisserait un vide au milieu de la ligne le reste du temps. */
 .jl-quand { margin-left: auto; padding-left: 8px; white-space: nowrap; }
 
-/* État de la place, d'un coup d'œil : vert ouvert, ambre hors séance,
-   gris fermé. La pastille pulse tant que le marché cote. */
 .pastille { width: 7px; height: 7px; border-radius: var(--radius-pill); flex-shrink: 0; display: inline-block; }
 .pastille.open { background: var(--good); animation: bat 2s ease-in-out infinite; }
 .pastille.pre, .pastille.post { background: var(--warning); }
@@ -3489,30 +2679,10 @@ select.annee {
 @keyframes bat { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
 @media (prefers-reduced-motion: reduce) { .pastille.open { animation: none } }
 
-/* Plus une seule colonne à masquer : les quatre qui restent tiennent à 375 px.
-   Elles se resserrent, sans que rien ne disparaisse — c'était tout le problème
-   des deux règles qui vivaient ici. */
-/* Depuis que la première colonne porte un ticker et non un nom, elle n'a plus
-   besoin de s'étirer : trois à cinq caractères, toujours. Les colonnes de
-   chiffres reprennent donc l'aise qu'il leur faut pour que « −0,20 % » et
-   « −11 € » ne frôlent pas leur bord. */
 @media (max-width: 460px) {
-  /* 58 px et non 50 pour « Poids » : son intitule fait 34 px, la fleche de tri
-     9, l'aide 5, plus 4 d'ecart — 52 px, que 50 ne contenaient pas. C'est ce
-     debordement qui faisait chercher au navigateur un endroit ou couper.
-
-     Les huit pixels viennent de la colonne du nom, qui les rend sans rien
-     perdre : elle coupe deja les intitules trop longs par des points de
-     suspension, et un nom tronque reste reconnaissable la ou une fleche
-     orpheline ne veut plus rien dire. La ligne entiere ouvre la fiche, qui
-     porte le nom complet. */
   .jour-ligne { grid-template-columns: minmax(0, 1fr) 58px 70px 74px; column-gap: 8px; }
 }
 
-/* --------- Sélecteur de période ---------
-   Trois raccourcis toujours visibles, puis une liste pour le reste. La liste
-   s'allume quand c'est elle qui porte la sélection, sinon elle reste discrète
-   pour ne pas concurrencer les boutons. */
 .plage { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .plage select {
   width: auto; padding: 5px 6px; font-size: 11.5px;
@@ -3525,10 +2695,6 @@ select.annee {
   font-weight: 650;
 }
 
-/* --------- Barre de recherche d'un titre ---------
-   Un champ n'a pas besoin d'occuper toute la largeur d'une carte : on le
-   dimensionne pour son contenu (un ISIN fait 12 caractères) et on aligne
-   tout sur une seule ligne. Sur mobile, le repli se fait naturellement. */
 .barre-recherche {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 }
@@ -3543,9 +2709,6 @@ select.annee {
   font-size: 12px; color: var(--text-secondary);
 }
 
-/* --------- Prix : le montant et sa devise, côte à côte ---------
-   Le sigle est discret en euros, mis en évidence sinon : c'est la ligne
-   en devise étrangère qui doit attirer l'œil, pas l'inverse. */
 .prix-cell > div, .prix-cell { white-space: nowrap; }
 .prix-cell input { width: calc(100% - 20px); }
 .prix-cell .dev {
@@ -3573,8 +2736,6 @@ th .u {
    qui porte le sens, pas la taille. */
 .badge {
   flex-shrink: 0; align-self: center;
-  /* La marge négative rattrape l'écart de la rangée : la pastille doit
-     toucher le mot, pas flotter à dix pixels de lui. */
   width: 6px; height: 6px; border-radius: var(--radius-pill); margin-left: -4px;
   background: var(--warning); color: transparent;
   font-size: 0; line-height: 0; overflow: hidden;
@@ -3590,10 +2751,6 @@ th .u {
   .badge { animation: none; opacity: 1; }
 }
 
-
-/* Un rappel n'est pas une erreur. Le rouge disait « quelque chose est cassé »
-   pour annoncer qu'un relevé restait à prendre, et c'est la première chose
-   qu'on voyait en ouvrant l'application. L'ambre appelle sans alarmer. */
 .rappel {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   font: inherit; font-size: 13px; color: var(--text-secondary); cursor: pointer;
@@ -3623,10 +2780,6 @@ th .u {
    « Plus tard » sur deux, ce qui triplait la hauteur du bandeau. */
 .rappel-sorties .btn { margin-left: 0; white-space: nowrap; }
 
-/* Une fois les boutons insecables, c'est le texte qui se faisait ecraser :
-   une colonne de 80 px, onze lignes, 250 px de bandeau. Il lui faut une base
-   minimale, et au groupe de sorties le droit de passer a la ligne en dessous
-   quand les deux ne tiennent plus cote a cote. */
 :is(.note-relance, .note:has(> .rappel-sorties)) { flex-wrap: wrap; }
 :is(.note-relance, .note:has(> .rappel-sorties)) > span:not(.rappel-sorties) {
   flex: 1 1 220px;
@@ -3635,12 +2788,9 @@ th .u {
 .rappel-sorties .btn.icon.xs { font-size: 13px; padding: 3px 7px; }
 @media (hover: hover) { .rappel-sorties .btn.icon.xs:hover { color: var(--text-primary); background: var(--surface-2); } }
 
-/* bouton de reprise en tête de ligne du relevé */
 .snap-cell { width: 34px; padding: 0 !important; text-align: center; }
 .btn.icon.snap { font-size: 13px; padding: 5px 7px; color: var(--muted); }
 @media (hover: hover) { .btn.icon.snap:hover { color: var(--accent); background: var(--surface-2); } }
-/* Le mois qui attend sa photo : le seul bouton de la colonne qui appelle un
-   geste, donc le seul qui a le droit d'être vu. */
 .btn.icon.snap.snap-attendu {
   color: var(--page); background: var(--accent); font-weight: 700;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
@@ -3651,14 +2801,12 @@ th .u {
 } }
 tr.mois-courant td { background: color-mix(in oklab, var(--accent) 7%, transparent); }
 
-/* la carte qui clignote peut être une ligne de tableau */
 @keyframes flash-row {
   0%, 100% { background: transparent; }
   15%, 60% { background: color-mix(in oklab, var(--accent) 24%, transparent); }
 }
 tr.flash-target td { animation: flash-row 1.6s ease; }
 
-/* ---------------- Contrôles de cohérence ---------------- */
 .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .chk {
   display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 11px; align-items: center;
@@ -3671,18 +2819,10 @@ tr.flash-target td { animation: flash-row 1.6s ease; }
 .chk-warn  { border-color: color-mix(in oklab, var(--warning) 45%, transparent);
              background: color-mix(in oklab, var(--warning) 10%, var(--surface-1)); }
 .chk-info  { border-color: var(--border); background: var(--surface-2); }
-/* Une saisie en attente prend l'ambre des rappels : elle demande un geste, elle
-   ne signale pas un chiffre faux. Ce niveau est arrive avec la cloche, et ces
-   regles etaient dupliquees a l'identique un peu plus haut — la copie morte est
-   partie avec, sinon la nouvelle classe n'aurait tenu que dans l'une des deux. */
 .chk-action { border-color: color-mix(in oklab, var(--warning) 45%, transparent);
               background: color-mix(in oklab, var(--warning) 10%, var(--surface-1)); }
 .chk .btn { flex-shrink: 0; text-decoration: none; }
 
-/* ---------------- Tri des colonnes ---------------- */
-/* Le tri est porte par un bouton dans l'en-tete, plus par l'en-tete entiere :
-   la bulle d'aide vit a cote, hors de la zone qui trie. La fleche suit le
-   bouton, pas la cellule, pour qu'elle ne se retrouve pas derriere le « ? ». */
 th.sortable { user-select: none; white-space: nowrap; }
 th.sortable .th-tri {
   all: unset; cursor: pointer; font: inherit; color: inherit;
@@ -3694,14 +2834,11 @@ th.sortable .th-tri::after { content: '⇅'; opacity: .3; margin-left: 5px; font
 th.sortable.asc  .th-tri::after { content: '↑'; opacity: 1; color: var(--accent); }
 th.sortable.desc .th-tri::after { content: '↓'; opacity: 1; color: var(--accent); }
 
-/* ---------------- Divers ---------------- */
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row.end { justify-content: flex-end; }
 .spacer { flex: 1; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
-/* Un écran vide est un écran comme un autre : il mérite une surface, pas une
-   phrase grise flottant au milieu du blanc. */
 .empty {
   color: var(--text-secondary); font-size: 13px; line-height: 1.55;
   padding: 22px 20px; text-align: center;
@@ -3751,26 +2888,12 @@ td .empty, th .empty { background: none; border: none; }
 .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px; }
 .segmented button {
   font: inherit; font-size: 12.5px; font-weight: 550; border: none; background: transparent; color: var(--text-secondary);
-  /* Sept pixels et non cinq : les pilules faisaient 26 px de haut, sous le
-     minimum de 24 une fois retire le remplissage de 2 px de leur cadre, et six
-     d'entre elles se suivent sur « Marchés » — Net, Brut, YTD, 1 an, 3 ans,
-     5 ans. Deux pixels de plus par cote donnent 30, sans que la pilule change
-     d'allure. Le voisin latéral etant a portee, on ne peut pas etendre la cible
-     en dehors comme pour un bouton-icone : elle mordrait sur lui. */
   padding: 7px 12px; border-radius: var(--radius-xs); cursor: pointer;
 }
 .segmented button.on { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); }
 
-/* La bascule entre les deux lectures d'une même rubrique. Posée en tête de
-   page, alignée à gauche : c'est une commande de navigation, elle se lit
-   avant le contenu, pas au milieu. */
-/* Collante : sur une page de six cartes, la bascule partait au premier
-   défilement et il fallait remonter pour changer de lecture. Elle reste sous
-   le titre, à sa place, et le fond l'empêche de flotter sur le contenu. */
 .sous-onglets {
   display: flex; margin-bottom: 2px;
-  /* Au-dessus des bandeaux d'etablissement, qui sont a 5 : quand deux collants
-     se croisent, c'est la navigation qui doit rester lisible. */
   position: sticky; top: 0; z-index: 6;
   padding: 6px 0 8px;
   /* Aucun fond, et aucun flou : seules les pastilles portent une surface.
@@ -3788,24 +2911,10 @@ td .empty, th .empty { background: none; border: none; }
      couvrent toute la largeur sur telephone et gardent leur propre surface : ce
      qu'on lit ne depend jamais de ce fond. */
   background: transparent;
-  /* La hauteur est declaree plutot que subie : c'est elle que le collage des
-     bandeaux ajoute a celle de la barre du haut. Un bandeau ne peut pas se
-     poser sous cette bande sans savoir ce qu'elle mesure. */
   min-height: var(--h-sous-onglets); box-sizing: border-box;
 }
 .sous-onglets .segmented button { padding: 6px 16px; font-size: 13px; }
 
-/* L'onglet actif porte la couleur de la marque.
-   Les sous-onglets etaient deux rectangles gris, l'actif se distinguant par une
-   surface un peu plus claire : sur un fond presque noir, la difference se voyait
-   a peine, et rien ne disait que c'etait une navigation plutot qu'un bandeau.
-   Le violet la dit — c'est la teinte de l'onglet courant en bas de l'ecran, du
-   repere du menu et des anneaux de focus, donc « tu es ici » se lit de la meme
-   facon partout dans l'application.
-
-   Un lavis et un liseré plutot qu'un aplat plein : ces boutons font la largeur
-   de l'ecran sur telephone, un violet massif y aurait pese plus lourd que le
-   titre de la page. */
 .sous-onglets .segmented { background: var(--surface-1); position: relative; }
 
 /* Des cellules égales à toutes les largeurs, et non seulement au téléphone.
@@ -3846,8 +2955,6 @@ td .empty, th .empty { background: none; border: none; }
 .sous-onglets .segmented::before {
   content: ''; position: absolute; z-index: 0;
   top: 2px; bottom: 2px; left: 2px;
-  /* Le rembourrage de deux pixels de chaque cote sort du calcul : les boutons
-     se partagent ce qui reste, sans ecart entre eux. */
   width: calc((100% - 4px) / var(--n, 2));
   border-radius: var(--radius-xs);
   background: color-mix(in oklab, var(--accent) 16%, var(--surface-2));
@@ -3861,31 +2968,6 @@ td .empty, th .empty { background: none; border: none; }
 .sous-onglets .segmented:has(> :nth-child(4).on) { --onglet: 3; }
 .sous-onglets .segmented:not(:has(> .on))::before { opacity: 0; }
 
-/* Le tassement d'appui, partage avec la barre du bas.
-
-   Une seule image-cle pour les deux barres : c'est le meme geste, il doit avoir
-   la meme main. Elle vit ici, hors de la requete telephone, parce que les
-   sous-onglets existent a toutes les largeurs alors que la barre du bas n'est
-   qu'un composant de telephone — une image-cle definie dans une requete media
-   n'est utilisable que dedans. */
-/* Le tassement vaut 2,2 %, soit huit pixels de course sur une barre de 355.
-
-   Un pour cent se devinait plus qu'il ne se sentait : trois pixels. Un essai a
-   3,2 % a suivi, et il a ete repris — c'est la que la chose se retourne. Une
-   barre d'onglets n'est pas un bouton, c'est le cadre de l'application. Un
-   bouton qu'on presse s'enfonce et cela se lit comme une reponse ; un cadre qui
-   rapetrisse se lit comme une instabilite. Onze pixels de course deplacent les
-   deux bouts arrondis de cinq pixels chacun pendant que le flou de 12 px
-   rechantillonne dessous : c'est exactement le frémissement qu'on a retire de
-   l'icone quelques commits plus tot, remis a l'echelle de la barre entiere.
-
-   Et le retour physique existe maintenant. Sur un telephone, l'appui rend deja
-   un clic ; une deformation franche par-dessus signale deux fois la meme chose.
-
-   Si le geste doit se sentir davantage, ce n'est pas l'echelle qu'il faut
-   pousser mais la duree, ou le ressort de la courbe — elle depasse deja
-   legerement 1 au retour, donc la barre se detend au lieu de reprendre sa
-   place. */
 @keyframes appui-barre {
   0%   { transform: scale(1); }
   30%  { transform: scale(.978); }
@@ -3896,28 +2978,17 @@ td .empty, th .empty { background: none; border: none; }
   .sous-onglets .segmented::before { transition: none; }
   .sous-onglets .segmented.tape { animation: none; }
 }
-/* Les libelles passent au-dessus du lavis, qui n'est plus leur propre fond. */
 .sous-onglets .segmented button { position: relative; z-index: 1; }
 .sous-onglets .segmented button.on {
   background: none;
   color: var(--text-primary);
 }
-/* Le survol de l'inactif s'eclaire du meme violet, en beaucoup plus discret :
-   il annonce ou le clic mene sans se faire passer pour l'onglet courant. */
 @media (hover: hover) { .sous-onglets .segmented button:not(.on):hover {
   background: color-mix(in oklab, var(--accent) 8%, transparent);
   color: var(--text-primary);
 } }
 
-/* La pastille de saisie en attente garde son ambre — voir sa regle plus bas.
-   Elle dit « il manque quelque chose ici », ce que le violet de la navigation ne
-   dit pas : deux messages, deux couleurs. */
-
 @media (max-width: 900px) {
-  /* Sous la barre fixe du haut, pas dessous. Et pleine largeur : une bascule
-     qui gouverne toute la page ne se présente pas comme deux petits boutons
-     posés dans un coin — les deux moitiés se partagent l'écran, la cible est
-     large, et on comprend que c'est la page entière qui change. */
   /* Le collage reste sous la barre deployee, et ne bouge jamais : c'est la
      translation, plus haut, qui remonte cette bande quand la barre se retire. Un
      `top` qui suivrait l'etat de la barre ferait recalculer la contrainte de
@@ -3949,10 +3020,6 @@ td .empty, th .empty { background: none; border: none; }
   background: var(--text-primary); color: var(--page); padding: 10px 18px; border-radius: var(--radius-pill);
   font-size: 13px; font-weight: 550; z-index: 100; box-shadow: var(--shadow);
 }
-/* Le bouton d'annulation vit dans le message. Il est sur fond sombre, donc les
-   couleurs des boutons ordinaires ne s'appliquent pas : on emprunte celles du
-   toast, inversees. Le trait de separation dit qu'il ne fait pas partie de la
-   phrase, sans lui ajouter une bordure complete a l'interieur d'une pilule. */
 .toast-action {
   position: relative;
   margin-left: 12px; padding: 0 0 0 12px;
@@ -3976,7 +3043,6 @@ td .empty, th .empty { background: none; border: none; }
 }
 @media (hover: hover) { .toast-action:hover { opacity: .75; } }
 
-/* ---------------- Responsive ---------------- */
 @media (max-width: 1180px) {
   .g-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .g-hero, .g-2-1 { grid-template-columns: minmax(0, 1fr); }
@@ -3985,23 +3051,8 @@ td .empty, th .empty { background: none; border: none; }
   body { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: static; height: auto; max-width: 100%; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; }
   .brand { padding: 0; }
-  /* Le burger a cédé la place au bouton profil, à droite : deux portes pour
-     un même panneau, c'est le doublon qu'on retire partout ailleurs. */
   .burger { display: none; }
 
-  /* La navigation devient une feuille qui monte du bas.
-
-     Trois positions ont été essayées avant celle-là. Par la gauche, elle venait
-     d'un burger d'en-tête qui n'existe plus. Par le haut, pour naître du logo :
-     sa poignée tombait alors sous la barre d'onglets flottante, invisible, et
-     l'axe du geste devenait celui du défilement. Par le bas, la poignée est en
-     haut de la feuille, en pleine vue, et le pouce la repousse vers le bas d'où
-     elle vient — c'est aussi le motif que tout le monde connaît.
-
-     Sa hauteur est celle de son contenu, plafonnée : deux entrées et deux
-     bascules n'ont pas besoin d'un écran entier, et la page qui reste visible
-     derrière dit qu'on n'a pas navigué. Le rembourrage du bas dégage la barre
-     d'onglets, qui passe au-dessus (z-index 65) et reste donc utilisable. */
   .nav {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 60;
     max-height: min(78%, 560px);
@@ -4017,17 +3068,12 @@ td .empty, th .empty { background: none; border: none; }
   }
   body.nav-open .nav { transform: none; visibility: visible; }
 
-  /* La poignée, sur le bord qu'on pousse : en haut de la feuille, horizontale,
-     dans l'axe du geste. Même signe que celui d'une feuille qu'on renvoie. */
   .nav::after {
     content: ''; position: absolute; left: 50%; top: 9px;
     width: 38px; height: 4px; margin-left: -19px; border-radius: var(--radius-pill);
     background: var(--sidebar-ink); opacity: .2; pointer-events: none;
   }
-  /* Ceinture et bretelles : même si un contexte d'empilement se glissait
-     entre les deux, la barre reste au-dessus du voile pendant l'ouverture. */
   body.nav-open .sidebar { z-index: 60; }
-  /* Une transition figée laisserait le panneau hors écran mais « ouvert ». */
   @media (prefers-reduced-motion: reduce) { .nav { transition: none; } }
   .nav a { padding: 13px 14px; font-size: 15px; }
   .nav a .ic { display: inline-block; width: 20px; font-size: 14px; }
@@ -4042,22 +3088,9 @@ td .empty, th .empty { background: none; border: none; }
   }
   .nav-backdrop[hidden] { display: none; }
 
-  /* le burger reste cliquable par-dessus le panneau */
   .burger { position: relative; z-index: 70; }
   .nav a { white-space: nowrap; padding: 7px 10px; }
-  /* Les pictogrammes restaient allumes plus haut dans ce meme bloc, puis cette
-     regle les eteignait — meme specificite, ecrite apres, donc c'est elle qui
-     gagnait. Le tiroir « Plus » montrait donc sept intitules nus a cote d'une
-     gouttiere vide, alors que le menu de bureau et la barre du bas portent les
-     memes dessins pour les memes destinations. Trois presentations du meme menu
-     sur le meme appareil. */
-  /* La barre du haut ne porte plus que l'identité et le burger. Le pied de
-     menu n'a plus rien à y montrer sur téléphone. */
   .sidebar-foot { display: none; }
-  /* Les deux réglages tombent au bas du tiroir, loin des destinations et
-     sous le pouce quand le menu est ouvert. */
-  /* Cibles tactiles plus larges, donc rembourrage plus grand : le calcul
-     d'alignement suit, via les deux variables. */
   /* 10px : le retrait reellement applique aux liens ici — `.nav a` est
      redeclare plus bas dans ce meme bloc, et c'est cette valeur qui gagne. */
   .nav-outils { --nav-retrait: 10px; --oeil-marge: 10px; padding-top: 10px; padding-bottom: 4px; }
@@ -4140,14 +3173,8 @@ td .empty, th .empty { background: none; border: none; }
        barre retiree, donc hors d'atteinte a ce moment-la. `app.js` rend la barre
        avant d'ouvrir le tiroir, ce qui ferme le dernier chemin. */
   }
-  /* Le remplissage du contenu ne bouge jamais, lui. Le faire suivre le retrait
-     deplacerait la page sous le doigt : le defilement sauterait de 54 px a chaque
-     aller-retour, et l'on chasserait la ligne qu'on lisait. */
   .main { padding-top: var(--h-barre); }
 
-  /* Le depart : plus court, et accelere. La transition qui s'applique est celle
-     de l'etat vise, donc c'est bien ici que se regle le retrait, et dans la regle
-     de base que se regle le retour. */
   body.haut-cache .sidebar {
     /* `translate3d` et non `translateY` : la troisieme coordonnee, meme nulle,
        force le compositeur a prendre l'element en charge. C'est le remede des
@@ -4174,9 +3201,6 @@ td .empty, th .empty { background: none; border: none; }
      reste, et elle reste par construction. C'est ce qui la met hors de portee
      d'une distraction — j'ai perdu cette garde une fois, en ecrivant un zero, et
      les sous-onglets sont remontes derriere l'heure de l'iPhone. */
-  /* Memes duree et courbe que la barre : deux vitesses feraient decrocher les
-     sous-onglets de la barre qu'ils accompagnent, et c'est exactement ce qui se
-     lit comme un defaut. Un test l'exige, et il a raison. */
   .sous-onglets {
     transition: transform .42s cubic-bezier(.3, .55, .25, 1);
   }
@@ -4233,17 +3257,8 @@ td .empty, th .empty { background: none; border: none; }
      demanderait de neutraliser en meme temps le retrait et la variable, soit deux
      regles qui se contredisent a lire. */
 
-  /* Le titre s'ecrivait deux fois : en gris dans la barre fixe, et en blanc
-     juste en dessous. La barre fixe suffit — elle reste visible au
-     defilement, l'autre partait a la premiere poussee du doigt. */
   .topbar { display: none; }
 
-  /* La poignee en tete des pages annoncait le geste « repousser pour revenir a
-     l'accueil ». Le geste est parti — Apercu est le premier onglet de la barre du
-     bas, toujours a un appui — et l'annonce d'un geste inexistant avec lui. */
-  /* La barre fixe porte la rubrique, et rien d'autre : le nom de l'app est
-     déjà dit par le logo, et le titre de la page défile hors de l'écran.
-     Sans ça on perdait de vue où l'on se trouve dès le premier scroll. */
   .brand-sous, .brand-text strong { display: none; }
   .brand-vue {
     display: block; font-size: 15px; font-weight: 680;
@@ -4252,14 +3267,7 @@ td .empty, th .empty { background: none; border: none; }
   }
   .view { padding: 14px 16px 48px; gap: 14px; }
   .g-2, .g-3, .g-4 { grid-template-columns: minmax(0, 1fr); }
-  /* Les tuiles de synthese passent par paires : empilees une par une, cinq
-     tuiles occupaient deux ecrans avant le premier graphique. Un chiffre et
-     son etiquette tiennent tres bien dans une demi-largeur — c'est la
-     grammaire de toutes les apps de patrimoine. Les grilles de cartes,
-     elles, restent en colonne. */
   .g-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  /* Un compte impair laisse la derniere tuile seule dans sa colonne : elle
-     prend alors toute la largeur plutot que de laisser un trou. */
   .g-tuiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .g-tuiles .tile { padding: 12px 13px; }
   .g-tuiles .t-value { font-size: 19px; }
@@ -4278,13 +3286,9 @@ td .empty, th .empty { background: none; border: none; }
 
      Dix et demi et non onze et demi : la tuile ne fait que 167 px de large. */
   .g-tuiles .t-meta { font-size: 10.5px; flex-wrap: wrap; gap: 4px 6px; }
-  /* Toutes les rangees a la meme hauteur, meme si une etiquette se replie. */
   .g-tuiles { grid-auto-rows: 1fr; }
   .view, .topbar { padding-left: 16px; padding-right: 16px; }
 
-  /* Un enfant de flex ou de grille refuse par defaut de descendre sous sa
-     largeur min-content. Avec des tableaux en nowrap, toute la page deborde.
-     On leve ce plancher sur les conteneurs de mise en page. */
   .view, .view > *, .grid, .grid > *, .card, .hero, .tile { min-width: 0; }
   .table-wrap { max-width: 100%; }
 
@@ -4294,7 +3298,6 @@ td .empty, th .empty { background: none; border: none; }
   .hero-value { font-size: 34px; }
   .card, .hero { padding: 15px; }
 
-  /* Les en-tetes de carte et les barres de boutons passent a la ligne */
   .card-head { flex-wrap: wrap; gap: 6px 10px; }
   /* Un bouton seul qui passe a la ligne reste a droite. `space-between` distribue
      ligne par ligne : seul sur la seconde, il partait a gauche, et la carte
@@ -4327,18 +3330,6 @@ td .empty, th .empty { background: none; border: none; }
   .kv { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; }
   .kv dt { min-width: 0; overflow-wrap: break-word; }
 
-  /* Les deux regles ci-dessus valent pour des montants : le libelle cede, la
-     valeur garde sa largeur. Une liste de prose demande l'inverse, et les
-     surcharges doivent etre reprises ici — declarees plus haut, elles
-     perdaient contre ces deux lignes a specificite egale. Sans elles, une
-     valeur repliable prend tout et « Nom officiel » s'imprime a la
-     verticale.
-
-     Ce qui n'inverse pas, c'est l'alignement. Il etait pose a gauche ici, et
-     nulle part ailleurs : la meme carte d'identite se lisait donc a droite sur
-     un ecran et a gauche sur un telephone, au-dessus d'un bloc de chiffres reste
-     a droite. Deux colonnes de valeurs qui se suivent dans une meme fenetre
-     partagent leur bord, prose ou montants. */
   .kv-texte { grid-template-columns: auto minmax(0, 1fr); }
   .kv-texte dt { min-width: max-content; overflow-wrap: normal; }
 
@@ -4369,7 +3360,6 @@ td .empty, th .empty { background: none; border: none; }
      etre tenue a la main — elle se serait perimee au premier habillage suivant. */
   input, select, textarea { font-size: 16px !important; }
 
-  /* défilement inertiel sur les tableaux larges */
   .table-wrap { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
 
   /* Un tableau hors conteneur défilant reste un tableau : passé en `block`
@@ -4397,24 +3387,11 @@ td .empty, th .empty { background: none; border: none; }
   table.table-serree input, table.table-serree select { width: 100%; min-width: 0; }
   table.table-serree td, table.table-serree th { padding-left: 4px; padding-right: 4px; }
 
-  /* Les largeurs de colonnes sont un reglage a part : « nom, deux nombres, une
-     croix » n'est qu'une forme parmi d'autres. Melangees a la regle ci-dessus,
-     elles ecrasaient a 34 px le menu deroulant d'un tableau a deux colonnes.
-     En mise en page fixe et sans largeur declaree, les colonnes se partagent
-     l'espace a parts egales : un simple « % » recevait autant qu'un nom a
-     saisir. Les colonnes chiffrees prennent donc ce que leur contenu demande,
-     le nom garde le reste. */
   table.cols-nom-chiffres th:nth-child(2) { width: 84px; }
   table.cols-nom-chiffres th:nth-child(3) { width: 44px; }
   table.cols-nom-chiffres td:last-child,
   table.cols-nom-chiffres th:last-child { width: 34px; }
 
-  /* Nom a gauche et action a droite ne tiennent pas cote a cote : il reste au
-     libelle une colonne ou « GraniteShares 2x Long NVDA Daily ETF » se coupe
-     net, sans ellipse, en courant sous l'action. Deux colonnes serrees valent
-     moins qu'une ligne empilee : le nom prend toute la largeur, l'action se
-     pose dessous et devient une vraie cible pour le pouce. C'est le motif que
-     le reste de l'application applique deja sous 768 px. */
   table.cols-nom-action, table.cols-nom-action tbody,
   table.cols-nom-action tr, table.cols-nom-action td { display: block; width: auto; }
   table.cols-nom-action tr {
@@ -4432,14 +3409,8 @@ td .empty, th .empty { background: none; border: none; }
      doigt est tenue. */
   table.cols-nom-action select { width: 100%; }
 
-  /* la colonne figée mangerait la moitié de l'écran */
   .sticky-col { position: static; }
 
-  /* Un tableau de saisie à 17 colonnes ne peut pas tenir dans 390 px : le
-     comprimer rognait le texte de chaque champ. On lui laisse sa largeur
-     naturelle et on fait défiler horizontalement.
-     Uniquement dans un conteneur défilant : sur un tableau qui joue lui-même
-     ce rôle, min-width l'emporterait sur max-width et déborderait la page. */
   .table-wrap table.editable { min-width: 880px; }   /* une colonne de plus : Classe + Rôle */
   table.editable th, table.editable td { white-space: nowrap; }
   /* Sauf la prose : cette regle-ci empeche un montant de se couper en deux, ce
@@ -4449,41 +3420,13 @@ td .empty, th .empty { background: none; border: none; }
   table.editable td.prose { white-space: normal; }
   table.editable input, table.editable select { min-width: 4.5em; }
   table.editable td.name input { min-width: 9em; }
-  /* Categorie et compte portent des mots, pas des nombres : 4.5em tronquait
-     un intitule long en le tronquant. Le tableau defile deja horizontalement, la
-     largeur en trop ne coute rien. */
   table.editable select[data-path$=".account"] { min-width: 9.5em; }
   table.editable select[data-path$=".category"] { min-width: 7em; }
   .sym-cell input { min-width: 6em; }
 }
 
-/* ======================================================   Téléphone — le menu passe sous le pouce
-
-   En haut à gauche, le burger est le coin le plus difficile à atteindre
-   d'une seule main. Il devient un bouton flottant en bas à droite, et
-   c'est le même bouton qui referme : ouvrir et fermer se font sans
-   déplacer le pouce.
-
-   Le panneau ancre sa liste en bas pour la même raison — les entrées
-   naissent au-dessus du bouton, pas à l'autre bout de l'écran.
-
-   Le seuil est celui de la barre latérale, 900 px, et pas un autre.
-
-   Il valait 767 px, alors que la latérale ne redevient une colonne qu'à
-   900 px : entre les deux — l'iPad en portrait, précisément — la barre du
-   haut existait sans que ses boutons soient habillés, et la barre du bas
-   ne s'affichait pas du tout. La navigation ne tenait plus qu'au bouton de
-   profil. Une mise en page et le mobilier qui la sert doivent basculer au
-   même seuil, sinon il existe une largeur où l'un attend l'autre.
-   ============================================================= */
 @media (max-width: 900px) {
 
-  /* Le logo ouvre les réglages : un chevron le dit, sinon rien ne l'annonce —
-     un logo se lit « accueil », pas « menu ». Il tourne à l'ouverture, comme
-     tous les dépliants de l'application.
-
-     La zone touchée s'étend vers le bas : sur 34 px de logo, le pouce viserait
-     juste. Le remplissage la porte à 44, le minimum d'une cible tactile. */
   /* Le logo reste au-dessus du panneau qu'il ouvre. Le tiroir couvre tout
      l'écran et le recouvrait : plus rien ne le refermait, puisque c'est lui le
      bouton, et le voile est sous le panneau. Ne restait que le balayage, qui
@@ -4494,8 +3437,6 @@ td .empty, th .empty { background: none; border: none; }
      tronque proprement. */
   .brand { padding: 2px 6px 2px 0; flex: 1; }
 
-  /* Le retour prend la place du logo, il ne s'ajoute pas à lui : deux marques
-     au même endroit se disputeraient le coin le plus lu de l'écran. */
   body.sous-page .brand-mark { display: none; }
   body.sous-page .retour { display: grid; }
   .retour {
@@ -4512,13 +3453,8 @@ td .empty, th .empty { background: none; border: none; }
     stroke-linecap: round; stroke-linejoin: round;
   }
 
-  /* Le bouton de retour en tête de page s'efface : il ferait doublon avec celui
-     de la barre, à trente pixels l'un de l'autre. */
   .retour-page { display: none; }
 
-  /* Deux boutons ronds au bout de la barre, la cloche puis le compte. Ronds
-     parce qu'ils commandent et ne mènent pas : le reste de l'en-tête est du
-     texte, et un cercle se distingue d'un titre sans avoir besoin d'un cadre. */
   .entete-actions { display: flex; align-items: center; gap: 8px; position: relative; }
   .btn-rond {
     width: 38px; height: 38px; flex: none; padding: 0;
@@ -4537,8 +3473,6 @@ td .empty, th .empty { background: none; border: none; }
   .btn-rond[aria-expanded="true"] { background: var(--sidebar-actif, var(--sidebar-border)); }
   .btn-rond:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* La pastille de la cloche : le même ambre que les rappels, la même taille
-     que celle des onglets. Elle mord sur le bord du cercle, comme partout. */
   .pastille-ronde {
     position: absolute; top: 1px; right: 1px;
     width: 9px; height: 9px; border-radius: var(--radius-pill);
@@ -4546,9 +3480,6 @@ td .empty, th .empty { background: none; border: none; }
     box-shadow: 0 0 0 2px var(--sidebar);
   }
 
-  /* Le panneau descend de la cloche, aligné sur le bord droit de l'écran. Sa
-     largeur est plafonnée : au-delà, une liste de trois lignes devient une
-     colonne de texte étirée. */
   .popover-notifs {
     position: absolute; top: calc(100% + 10px); right: 0; z-index: 70;
     width: min(330px, calc(100vw - 24px));
@@ -4575,8 +3506,6 @@ td .empty, th .empty { background: none; border: none; }
   }
   .notif-tete b { font-size: 13.5px; }
   .notif-tete span { font-size: 11.5px; color: var(--muted); margin-left: auto; }
-  /* L'engrenage ferme la ligne, apres le compte : c'est une sortie, pas un
-     titre. Meme discretion que les croix des lignes. */
   .notif-reglages { flex: none; padding: 2px 4px; opacity: .6; }
   @media (hover: hover) { .notif-reglages:hover { opacity: 1; } }
   /* `fill` et `stroke` viennent de l'attribut du SVG : trois points pleins, pas
@@ -4584,8 +3513,6 @@ td .empty, th .empty { background: none; border: none; }
      ici, et c'est voulu. */
   .notif-reglages svg { width: 16px; height: 16px; display: block; }
 
-  /* Une ligne entière est le bouton : le titre dit quoi, la ligne mène là où ça
-     se règle. Trois niveaux, trois teintes, celles des contrôles de cohérence. */
   .notif-ligne {
     display: flex; align-items: flex-start; gap: 2px; border-radius: var(--radius-sm);
   }
@@ -4596,9 +3523,6 @@ td .empty, th .empty { background: none; border: none; }
     padding: 9px 4px 9px 8px; border: none; background: none; border-radius: var(--radius-sm);
     font: inherit; color: inherit; cursor: pointer;
   }
-  /* La croix ne se montre au survol que la ou le survol existe. Au doigt il n'y
-     en a pas, elle reste donc visible : une commande qui n'apparait qu'au
-     pointeur n'existe pas sur telephone. */
   .notif-x { margin: 6px 5px 0 0; flex: none; opacity: .55; }
   @media (hover: hover) { .notif-x:hover { opacity: 1; } }
   @media (hover: hover) {
@@ -4615,8 +3539,6 @@ td .empty, th .empty { background: none; border: none; }
   .notif-txt span { font-size: 12px; color: var(--text-secondary); }
   .notif-vide { padding: 16px 10px 18px; text-align: center; color: var(--muted); font-size: 13px; }
 
-  /* Le chevron de fermeture, au bas du panneau : pleine largeur pour se viser
-     au pouce, discret pour ne pas se prendre pour une ligne de la liste. */
   .notif-fermer {
     display: block; width: 100%; padding: 5px 0 3px; margin-top: 2px;
     border: none; background: none; cursor: pointer;
@@ -4706,28 +3628,6 @@ td .empty, th .empty { background: none; border: none; }
        reserve rien. Sans plancher, la pilule y collerait au bord physique. */
     bottom: max(10px, calc(3px + var(--zone-geste) / 2));
     border-radius: var(--radius-pill);
-    /* Du verre, et non un aplat translucide.
-
-       Le fond descend a 14 %. Le commentaire ci-dessus donnait 22 % pour
-       plancher, et c'en etait un tant que le fond portait seul la separation :
-       en dessous, la barre cessait de se lire comme un objet pose devant le
-       contenu. Ce n'est plus le fond qui la dessine, c'est l'epaisseur simulee du
-       materiau, et le plancher se deplace avec.
-
-       Trois pieces, celles du verre d'iOS. La saturation poussee a 190 % : c'est
-       elle, plus que le flou, qui donne la couleur du contenu qui passe dessous —
-       un flou seul rend une bouillie grise. Un reflet en haut, degrade sur la
-       moitie superieure, qui simule la lumiere prise par la tranche. Et deux
-       liseres internes, clair en haut, sombre en bas, qui donnent au verre une
-       epaisseur : c'est ce qui remplace la bordure franche.
-
-       Le blanc des reflets est litteral et non tire d'une variable de theme : un
-       reflet est clair dans les deux themes. En theme clair il ne se voit
-       presque pas, ce qui est juste — le verre y est laiteux, pas brillant.
-
-       Ce qui manque, et qui ne se fait pas en CSS : la refraction, le contenu qui
-       se deforme en passant sous le bord du verre. Elle demanderait un filtre SVG
-       de deplacement applique a une copie de la page. */
     background:
       linear-gradient(to bottom,
         rgba(255, 255, 255, .10),
@@ -4736,9 +3636,6 @@ td .empty, th .empty { background: none; border: none; }
     backdrop-filter: blur(18px) saturate(190%) brightness(1.06);
     -webkit-backdrop-filter: blur(18px) saturate(190%) brightness(1.06);
     border: 1px solid color-mix(in oklab, var(--border-strong) 70%, transparent);
-    /* Les deux liseres d'epaisseur, puis les deux ombres portees : une large qui
-       decolle la pilule de la page, une courte qui dessine son assise. Sans la
-       seconde, elle a l'air posee sur rien en theme clair. */
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16),
                 inset 0 -1px 0 rgba(0, 0, 0, .22),
                 0 12px 32px -10px rgba(0, 0, 0, .55),
@@ -4750,14 +3647,6 @@ td .empty, th .empty { background: none; border: none; }
     min-height: 52px; padding: 7px 2px 8px;
     background: none; border: none; cursor: pointer; text-decoration: none;
     font: inherit; font-size: 10.5px; font-weight: 550; letter-spacing: .01em;
-    /* Ce qui permet a la barre d'etre transparente : une ombre derriere le texte
-       et les traits des icones. Sans elle, un aplat clair du graphique qui passe
-       sous la pilule mange les libelles. Elle est invisible sur fond sombre —
-       c'est la methode des titres poses sur une image.
-
-       Deux ombres et non une : une courte qui detache le glyphe, une plus large
-       et diffuse qui pose un halo. La seconde est ce qui a permis de descendre le
-       fond a 30 % — une ombre unique tenait jusqu'a 46, pas au-dela. */
     text-shadow: 0 1px 2px color-mix(in oklab, var(--page) 78%, transparent),
                  0 0 7px color-mix(in oklab, var(--page) 55%, transparent);
     /* L'encre discrète des annotations est trop faible ici : à 10,5 px, une
@@ -4771,19 +3660,6 @@ td .empty, th .empty { background: none; border: none; }
     fill: none; stroke: currentColor; stroke-width: 1.7;
     stroke-linecap: round; stroke-linejoin: round;
   }
-  /* L'onglet courant s'annonce par trois signaux : une pastille sous lui, une
-     icône colorée, et un libellé à pleine encre. L'accent seul ne convenait
-     pas au texte — 2,89 de contraste en thème clair, sous le seuil lisible.
-     Il reste sur l'icône, où la forme porte déjà le sens.
-
-     Le premier signal était un trait de 2 px collé en haut de la barre. Dans
-     une pilule il devenait une encoche flottante à mi-courbe, sans rien à quoi
-     s'accrocher. Une pastille remplit le rôle et c'est ce que font les deux
-     applications citées en exemple.
-
-     Elle est neutre et non violette : ce fond passe derrière un libellé, et
-     l'accent sous du texte lui coûterait le contraste qu'on vient de lui
-     garantir. La couleur reste sur l'icône, où elle ne gêne rien. */
   .tabbar a.on, .tabbar button.on { color: var(--text-primary); }
   .tabbar a.on svg, .tabbar button.on svg { color: var(--accent); }
 
@@ -4815,8 +3691,6 @@ td .empty, th .empty { background: none; border: none; }
        quand ils etaient dans le remplissage etait juste ; les garder
        maintenant remonterait la pastille au-dessus des libelles. */
     top: 5px; bottom: 5px; left: 2px;
-    /* Deux pixels de marge de chaque cote au lieu de cinq : « Allocation » est
-       le libelle le plus long et la pastille lui serrait les epaules. */
     width: calc(20% - 4px);
     border-radius: var(--radius-pill);
     background: color-mix(in oklab, var(--text-primary) 10%, transparent);
@@ -4834,8 +3708,6 @@ td .empty, th .empty { background: none; border: none; }
   .tabbar:has(> :nth-child(3).on) { --onglet: 2; }
   .tabbar:has(> :nth-child(4).on) { --onglet: 3; }
   .tabbar:has(> :nth-child(5).on) { --onglet: 4; }
-  /* Aucun onglet actif — une vue qui n'est pas dans la barre : la pastille
-     s'efface au lieu de rester sur un onglet qu'on a quitte. */
   .tabbar:not(:has(> .on))::before { opacity: 0; }
   @media (prefers-reduced-motion: reduce) {
     .tabbar::before { transition: none; }
@@ -4843,16 +3715,6 @@ td .empty, th .empty { background: none; border: none; }
 
   .tabbar a:active, .tabbar button:active { color: var(--text-secondary); }
 
-  /* Pastille de saisie en attente, sur l'onglet concerné. Budget la porte pour
-     les deux saisies, dépenses et relevé : les relevés sont un de ses
-     sous-onglets, et aucune page du tiroir n'attend plus rien.
-
-     Ambre, et non le rouge critique : elle ne signale rien de casse, seulement
-     une saisie mensuelle qui n'a pas encore eu lieu. Chaque debut de mois, elle
-     posait donc un point d'alerte sur la barre de navigation pour de la routine,
-     et une alerte qui revient tous les mois cesse d'etre lue. Le rouge reste au
-     chiffre faux : les controles de coherence, eux, le meritent. La carte de
-     rappel de l'accueil a suivi le meme chemin, pour la meme raison. */
   .tab-pastille {
     position: absolute; top: 7px; left: 50%; margin-left: 7px;
     width: 7px; height: 7px; border-radius: 50%;
@@ -4861,19 +3723,6 @@ td .empty, th .empty { background: none; border: none; }
   }
   .tab-pastille[hidden] { display: none; }
 
-  /* Le bond de l'onglet qu'on retouche : l'icône se tasse puis se détend,
-     comme un bouton qu'on presse. Court — c'est un accusé de réception, pas
-     une animation à regarder.
-
-     Il descendait de 2 px en se tassant à 86 %, soit près de 4 px de course
-     verticale, pendant que le libellé sous lui ne bougeait pas. Les deux se
-     désolidarisaient, et l'onglet paraissait trembler plutôt que répondre.
-     Le tassement seul suffit à dire qu'on a appuyé, et il ne déplace rien : un
-     accusé de réception ne doit pas se remarquer comme un défaut.
-
-     La courbe perd aussi son rebond élastique — le 1,56 renvoyait l'icône
-     au-dessus de sa taille avant de revenir, ce qui ajoutait une oscillation là
-     où l'on ne voulait qu'un appui. */
   .tabbar a.rebond svg { animation: rebond-onglet .32s cubic-bezier(.33, 0, .3, 1); }
   @keyframes rebond-onglet {
     0%   { transform: scale(1); }
@@ -4881,21 +3730,6 @@ td .empty, th .empty { background: none; border: none; }
     100% { transform: scale(1); }
   }
 
-  /* La barre entière accuse l'appui, d'un tassement d'un pour cent.
-
-     C'est ce que font les barres d'onglets du système : la pilule s'enfonce une
-     fraction de seconde sous le doigt. Elle répond à tous les onglets, y compris
-     ceux qui changent de page — c'est le seul retour avant que la nouvelle vue
-     arrive.
-
-     Un pour cent, et pas davantage : la barre fait 355 px de large, donc la même
-     proportion qui passe pour un appui sur un bouton deviendrait une secousse.
-     La courbe rend un peu au-delà de 1 avant de revenir, ce qui donne le
-     ressort ; sur un pour cent, il se sent sans se voir.
-
-     Le tassement porte sur la barre, donc la pilule et les libellés suivent
-     ensemble : rien ne se désolidarise, ce qui était le défaut de l'ancien bond
-     de l'icône. */
   .tabbar.tape { animation: appui-barre .38s cubic-bezier(.3, 1.5, .5, 1); }
   @media (prefers-reduced-motion: reduce) {
     .tabbar.tape { animation: none; }
@@ -4904,13 +3738,8 @@ td .empty, th .empty { background: none; border: none; }
     .tabbar a.rebond svg { animation: none; }
   }
 
-  /* Le tiroir s'ouvre au-dessus du contenu mais sous la barre d'onglets :
-     « Plus » reste à sa place, et le referme sans déplacer le pouce. */
-  /* Plus rien à centrer : la feuille fait la hauteur de son contenu, et c'est
-     par le bas qu'elle arrive — le vide qu'il fallait combler n'existe plus. */
   .nav-outils { margin-top: 12px; }
 
-  /* Tête du tiroir : identité et patrimoine net. */
   .nav-tete {
     display: flex !important; align-items: center; gap: 12px;
     padding: 14px 12px; margin-bottom: 10px;
@@ -4925,7 +3754,6 @@ td .empty, th .empty { background: none; border: none; }
     background: none; border: none; padding: 0; text-align: left; font-family: inherit;
   }
 
-  /* La barre ne doit jamais recouvrir la fin de la page. */
   .view { padding-bottom: calc(76px + var(--zone-geste)); }
 
   /* Toute vue doit dépasser l'écran, ne serait-ce que d'un pixel.
@@ -4942,24 +3770,13 @@ td .empty, th .empty { background: none; border: none; }
      plus au hasard. */
   .view { min-height: calc(100vh + 1px); }
 
-  /* Le message de confirmation passe en haut : en bas, il se posait sur les
-     onglets — et celui de la synchronisation cloud s'affiche au demarrage,
-     donc pile au moment ou l'on cherche a naviguer. Il se place sous la barre
-     fixe, jamais dessus. Il effleure le titre de la page pendant ses deux
-     secondes d'affichage, ce qui est le lot d'un message passager ; les
-     onglets, eux, doivent rester cliquables en permanence. */
   .toast {
     bottom: auto; top: calc(var(--h-barre) + 8px);
     max-width: calc(100% - 32px); text-align: center;
   }
 
-  /* Tirer vers le bas ramène à l'accueil. Le navigateur ne doit pas
-     s'emparer du geste pour recharger la page à notre place. */
   body { overscroll-behavior-y: contain; }
 
-  /* Vivaient ici le calque qui donnait la profondeur pendant le glissement, et
-     les regles qui transformaient la page courante en carte posee dessus. Ils
-     sont partis avec le geste de retour a l'accueil. */
 }
 
 @media print {
@@ -4967,14 +3784,6 @@ td .empty, th .empty { background: none; border: none; }
   body { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* ======================================================   Finition — mouvement, mise au point, chrome du navigateur
-
-   Rien ici ne change une donnée : ce sont les détails qui font qu'une
-   interface répond au lieu de subir. Tout se désactive si le système
-   demande moins d'animation.
-   ============================================================= */
-
-/* --- Barres de défilement : fines, dans le ton du fond --- */
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
@@ -4984,11 +3793,6 @@ td .empty, th .empty { background: none; border: none; }
 }
 @media (hover: hover) { *::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; } }
 
-/* --- Sélection et mise au point clavier --- */
-/* La selection reste un voile, pas un surlignage. A 32 % de l'accent, un titre
-   en gras se retrouvait sur un bloc violet franc — vu sur l'en-tete d'une fiche,
-   ou un appui long avait attrape le titre, le sous-titre et la croix d'un coup.
-   Un voile laisse lire le texte qu'il designe, ce qui est tout son travail. */
 ::selection { background: color-mix(in oklab, var(--accent) 18%, transparent); }
 :is(button, a, input, select, summary):focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-xs);
@@ -5026,19 +3830,15 @@ td .empty, th .empty { background: none; border: none; }
   animation: barre-pousse .55s cubic-bezier(.22, .61, .36, 1) .14s backwards;
 }
 
-/* --- Cartes : réagissent au survol sans bouger la page --- */
 .card { transition: border-color .15s ease; }
 @media (hover: hover) { .card:hover { border-color: color-mix(in oklab, var(--border-strong) 70%, transparent); } }
 
-/* --- Boutons : un appui qui se sent --- */
 .btn { transition: opacity .12s, background .12s, transform .08s; }
 .btn:active { transform: scale(.97); }
 
-/* --- Lignes de tableau : surlignage au survol, sans bordure qui saute --- */
 tbody tr { transition: background .12s ease; }
 @media (hover: hover) { tbody tr:hover { background: color-mix(in oklab, var(--surface-2) 60%, transparent); } }
 
-/* --- Graphiques : grille plus discrète, infobulle plus nette --- */
 .tick { font-size: 10px; }
 .chart-tip {
   border-radius: var(--radius-sm); padding: 10px 12px;
@@ -5050,7 +3850,6 @@ tbody tr { transition: background .12s ease; }
   color: var(--muted); margin-bottom: 6px;
 }
 
-/* --- Bascule de thème : une transition courte évite le clignotement --- */
 body, .card, .tile, .topbar {
   transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
@@ -5097,17 +3896,10 @@ body, .card, .tile, .topbar {
 @keyframes modal-fond-sort { to { opacity: 0; } }
 @keyframes modal-sort { to { opacity: 0; transform: translate3d(0, 8px, 0) scale(.985); } }
 @media (max-width: 900px) {
-  /* La feuille repart comme elle est venue : vers le bas, un peu plus vite
-     qu'à l'aller — on a fini, rien à lire en route. */
   .modal.modal-ferme .modal-panel { animation: feuille-sort var(--duree-fenetre-sortie) cubic-bezier(.4, 0, 1, 1) forwards; }
   @keyframes feuille-sort { to { transform: translate3d(0, 100%, 0); } }
 }
 
-/* --- Toast : il arrive d'un ressort, il part d'un souffle ---
-   L'entrée légèrement élastique attire l'œil une fraction de seconde, ce qui
-   est tout son travail ; la sortie anticipe la disparition, pour qu'il ne
-   s'évapore pas au milieu d'une lecture. Le transform d'entrée doit finir sur
-   translateX(-50%) : c'est ce qui centre le toast, l'oublier le décalerait. */
 @keyframes toast-entre {
   from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(.94); }
   to   { opacity: 1; transform: translateX(-50%); }
@@ -5118,7 +3910,6 @@ body, .card, .tile, .topbar {
 .toast { animation: toast-entre .32s cubic-bezier(.26, 1.25, .48, 1); }
 .toast.toast-sort { animation: toast-sortie .32s ease forwards; }
 
-/* --- Infobulle des graphiques : elle se pose, elle ne surgit pas --- */
 @keyframes tip-pose { from { opacity: 0; transform: translateY(3px) scale(.98); } }
 .chart-tip { animation: tip-pose .15s cubic-bezier(.22, .61, .36, 1); }
 
@@ -5135,29 +3926,11 @@ details::details-content {
 }
 details[open]::details-content { block-size: auto; }
 
-/* --- Contrôles segmentés et pastilles de plage : l'état glisse --- */
-/* L'appui se sent : le meme tassement que les boutons, et l'etat « on » fond
-   au lieu de claquer. Demande du 9 aout sur Net / Brut, appliquee a la
-   famille entiere. La transition vit ICI et nulle part ailleurs : une
-   premiere version l'avait posee sur la regle de base des segmentes, et
-   celle-ci, plus bas dans la feuille, la battait a l'ordre sans un mot. */
 .segmented button, .plage button {
   transition: background .16s ease, color .16s ease, transform .08s ease;
 }
 .segmented button:active, .plage button:active { transform: scale(.94); }
 
-/* --- Chiffre du patrimoine : léger fondu quand il change --- */
-/* Un cours qui vient de changer s'eclaire, une fois.
-
-   Cette regle existait et n'etait branchee nulle part : une animation morte
-   depuis le debut. Elle ne faisait qu'un fondu d'opacite de 35 %, trop discret
-   pour se voir sur un chiffre qu'on ne regardait pas encore.
-
-   Elle porte maintenant un lavis de la teinte d'accent, qui monte vite et
-   s'efface lentement — c'est le geste de tous les courtiers, et il dit quelque
-   chose de vrai : ce chiffre-la a bouge, les autres non. Le fond est peint sur
-   un pseudo-element pour ne pas toucher la mise en page, et le chiffre garde
-   ses chiffres tabulaires : sa largeur ne bronche pas. */
 /* La courbe d'evolution se decouvre de gauche a droite, a l'arrivee.
 
    Les jauges poussaient de zero, les cartes montaient de 7 px, et le graphique
@@ -5184,27 +3957,6 @@ details[open]::details-content { block-size: auto; }
   .vue-entre .chart-trace { animation: none; }
 }
 
-/* Le contenu se fond quand on change de sous-onglet.
-
-   Un remplacement sec disait « autre page » ; un fondu dit « meme page, autre
-   facette », ce qui est la verite — Patrimoine et Cible parlent du meme argent.
-   180 ms et une translation de 4 px : assez pour se lire comme un mouvement,
-   trop court pour se faire attendre a chaque bascule.
-
-   Pas la cascade des cartes : elle appartient a l'arrivee sur une vue. La
-   rejouer ici couterait 0,4 s pour une page qu'on ne quitte pas. */
-/* La barre de sous-onglets ne bouge pas quand on l'actionne.
-
-   Elle est un enfant direct de la vue, donc la cascade d'arrivee l'emportait —
-   et changer de sous-onglet compose la page comme une arrivee. On voyait donc
-   clignoter l'objet qu'on venait de toucher : « quand on clique sur un onglet il
-   clignote une fois ».
-
-   La regle vaut au-dela du bug : une commande ne bouge pas sous le doigt qui
-   l'actionne, c'est ce qui la distingue de ce qu'elle commande. A l'arrivee
-   depuis une autre vue, en revanche, la barre peut cascader avec le reste : on
-   vient d'ailleurs, rien n'a ete touche a cet endroit. D'ou une classe posee
-   pour ce rendu-la seulement, et non une exclusion permanente. */
 .vue-entre.barre-immobile > .sous-onglets { animation: none; }
 
 @keyframes valeur-change {
@@ -5252,9 +4004,6 @@ details[open]::details-content { block-size: auto; }
   }
 }
 
-/* --------- Position du cours dans son année ---------
-   Une piste plutôt qu'un chiffre : on situe le cours entre son plus bas et
-   son plus haut d'un coup d'œil, ce qu'une paire de nombres ne donne pas. */
 .an52 { margin-top: 14px; }
 .an52-tete, .an52-pied {
   display: flex; justify-content: space-between; gap: 10px; font-size: 11.5px;
@@ -5294,27 +4043,14 @@ details[open]::details-content { block-size: auto; }
 .budget-charges > .card { order: 2; }                      /* Charges fixes */
 .budget-charges > .grid > .card:nth-child(2) { order: 3; } /* Autres depenses */
 
-/* Pastille sur un sous-onglet : le meme ambre que celle du menu, posee contre
-   le libelle. Elle dit lequel des trois onglets attend une saisie, ce que la
-   pastille de l'entree de menu ne pouvait pas preciser. */
 .sous-onglets .pastille-onglet {
   display: inline-block; width: 6px; height: 6px; border-radius: var(--radius-pill);
   margin-left: 6px; vertical-align: 2px;
   background: var(--warning);
 }
 
-/* Une grille a plusieurs colonnes qui n'a qu'un enfant laisse un trou : deux
-   tiers de contenu et un tiers de noir. C'est arrive trois fois — sur l'accueil
-   quand « Allocation par actif » a quitte la page, puis deux fois sur Budget
-   quand ses cartes se sont reparties entre sous-onglets. La regle le rend
-   impossible : un seul enfant, une seule colonne, quelle que soit la grille. */
 .grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 
-
-/* ---------------- Bandeau de demonstration ----------------
-   La bordure en tirets dit « pas pour de vrai » avant meme la lecture. Il
-   n'avait jamais eu de style : il s'affichait en texte brut au-dessus du
-   titre, premiere chose vue de la demonstration. */
 .bandeau-demo {
   margin: 12px 18px 0; padding: 9px 14px; border-radius: var(--radius-sm);
   border: 1px dashed var(--border-strong, var(--grid));
@@ -5322,11 +4058,6 @@ details[open]::details-content { block-size: auto; }
   font-size: 12.5px; text-align: center;
 }
 .bandeau-demo b { color: var(--text-primary); }
-/* ---------------- Tête de l'onglet Charges fixes ----------------
-   Trois chiffres et une liste a barres, la ou l'onglet s'ouvrait sur un tableau
-   de huit colonnes. Le grand montant et les deux petits se placent cote a cote
-   au-dessus de 560 px, l'un sous l'autre en dessous : deux chiffres a 25 px
-   n'entrent pas sur 375 px de large. */
 .charges-tete { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: flex-end; }
 .ct-chiffre { display: flex; flex-direction: column; gap: 2px; }
 .ct-chiffre b { font-size: 28px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -5339,10 +4070,6 @@ details[open]::details-content { block-size: auto; }
   .ct-cote { margin-left: 0; gap: 22px; }
 }
 
-/* La ligne des crédits, sous les parts de la liste de l'accueil.
-   Hors des parts, parce que les trois poches font déjà 100 % des avoirs et
-   qu'une dette n'est pas une quatrième poche : pas de colonne de pourcentage,
-   et un filet au-dessus pour dire le changement de nature. */
 .repart-credits {
   display: flex; align-items: baseline; gap: 10px; width: 100%;
   margin-top: 10px; padding: 11px 0 2px;
@@ -5368,8 +4095,6 @@ details[open]::details-content { block-size: auto; }
   100% { box-shadow: 0 0 0 2px transparent; }
 }
 .champ-ecrit { animation: champ-ecrit .9s ease-out; }
-/* Un mouvement qui n'apporte rien à qui l'a désactivé : la couleur suffit, tenue
-   le même temps sans transition. */
 @media (prefers-reduced-motion: reduce) {
   .champ-ecrit { animation: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--good) 60%, transparent); }
 }
@@ -5402,16 +4127,8 @@ details[open]::details-content { block-size: auto; }
 .fiche-actes {
   display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr);
 }
-/* Le bouton occupe sa cellule, comme un champ dans une grille : c'est la grille
-   qui decide de la largeur. */
 .fiche-actes .btn { width: 100%; }
-/* Deux rangees superposees se lisent comme une seule grille de quatre : l'ecart
-   entre elles est celui de la grille, pas une marge de bloc. */
 .fiche-actes + .fiche-actes { margin-top: 8px; }
-/* Une rangee qui ferme une carte de champs, au lieu de suivre son titre : un filet
-   separe la saisie de sa validation, comme le pied d'une fenetre. Aucun remplissage
-   lateral, la carte le donne deja et en poser un decalerait la rangee de ses
-   voisines. */
 .fiche-actes.apres-champs {
   margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--grid);
 }
@@ -5422,11 +4139,6 @@ details[open]::details-content { block-size: auto; }
   }
 }
 
-/* Les deux etagere de la page Actifs : « Comptes » et « Biens et especes ».
-
-   Un intertitre, pas une carte : il separe deux familles de groupes qui portent
-   deja leur propre cadre, et une carte de plus les enfermerait dans une
-   troisieme boite. Le premier ne prend pas sa marge haute, il ouvre la liste. */
 .cpt-section {
   font-size: 12px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .06em; color: var(--text-secondary);

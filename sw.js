@@ -1,12 +1,3 @@
-/* =============================================================
-   Service worker — « réseau d'abord », cache de secours.
-
-   Prudence volontaire : l'app est protégée par mot de passe, donc
-   une réponse 401/403 ne doit JAMAIS être mise en cache — sinon
-   l'écran de connexion resterait figé à la place du dashboard.
-   Seules les réponses 200 de même origine sont conservées, et
-   jamais les appels /api/ (cours, état synchronisé).
-   ============================================================= */
 
 const CACHE = 'wealth-v2';
 
@@ -53,14 +44,12 @@ self.addEventListener('fetch', event => {
   event.respondWith((async () => {
     try {
       const reseau = await recuperer(request);
-      // On ne garde que ce qui est réellement servi : pas les 401/403.
       if (reseau.ok && reseau.status === 200) {
         const cache = await caches.open(CACHE);
         cache.put(request, reseau.clone());
       }
       return reseau;
     } catch (e) {
-      // Hors connexion : on ressert la dernière version connue.
       const secours = await caches.match(request);
       if (secours) return secours;
       throw e;

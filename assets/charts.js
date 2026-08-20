@@ -1,7 +1,3 @@
-/* =============================================================
-   CHARTS — SVG pur, sans dépendance. Thème clair / sombre via
-   les variables CSS lues au moment du rendu.
-   ============================================================= */
 
 const Charts = (() => {
 
@@ -51,7 +47,6 @@ const Charts = (() => {
     for (const [el, fn] of registry) { if (el.isConnected) fn(); else registry.delete(el); }
   }
 
-  /* --- tooltip partagé par conteneur --- */
   /* Toutes les infobulles des graphiques, pour pouvoir les refermer d'ailleurs.
 
      Les six graphiques cachaient la leur sur `mouseleave`. Cet evenement
@@ -71,8 +66,6 @@ const Charts = (() => {
       if (!tip.isConnected) { infobulles.delete(tip); continue; }
       if (saufDans && tip.parentElement && tip.parentElement.contains(saufDans)) continue;
       tip.hidden = true;
-      /* Le curseur de la courbe est solidaire de son infobulle : le laisser
-         allume sur un point que plus rien ne nomme serait pire que les deux. */
       const cur = tip.parentElement && tip.parentElement.querySelector('.cursor');
       if (cur) cur.setAttribute('hidden', '');
       const spark = tip.parentElement && tip.parentElement.querySelector('.spark-curseur');
@@ -135,14 +128,11 @@ const Charts = (() => {
     });
 
     cible.addEventListener('pointermove', ev => {
-      /* A la souris on suit le survol ; au doigt, seulement quand il touche. */
       if (ev.pointerType !== 'touch') { montrer(ev); return; }
       if (!(ev.buttons || ev.pressure > 0)) return;
       if (arme) { montrer(ev); return; }
       if (abandonne || !depart) return;
       const dx = Math.abs(ev.clientX - depart.x), dy = Math.abs(ev.clientY - depart.y);
-      /* A egalite on donne le geste au defilement : c'est celui qu'on perd le
-         plus mal, et une infobulle manquee se rattrape en reposant le doigt. */
       if (dy > SEUIL_GLISSE && dy >= dx) { abandonne = true; clearTimeout(minuteur); minuteur = null; return; }
       if (dx > SEUIL_GLISSE) { clearTimeout(minuteur); minuteur = null; arme = true; montrer(ev); }
     });
@@ -173,11 +163,7 @@ const Charts = (() => {
     infobulles.add(tip);
     if (!ecouteFermeture) {
       ecouteFermeture = true;
-      /* En phase de capture : un graphique qui arrete la propagation de son
-         propre appui ne doit pas empecher les autres de se refermer. */
       document.addEventListener('pointerdown', ev => fermerInfobulles(ev.target), true);
-      /* Defiler referme aussi : l'infobulle est posee en pixels dans sa carte,
-         elle suit donc la page et se retrouve a nommer un point hors de vue. */
       window.addEventListener('scroll', () => fermerInfobulles(), { passive: true });
     }
     return tip;
@@ -195,8 +181,6 @@ const Charts = (() => {
     return ticks;
   }
 
-  /* Mesure réelle du texte : un libellé trop long doit être coupé net,
-     pas déborder sur les barres. */
   let _ctx = null;
   function fitText(texte, largeurMax, police = '12.5px system-ui, -apple-system, "Segoe UI", sans-serif') {
     if (!_ctx) _ctx = document.createElement('canvas').getContext('2d');
@@ -216,9 +200,6 @@ const Charts = (() => {
     return Math.round(v).toLocaleString(locale()) + ' €';
   };
 
-  /* =========================================================
-     1) Aire empilée avec curseur, évolution du patrimoine
-     ========================================================= */
   /* Option facultative, nee de la page Projection :
      `guide: { value, label }` est une ligne horizontale en pointille, comme
      celle de barsWithTarget. La cible long terme ne vivait que dans une note
@@ -251,27 +232,8 @@ const Charts = (() => {
       const x = i => m.l + (points.length === 1 ? iw / 2 : i * iw / (points.length - 1));
       const y = v => m.t + ih - (v / top) * ih;
 
-      // bandes empilées cumulées
       let cum = points.map(() => 0);
       const areas = [];
-      /* Une bande trop mince ne porte pas de trait.
-
-         Une crypto a 75 EUR dans un total de 26 540 pese trois dixiemes de
-         pourcent : une bande de moins d'un pixel, dont le trait vient se poser
-         exactement sur celui de la bande d'en dessous. Deux traits colles ne
-         disent rien de plus qu'un seul, ils font douter du dessin.
-
-         Le seuil est en **pixels** et non en pourcentage, parce que c'est une
-         question de dessin et pas de comptabilite : ce qui compte est qu'il reste
-         de la place entre les deux traits, et cette place depend de la hauteur du
-         graphique autant que de la part. Deux pixels et demi, soit un peu plus que
-         l'epaisseur du trait lui-meme.
-
-         On regarde le **maximum** de la bande sur la periode affichee, pas chaque
-         point : un trait qui apparaitrait en juillet pour disparaitre en aout se
-         lirait comme une donnee manquante. La bande garde sa surface dans tous les
-         cas — le total reste la somme de ses parts, l'infobulle continue de donner
-         les 75 EUR, et la legende garde son entree. Seul le trait s'efface. */
       const HAUTEUR_TRAIT = 2.5;
       for (const sr of series) {
         const lower = [...cum];
@@ -288,16 +250,12 @@ const Charts = (() => {
       }
       const totalLine = totals.map((v, i) => `${x(i)},${y(v)}`).join(' ');
 
-      // ticks X : on évite l'encombrement
       const every = Math.ceil(points.length / Math.max(3, Math.floor(iw / 78)));
       const xLabels = points.map((p, i) =>
         (i % every === 0 || i === points.length - 1)
           ? `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" class="tick">${esc(p.label)}</text>` : ''
       ).join('');
 
-      /* Toute donnee hors echelle reste dans le cadre : sans decoupe, une
-         serie negative peignait par-dessus les cartes du dessous. Le defaut
-         qui la rendait negative est corrige, mais la ceinture reste. */
       const clip = 'clip' + Math.random().toString(36).slice(2, 8);
       el.innerHTML = `
         <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Évolution du patrimoine')}">
@@ -315,14 +273,6 @@ const Charts = (() => {
                         fill="none" stroke="${c.text}" stroke-opacity=".28"
                         stroke-width="1" stroke-dasharray="3 4"/>`;
           })() : ''}
-          <!-- Les aires et les courbes dans un seul groupe, pour qu'un balayage
-               les decouvre ensemble a l'arrivee sur la vue. Animer chaque trace
-               separement, en stroke-dashoffset, aurait demande de connaitre la
-               longueur de chaque chemin et n'aurait rien dit des aires : ici
-               c'est le dessin entier qui se decouvre de gauche a droite, dans le
-               sens du temps. Voir la classe chart-trace dans la feuille de
-               style. (Aucun guillemet oblique ici : ce commentaire vit dans un
-               litteral de gabarit, un backtick y fermerait la chaine.) -->
           <g class="chart-trace">
           ${areas.join('')}
           <polyline points="${totalLine}" fill="none" stroke="${c.text}" stroke-width="1.5"
@@ -349,7 +299,6 @@ const Charts = (() => {
       const cur = el.querySelector('.cursor');
       const line = el.querySelector('.cursor-line');
 
-      /* Le dernier point survole, pour ne battre qu'aux changements. */
       let iPrecedent = null;
 
       function move(ev) {
@@ -409,8 +358,6 @@ const Charts = (() => {
          navigateur reserve le geste au graphique et la page se bloque. */
       const cacher = () => {
         cur.setAttribute('hidden', ''); tip.hidden = true;
-        /* Oublier le dernier point : sans cela, reposer le doigt au meme endroit
-           ne battrait pas, alors que c'est un geste neuf. */
         iPrecedent = null;
       };
       el.style.touchAction = 'pan-y';
@@ -438,9 +385,6 @@ const Charts = (() => {
     });
   }
 
-  /* =========================================================
-     2) Donut, 2 à 3 catégories max
-     ========================================================= */
   function donut(el, opts) {
     mount(el, () => {
       const { items, centerLabel } = opts;
@@ -493,9 +437,6 @@ const Charts = (() => {
     });
   }
 
-  /* =========================================================
-     3) Barres horizontales classées, magnitude
-     ========================================================= */
   function rankedBars(el, opts) {
     mount(el, () => {
       const items = opts.items.filter(i => opts.keepZero || i.value !== 0);
@@ -520,11 +461,6 @@ const Charts = (() => {
                 <rect x="0" y="${y}" width="${W}" height="${rowH - 2}" fill="transparent"/>
                 <text x="0" y="${y + rowH / 2 + 1}" class="rb-label">${esc(fitText(it.label, labelW - 12))}</text>
                 <title>${esc(it.label)}</title>
-                <!-- Une couleur par ligne quand l'appelant en fournit une :
-                     huit barres du même bleu ne sont qu'un classement, alors
-                     que la teinte de chaque classe se retrouve d'un écran à
-                     l'autre — le camembert, la courbe, les poches. On lit
-                     alors la même chose partout sans relire les libellés. -->
                 <rect x="${labelW}" y="${y + 5}" width="${w}" height="${rowH - 14}" rx="4"
                       fill="${neg ? cssv('--critical') : (it.couleur || color)}"
                       fill-opacity="${it.dim ? .45 : 1}"/>
@@ -542,12 +478,6 @@ const Charts = (() => {
         const montrer = () => {
           const it = items[+node.dataset.i];
           tip.hidden = false;
-          /* Le sous-titre dit ou vit cette part, quand la barre le sait : chez
-             quel etablissement et dans quelle enveloppe. Un nom de compte seul
-             ne suffit pas des qu'on en a deux du meme type — « CTO » et « CTO »
-             se lisaient pareil, et il fallait retourner sur la page Actifs pour
-             savoir lequel. La barre porte deja l'information, elle ne la
-             montrait pas. */
           const sous = [it.etab, it.type].filter(Boolean).join(' · ');
           tip.innerHTML = `<div class="tt-head">${esc(it.label)}</div>
             ${sous ? `<div class="tt-sous">${esc(sous)}</div>` : ''}
@@ -577,9 +507,6 @@ const Charts = (() => {
     });
   }
 
-  /* =========================================================
-     4) Barres groupées, réel vs cible
-     ========================================================= */
   function groupedBars(el, opts) {
     mount(el, () => {
       const { items, seriesLabels } = opts;   // items: {label, a, b}
@@ -619,8 +546,6 @@ const Charts = (() => {
 
       const tip = ensureTip(el);
       el.querySelectorAll('.gb').forEach(node => {
-        /* Un groupe peut être cliquable : c'est le moyen le plus direct de
-           régler une cible, en désignant la barre plutôt qu'un champ. */
         if (opts.onPick) {
           node.style.cursor = 'pointer';
           node.addEventListener('click', () => opts.onPick(items[+node.dataset.i], +node.dataset.i));
@@ -648,9 +573,6 @@ const Charts = (() => {
     });
   }
 
-  /* =========================================================
-     5) Barres verticales avec seuil, dépenses vs objectif
-     ========================================================= */
   function barsWithTarget(el, opts) {
     mount(el, () => {
       const { items, target, targetLabel } = opts;   // items: {label, value, note}
@@ -727,9 +649,6 @@ const Charts = (() => {
     });
   }
 
-  /* =========================================================
-     6) Barres de variation, valeurs signées autour d'un zéro
-     ========================================================= */
   function deltaBars(el, opts) {
     mount(el, () => {
       const { items, average } = opts;
@@ -803,9 +722,6 @@ const Charts = (() => {
     });
   }
 
-  /* =========================================================
-     7) Sparkline compacte
-     ========================================================= */
   function sparkline(el, values, opts = {}) {
     mount(el, () => {
       const W = Math.max(el.clientWidth, 80), H = opts.height || 44;
@@ -824,9 +740,6 @@ const Charts = (() => {
                 stroke-width="2" style="display:none"/>
       </svg>`;
 
-      /* Toucher ou survoler la courbe montre le point le plus proche :
-         montant et date, avec un curseur pose sur la ligne. Les evenements
-         pointer couvrent le doigt comme la souris. */
       if (!opts.labels) return;
       const svg = el.querySelector('svg');
       const curseur = el.querySelector('.spark-curseur');

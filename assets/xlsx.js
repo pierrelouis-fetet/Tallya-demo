@@ -1,13 +1,6 @@
-/* =============================================================
-   XLSX — écriture de vrais classeurs Excel, sans dépendance.
-   Un .xlsx est un ZIP de fichiers XML : on écrit donc un ZIP
-   « stored » (sans compression) à la main, puis les XML dedans.
-   Ouvre nativement dans Excel, LibreOffice et Google Sheets.
-   ============================================================= */
 
 const Xlsx = (() => {
 
-  /* ---------- CRC32 (exigé par l'en-tête ZIP) ---------- */
   const CRC = (() => {
     const t = new Uint32Array(256);
     for (let i = 0; i < 256; i++) {
@@ -24,7 +17,6 @@ const Xlsx = (() => {
     return (c ^ 0xFFFFFFFF) >>> 0;
   }
 
-  /* ---------- ZIP (méthode 0 : stocké) ---------- */
   function zip(files) {
     const enc = new TextEncoder();
     const now = new Date();
@@ -83,7 +75,6 @@ const Xlsx = (() => {
       { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
 
-  /* ---------- helpers XML ---------- */
   const x = s => String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
 
@@ -93,7 +84,6 @@ const Xlsx = (() => {
     return s;
   }
 
-  // Excel compte les jours depuis le 30/12/1899
   function excelDate(iso) {
     if (!iso) return null;
     const [y, m, d] = String(iso).split('-').map(Number);
@@ -101,8 +91,6 @@ const Xlsx = (() => {
     return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000);
   }
 
-  /* ---------- styles ----------
-     0 défaut · 1 en-tête · 2 € · 3 % · 4 date · 5 nombre · 6 gras · 7 € gras · 8 % gras */
   const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <numFmts count="3">
@@ -142,10 +130,6 @@ const Xlsx = (() => {
   const STYLE_OF = { text: 0, eur: 2, pct: 3, date: 4, num: 5 };
   const BOLD_OF  = { text: 6, eur: 7, pct: 8, date: 6, num: 6 };
 
-  /* ---------- une feuille ----------
-     cols : [{ h: 'Nom', t: 'text|eur|pct|num|date', w: 18 }]
-     rows : tableaux de valeurs brutes (les % en fraction : 0.0483 = 4,83 %)
-     total: tableau optionnel, mis en gras avec un trait au-dessus          */
   function sheetXml(cols, rows, total) {
     const all = total ? [...rows, total] : rows;
 
@@ -184,8 +168,6 @@ const Xlsx = (() => {
 </worksheet>`;
   }
 
-  /* ---------- classeur ----------
-     sheets : [{ name, cols, rows, total }] */
   function build(sheets) {
     const files = [
       { name: '[Content_Types].xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

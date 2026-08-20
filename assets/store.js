@@ -1,16 +1,4 @@
-/* =============================================================
-   STORE — état, persistance locale et calculs dérivés
-   ============================================================= */
 
-/* Deux jeux de donnees cohabitent, sous deux cles distinctes : les vraies et
-   celles de la demonstration. Le mode se retient d'un chargement a l'autre,
-   sinon un rafraichissement en pleine demo ferait reapparaitre les vraies
-   donnees sans prevenir.
-
-   La regle a ne jamais casser : en demonstration, on n'ecrit que dans la cle
-   de demonstration, et on ne synchronise pas. Sans ce garde-fou, charger la
-   demo poussait des chiffres fictifs dans le KV et effacait le patrimoine en
-   ligne. Les vraies donnees restent intactes sous leur propre cle. */
 const MODE_KEY   = 'wealth-dashboard:mode';
 const CLE_REELLE = 'wealth-dashboard:v1';
 const CLE_DEMO   = 'wealth-dashboard:demo';
@@ -43,7 +31,6 @@ function demoPerimee() {
   return num(etat.seedVersion) < SEED_VERSION;
 }
 
-/* Rejoue la graine, en gardant la cle de stockage courante. */
 function rechargerDemo() {
   Store.state = structuredClone(SEED);
   Store.migrate();
@@ -54,39 +41,11 @@ const BACKUP_KEY = 'wealth-dashboard:backups';
 const UNDO_LIMIT = 40;
 const BACKUP_LIMIT = 8;
 
-/* Les comptes vivent dans l'état : on peut en ajouter et en supprimer.
-   Ces trois vues sont recalculées à chaque modification. */
 let ACCOUNTS = SEED_ACCOUNTS;
 let ACC = Object.fromEntries(ACCOUNTS.map(a => [a.id, a]));
 let HOLDING_ACCOUNTS = ACCOUNTS.filter(a => a.holdings).map(a => a.id);
 
-/* =============================================================
-   MODÈLE — Banque ou courtier > Compte > (argent + placements)
-
-   Trois niveaux, et rien d'autre :
-
-   Établissement { id, nom, notes, dettes[] }   — pas de type : beaucoup
-     sont hybrides (banque ET courtier). Seuls les comptes ont un type.
-   Compte { id, etabId, type, statut, ouvertLe, numero, notes,
-            cash[], lignes[] }                  — le cash est un ATTRIBUT
-     du compte : plusieurs entrées d'affectations différentes, jamais un
-     compte à part entière.
-   Ligne  { id, classe, libelle, valeur, prixDeRevient, quantite,
-            dateAcquisition }                   — les lignes cotées vivent
-     dans positions[] (source des cours) et sont projetées ici.
-
-   Les poches sont DÉRIVÉES à chaque lecture — depuis l'affectation
-   déclarée du cash et la classe d'actif des lignes, jamais depuis le
-   type d'établissement ni le type de compte. Rien de dérivé n'est
-   persisté.
-   ============================================================= */
-
-/* Les clés internes ne s'affichent jamais : l'écran ne connaît que ces
-   libellés. C'est la frontière entre le modèle et l'interface. */
 const AFFECTATIONS = [
-  /*    « Cash à investir » et non « À investir » : les quatre poches se lisent
-   cote a cote sur trois ecrans, et un intitule sans substantif ne se
-   comparait pas aux trois autres.*/
   ['courant',    trad('Cash disponible')],
   ['precaution', trad('Épargne de précaution')],
   ['projet',     trad('Projet prévu')],
@@ -123,9 +82,6 @@ const AFFECTATION_LABEL = Object.fromEntries(AFFECTATIONS);
    endroit a modifier. */
 const BASES = {
   avoirs:      { nom: trad('Tes avoirs'),         de: trad('de tes avoirs') },          // brut
-  /* « Patrimoine net » et non « Ton patrimoine net » : c'est deja le mot du
-     bandeau lateral et des pieds de liste. Un nom qui existe se reprend, il ne
-     se reinvente pas. */
   net:         { nom: trad('Patrimoine net'),     de: trad('de ton patrimoine net') },   // brut - dettes
   place:       { nom: trad('Placé'),              de: trad('de ce qui est placé') },    // nowTotals().invested
   placeBourse: { nom: trad('Placé en bourse'),    de: trad('de ce qui est placé en bourse') },
@@ -137,9 +93,6 @@ const BASES = {
   cashPlacer:  { nom: AFFECTATION_LABEL.investir,   de: trad('du cash à investir') },
 };
 
-/* La mention grise a droite d'un titre de bloc : « en % de tes avoirs ·
-   36 098 EUR ». Le format vient de « Core et satellites », qui l'avait seul ;
-   il est desormais celui de tous les blocs a pourcentages. */
 const mentionBase = (base, montant) => `${trad('en %')} ${base.de} · ${fmtEUR0(montant)}`;
 
 /* Les quatre poches de liquidites, dans l'ordre d'AFFECTATIONS, avec leur
@@ -152,55 +105,15 @@ function pochesLiquidites() {
 
 const CLASSES_ACTIFS = {
   liquidites:  trad('Liquidités'),
-  /*    « Actifs de marché » : la classe porte plus que des actions — ETF, ETC or,
-   options — et le terme reste juste meme quand la crypto a sa propre tuile a
-   cote.*/
   actions:     trad('Actifs de marché'),
   obligations: trad('Obligations'),
-  /* Le capital garanti : un fonds euros, le fonds en euros d'un PER, le support
-     garanti d'un contrat luxembourgeois. Une poche a lui, et il l'a fallu.
-
-     Ce n'est pas du cash : ces euros ne sont pas disponibles tout de suite, et
-     les compter dans les liquidites gonflait l'epargne de precaution de
-     l'accueil d'un argent qu'on ne peut pas sortir dans la journee.
-
-     Ce ne sont pas des obligations non plus, et c'est la que ça coutait cher :
-     la poche decide du taux de la projection, et un fonds euros y capitalisait
-     au taux du marche. Pour qui detient l'essentiel de son assurance-vie en
-     fonds euros, c'est la moitie d'un patrimoine projetee a trois fois son
-     rendement reel — et toujours du cote flatteur, donc invisible.
-
-     Le nom dit un comportement et non un produit, comme toutes les classes
-     d'ici : « Fonds euros » aurait laisse dehors le fonds en euros d'un PER et
-     le support garanti d'ailleurs, qui se comportent pareil. */
   garanti:     trad('Capital garanti'),
   crypto:      trad('Cryptomonnaies'),
   nonCote:     trad('Placements non cotés'),
   immobilier:  trad('Immobilier'),
-  /* Une montre, une voiture, un tableau, un instrument. Ce qu'on possede et qui
-     vaut, sans etre un placement financier.
-
-     Une classe a part, et non un rangement dans « Placements non cotes » : celle-ci
-     veut dire parts de societe et financement participatif, du financier avec un
-     emetteur en face. Une montre n'a pas d'emetteur. Les melanger ferait dire deux
-     choses a une seule classe, et c'est le defaut que ce projet corrige partout
-     ailleurs. */
-  /*    Au singulier, comme la classe « Immobilier » : le type de compte porte le
-   meme mot, et deux orthographes du meme mot sur deux onglets se lisaient
-   comme deux choses.*/
   bienValeur:  'Bien de valeur',
 };
 
-/* Quatre délais, pas trois. « Bloqué » réunissait deux situations que rien ne
-   rapproche : un appartement est lent — il se vend en trois à six mois, il
-   s'hypothèque, il se loue — là où un PER est juridiquement fermé jusqu'à la
-   retraite. Les additionner donnait à l'autonomie financière un dernier palier
-   qui comptait des euros récupérables avec d'autres qui ne le sont pas, et
-   c'était le chiffre le plus rassurant de la carte. */
-/* L'ordre compte : les paliers se cumulent dans celui-ci, du plus liquide au
-   moins. Les deux derniers restent hors cumul, pour deux raisons differentes
-   qu'il ne faut pas confondre — l'un n'arrivera pas avant son terme, l'autre
-   n'arrivera qu'en echange d'un demenagement. */
 const MOBILISABLE_LABEL = {
   immediat: 'Disponible immédiatement',
   differe:  'Disponible sous quelques jours',
@@ -346,9 +259,6 @@ const FORME_POCHE = {
   pe:     { classes: ['nonCote'], defaut: 'investir' },
 };
 
-/* Les deux formulaires de compte listent la meme chose : la table moins les
-   types internes, plus les types du detenteur. Une seule source, sinon le
-   type cree dans une fenetre disparaissait de l'autre. */
 function typesCompteChoix() {
   return [...TYPES_COMPTE.filter(t => !t.interne), ...typesPerso()];
 }
@@ -376,13 +286,6 @@ function creerTypePerso(label, groupe) {
   return id;
 }
 
-/* Un bien se possede, il ne s'ouvre pas.
-
-   La difference se lisait deja dans le parcours de creation, qui demande une
-   valeur et un prix d'acquisition la ou un compte demande un solde et un usage,
-   mais elle y etait ecrite en dur. La fiche, elle, annoncait « Date d'ouverture »
-   pour une Rolex. Le predicat vit ici pour que la question et l'intitule ne
-   puissent plus diverger. */
 const estUnBien = t => !!t && !t.titres && t.groupe === 'pe';
 
 /* Ce qu'on detient en direct : le contenant EST la chose.
@@ -401,15 +304,6 @@ const motDateCompte = t => trad(estUnBien(t) ? 'Date d’achat' : 'Date d’ouve
    ajoute demain n'ait qu'une chose a declarer. */
 const motCompte = t => trad(estDetenuEnDirect(t) ? 'bien' : 'compte');
 
-/* --- comment nommer le contenant ---------------------------------------
-   Le niveau du dessus est un contenant, et son nom depend de ce qu'il
-   contient : « banque ou courtier » ne veut rien dire pour une maison, ni
-   pour une part de societe non cotee. Un seul endroit decide du mot. */
-/* La question dit « rattacher », pas seulement « quel » : la liste montre ce
-   qui existe déjà, et avec un seul bien enregistré « Quel bien ? » se lisait
-   comme un choix de catégorie — on cherchait « appartement, maison, terrain »
-   et on ne trouvait qu'une entrée. Ce n'est pas un type qu'on choisit ici,
-   c'est le bien lui-même. */
 /* `contenu` : le mot pour ce que le contenant abrite.
 
    Il vit dans cette table et nulle part ailleurs, avec les autres mots du
@@ -441,22 +335,13 @@ const CONTENANTS = {
             contenu: 'contrat' },
 };
 
-/* Premiere lettre en capitale, pour un mot qui ouvre un titre ou un bouton.
-   Le mot vit en minuscules dans la table, parce qu'il s'emploie surtout au
-   milieu d'une phrase — « 2 biens », « plus aucun compte ». */
 const majuscule = m => String(m || '').charAt(0).toUpperCase() + String(m || '').slice(1);
 
-/* « 2 biens », « 1 compte » : le mot du contenu, accorde. Une seule fonction
-   pour que le pluriel ne se recopie pas a chaque endroit qui compte. */
 function motContenu(etabId, n) {
   const mot = contenantDeLEtab(etabId).contenu || 'compte';
-  /* Le pluriel se forme sur le mot francais, puis le tout se traduit : les
-     quatre formes (compte, comptes, bien, biens) ont chacune leur clef. */
   return trad(`${mot}${n > 1 ? 's' : ''}`);
 }
 
-/* Le mot suit un drapeau du type, plus une liste d'identifiants ecrite ici :
-   celui qu'on ajoutera demain n'aura qu'a se declarer. */
 const contenantDuType = typeId => {
   const t = typeCompte(typeId);
   return t.bienImmo ? CONTENANTS.bien
@@ -465,9 +350,6 @@ const contenantDuType = typeId => {
     : CONTENANTS.banque;
 };
 
-/* Pour une fiche : le mot suit les comptes reellement rattaches. Un
-   etablissement qui n'heberge que de l'immobilier est un bien ; s'il melange,
-   « banque ou courtier » redevient le terme le plus large. */
 function contenantDeLEtab(etabId) {
   const types = [...new Set(COMPTES().filter(c => c.etabId === etabId).map(c => c.type))];
   if (!types.length) return CONTENANTS.banque;
@@ -479,44 +361,18 @@ function ETABS() { return Store.state.etabs || []; }
 function COMPTES() { return Store.state.comptes || []; }
 const etabById = id => ETABS().find(e => e.id === id);
 const compteById = id => COMPTES().find(c => c.id === id);
-/* Un compte archivé garde son historique mais sort de tous les totaux. */
 const comptesOuverts = () => COMPTES().filter(c => c.statut !== 'archive');
 
-/* Le nom d'un compte, et le repli d'un bien qui n'en porte pas.
-
-   Un bien tient dans un compte qui ne contient que lui : les deux noms sont un
-   seul fait. Le parcours de creation les ecrit desormais ensemble, mais un bien
-   pose avant — ou nomme depuis la fenetre de sa ligne — a un compte vide et une
-   ligne nommee. La fiche affichait alors « Bien de valeur » en titre au-dessus
-   d'une ligne « moto ». Le repli va donc dans les deux sens, et le libelle du
-   type ne reste que si personne n'a rien nomme nulle part. */
 const nomCompteV2 = c => c.libelle
   || (((c.lignes || []).length === 1 && !(c.cash || []).length
        && String(c.lignes[0].libelle || '').trim()) || '')
-  /* Le repli sur le libelle du type est le seul morceau qui vienne de la
-     table et non du detenteur : lui seul se traduit. */
   || trad(typeCompte(c.type).label);
 const nomEtabDe = c => etabById(c.etabId)?.nom || '';
 
-/* Le nom affiche d'une ligne de placement.
-
-   Symetrique du repli ci-dessus : une ligne nommee du libelle de son type
-   n'a jamais ete nommee par personne — c'est le defaut pose a la creation —
-   et le nom du compte qui la porte en dit plus. « Bien de valeur » sous une
-   carte « Biens de valeur » repetait le mot une troisieme fois. Un nom
-   vraiment saisi n'est jamais ecrase : seul le libelle du type declenche le
-   repli. Ici, et pas dans chacune des trois vues qui affichent une ligne. */
 const nomLignePlacement = (l, compte) =>
   String(l.libelle || '').trim() === typeCompte(compte.type).label
     ? nomCompteV2(compte) : l.libelle;
 
-/* La meta sous un nom ne redit jamais ce nom.
-
-   Un bien saisi d'un seul mot le porte trois fois — la ligne, le compte et
-   l'etablissement prennent le meme —, et la carte affichait « Flat » puis
-   « Flat · Flat ». La casse et les espaces ne font pas une difference, et deux
-   parts egales entre elles ne comptent qu'une fois. Rend une chaine vide quand
-   il ne reste rien : au point d'appel de decider s'il pose la ligne. */
 const sousNom = (nom, ...parts) => {
   const cle = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const vus = new Set([cle(nom)]);
@@ -528,17 +384,6 @@ const sousNom = (nom, ...parts) => {
   }).join(' · ');
 };
 
-/* L'etablissement d'un compte s'affiche partout ou son nom s'affiche, sur sa
-   propre ligne, et sans condition.
-
-   Un compte porte exactement un etabId : l'information existe toujours, il
-   n'y a donc jamais a se demander si la ligne sera vide. La seule exception est
-   les especes, qui n'ont pas de contenant du tout — sansEtab.
-
-   C'est le champ « broker », deja porte par la projection des
-   comptes. Pas de second champ pour le meme fait. */
-
-/* Catégorie de marché → classe d'actif. */
 /* --- classe d'actif et role -------------------------------------------
    L'ancien champ « category » melangeait trois questions : le role
    strategique (ETF Core contre satellite), la nature de l'instrument (ETF,
@@ -552,24 +397,7 @@ const sousNom = (nom, ...parts) => {
 const ASSET_CLASSES = {
   actions:        trad('Actions'),
   obligations:    trad('Obligations'),
-  /* Une fonciere, un REIT, un ETF immobilier : cote, vendable en seance, mais
-     dont le risque est l'immobilier et non les actions. Tout cela tombait dans
-     « Actions », et 20 % de foncieres se lisaient comme 20 % d'actions de plus.
-     La classe n'a rien a voir avec la ligne « Immobilier » de l'accueil, qui
-     porte des biens en direct : celle-la se vend en quelques mois, celle-ci en
-     une seance. Meme sous-jacent, deux liquidites. */
   immobilierCote: trad('Immobilier coté'),
-  /* Une ligne qui contient plusieurs classes a la fois : un fonds patrimonial
-     d'assurance-vie, un ETF 60/40, un fonds a horizon. Il fallait la classer en
-     actions ou en obligations, les deux fausses. Le declarer multi-actifs est
-     plus honnete que de trancher au hasard : l'application ne sait pas ce qu'il
-     y a dedans, et elle ne pretend pas le savoir.
-
-     Le libelle a d'abord ete « Fonds diversifie », et c'etait une faute du meme
-     genre que « Core » tout seul : « Fonds » est une valeur du champ Nature, qui
-     dit l'emballage, quand la classe dit le contenu. Un ETF monde est un fonds
-     de classe actions — les deux champs repondent a deux questions, et un
-     libelle ne doit pas emprunter le vocabulaire de l'autre axe. */
   diversifie:     trad('Multi-actifs'),
   metaux:         trad('Métaux précieux'),
   crypto:         'Crypto',
@@ -588,18 +416,12 @@ const ASSET_CLASSES = {
    apparaissent dans Allocation et dans la répartition de la vue d'ensemble.
    Une ligne qui porterait encore cette valeur retombe sur « actions » par la
    lecture tolérante d'assetClassDe(). */
-/* « or » était le nom retenu au départ ; « metaux » couvre aussi l'argent et
-   le platine, qui se détiennent de la même façon. L'ancien nom reste accepté
-   en lecture : un état à moitié converti, ou une sauvegarde restaurée, ne
-   doit pas perdre ses lignes. */
 const CLASSES_ALIAS = { or: 'metaux' };
 const ROLES = { core: 'Core', satellite: 'Satellite' };
 const ROLE_DEFAUT = 'satellite';
 
 const SCHEMA_VERSION = 2;
 
-/* Table de conversion de l'ancien champ. Elle sert a la migration et rien
-   d'autre : une fois le JSON converti, plus personne ne la lit. */
 const CATEGORIE_VERS_SCHEMA = {
   'ETF Core': { assetClass: 'actions',   role: 'core' },
   'ETF':      { assetClass: 'actions',   role: 'satellite' },
@@ -610,24 +432,15 @@ const CATEGORIE_VERS_SCHEMA = {
   'OPTION':   { assetClass: 'actions',   role: 'satellite' },
 };
 
-/* Lecture tolerante : une ligne sans classe declaree, ou portant une valeur
-   inconnue, retombe sur « actions ». Aucun calcul ne doit dependre de la
-   propriete d'une migration passee. */
 const assetClassDe = p => {
   const v = CLASSES_ALIAS[p.assetClass] || p.assetClass;
   return ASSET_CLASSES[v] ? v : 'actions';
 };
 const roleDe       = p => ROLES[p.role] ? p.role : ROLE_DEFAUT;
 
-/* De la classe d'actif declaree vers les poches internes du patrimoine.
-   L'or reste un actif de marche : il se vend en bourse comme un titre. */
 const POCHE_DE_CLASSE = {
   actions:        'actions',
   obligations:    'obligations',
-  /* L'immobilier cote va dans les actifs de marche et non dans la poche
-     « immobilier » : celle-la est reputee lente a vendre, et y ranger un REIT
-     aurait fait mentir l'autonomie financiere de tout son montant. Un fonds
-     diversifie est un actif de marche pour la meme raison. */
   immobilierCote: 'actions',
   diversifie:     'actions',
   metaux:         'actions',
@@ -643,10 +456,6 @@ const pocheDeClasse = ac => {
   return POCHE_DE_CLASSE[cle] || (cle in CLASSES_ACTIFS ? cle : 'actions');
 };
 
-/* Le chemin inverse : une ligne manuelle porte le nom d'une poche interne
-   (« nonCote », « liquidites »), pas celui d'une classe d'actif. Sans cette
-   table, rapprocher une detention hors perimetre de la cible qui la vise
-   echouait en silence. */
 const CLASSE_DE_POCHE = {
   liquidites: 'monetaire',
   actions: 'actions',
@@ -656,35 +465,11 @@ const CLASSE_DE_POCHE = {
 };
 const classeDePoche = poche => CLASSE_DE_POCHE[poche] || null;
 
-/* --- ce qu'on detient vraiment d'une ligne -------------------------------
-   Un bien achete a deux comptait pour un. L'application savait deja partager
-   une charge fixe entre deux contributeurs, mais pas un actif : le total
-   affichait le logement entier a qui n'en detient que la moitie, et c'est le
-   pire genre d'erreur — un faux total que rien ne signale.
-
-   La part vit sur la ligne, parce que c'est le bien qui se detient a plusieurs,
-   pas le compte qui le porte : une SCI peut tenir deux lots aux quotes-parts
-   differentes. Absente, elle vaut le tout : un etat d'avant ne change pas de
-   valeur en arrivant ici.
-
-   Le credit, lui, se saisit tel qu'on le doit. Rien ne le divise, et l'aide du
-   champ le dit : la banque ne prete pas une fraction de mensualite, chaque
-   emprunteur connait la sienne. */
 const partDetention = l => {
   const p = num(l?.part);
   return (p > 0 && p <= 100) ? p / 100 : 1;
 };
 
-/* --- a quoi sert un bien -------------------------------------------------
-   Le meme appartement ne se lit pas de la meme facon selon qu'on l'habite ou
-   qu'on le loue, et rien ne permettait de le dire. Consequence visible : la
-   fiche d'une residence principale annonçait « Rendement brut 0,00 % » des
-   qu'on lui rattachait sa taxe fonciere, et l'ecran des delais comptait le toit
-   sous lequel on vit comme mobilisable en quelques mois.
-
-   Declare, jamais devine. Un bien sans loyer rattache n'est pas forcement une
-   residence principale : il peut etre en travaux, entre deux locataires, ou
-   loue a un proche sans que le loyer soit saisi. */
 const USAGES_BIEN = [
   ['locative',   'Mis en location'],
   ['principale', 'Résidence principale'],
@@ -693,9 +478,6 @@ const USAGES_BIEN = [
 const USAGE_BIEN_LABEL = Object.fromEntries(USAGES_BIEN);
 const usageLigne = l => USAGE_BIEN_LABEL[l?.usage] ? l.usage : '';
 
-/* L'usage d'un compte immobilier : celui de ses lignes, quand elles s'accordent.
-   Derive des lignes et non d'un second champ sur le compte — deux endroits ou
-   declarer le meme fait finiraient par se contredire. */
 function usageBien(compte) {
   const dits = [...new Set((compte?.lignes || [])
     .filter(l => (l.classe || 'immobilier') === 'immobilier')
@@ -703,8 +485,6 @@ function usageBien(compte) {
   return dits.length === 1 ? dits[0] : '';
 }
 
-/* Placements d'un compte : lignes cotées (positions, valorisées au cours)
-   puis lignes manuelles (non coté, immobilier). */
 function lignesDe(compte) {
   const marche = Store.state.positions
     .filter(p => p.account === compte.id)
@@ -715,9 +495,6 @@ function lignesDe(compte) {
   /* `ref` : le rang de la ligne dans son compte. La vue en a besoin pour ouvrir
      la bonne fenetre d'edition, et l'index de cette liste-ci ne le donne pas —
      les lignes de marche passent devant. */
-  /* La quote-part s'applique ici, une seule fois : treize ecrans lisent cette
-     fonction, et la valeur saisie reste celle du bien entier — c'est elle qu'on
-     compare a une annonce, et elle ne se divise pas dans le champ. */
   const manuelles = (compte.lignes || []).map((l, i) => {
     const q = partDetention(l);
     return { ...l, ref: i, part: q < 1 ? num(l.part) : null,
@@ -728,17 +505,8 @@ function lignesDe(compte) {
   return [...marche, ...manuelles];
 }
 
-/* La disponibilité effective d'une ligne : la règle calculée, sauf si le
-   placement porte son propre réglage. La règle ne connaît que la classe et
-   le type de compte — elle ignore qu'un non coté précis se revend en
-   quelques jours sur son marché secondaire. Le réglage corrige ce cas
-   sans affaiblir le défaut pour tous les autres. */
 function mobiliteLigne(l, compte) {
   if (l.mobilite && l.mobilite !== 'auto') return l.mobilite;
-  /* Le logement qu'on habite n'est pas un actif mobilisable : le vendre veut
-     dire se reloger, donc racheter ou payer un loyer. Le compter dans « en
-     quelques mois » promettait une reserve qui n'existe pas. Le reglage par
-     ligne reste au-dessus, pour qui vend vraiment et loue ensuite. */
   if (usageLigne(l) === 'principale') return 'habite';
   return mobilisabilite(l.classe, compte.type);
 }
@@ -778,7 +546,6 @@ function groupesParEnveloppe(comptes = comptesOuverts()) {
     }));
 }
 
-/* Le cash « à investir » d'un compte — cible des ventes et des achats. */
 function cashInvestirEntree(compte, creer = false) {
   let e = (compte.cash || []).find(x => x.affectation === 'investir');
   if (!e && creer) { compte.cash = compte.cash || []; e = { montant: 0, affectation: 'investir' }; compte.cash.push(e); }
@@ -807,9 +574,6 @@ function poserEspeces(s) {
 
   const etabs = s.etabs || [];
   const seulEspeces = /^esp[eè]ces?$/i;
-  /* Ce qu'on reconnait comme du bricolage : de l'argent liquide dont le
-     contenant, ou le compte lui-meme, ne s'appelle que « especes ». Un compte
-     courant chez une vraie banque n'entre pas dans ce filet. */
   const bricole = s.comptes.find(c => {
     if (typeCompte(c.type).groupe !== 'cash') return false;
     const nomE = (etabs.find(e => e.id === c.etabId) || {}).nom || '';
@@ -820,20 +584,13 @@ function poserEspeces(s) {
     const ancien = bricole.etabId;
     bricole.type = 'especes';
     bricole.etabId = null;
-    /* « Real Cash » et « Espèces » etaient des noms de contournement : les
-       effacer laisse le libelle du type parler. Tout autre nom est un choix,
-       il reste. */
     if (/^(real )?cash$/i.test(String(bricole.libelle || '').trim())
         || seulEspeces.test(String(bricole.libelle || '').trim())) bricole.libelle = '';
-    /* L'etablissement invente disparait s'il ne tient plus rien : ni compte,
-       ni credit. Un groupe vide a l'ecran serait le souvenir d'un detour. */
     const vide = e => !s.comptes.some(c => c.etabId === e.id)
                    && !(e.dettes || []).some(d => num(d.montant));
     const e = etabs.find(x => x.id === ancien);
     if (e && vide(e)) s.etabs = etabs.filter(x => x !== e);
   } else {
-    /* A zero : ajouter de l'argent que personne n'a declare fausserait le
-       patrimoine des le premier lancement. */
     const libre = s.comptes.some(c => c.id === ID_ESPECES) ? ID_ESPECES + '_' + Date.now() : ID_ESPECES;
     s.comptes.push({
       id: libre, etabId: null, type: 'especes', statut: 'ouvert',
@@ -843,11 +600,6 @@ function poserEspeces(s) {
   }
 }
 
-/* Comptes pouvant accueillir une ligne de cette catégorie de marché : le
-   filtre passe par la classe compatible — une ligne Bitcoin ne se propose
-   que sur un portefeuille de cryptomonnaies. Le compte actuel de la ligne
-   reste listé même s'il est devenu incompatible : on ne casse pas une
-   donnée existante en silence. */
 function comptesPourCategorie(cat, compteActuel = null) {
   const classe = pocheDeClasse(cat);
   const ok = comptesOuverts().filter(c => typeCompte(c.type).classes.includes(classe));
@@ -856,7 +608,6 @@ function comptesPourCategorie(cat, compteActuel = null) {
   return ok;
 }
 
-/* Les entrées « à investir », avec les index dont data-path a besoin. */
 function entreesInvestir() {
   const out = [];
   Store.state.comptes?.forEach((c, idxCompte) => {
@@ -868,10 +619,6 @@ function entreesInvestir() {
   return out;
 }
 
-/* --- mobilisabilité ----------------------------------------------------
-   f(classe, type de compte, date d'ouverture) — pas la classe seule : un
-   ETF dans un PEA de moins de cinq ans est coté mais bloqué, un PER porte
-   des lignes liquides mais reste fermé jusqu'à la retraite. */
 function ageAnnees(iso) {
   if (!iso) return Infinity;                    // sans date : pas de blocage
   return (Date.now() - new Date(iso)) / (365.25 * 24 * 3600e3);
@@ -913,27 +660,9 @@ function ancienneteCompte(c) {
            seuilLe: iso(seuilLe) };
 }
 
-/* Pas de date d'ouverture ici, et ce n'est pas un oubli : elle etait reçue et
-   jamais lue. Un PEA de moins de cinq ans n'est pas bloque au sens de
-   l'autonomie — on casse le plan et l'argent arrive en quelques jours, on y perd
-   l'avantage fiscal et non l'acces — et l'anciennete d'une assurance-vie ne
-   change rien non plus a la vitesse d'un rachat. Le parametre laissait croire a
-   une regle qui n'existe pas, et le texte d'aide du champ la promettait. Ce que
-   l'anciennete change vraiment est fiscal, et se lit sur la fiche du compte. */
 function mobilisabilite(classe, typeId) {
   if (typeId === 'per') return 'bloque';
-  /* Un PEA de moins de cinq ans n'est pas bloqué au sens de l'autonomie :
-     en cas de coup dur on casse le plan et l'argent arrive en quelques
-     jours — on y perd l'avantage fiscal, pas l'accès. Seul le PER est
-     réellement fermé jusqu'à la retraite. */
-  /* Lent, pas fermé : on ne vend pas un studio ni une part de société non
-     cotée dans la semaine, mais on les vend. Le réglage par ligne reste là
-     pour le non coté qui se revend sur un marché secondaire. */
   if (classe === 'nonCote' || classe === 'immobilier') return 'lent';
-  /* Un bien de valeur est lent, pas bloque : une montre se vend, en quelques
-     semaines et avec decote. Le mettre en « bloque » l'aurait sorti du compte de
-     mois d'autonomie, alors qu'il est mobilisable en cas de coup dur — et c'est
-     precisement ce que ce palier mesure. */
   if (classe === 'bienValeur') return 'lent';
   /* Les liquidites sont immediates si le compte qui les porte est un compte de
      cash, et non selon une liste de deux types ecrite ici a la main.
@@ -953,12 +682,7 @@ function mobilisabilite(classe, typeId) {
   return 'differe';
 }
 
-/* --- poches et patrimoine, dérivés à la volée -------------------------- */
 function poches() {
-  /* Les classes se derivent de leur table, elles ne se recopient pas ici.
-     La liste etait ecrite a la main : ajouter « Biens de valeur » a
-     CLASSES_ACTIFS laissait ce compteur a zero, et la classe n'existait qu'a
-     moitie. */
   const p = { courant: 0, precaution: 0, projet: 0, investir: 0,
               classes: Object.fromEntries(Object.keys(CLASSES_ACTIFS).map(k => [k, 0])),
               /* Derive de la table des paliers : en ecrire la liste ici a la
@@ -1006,23 +730,11 @@ function chargeDuCredit(id) {
   return i < 0 ? null : { charge: B().fixedCharges[i], index: i };
 }
 
-/* La mensualite effective d'un credit : celle de la charge qui le rembourse,
-   sinon celle qu'on a notee sur le credit lui-meme. */
 function mensualiteCredit(d) {
   const lien = chargeDuCredit(d.id);
   return lien ? chargeMensuelle(lien.charge) : num(d.mensualite) || 0;
 }
 
-/* La charge fixe qui rembourse un credit, creee depuis la fenetre du credit.
-
-   La question est posee dans la fenetre du credit, par une case a cocher, et non
-   par une confirmation apres l'enregistrement : « il devrait meme me demander
-   dans le credit ». Une fenetre, une validation. La case est cochee d'avance,
-   parce que c'est le cas normal — cet argent sort vraiment — et le libelle dit ce
-   qu'elle fait, donc rien ne se decide en cachette.
-
-   Une fois la charge creee, la mensualite notee sur le credit est effacee : c'est
-   la charge qui la porte desormais, et laisser les deux les laisserait diverger. */
 function creerChargeDuCredit(d) {
   if (!num(d.mensualite) || chargeDuCredit(d.id)) return false;
   Store.state.budget.fixedCharges.push({
@@ -1059,10 +771,6 @@ function projectionCredit(d) {
   let mois = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
   if (b.getDate() < a.getDate()) mois--;               // le mois n'est pas echu
   if (!(mois > 0)) return { ...rien, moisDepuis: Math.max(0, mois) };
-  /* Sans mensualite ni taux, il n'y a rien a projeter — mais le compteur de mois
-     est rendu quand meme : c'est lui qui declenche le rappel, et un solde qu'on
-     n'a pas regarde depuis six mois merite d'etre releve meme quand l'application
-     ne sait pas dire a combien il en est. */
   if (!mens && !taux) return { ...rien, moisDepuis: mois };
   /* Un seul calcul pour les deux sens.
      `capital + interets - mensualite` : avec une mensualite plus grosse que les
@@ -1071,18 +779,6 @@ function projectionCredit(d) {
      ne se rembourse pas par echeances et grossit tout seul. Le meme piege que le
      rappel du releve mensuel : le chiffre le plus faux est celui qu'on croit
      stable. */
-  /* L'assurance emprunteur sort de la mensualite sans rembourser un euro.
-
-     Elle vaut couramment 0,3 a 0,4 % du capital emprunte par an, elle est
-     prelevee avec l'echeance, et le modele la comptait comme du remboursement :
-     sur un pret de 250 000 EUR, c'est 75 EUR par mois qui faisaient descendre la
-     dette dans la projection alors qu'ils partent en prime. L'ecart se creuse a
-     chaque mois projete.
-
-     La prime se calcule sur le capital EMPRUNTE, pas sur le restant du : c'est
-     la formule de la grande majorite des contrats, et elle donne une prime
-     constante. A defaut de capital initial connu, le restant du sert de base —
-     la prime est alors sous-estimee, ce qui est le bon sens de l'erreur. */
   const assurance = num(d.tauxAssurance)
     ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
   const rembourse = Math.max(0, mens - assurance);
@@ -1094,30 +790,11 @@ function projectionCredit(d) {
            sens: capital > reste ? 'monte' : capital < reste ? 'baisse' : 'stable' };
 }
 
-/* --- quand le credit sera paye, et ce qu'il coutera d'ici la -------------
-   La premiere question d'un emprunteur, et l'application ne savait pas y
-   repondre alors qu'elle en avait toutes les pieces : capital restant,
-   mensualite, taux. Aucun champ de plus a saisir.
-
-   Ce n'est pas la projection de patrimoine, gelee a dessein : celle-la melerait
-   un contrat certain a un pari sur la valeur du bien. Ici on ne lit que le
-   contrat, et on ne le rapporte a aucun patrimoine.
-
-   L'amortissement se rejoue mois par mois plutot que par la formule fermee
-   n = -ln(1 - rC/M) / ln(1+r) : la boucle donne les interets exacts, formule
-   comprise, et la derniere echeance partielle avec. Trois cent soixante tours
-   pour un pret de trente ans, le cout est nul.
-
-   Sans taux, un pret s'amortit tout droit : c'est le pret familial ou le
-   differe sans interets, et le refuser priverait de reponse le cas le plus
-   simple. */
 function finCredit(d) {
   const reste = num(d.montant);
   const mens = mensualiteCredit(d);
   const taux = num(d.taux) / 100 / 12;
   if (!(reste > 0) || !(mens > 0)) return null;
-  /* Une mensualite qui ne couvre pas les interets du mois ne rembourse rien :
-     la dette monte, et annoncer une date de fin serait un mensonge. */
   if (mens <= reste * taux) return null;
   let capital = reste, mois = 0, interets = 0;
   while (capital > 0 && mois < 1200) {
@@ -1132,8 +809,6 @@ function finCredit(d) {
   fin.setMonth(fin.getMonth() + mois);
   return {
     mois, interets,
-    /* La derniere echeance solde ce qui reste : elle est plus petite que les
-       autres, et l'annoncer evite de croire a un mois de trop. */
     derniere: mens + capital,
     finLe: `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`,
   };
@@ -1166,9 +841,6 @@ function creditsEnCours() {
         libelle: d.libelle || 'Crédit', preteur: d.preteur || '',
         reste, initial: initial || null,
         mensualite: mensualiteCredit(d) || null, taux: num(d.taux) || null,
-        /* Par quoi il se rembourse, quand une charge fixe s'en charge : la carte
-           le dit, et la fenetre du credit n'offre alors plus de champ de
-           mensualite — il serait le second. */
         charge: (() => {
           const lien = chargeDuCredit(d.id);
           return lien ? { index: lien.index, label: lien.charge.label || 'Charge fixe',
@@ -1176,16 +848,6 @@ function creditsEnCours() {
         })(),
         rembourse: initial > 0 ? Math.max(0, initial - reste) : null,
         part: initial > 0 ? Math.min(100, Math.max(0, (initial - reste) / initial * 100)) : null,
-        /* Ce que la prochaine mensualite fait vraiment, quand le taux est connu :
-           les interets partent, le capital reste. C'est la seule facon honnete de
-           dire « ta mensualite fait monter ton patrimoine net » — elle ne le fait
-           monter que de sa part de capital, et l'ecart n'est pas un detail : sur
-           96 000 EUR a 3,4 %, 272 des 620 EUR mensuels sont des interets.
-
-           Approximation assumee, celle du premier mois : le taux annuel divise
-           par douze sur le capital restant. Un tableau d'amortissement exact
-           demanderait la duree, que l'application ne stocke pas, et l'ecart sur
-           un mois est de quelques centimes. */
         interets: (num(d.taux) && reste) ? reste * num(d.taux) / 100 / 12 : null,
         capital: (num(d.taux) && mensualiteCredit(d))
           ? Math.max(0, mensualiteCredit(d) - reste * num(d.taux) / 100 / 12) : null,
@@ -1199,9 +861,6 @@ function creditsEnCours() {
   return {
     lignes,
     reste: dettesTotal(),
-    /* Ce que les credits prelevent chaque mois, quand la mensualite est
-       renseignee. Lecture seule : ces mensualites sont deja des charges fixes
-       du budget, et les additionner ici au budget les compterait deux fois. */
     mensuel: lignes.reduce((s, x) => s + (x.mensualite || 0), 0),
     initial: lignes.reduce((s, x) => s + (x.initial || 0), 0),
   };
@@ -1220,11 +879,6 @@ function patrimoine() {
   return { ...p, brut, dettes, net: brut - dettes };
 }
 
-/* --- répartition par classe d'actif -------------------------------------
-   Un seul axe : la classe. Chaque euro y figure une fois, la somme fait
-   exactement le patrimoine brut — c'est ce qui permet d'afficher des parts
-   qui totalisent 100 %. Ajouter une classe au patrimoine (immobilier,
-   crypto) fait apparaître sa tuile sans toucher au composant. */
 /* Dérivée de la même table que `couleurClasse` : deux listes écrites à la
    main finissent par diverger, et une couleur qui change de sens d'un écran à
    l'autre ne veut plus rien dire. */
@@ -1245,12 +899,6 @@ function repartitionClasses() {
     .filter(x => x.value > 0.005);
 }
 
-/* --- projection vers l'ancienne forme ----------------------------------
-   L'historique mensuel, l'allocation et les exports lisent encore un
-   tableau plat de comptes. On le reconstruit depuis le modèle : chaque
-   compte devient une entrée, et les anciens identifiants absorbés par la
-   migration restent en pierres tombales — invisibles partout, mais les
-   relevés passés qui portent leurs colonnes gardent leur sens. */
 function refreshAccounts() {
   const s = Store.state;
   if (s && Array.isArray(s.comptes)) {
@@ -1294,56 +942,29 @@ function refreshAccounts() {
   HOLDING_ACCOUNTS = ACCOUNTS.filter(a => a.holdings).map(a => a.id);
 }
 
-/* Le type porte la poche : c'est elle qui pilote tous les calculs. */
 function accountTypes() { return Store.state.accountTypes; }
 function accountType(id) {
   return accountTypes().find(t => t.id === id)
       || { id, label: id || 'Autre', group: 'bourse' };
 }
 
-/* --- rôle d'un compte dans les calculs --------------------------------
-   Trois rôles suffisent à décrire ce qu'un compte représente :
-
-     holdings: true   il porte des lignes de titres
-     role: 'cash'     il porte du cash en attente d'investissement
-     role: 'margin'   il porte une dette de levier (montant négatif)
-     (aucun)          il vaut simplement le montant saisi
-
-   Sans ces rôles, chaque calcul devait nommer les comptes un par un —
-   ce qui ne pouvait fonctionner que pour un seul utilisateur. */
 function accountsWhere(pred) { return ACCOUNTS.filter(a => !a.legacy && pred(a)); }
 function brokerCashAccounts() { return accountsWhere(a => a.role === 'cash'); }
 function marginAccounts() { return accountsWhere(a => a.role === 'margin'); }
 function sumNow(comptes) { return comptes.reduce((s, a) => s + nowValue(a.id), 0); }
 
-/* Ancien monde : le cash d'un compte titres vivait dans un pseudo-compte
-   voisin, qu'il fallait recoller ici. Le modèle porte désormais le cash sur
-   le compte lui-même — nowValue() l'inclut, il n'y a plus rien à recoller. */
 function cashOf() { return 0; }
 
-/* Libellé dans l'allocation par actif. Il appartient au compte : c'est lui
-   qui décide comment il s'appelle, jamais son type. */
 function allocLabel(a) { return a.alloc || a.label; }
 
-/* Compte proposé par défaut pour une nouvelle ligne de titres. */
 function defaultHoldingAccount() {
   return (accountsWhere(a => a.holdings)[0] || ACCOUNTS[0] || {}).id || '';
 }
 
-/* ---------- utilitaires ---------- */
 const num = v => (v === '' || v === null || v === undefined || isNaN(v)) ? 0 : Number(v);
 const round2 = v => Math.round(v * 100) / 100;
 const round4 = v => Math.round(v * 10000) / 10000;
 
-/* --- mode discret ---
-   Un train, un open space, quelqu'un qui passe derrière l'écran : on veut
-   pouvoir consulter l'app sans afficher son patrimoine. Le masque agit au
-   formatage, donc il couvre tout d'un coup — cartes, tableaux, axes de
-   graphiques, infobulles — sans avoir à marquer chaque montant.
-
-   Les pourcentages restent lisibles : ils disent la performance sans rien
-   révéler du capital. Les exports, eux, travaillent sur les nombres bruts
-   et ne passent pas par ici : masquer l'écran ne mutile pas un fichier. */
 const MASK_KEY = 'wealth-dashboard:discret';
 let montantsMasques = (() => {
   try { return localStorage.getItem(MASK_KEY) === '1'; } catch (e) { return false; }
@@ -1355,11 +976,6 @@ function setMasque(on) {
 }
 const masqueActif = () => montantsMasques;
 
-/* Un œil barre remplace les chiffres, le symbole reste : on voit qu'il y a
-   un montant, et dans quelle devise, sans le lire. C'est le dessin exact du
-   bouton qui declenche le masque, dans son etat ferme — contour et barre,
-   sans pupille : la trace laissee sur l'ecran est la meme forme que la
-   commande qui l'a laissee. */
 const SIGNES = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF', JPY: '¥' };
 const symboleDevise = devise => SIGNES[devise || 'EUR']
   || String(devise ?? '').replace(/[&<>"']/g, '');
@@ -1405,29 +1021,21 @@ const fmtMois = v => new Intl.NumberFormat(locale(),
   { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(num(v));
 const fmtEUR0Texte = v => montantsMasques ? masqueTexte('EUR') : fmtEUR0(v);
 
-/* Un prix unitaire est libellé dans la devise de cotation, pas en euros.
-   L'afficher avec un « € » revient à mentir sur le montant. */
 const fmtCur = (v, devise = 'EUR', dec = 2) => montantsMasques ? masque(devise)
   : moinsTypographique(new Intl.NumberFormat(locale(), {
       style: 'currency', currency: devise || 'EUR',
       minimumFractionDigits: dec, maximumFractionDigits: dec,
     }).format(num(v)));
 
-/* Le prix dans sa devise, suivi de sa contre-valeur si ce n'est pas l'euro. */
 function fmtCurEur(v, devise, taux) {
   if (!devise || devise === 'EUR') return fmtEUR(v);
   return `${fmtCur(v, devise)} <span class="muted">≈ ${fmtEUR(num(v) * (num(taux) || 1))}</span>`;
 }
 
-/* L'espace devant le signe est une regle typographique francaise. L'anglais
-   le colle au nombre : « 12.50% ». */
 const fmtPct = (v, dec = 2) => moinsTypographique(new Intl.NumberFormat(locale(), {
   minimumFractionDigits: dec, maximumFractionDigits: dec,
 }).format(num(v))) + (enAnglais() ? '%' : ' %');
 
-/* Un nombre sans unite, aux separateurs de la langue : « 1 250 » en francais,
-   « 1,250 » en anglais, jamais « 1250 ». Les decimales ne s'affichent que si
-   elles existent, une surface de 42 m2 ne s'ecrivant pas « 42,00 ». */
 const fmtNombre = v => moinsTypographique(num(v).toLocaleString(locale(), { maximumFractionDigits: 2 }));
 const fmtSigned = v => (v >= 0 ? '+' : '−') + fmtEUR(Math.abs(v), 0);
 const fmtSignedPct = (v, dec = 2) => (v >= 0 ? '+' : '−') + fmtPct(Math.abs(v), dec);
@@ -1444,26 +1052,18 @@ function fmtMonth(iso) {
   return `${moisCourts()[m - 1]} ${String(y).slice(2)}`;
 }
 
-/* « avr. 2040 » : l'annee en entier, contrairement au ruban des releves. Une
-   echeance a quinze ans d'ici avec « 40 » pour toute annee se lit mal, et rien
-   ici n'oblige a la colonne etroite qui a impose l'abrege ailleurs. */
 function fmtMoisAn(iso) {
   if (!iso) return '';
   const [y, m] = iso.split('-').map(Number);
   return `${moisCourts()[m - 1]} ${y}`;
 }
 
-/* Aucune date numerique en anglais : « 03/04/2026 » se lit 3 avril a Londres
-   et 4 mars a New York. Le mois en lettres retire la question, et le lecteur
-   n'a pas a savoir quelle variante d'anglais il regarde. */
 function fmtDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (enAnglais()) return `${Number(d)} ${moisCourts()[Number(m) - 1]} ${y}`;
   return `${d}/${m}/${y}`;
 }
-/* « 11 août » : la date d'un rappel repoussé, dite comme on la dit a voix
-   haute. L'annee n'apporte rien a sept jours d'ici. */
 function fmtJourMois(iso) {
   if (!iso) return '';
   const [, m, d] = iso.split('-').map(Number);
@@ -1501,13 +1101,6 @@ function fmtCoursQuand(secondes) {
   return enAnglais() ? `from ${fmtJourMois(jour)} at ${heure}` : `du ${fmtJourMois(jour)} à ${heure}`;
 }
 
-/* La clé de contrôle attendue pour un ISIN, calculée sur ses onze premiers
-   caractères — Luhn sur la chaîne lettres-converties. Elle était calculée ici
-   pour être aussitôt jetée, alors qu'elle est la réponse à la seule question
-   qu'on se pose devant un code refusé : lequel fallait-il écrire ?
-
-   Rend null quand le corps n'a pas la forme attendue : il n'y a alors pas de
-   clé à proposer, et rendre un chiffre laisserait croire à une correction. */
 function cleIsin(code) {
   const corps = String(code || '').trim().toUpperCase().slice(0, 11);
   if (!/^[A-Z]{2}[A-Z0-9]{9}$/.test(corps)) return null;
@@ -1522,10 +1115,6 @@ function cleIsin(code) {
   return String((10 - total % 10) % 10);
 }
 
-/* L'ISIN corrigé : le corps tel qu'il est, suivi de la clé qu'il réclame. Le
-   douzième caractère d'un ISIN est toujours un chiffre — un « D » y est
-   impossible par construction — donc une saisie fautive se répare sans rien
-   deviner. Rend null s'il n'y a rien à réparer, ou rien de réparable. */
 function isinCorrige(code) {
   const brut = String(code || '').trim().toUpperCase();
   const cle = cleIsin(brut);
@@ -1534,16 +1123,12 @@ function isinCorrige(code) {
   return attendu === brut ? null : attendu;
 }
 
-/* Valide la clé de contrôle d'un ISIN.
-   Sert à repérer une faute de frappe avant même d'interroger le réseau. */
 function isinIsValid(code) {
   const c = String(code || '').trim().toUpperCase();
   if (!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(c)) return false;
   return cleIsin(c) === c[11];
 }
 
-/* Convertit un ticker « place:code » (style Google Finance) en symbole Yahoo.
-   Ce qui n'est pas reconnu est laissé tel quel : à corriger dans l'app. */
 const EXCHANGE_SUFFIX = {
   EPA: '.PA', EPAR: '.PA', ETR: '.DE', FRA: '.F', LON: '.L', AMS: '.AS',
   EBR: '.BR', BIT: '.MI', BME: '.MC', SWX: '.SW', VIE: '.VI',
@@ -1558,7 +1143,6 @@ function guessSymbol(ticker) {
   return suffix === undefined ? m[2].toUpperCase() : m[2].toUpperCase() + suffix;
 }
 
-/* ---------- état ---------- */
 const Store = {
   state: null,
 
@@ -1595,23 +1179,6 @@ const Store = {
   migrate() {
     const s = this.state;
 
-    /* Le rendement des « autres actifs » vaut zero par defaut, y compris pour
-       un etat qui n'a jamais connu ce champ, et la fusion avec SEED.meta suffit
-       a le poser.
-
-       J'avais d'abord fait heriter ces etats de leur ancien taux unique, pour ne
-       deplacer les chiffres de personne. C'etait le mauvais arbitrage : geler
-       l'immobilier au motif qu'on ne sait pas le modeliser, tout en faisant
-       croitre du non cote a 5 % au motif qu'on ne sait pas non plus, applique
-       deux standards a la meme ignorance.
-
-       Ce qui tranche est l'asymetrie de l'erreur. Une projection sert a decider
-       combien epargner : surestimer fait epargner moins pour un chiffre qui
-       n'arrivera pas, sous-estimer fait epargner plus et reserve une bonne
-       surprise. Zero n'est pas « vrai », c'est l'erreur qu'on peut se
-       permettre. Et la regle qui gouverne : l'application calcule, l'utilisateur
-       affirme. Un defaut a 5 % sur des parts illiquides, c'est l'application qui
-       parie a sa place sur la partie la moins connaissable de son patrimoine. */
     s.meta = Object.assign(structuredClone(SEED.meta), s.meta || {});
     s.targets = Object.assign(structuredClone(SEED.targets), s.targets || {});
     s.strategy = Object.assign(structuredClone(SEED.strategy), s.strategy || {});
@@ -1621,22 +1188,11 @@ const Store = {
     s.positions = s.positions || structuredClone(SEED.positions);
     s.quotes = s.quotes || { lastRun: null, fx: {}, changes: [] };
     s.sales = s.sales || [];
-    /* Une place était imposée par défaut, ce qui faisait remonter des
-       cotations secondaires pour des titres cotés ailleurs. On repasse en
-       automatique une fois ; un choix fait après cette bascule est conservé. */
     if (!s.meta.exchangeAutoDone) {
       s.meta.preferredExchange = 'auto';
       s.meta.exchangeAutoDone = true;
     }
 
-    /* Trois classements incohérents, corrigés une fois :
-       - le cash d'un courtier appartient à la poche bourse, comme ses jumeaux ;
-       - une dette de levier n'est pas une enveloppe fiscale, elle a son type ;
-       - un compte-titres plein d'ETF cotés est liquide, la contrainte d'un PEA
-         est fiscale, pas une immobilisation.
-       Un réglage fait après cette bascule est conservé. */
-    /* « Part PK » codait un seul conjoint dans le nom du champ. Les parts
-       deviennent une liste de contributeurs, montant par montant. */
     if (!Array.isArray(s.budget.contributors)) {
       const partage = s.budget.fixedCharges.some(c => num(c.sharePK));
       s.budget.contributors = partage ? [{ id: 'pk', name: 'PK' }] : [];
@@ -1660,9 +1216,6 @@ const Store = {
       s.meta.classementRevu = true;
     }
 
-    /* « Compléments alimentaires » devient « Autres dépenses » : chaque
-       ligne porte un montant et sa periodicite, au lieu d'un cout annuel et
-       de deux champs de repere libres. Les reperes migrent dans la note. */
     for (const r of (s.budget?.supplements || [])) {
       if (r.amount !== undefined || r.annual === undefined) continue;
       r.amount = num(r.annual);
@@ -1672,22 +1225,15 @@ const Store = {
     }
 
     s.budget = Object.assign(structuredClone(SEED.budget), s.budget || {});
-    // les catégories etaient figees dans le code : on les fait entrer dans l'etat
     if (!Array.isArray(s.budget.categories) || !s.budget.categories.length) {
       s.budget.categories = [...EXPENSE_CATEGORIES];
     }
-    /* Répare les calendriers : un mois supprimé autrefois revient à sa place,
-       vide. Doit passer après la normalisation de s.budget. */
     ensureCalendarMonths(s.monthly, 'date', 'comment');
     ensureCalendarMonths(s.budget.expenses, 'month', 'note');
     s.accountTypes = s.accountTypes || structuredClone(SEED.accountTypes);
     s.accounts = s.accounts || structuredClone(SEED.accounts);
     s.typesPerso = s.typesPerso || [];
 
-    /* Des types d'enveloppe pour tout ce qu'un patrimoine francais peut
-       porter, meme sans compte dessus aujourd'hui : la vue Avoirs ne montre
-       que les types utilises, mais le formulaire d'ajout doit tout offrir.
-       Une seule fois, pour que supprimer un type reste possible. */
     /* Le détail d'une catégorie de dépenses est retiré, et son champ avec.
 
        Il vivait dans `d`, à côté du total : « Restos 146, dont TR 110 et Bourso
@@ -1706,20 +1252,6 @@ const Store = {
       s.meta.detailRetire = true;
     }
 
-    /* Les parts de cash fantomes des contrats.
-
-       L'assistant a pose, sur les assurances-vie et les PER, une part a zero
-       sans affectation : il lisait trois champs que l'etape 3 ne posait plus
-       pour ces types. La carte de tresorerie ne se masquant que lorsqu'elle est
-       vide, elle reapparaissait avec son menu, et « Cash disponible » revenait
-       sur un contrat qui n'en a pas.
-
-       On n'efface que ce que personne n'a saisi : montant nul ET affectation
-       absente. Une part avec un montant reste, meme sur un contrat — retirer un
-       ecran n'emporte pas ce qu'on y avait mis, et ces euros-la doivent pouvoir
-       etre reclasses a la main.
-
-       Idempotente : au second passage il n'y a plus rien a retirer. */
     for (const c of (s.comptes || [])) {
       if (!Array.isArray(c.cash) || !c.cash.length) continue;
       if (!typeCompte(c.type).sansCash) continue;
@@ -1740,9 +1272,6 @@ const Store = {
       }
       s.meta.typesEnrichis = true;
     }
-    /* Les rôles et libellés d'allocation datent d'après les premiers états
-       enregistrés : on les reprend du seed, une fois, par identifiant. Les
-       calculs, eux, ne nomment plus jamais un compte. */
     const parDefaut = Object.fromEntries(SEED_ACCOUNTS.map(a => [a.id, a]));
     for (const a of s.accounts) {
       if (!a.type) a.type = accountTypes().find(t => t.group === a.group)?.id || 'banque';
@@ -1751,7 +1280,6 @@ const Store = {
     }
     refreshAccounts();
 
-    // ancien champ « ticker » → symbole de cotation Yahoo
     for (const p of s.positions) {
       if (p.symbol === undefined) p.symbol = guessSymbol(p.ticker);
       if (p.currency === undefined) p.currency = (num(p.fx) && num(p.fx) !== 1) ? 'USD' : 'EUR';
@@ -1771,10 +1299,6 @@ const Store = {
     this.migrerModele(s);
     poserEspeces(s);
     this.migrerClassesActifs(s);
-    /* Appelee a part : migrerClassesActifs() sort tout de suite quand le
-       schema est deja a jour, et les cibles seraient restees a l'ancien
-       format sur un etat converti par une version precedente. Elle porte sa
-       propre garde. */
     this.migrerCibles(s);
     /* --- les contenants restés vides d'avant le correctif -------------------
        Supprimer le dernier compte d'un établissement emporte désormais
@@ -1829,8 +1353,6 @@ const Store = {
       if (ancienne !== undefined) {
         const cible = CATEGORIE_VERS_SCHEMA[ancienne];
         if (cible) {
-          /* Un choix deja pose l'emporte : rejouer la migration ne doit pas
-             defaire une correction faite a la main entre-temps. */
           if (!ASSET_CLASSES[p.assetClass]) p.assetClass = cible.assetClass;
           if (!ROLES[p.role]) p.role = cible.role;
           converties++;
@@ -1841,8 +1363,6 @@ const Store = {
       if (!ASSET_CLASSES[p.assetClass]) p.assetClass = 'actions';
       if (!ROLES[p.role]) p.role = ROLE_DEFAUT;
     }
-    /* Les ventes archivees gardent une trace de la ligne vendue : le meme
-       champ y traine, et le journal l'affiche. */
     for (const v of (Array.isArray(s.sales) ? s.sales : [])) {
       const ancienne = v.category ?? v.categorie;
       if (ancienne === undefined) continue;
@@ -1856,33 +1376,11 @@ const Store = {
     return { converties, deja: false };
   },
 
-  /* Les cibles suivaient l'ancien melange : coreEtf, satellites, gold. Deux
-     etages les remplacent, parce qu'ils ne repondent pas a la meme question.
-
-     L'allocation strategique se fixe par classe, combien d'actions, combien
-     d'or. Le partage socle / satellites se fixe ensuite, a l'interieur de ce
-     qui est investi. C'est ainsi que se construit un portefeuille : on ne met
-     pas « Core » et « Or » en concurrence, l'un est un sous-niveau de l'autre.
-
-     Report : les 70 % de coeur et 20 % de satellites etaient tous deux des
-     actions, ils donnent 90 % d'actions. Leur rapport interne ne devient pas
-     une cible : le socle est un constat, pas un objectif, voir
-     rebalanceRoles(). */
   migrerCibles(s) {
     const tg = s.targets || (s.targets = {});
-    /* Le menage se fait dans tous les cas, pas seulement au premier passage :
-       un etat converti par une version qui sortait avant ce nettoyage garde
-       sinon les trois anciennes cles indefiniment. Plus personne ne les lit,
-       mais elles trainent dans l'export et egarent qui relit le JSON. */
     const purge = () => {
       delete tg.coreEtf; delete tg.satellites; delete tg.gold;
-      /* Les cibles de role ont existe une version : deux series de cibles sur
-         le meme argent pouvaient se contredire sans que rien ne le detecte.
-         Le socle est redevenu un constat. */
       delete tg.roles;
-      /* « Non coté » a figuré parmi les classes de lignes de marché : une
-         ligne cotée ne peut pas être non cotée, et le suivi existe déjà en
-         lignes de compte. */
       if (tg.classes) delete tg.classes.private_market;
       tg.exclues = (tg.exclues || []).filter(k => k !== 'private_market');
     };
@@ -1900,24 +1398,6 @@ const Store = {
     purge();
   },
 
-  /* --- migration vers le modèle établissement > compte > cash[] ---------
-     L'ancien modèle confondait contenant, compte et poche : le cash d'un
-     courtier était un compte à part entière, d'où doublons et lignes
-     fantômes. Ici, une seule passe :
-
-     - les courtiers deviennent des établissements, dédupliqués par nom ;
-     - chaque compte porteur devient un Compte ; son argent devient une
-       entrée cash avec une affectation (l'ancien « cash de vie » se lit
-       « dépenses courantes », les livrets réglementés « épargne de
-       précaution ») ;
-     - les pseudo-comptes « cash courtier » fusionnent dans le compte
-       titres du même établissement et du même type, en entrée « à
-       investir » ;
-     - le levier devient un crédit de l'établissement ;
-     - les valeurs manuelles (non coté) deviennent des lignes du compte.
-
-     Les anciens identifiants absorbés restent dans s.accounts : les
-     relevés mensuels passés portent leurs colonnes. */
   migrerModele(s) {
     if (Array.isArray(s.comptes)) return;        // déjà migré
     s.etabs = [];
@@ -1931,7 +1411,6 @@ const Store = {
     };
     const infos = s.accountInfo || {};
 
-    // 1. les comptes porteurs
     for (const a of s.accounts) {
       if (a.role === 'cash' || a.role === 'margin') continue;   // absorbés plus bas
       const e = etabDe(a.broker);
@@ -1951,7 +1430,6 @@ const Store = {
       if (t.groupe === 'cash') {
         compte.cash.push({ montant, affectation: type === 'livret' ? 'precaution' : 'courant' });
       } else if (!a.holdings && (montant || num(i.deposit))) {
-        // valeur manuelle : une ligne, à la classe du type
         compte.lignes.push({
           id: 'l_' + a.id, classe: t.classes.find(c => c !== 'liquidites') || 'nonCote',
           libelle: a.label, valeur: montant,
@@ -1963,7 +1441,6 @@ const Store = {
       s.comptes.push(compte);
     }
 
-    // 2. fusion des pseudo-comptes « cash courtier » dans leur compte titres
     for (const a of s.accounts.filter(x => x.role === 'cash')) {
       const montant = num(s.now[a.id]);
       const memeEtab = etabDe(a.broker).id;
@@ -1972,7 +1449,6 @@ const Store = {
       s.now[a.id] = 0;                          // l'argent a déménagé
     }
 
-    // 3. le levier devient un crédit de l'établissement
     for (const a of s.accounts.filter(x => x.role === 'margin')) {
       const du = -num(s.now[a.id]);
       /* `verifieLe` des la naissance : un capital restant du est le seul champ
@@ -1985,16 +1461,11 @@ const Store = {
       s.now[a.id] = 0;
     }
 
-    // 4. tout compte titres ouvert propose une entrée « à investir »,
-    //    même vide : c'est là que les ventes déposent et que les achats puisent
     for (const c of s.comptes) {
       if (typeCompte(c.type).titres && c.statut === 'ouvert') cashInvestirEntree(c, true);
     }
   },
 
-  /* --- pile d'annulation ---------------------------------------
-     On empile l'état précédent, au plus une fois par seconde : une
-     rafale de frappes dans un champ compte pour une seule annulation. */
   _undo: [],
   _prev: null,
   _lastPush: 0,
@@ -2022,11 +1493,6 @@ const Store = {
     } catch (e) {
       console.warn('Sauvegarde impossible', e);
     }
-    /* Jamais de synchronisation en demonstration : les chiffres fictifs
-       ecraseraient le patrimoine reel stocke en ligne. C'est la seule condition
-       qui separe une demo inoffensive d'une perte de donnees, et elle passe avant
-       tout le reste — le choix entre envoi immediat et envoi regroupe ne se pose
-       que s'il y a quelque chose a envoyer. */
 
     /* Le cloud reçoit tout de suite, sauf pendant une frappe.
 
@@ -2050,10 +1516,6 @@ const Store = {
 
   canUndo() { return this._undo.length > 0; },
 
-  /* Combien de gestes la pile porte. Un bouton « Annuler » qui ne dit pas s'il
-     reste quelque chose a annuler laisse tenter le clic pour savoir, et cette
-     pile-la vit en memoire : elle est vide au chargement de la page, donc le
-     compteur est aussi le seul moyen de comprendre pourquoi le bouton dort. */
   undoCount() { return this._undo.length; },
 
   undo() {
@@ -2066,7 +1528,6 @@ const Store = {
     return true;
   },
 
-  /* --- sauvegardes horodatées ---------------------------------- */
   backups() {
     try { return JSON.parse(localStorage.getItem(BACKUP_KEY)) || []; }
     catch (e) { return []; }
@@ -2079,14 +1540,11 @@ const Store = {
       localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, BACKUP_LIMIT)));
       return true;
     } catch (e) {
-      // quota atteint : on retente avec moins d'historique
       try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, 2))); return true; }
       catch (e2) { console.warn('Sauvegarde auto impossible', e2); return false; }
     }
   },
 
-  /* Une sauvegarde par jour au premier chargement : si une saisie tourne mal,
-     la version de la veille est toujours là. */
   autoBackup() {
     const list = this.backups();
     const lastAt = list[0] && new Date(list[0].at);
@@ -2111,11 +1569,6 @@ const Store = {
   },
 };
 
-/* =============================================================
-   CALCULS
-   ============================================================= */
-
-/* --- une position --- */
 function posValue(p) {
   return p.manual ? num(p.value) : num(p.qty) * num(p.price) * num(p.fx || 1);
 }
@@ -2171,11 +1624,6 @@ function posPerfPct(p) {
 }
 function posPerfEur(p) { return posValue(p) - posInvested(p); }
 
-
-/* --- performance du jour -----------------------------------------------
-   Écart entre le cours actuel et la clôture de la veille. Le taux de change
-   du jour sert aux deux bornes : on isole ainsi le mouvement du titre, sans
-   y mêler celui de la devise, qu'on ne connaît pas pour hier. */
 /* Le cours retenu date-t-il d'aujourd'hui ?
 
    `quoteTime` est l'heure de la derniere transaction reguliere, telle que la
@@ -2185,21 +1633,6 @@ function posPerfEur(p) { return posValue(p) - posInvested(p); }
 
    Sans cette heure, on ne peut rien affirmer : Stooq ne la donne pas. On garde
    alors l'ecart, faute de pouvoir prouver qu'il est perime. */
-/* Ce cours a-t-il ete echange aujourd'hui ?
-
-   Avec l'heure, la question est tranchee. Sans elle, il faut choisir un defaut,
-   et les deux se defendent — c'est pourquoi la regle a trois branches et non
-   deux.
-
-   Repondre « non » par principe silencerait Stooq, qui ne publie jamais l'heure :
-   ses lignes afficheraient un ecart nul a vie, ce qui est faux tous les jours de
-   seance. Repondre « oui » par principe fait attribuer au jour l'ecart de la
-   derniere seance des qu'une source muette repond un dimanche.
-
-   On tranche donc sur ce que l'on sait par ailleurs, et seulement quand on le
-   sait : une place declaree fermee suffit a dire que ce cours n'est pas
-   d'aujourd'hui. Sans heure et sans etat de place, on ne sait rien, et on garde
-   l'ecart plutot que d'effacer un chiffre juste. */
 function coteAujourdhui(p) {
   const t = num(p.quoteTime);
   if (t) return isoLocal(new Date(t * 1000)) === todayISO();
@@ -2207,10 +1640,6 @@ function coteAujourdhui(p) {
   return etat ? etat.cle !== 'close' : true;
 }
 
-/* Cette ligne a-t-elle ete achetee aujourd'hui ?
-   La date d'achat est declaree, jamais deduite : une ligne creee ce matin peut
-   porter un titre detenu depuis trois ans, c'est le cas de toute mise en route
-   de l'application. Sans date, on ne sait pas, et on s'en tient a la veille. */
 function acheteAujourdhui(p) {
   return !!p?.dateAchat && p.dateAchat === todayISO() && posInvested(p) > 0;
 }
@@ -2219,12 +1648,6 @@ function posDayChange(p) {
   const prev = num(p.prevClose);
   if (p.manual || !num(p.price)) return null;
 
-  /*     La reference devient donc le prix paye, et l'effet du jour vaut exactement
-     la plus-value latente : tout ce qui est arrive a cette ligne est arrive
-     aujourd'hui. C'est le seul cas ou le taux d'achat sert de borne — ailleurs
-     les deux bornes prennent le taux du jour, faute de connaitre celui d'hier,
-     alors qu'ici le taux d'achat est d'aujourd'hui lui aussi. Le change compte
-     donc, et les deux lignes de la fiche ne peuvent plus se contredire. */
   if (acheteAujourdhui(p)) {
     return { pct: posPerfPct(p), eur: posPerfEur(p), prev: prev || null,
              price: num(p.price), depuisAchat: true };
@@ -2232,14 +1655,6 @@ function posDayChange(p) {
 
   if (!prev) return null;
   const fx = num(p.fx) || 1, q = num(p.qty);
-  /* Aucune seance depuis minuit : l'ecart du jour est nul, et ce n'est pas une
-     approximation — c'est la reponse exacte a « depuis la cloture d'hier ». Le
-     cours n'a pas bouge depuis, puisqu'il n'a pas ete echange.
-
-     Sans cette borne, l'ecran affichait le mouvement de la derniere seance comme
-     s'il etait celui du jour : le matin, « Aujourd'hui +409 EUR » racontait la
-     veille, et l'ecart doublait quand la cloture retenue datait de l'avant-veille.
-     Le meme chiffre restait affiche toute la nuit et tout le week-end. */
   if (!coteAujourdhui(p)) return { pct: 0, eur: 0, prev, price: num(p.price), horsSeance: true };
   return {
     pct: (num(p.price) / prev - 1) * 100,
@@ -2248,9 +1663,6 @@ function posDayChange(p) {
   };
 }
 
-/* État de la place pour une ligne. Yahoo l'annonce parfois lui-même ; sinon
-   on le déduit des horaires de séance qu'il joint au cours. Sans rien de
-   tout ça, on préfère se taire plutôt que d'affirmer « fermé » à tort. */
 const MARKET_STATES = {
   REGULAR:    { cle: 'open',  label: trad('ouvert') },
   PRE:        { cle: 'pre',   label: trad('pré-ouverture') },
@@ -2260,9 +1672,6 @@ const MARKET_STATES = {
   CLOSED:     { cle: 'close', label: trad('fermé') },
 };
 
-/* Au-delà de cette ancienneté, un cours n'est plus celui d'un marché qui cote.
-   Trente minutes laissent passer un titre peu échangé sans le déclarer fermé,
-   et écartent sans hésiter une clôture qui date de la veille. */
 const COURS_FRAIS_S = 30 * 60;
 
 function marketStatus(p) {
@@ -2274,13 +1683,6 @@ function marketStatus(p) {
   const t = Math.floor(Date.now() / 1000);
   const dans = b => Array.isArray(b) && b[0] != null && t >= b[0] && t < b[1];
 
-  /* Pour ce qui cote en continu — futures, devises, cryptomonnaies — Yahoo ne
-     publie pas une séance mais une journée calendaire : l'or annonçait
-     « 06:00 → 05:59 », vingt-quatre heures qui englobent forcément l'instant
-     présent. La fenêtre ne dit alors rien, et s'y fier affichait l'or ouvert
-     un dimanche soir, alors que son dernier cours datait de quarante-six
-     heures. C'est l'horodatage qui tranche : un marché qui cote imprime des
-     prix, un marché fermé n'en imprime plus. */
   const fenetre = Array.isArray(s.regular) && s.regular[0] != null
     ? s.regular[1] - s.regular[0] : 0;
   if (fenetre >= 23 * 3600) {
@@ -2295,12 +1697,6 @@ function marketStatus(p) {
   return MARKET_STATES.CLOSED;
 }
 
-/* --- fiche d'identité d'une ligne -------------------------------------
-   Yahoo protège désormais l'endpoint qui porte l'émetteur et les frais
-   (401). Mais le nom officiel du fonds le contient presque toujours —
-   « HANetf ICAV - Future of Defence UCITS ETF », et le préfixe de l'ISIN
-   donne le pays d'émission, ce qui décide de l'éligibilité au PEA. Ces deux
-   informations sont donc déduites, et présentées comme telles. */
 const ISSUERS = [
   'iShares', 'Amundi', 'Xtrackers', 'Vanguard', 'Lyxor', 'BNP Paribas', 'SPDR',
   'Invesco', 'HANetf', 'VanEck', 'WisdomTree', 'Franklin', 'Fidelity', 'UBS',
@@ -2326,7 +1722,6 @@ function isinCountry(isin) {
   return code ? (ISIN_PAYS[code] || code) : null;
 }
 
-/* Où se situe le cours dans son année : 0 % au plus bas, 100 % au plus haut. */
 function rangePosition(p) {
   const bas = num(p.low52), haut = num(p.high52), c = num(p.price);
   if (!bas || !haut || haut <= bas) return null;
@@ -2347,7 +1742,6 @@ function coursAsOf() {
   return heures.length ? Math.max(...heures) : null;
 }
 
-/* Performance du jour ligne par ligne, plus le total. */
 function dayPerformance() {
   const lignes = [];
   let eur = 0, base = 0, sansDonnee = 0;
@@ -2357,10 +1751,6 @@ function dayPerformance() {
     eur += d.eur;
     base += posValue(p) - d.eur;          // valeur d'hier, au change du jour
     lignes.push({
-      /* L'indice de la position, pas seulement son nom : l'ecran retrouvait la
-         ligne par son nom avec .find(), et deux titres homonymes sur deux
-         comptes se voyaient attribuer le poids et la fiche du premier. Le nom
-         est un libelle, jamais une identite. */
       index: Store.state.positions.indexOf(p),
       name: p.name, currency: p.currency || 'EUR', value: posValue(p),
       symbol: p.symbol || '', exchange: p.exchange || '',
@@ -2380,16 +1770,12 @@ function dayPerformance() {
     pct: base ? eur / base * 100 : 0,
     hausse: lignes.filter(l => l.eur > 0).length,
     baisse: lignes.filter(l => l.eur < 0).length,
-    /* Vrai quand rien de ce qui est liste n'a cote depuis minuit : le total est
-       alors nul par construction, et l'afficher comme un montant ferait croire
-       a une journee sans mouvement. */
     toutHorsSeance: lignes.length > 0 && horsSeance === lignes.length,
     asOfMarche: coursAsOf(),                      // de quand datent les prix
     asOf: Store.state.quotes?.lastRun || null,    // de quand date la requete
   };
 }
 
-/* --- valeur d'un compte titres = somme de ses positions --- */
 function holdingsOf(accountId) {
   return Store.state.positions.filter(p => p.account === accountId);
 }
@@ -2397,11 +1783,6 @@ function holdingsValue(accountId) {
   return holdingsOf(accountId).reduce((s, p) => s + posValue(p), 0);
 }
 
-/* --- photo actuelle : montant par compte ---
-   La valeur d'un compte du modèle = ses espèces + ses placements, cotés
-   comme manuels. Les identifiants absorbés par la migration retombent sur
-   l'ancien stockage, figé à zéro, ils ne comptent que dans les relevés
-   passés. */
 function nowValue(accountId) {
   const c = compteById(accountId);
   if (c) return valeurCompte(c);
@@ -2409,14 +1790,6 @@ function nowValue(accountId) {
   return num(Store.state.now[accountId]);
 }
 
-/* Les poches sont dérivées de l'affectation du cash et de la classe des
-   placements, jamais du type de compte.
-
-   Elles ne portent plus les crédits. Les y soustraire marchait tant qu'une
-   dette valait quelques centaines d'euros de levier ; un prêt immobilier de
-   130 000 EUR rendait la poche « bourse » négative, et le graphique empilé
-   s'effondrait sous son axe. Une dette n'appartient a aucune poche : elle se
-   retranche du total, une seule fois, a la fin. */
 /*   Une réserve à connaître : l'historique ne peut pas suivre. Un relevé porte
    la valeur totale d'un compte, et la poche vient du compte (`rowGroups` →
    `a.gAff`) — le cash qui dort dans un PEA y reste donc rangé en bourse, sans
@@ -2425,12 +1798,6 @@ function nowValue(accountId) {
    et « Auj. ». Il vaut le montant à investir, et le total ne bouge pas. */
 function nowByGroup() {
   const p = patrimoine();
-  /* Six poches d'ecran, une par cle — et le total ne se calcule PAS ici.
-
-     C'est le meme defaut que patrimoine() corrige deja pour lui-meme : une
-     addition ecrite a la main laisse la classe suivante dehors. Un test exige
-     desormais que la somme de ces poches fasse patrimoine().brut — la poche
-     oubliee de demain sera rouge le jour meme. */
   return {
     cash: p.courant + p.precaution + p.projet + p.investir,
     bourse: p.classes.actions + p.classes.obligations,
@@ -2438,10 +1805,6 @@ function nowByGroup() {
     pe: p.classes.nonCote,
     immo: p.classes.immobilier,
     biens: p.classes.bienValeur,
-    /* Septieme poche, et elle sort de « bourse » : un capital garanti n'est pas
-       un actif de marche, et c'est cette poche-la que la projection lit pour
-       choisir un taux. Le test qui exige que la somme des poches fasse le brut
-       la couvre des sa premiere lecture. */
     garanti: p.classes.garanti,
   };
 }
@@ -2481,10 +1844,6 @@ function nowTotals() {
   const p = patrimoine();
   const g = nowByGroup();
   const reserve = reserveProjet();
-  /* Le brut se derive de patrimoine(), il ne se refait pas en sommant les
-     poches : deux additions du meme fait finissent par diverger, et c'est
-     arrive — voir la note de nowByGroup(). Les poches servent l'affichage,
-     le brut est la verite, et le test verifie qu'ils s'accordent. */
   const brut = p.brut;
   return { ...g, brut, dettes: p.dettes, net: brut - p.dettes,
            total: brut - p.dettes,          // « total » = patrimoine net, partout
@@ -2502,22 +1861,6 @@ function nowTotals() {
            invested: brut - g.cash };
 }
 
-/* --- pas de plus-value latente dans le temps ---------------------------
-   Le calcul demande deux nombres pris au meme instant sur le meme perimetre :
-   ce que valaient les lignes, et ce qu'elles avaient coute. L'historique ne
-   porte que le premier, et par compte entier : la poche « bourse » d'un releve
-   contient les especes qui dorment chez le courtier et les placements manuels
-   du compte, quand un prix de revient de portefeuille ne couvre que les
-   positions. Retrancher l'un de l'autre compte le cash comme du gain, et laisse
-   dehors le cout des positions rangees en crypto.
-
-   Le perimetre ne se rattrape pas apres coup : un releve ne dit pas quelle part
-   d'un compte etait investie ce mois-la. Et le reconstituer depuis les dates
-   d'achat se tromperait toujours du meme cote, le flatteur — une ligne renforcee
-   porte un prix moyen et une seule date, donc l'argent verse en dernier
-   compterait comme present depuis le debut. */
-
-/* --- une ligne d'historique --- */
 function rowGroups(row) {
   const g = { cash: 0, bourse: 0, crypto: 0, pe: 0, immo: 0, biens: 0 };
   for (const a of ACCOUNTS) g[a.gAff || a.group] += num(row.v[a.id]);
@@ -2532,34 +1875,13 @@ function rowIsEmpty(row) {
   return Object.values(row.v || {}).every(x => !num(x));
 }
 
-/* Un releve porte sur un mois qui a eu lieu.
-
-   Le jour se passe en argument pour qu'un test n'ait pas a dependre de
-   l'horloge : c'est la seule facon de verifier les deux cotes de la frontiere. */
 const moisRevolu = (date, aujourdhui = todayISO()) =>
   String(date || '').slice(0, 7) <= String(aujourdhui).slice(0, 7);
 
-/* Années présentes dans le relevé, de la plus ancienne à la plus récente */
 function historyYears() {
   return [...new Set(Store.state.monthly.map(r => r.date.slice(0, 4)))].sort();
 }
 
-/* Restreint une série à une fenêtre temporelle.
-   'ytd' = depuis le 1er janvier · '1y'/'3y'/'5y' = glissant · 'all' = tout */
-/* L'echelle des plages : fixe, et c'est tout l'interet.
-
-   Elle etait calculee depuis la profondeur de l'historique, dans une liste
-   [2, 3, 5, 10, 15, 20] bornee a l'anciennete des relevés, et les durees
-   basculaient entre pastilles et liste deroulante selon leur nombre. Deux
-   consequences : on voyait « 2 ans », qui n'est un cran nulle part, et le
-   contrôle changeait de forme a mesure que les donnees vieillissaient. Un
-   bouton qui se deplace tout seul au bout de trois ans d'usage ne devient
-   jamais un geste automatique.
-
-   Les crans retenus suivent Yahoo (YTD, 1 an, 5 ans, Max) avec un cran a
-   3 ans, utile quand on demarre : cinq boutons, 250 px des 311 disponibles a
-   375 px. Pas de 10 ans : au-dela de cinq ans « Tout » repond deja, et le
-   sixieme bouton ne laissait que 3 px de marge. */
 const HISTORY_RANGES = [
   { id: 'ytd', label: 'YTD' },
   { id: '1y',  label: trad('1 an') },
@@ -2568,22 +1890,8 @@ const HISTORY_RANGES = [
   { id: 'all', label: trad('Tout') },
 ];
 
-/* Libellé lisible d'une plage. Les identifiants ne vivent qu'en memoire, mais
-   un « 15y » d'une session precedente ou d'un signet ne doit pas afficher
-   « undefined » : on retombe sur la forme generique, puis sur « Tout ». */
-/* Une annee civile est une plage, au meme titre qu'une duree glissante.
-
-   Ce n'est pas le cran derive qu'on a retire jadis : celui-la etait une duree
-   calculee sur la profondeur des donnees, « 2 ans », qui n'est un repere nulle
-   part et qui se deplace a mesure que l'historique vieillit. Une annee est un
-   objet nomme et fixe, 2025 restera 2025, et c'est la borne dans laquelle un
-   journal se lit — « mes ventes de 2025 » est la question qu'on se pose, jamais
-   « mes ventes des trois dernieres annees ». */
 const estAnnee = id => /^\d{4}$/.test(String(id || ''));
 
-/* Les annees ou quelque chose s'est passe, de la plus recente a la plus ancienne.
-   Derivee des dates, jamais ecrite a la main : une annee absente de la liste ne
-   pourrait pas etre choisie, et une annee de trop offrirait une plage vide. */
 function anneesPresentes(dates) {
   return [...new Set(dates.map(d => String(d || '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))]
     .sort().reverse();
@@ -2598,11 +1906,6 @@ function rangeLabel(id) {
   return m ? (m[1] === '1' ? trad('1 an') : `${m[1]} ${trad('ans')}`) : trad('Tout');
 }
 
-/* Les deux bornes d'une plage, et non la seule ouverture.
-
-   Une duree glissante n'a pas de fin — elle court jusqu'a aujourd'hui — donc un
-   seuil suffisait. Une annee civile est fermee des deux cotes, et filtrer une
-   annee sur son seul debut aurait montre 2025 **et tout ce qui a suivi**. */
 function rangeBornes(range) {
   if (estAnnee(range)) return { debut: `${range}-01-01`, fin: `${range}-12-31` };
   return { debut: rangeStart(range), fin: null };
@@ -2635,11 +1938,9 @@ function limitRange(points, range, { ecarts = false } = {}) {
   const seuil = `${depuis.getFullYear()}-${String(depuis.getMonth() + 1).padStart(2, '0')}`
               + `-${String(depuis.getDate()).padStart(2, '0')}`;
   const gardes = points.filter(p => p.date >= seuil);
-  // une seule donnée ne fait pas une courbe : on élargit plutôt que d'afficher un point
   return gardes.length >= 2 ? gardes : points.slice(-2);
 }
 
-/* --- série historique + point "aujourd'hui" --- */
 function historySeries({ includeNow = true } = {}) {
   const pts = Store.state.monthly
     .filter(r => !rowIsEmpty(r))
@@ -2654,21 +1955,6 @@ function historySeries({ includeNow = true } = {}) {
     /* `total` doit egaler la somme des trois poches, comme pour un releve
        passe : la courbe suit la valeur des avoirs, les credits se lisent
        dans le patrimoine net du bandeau. */
-    /* Le capital garanti a sa bande, et il ne rejoint pas la bourse.
-
-       Il l'a fait un temps, au motif que ce graphique trace des poches de compte
-       et que le passe ne se decoupe pas par classe. Le motif etait bon, la
-       conclusion fausse : les obligations sont dans « Actifs de marche » et
-       l'etiquette dit vrai, un fonds euros n'est pas un actif de marche et elle
-       ment. Un patrimoine entierement en fonds euros s'affichait a 100 %
-       d'actifs de marche, sous une carte qui annonçait 100 % de capital garanti.
-
-       Ce qu'on ne peut toujours pas faire, et qu'il faut savoir : un releve
-       mensuel note des montants PAR COMPTE, donc rien ne dit quelle part d'une
-       assurance-vie etait en fonds euros il y a huit mois. La bande commence le
-       jour ou l'on classe ses supports, pas le jour ou l'argent est arrive. Une
-       etiquette juste sur un debut tardif vaut mieux qu'une etiquette fausse sur
-       toute la courbe. */
     pts.push({ label: "Auj.", date: todayISO(), cash: t.cash, bourse: t.bourse,
                garanti: t.garanti,
                crypto: t.crypto, pe: t.pe, immo: t.immo, biens: t.biens,
@@ -2677,18 +1963,10 @@ function historySeries({ includeNow = true } = {}) {
   return pts;
 }
 
-/* Clé du mois en cours, au format des lignes du relevé */
 function currentMonthKey() {
   return todayISO().slice(0, 7) + '-01';
 }
 
-/* Le mois en cours a-t-il déjà sa photo ? Sert aux rappels. */
-/* --- le calendrier des 12 mois -----------------------------------------
-   Un relevé mensuel est un calendrier, pas une liste : les douze mois de
-   chaque année doivent rester visibles même vides, sinon vider un mois le
-   fait disparaître du tableau et laisse un trou entre juillet et septembre.
-   Les lignes hors calendrier (une clôture au 31/12, par exemple) restent
-   des lignes ordinaires, ajoutables et supprimables. */
 const isCalendarMonth = date => /^\d{4}-\d{2}-01$/.test(String(date));
 
 function ensureCalendarMonths(rows, cle, champTexte) {
@@ -2705,35 +1983,11 @@ function ensureCalendarMonths(rows, cle, champTexte) {
   return rows;
 }
 
-/* Vider une ligne de calendrier plutôt que la retirer. */
 function clearMonthRow(row, champTexte) {
   row.v = {};
   row[champTexte] = '';
 }
 
-/* Un rappel qu'on peut taire, pour le mois en cours seulement.
-   « J'attends une rentree d'argent la semaine prochaine, ne me le demande pas
-   maintenant » est une raison legitime, et une pastille qu'on ne peut pas
-   eteindre finit par ne plus etre lue du tout. Le report est donc une cle de
-   mois : il expire de lui-meme au mois suivant, sans qu'on ait a se souvenir
-   de le lever. Aucune migration, un etat sans ce champ se comporte comme
-   avant. */
-/* Deux facons de faire taire un rappel, parce qu'il y a deux intentions.
-
-   « Plus tard » veut dire « pas maintenant, mais reviens » : le releve du mois
-   sera pris, seulement pas ce soir. Le rappel revient au bout de sept jours,
-   sans qu'on ait a s'en souvenir.
-
-   « Pas ce mois-ci » veut dire « n'en parle plus » : on ne prendra pas ce
-   releve, ou les depenses du mois sont deja suivies ailleurs. Il se tait
-   jusqu'au mois suivant, et expire de lui-meme quand la cle change.
-
-   Les deux vivent dans le meme champ, et le report porte un prefixe. Sans lui,
-   les deux formes seraient indistinguables : une cle de mois est « 2026-08-01 »,
-   soit une date ISO elle aussi. Un report tombant le premier d'un mois — repousse
-   le 25 juillet, sept jours plus tard on est le 1er aout — se serait alors lu
-   comme un masquage du mois d'aout entier. Le rappel aurait disparu pour trente
-   jours au lieu de sept, et rien ne l'aurait signale. */
 const REPORT_JOURS = 7;
 const PREFIXE_REPORT = 'jusquau:';
 
@@ -2741,8 +1995,6 @@ function rappelMasque(genre, key) {
   const v = String((Store.state.meta?.rappelsMasques || {})[genre] || '');
   if (!v) return false;
   if (v.startsWith(PREFIXE_REPORT)) return todayISO() < v.slice(PREFIXE_REPORT.length);
-  /* Une cle de mois : le rappel dort jusqu'a ce que le mois change. Les etats
-     ecrits avant le report ne portent que cette forme, ils restent valides. */
   return v === key;
 }
 function masquerRappel(genre, key) {
@@ -2758,47 +2010,18 @@ function reporterRappel(genre, jours = REPORT_JOURS) {
   return quand;
 }
 
-/* Le jour du mois où l'application réclame ses saisies.
-
-   Un seul réglage pour les deux rappels, le relevé et les dépenses. Deux jours
-   séparés se seraient contredits sans que rien ne le détecte, et personne ne
-   fait ses comptes deux fois par mois.
-
-   28 au plus : février existe. Un jour 30 ne serait jamais atteint deux mois par
-   an, et le rappel se tairait sans raison lisible.
-
-   Ce réglage déplace **quand la cloche parle**, jamais ce qu'elle compte : les
-   mois restent calendaires. Un vrai mois décalé du 15 au 14 changerait toutes
-   les moyennes, l'autonomie et le rythme d'accumulation ; c'est un autre
-   chantier, et l'aide du champ le dit plutôt que de le laisser deviner. */
 const JOUR_RAPPEL_DEFAUT = 1;
 function jourRappel() {
   const j = Math.round(num(Store.state.meta?.jourRappel)) || JOUR_RAPPEL_DEFAUT;
   return Math.min(28, Math.max(1, j));
 }
-/* Le jour est-il venu ? Comparé au quantième d'aujourd'hui, en heure locale
-   comme tout calcul de jour de ce fichier. */
 function jourRappelAtteint() {
   return Number(todayISO().slice(8, 10)) >= jourRappel();
 }
 
-/* --- y a-t-il de quoi reclamer une saisie ? -------------------------------
-   Les gardes vivent ici, dans la source, et non chez les quinze appelants :
-   la cloche avait recu la sienne pendant que les deux bandeaux de l'accueil
-   continuaient de crier, faute de passer par elle. Un fait se regle a un seul
-   endroit.
-
-   Un compte declare, c'est un compte que le detenteur a cree. Les especes ne
-   comptent pas : leur compte existe pour tout le monde, pose par le modele, et
-   « Enregistre 0 € dans tes donnees mensuelles » sur ce seul compte n'a aucun
-   sens. */
 const aUnComptePropre = () =>
   comptesOuverts().some(c => !typeCompte(c.type).interne);
 
-/* L'application a-t-elle deja servi ? Un mois de depenses saisi, ou un releve
-   enregistre. Sans cela, reclamer le mois clos revient a demander de remplir un
-   passe que l'application n'a pas vecu : quelqu'un qui arrive en aout ne va pas
-   saisir juillet. */
 const aDejaServi = () =>
   (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0))
   || (Store.state.monthly || []).some(r => !rowIsEmpty(r));
@@ -2816,10 +2039,6 @@ function currentMonthPending() {
                     && jourRappelAtteint() && !rappelMasque('releve', key) };
 }
 
-/*    La relance des dépenses vise le mois clos, pas le mois en cours. Elle porte
-   donc sur juillet, et s'éteint dès qu'il est saisi. Le relévé de patrimoine,
-   lui, reste sur le mois en cours : c'est une photo, elle se prend n'importe
-   quand.*/
 function moisPrecedentKey() {
   const [a, m] = todayISO().split('-').map(Number);
   const d = new Date(Date.UTC(a, m - 2, 1));
@@ -2830,33 +2049,11 @@ function depensesEnAttente() {
   const i = Store.state.budget.expenses.findIndex(r => r.month === key);
   const row = i >= 0 ? Store.state.budget.expenses[i] : null;
   const vide = !row || !Object.values(row.v || {}).some(v => num(v) !== 0);
-  /* Le mois clos ne se reclame qu'a qui a deja saisi quelque chose : le premier
-     mois d'utilisation n'a pas de passe a rattraper. */
   return { key, index: i, label: fmtMonth(key), vide,
            missing: vide && aDejaServi()
                     && jourRappelAtteint() && !rappelMasque('depenses', key) };
 }
 
-/* Les mois restés vides derrière soi, dans n'importe quelle table mensuelle.
-
-   Ce n'est pas une saisie en retard, c'est un trou dans l'historique, et il ne
-   se voit pas : chaque moyenne continue de se calculer, sur moins de points.
-   Le coût de la vie, l'autonomie financière et le rythme d'accumulation sortent
-   tous de ces tables.
-
-   Deux gardes, et la seconde rend le contrôle utilisable.
-
-   Les mois **avant le premier rempli** ne comptent pas : le calendrier ouvre
-   douze mois d'avance, et sans cette garde une installation neuve annoncerait
-   « onze mois vides » le jour de son premier relevé. On ne signale que les trous
-   à l'intérieur de ce qu'on a commencé à tenir.
-
-   Et le mois en cours est exclu : il a déjà son rappel, et il n'est pas en
-   retard tant qu'il n'est pas fini.
-
-   La fonction reçoit sa liste et sa façon de dire qu'une ligne est vide : les
-   relevés et les dépenses vivent dans deux tables de formes différentes, et
-   deux copies de ce parcours auraient fini par ne plus dire la même chose. */
 function moisVides(lignes, estVide) {
   const encours = currentMonthKey();
   const passes = (lignes || [])
@@ -2882,14 +2079,6 @@ function isoLocal(d) {
 }
 function todayISO() { return isoLocal(new Date()); }
 
-/* --- zone et secteur ----------------------------------------------------
-   Aucune source gratuite ne donne la composition d'un ETF ligne a ligne :
-   savoir qu'un « MSCI World » est a 70 % americain demanderait le detail du
-   fonds, que ni Yahoo ni Stooq ne publient. La zone et le secteur sont donc
-   portes par la ligne elle-meme, avec une premiere valeur devinee du libelle
-   — un « Nasdaq » est americain et technologique, un « MSCI World » mondial
-   et diversifie. C'est un point de depart, pas une verite : chaque ligne se
-   corrige depuis sa fiche, et le choix corrige l'emporte toujours. */
 const ZONES = {
   monde:     'Monde',
   amnord:    'Amérique du Nord',
@@ -2915,8 +2104,6 @@ const SECTEURS = {
 
 function devineZone(p) {
   const s = `${p.name || ''} ${p.longName || ''} ${p.symbol || ''}`.toLowerCase();
-  /* Une matiere premiere n'a pas de pays : la coter a Londres ou en dollars
-     n'en fait pas un actif britannique ou americain. */
   const ac = assetClassDe(p);
   if (ac === 'crypto' || ac === 'metaux') return 'monde';
   if (/\bgold\b|silver|uranium|copper|commodit/.test(s)) return 'monde';
@@ -2951,9 +2138,6 @@ function devineSecteur(p) {
 const zoneDe    = p => ZONES[p.zone]       ? p.zone    : devineZone(p);
 const secteurDe = p => SECTEURS[p.secteur] ? p.secteur : devineSecteur(p);
 
-/* Repartition des titres cotes selon une cle declaree. Le perimetre s'arrete
-   aux lignes de marche : une part de non cote ou un studio n'ont ni zone
-   boursiere ni secteur au sens ou on l'entend ici. */
 function allocationParCle(cle, libelles) {
   const par = new Map();
   let total = 0;
@@ -2972,10 +2156,6 @@ function allocationParCle(cle, libelles) {
 const allocationParZone    = () => allocationParCle(zoneDe, ZONES);
 const allocationParSecteur = () => allocationParCle(secteurDe, SECTEURS);
 
-/* --- allocation par actif (vue "Allocation by asset" du sheet) --- */
-/* Les libelles d'allocation viennent maintenant du couple classe + role :
-   « Actions · Core » et « Actions · Satellite » se distinguent sans qu'il
-   faille une categorie pour chaque combinaison. */
 const libelleAlloc = p => {
   const ac = assetClassDe(p);
   const cl = ASSET_CLASSES[ac];
@@ -2992,11 +2172,6 @@ const libelleAlloc = p => {
    La base suit le drapeau au lieu d'etre choisie par l'appelant : c'est le seul
    moyen que la somme des parts fasse toujours le total annonce. */
 function allocationByAsset({ credits = true } = {}) {
-  /* Chaque ligne porte la couleur de sa classe. Huit barres du même bleu ne
-     forment qu'un classement ; avec la teinte de la classe, on reconnaît d'un
-     coup ce qui est action, métal ou liquidité — et c'est la même couleur que
-     dans le camembert, la courbe et les poches. Une couleur qui ne veut dire
-     qu'une chose finit par se lire sans légende. */
   const map = new Map();
   const teintes = new Map();
   const add = (label, v, couleur) => {
@@ -3007,19 +2182,6 @@ function allocationByAsset({ credits = true } = {}) {
   for (const p of Store.state.positions) {
     add(libelleAlloc(p), posValue(p), couleurClasse(assetClassDe(p)));
   }
-  /* Les espèces s'agrègent par usage déclaré, le reste ligne par ligne :
-     chaque placement manuel apporte son libellé, et deux lignes du même
-     libellé se regroupent d'elles-mêmes. */
-  /* Les quatre poches d'AFFECTATIONS, une ligne chacune, comme sur l'accueil
-     et sur la carte du haut. Ce graphique agregeait courant + precaution +
-     projet sous « Argent disponible » : un cinquieme montant, connu de lui
-     seul, portant presque le nom d'une de ses propres parts. Le cash a une
-     seule histoire, et c'est pochesLiquidites() qui la raconte.
-     Bleu des liquidites pour les quatre : ici l'axe est la classe d'actif, et
-     ce cash en est une. La carte du haut les peint autrement parce qu'elle
-     range par disponibilite, et chaque carte porte sa propre legende. Leur
-     donner l'ambre ici les ferait entrer en collision avec l'immobilier, qui
-     tient deja cette teinte dans ce meme graphique. */
   for (const poche of pochesLiquidites()) {
     if (poche.value) add(poche.nom, poche.value, CLASSE_COULEURS.liquidites);
   }
@@ -3037,9 +2199,6 @@ function allocationByAsset({ credits = true } = {}) {
     .sort((a, b) => b.value - a.value);
 }
 
-/* --- allocation par compte : les placements, compte par compte ---------
-   Les espèces n'y figurent pas : « investi » au dénominateur les exclut,
-   les inclure au numérateur gonflait chaque part. */
 /* Le liquide entre dans cette repartition, et la base devient les avoirs.
 
    Elle l'excluait deux fois : les comptes du groupe `cash` etaient ecartes, et
@@ -3054,14 +2213,8 @@ function allocationByAsset({ credits = true } = {}) {
 function allocationByAccount() {
   const base = nowTotals().brut;
   return comptesOuverts()
-    /* La couleur suit la classe dominante du compte : un PEA d'actions se
-       lit vert comme les actions ailleurs, un compte de non coté violet. Le
-       compte n'est qu'un contenant, c'est ce qu'il porte qui compte. */
     .map(c => {
       const lignes = lignesDe(c);
-      /* Le cash du compte pese dans la classe dominante comme le reste : un
-         livret est entierement liquide, un compte-titres a moitie investi se
-         colore de ce qu'il porte le plus. */
       const parClasse = new Map([['liquidites', cashCompte(c)]]);
       for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
       const dominante = [...parClasse.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -3074,23 +2227,9 @@ function allocationByAccount() {
     .sort((a, b) => b.value - a.value);
 }
 
-/* --- portefeuille boursier : total et classes d'actifs --- */
 function stockTotals() {
   const somme = f => Store.state.positions.filter(f).reduce((s, p) => s + posValue(p), 0);
   const est = ac => p => assetClassDe(p) === ac;
-  /* Coeur et satellites se lisent maintenant sur le role, non plus sur le
-     type d'instrument : une action peut tenir le coeur d'un portefeuille, un
-     ETF sectoriel n'est qu'un satellite. Les deux se limitent aux actions —
-     l'or, la crypto et le non cote ont leur propre ligne de cible. */
-  /* Les encours par classe ET par role, pour les cibles. « 90 % d'actions » ne
-     disait pas si le prochain versement va au fonds mondial ou a une conviction,
-     et c'est la seule question qui reste quand on a de l'argent a placer.
-
-     Cette table se construit avant tout le reste, parce que tout le reste en
-     descend. Les totaux etaient additionnes a la main, classe par classe :
-     ajouter une classe a ASSET_CLASSES sans penser a cette ligne aurait sorti
-     son encours du total sans que rien ne le dise. Ici, une classe de plus
-     entre dans la somme par construction. */
   const parClasseRole = {};
   for (const cle of Object.keys(ASSET_CLASSES)) {
     parClasseRole[cle] = {
@@ -3101,8 +2240,6 @@ function stockTotals() {
   const parClasse = Object.fromEntries(Object.entries(parClasseRole)
     .map(([cle, r]) => [cle, r.core + r.satellite]));
 
-  /* Les alias nominatifs restent : ils nomment ce que plusieurs ecrans lisent
-     deja. Ils descendent de la table, donc ils ne peuvent plus la contredire. */
   const coreEtf     = parClasseRole.actions.core;
   const satellites  = parClasseRole.actions.satellite;
   const gold        = parClasse.metaux;
@@ -3114,7 +2251,6 @@ function stockTotals() {
      position tombe donc dans une classe et une seule, et cette somme vaut
      exactement la somme de toutes les positions. */
   const invested   = Object.values(parClasse).reduce((s, v) => s + v, 0);
-  // le reste de la poche bourse : lignes manuelles des comptes de marche
   const autres = comptesOuverts()
     .filter(c => typeCompte(c.type).groupe === 'bourse')
     .reduce((s, c) => s + (c.lignes || []).reduce((x, l) => x + num(l.valeur), 0), 0);
@@ -3123,20 +2259,6 @@ function stockTotals() {
            cashToInvest, invested, balance, parClasseRole, parClasse };
 }
 
-/* Ce que le reequilibrage regarde, et ce qu'il laisse dehors.
-   La base n'est pas le patrimoine : c'est ce qui vit sur un compte
-   d'investissement — PEA, compte-titres, assurance-vie, PER, portefeuille de
-   cryptomonnaies — avec ses lignes et sa tresorerie a investir. Le cash de
-   depenses courantes, l'epargne de precaution et le non cote loge ailleurs
-   n'y sont pas. La page affichait « Total portefeuille » sans le dire, et
-   69 906 EUR pouvaient se lire comme un patrimoine.
-
-   « Comptes titres » serait faux : en droit francais le compte-titres est le
-   CTO, et le perimetre en contient quatre autres especes.
-
-   La fonction sert aussi a reperer une incoherence : une classe peut recevoir
-   une cible alors que ce qu'on en detient est hors perimetre. Une cible de
-   non cote resterait alors introuvable, quoi qu'on achete. */
 function perimetreReequilibrage() {
   const r = rebalanceRows();
   const dedans = r.base;
@@ -3145,8 +2267,6 @@ function perimetreReequilibrage() {
   for (const c of comptesOuverts()) {
     if (typeCompte(c.type).groupe === 'bourse') continue;
     for (const l of (c.lignes || [])) {
-      /* L'immobilier n'a pas de classe d'actif : il ne se reequilibre pas
-         contre un ETF, et il n'a donc pas a apparaitre ici. */
       const k = classeDePoche(l.classe);
       if (k && num(l.valeur)) dehors.push({ classe: k, libelle: l.libelle || nomCompteV2(c), valeur: num(l.valeur) });
     }
@@ -3156,16 +2276,11 @@ function perimetreReequilibrage() {
       }
     }
   }
-  /* Les classes qui portent une cible mais dont l'encours est ailleurs :
-     la cible ne pourra jamais etre atteinte dans ce perimetre. */
   const tg = Store.state.targets.classes || {};
   const horsAtteinte = [...new Set(dehors.map(d => d.classe))]
     .filter(k => cibleDeClasse(tg[k]) > 0)
     .map(k => ({ classe: k, label: ASSET_CLASSES[k] || k,
                  montant: dehors.filter(d => d.classe === k).reduce((s, d) => s + d.valeur, 0) }));
-  /* Le non cote merite d'etre nomme : c'est la plus grosse part de ce qui
-     reste dehors, et savoir qu'il est suivi ailleurs evite de le croire
-     oublie. */
   const nonCote = comptesOuverts()
     .filter(c => typeCompte(c.type).groupe !== 'bourse')
     .reduce((s, c) => s + (c.lignes || [])
@@ -3183,14 +2298,8 @@ function cibleDeClasse(v) {
   return (v !== null && typeof v === 'object')
     ? Object.values(v).reduce((s, x) => s + num(x), 0) : num(v);
 }
-/* Le meme total, sous le nom qu'emploient les vues quand elles annoncent la
-   cible d'une classe a l'utilisateur. */
 const sommeCibleDe = cibleDeClasse;
 
-/* La trésorerie se range dans la meme liste d'exclusions que les classes, sous
-   cette cle. Elle n'est pas une classe d'actif — c'est ce qui n'est pas encore
-   place — mais elle se retire du reequilibrage par le meme geste, et un seul
-   endroit pour dire « hors jeu » vaut mieux que deux mecanismes paralleles. */
 const CLE_TRESORERIE = 'cashToInvest';
 
 /* Le nom d'une ligne de cible, classe ou tresorerie. Les messages qui parlaient
@@ -3199,10 +2308,6 @@ const CLE_TRESORERIE = 'cashToInvest';
 const nomDeLaCible = cle =>
   cle === CLE_TRESORERIE ? AFFECTATION_LABEL.investir : (ASSET_CLASSES[cle] || cle);
 
-/* La somme des cibles de la page, trésorerie comprise, en un seul endroit.
-   Une classe mise hors jeu ne compte pas : son encours a quitte la base, lui
-   reclamer une part de 100 % n'aurait pas de sens. La tresorerie sortie non
-   plus, sans quoi les cibles restantes ne pourraient jamais faire 100 %. */
 function sommeCibles() {
   const tg = Store.state.targets || {};
   const horsJeu = new Set(tg.exclues || []);
@@ -3212,28 +2317,11 @@ function sommeCibles() {
     .reduce((s, [, v]) => s + cibleDeClasse(v), 0) + cash);
 }
 
-/* Etage 1 : l'allocation strategique, une ligne par classe d'actif.
-   Une classe sans encours ni cible n'apparait pas — inutile d'afficher zero
-   sur six lignes quand on n'en detient que trois. */
 function rebalanceRows() {
   const t = stockTotals();
   const tg = Store.state.targets;
-  /* Une classe peut etre mise hors jeu : « je ne pilote pas ma crypto par le
-     reequilibrage » est une position defendable. La masquer sans plus aurait
-     laisse les pourcentages ne plus totaliser 100 % sans que rien ne le dise ;
-     son encours quitte donc la base, exactement comme le non cote qui vit
-     ailleurs. Reversible, et annonce dans le perimetre. */
   const exclues = new Set(tg.exclues || []);
-  /* Une table ecrite a la main vivait ici, une entree par classe. Elle sortait
-     silencieusement du calcul toute classe ajoutee a ASSET_CLASSES et pas
-     recopiee ici : son encours quittait la base, et les pourcentages ne
-     totalisaient plus 100 % sans que rien ne le dise. Elle descend maintenant
-     de la meme source que les lignes. */
   const encoursDe = t.parClasse;
-  /* La tresorerie se retire comme une classe, par la meme liste. Quelqu'un qui
-     n'en garde jamais — tout est place le jour meme — n'a pas a lire une ligne a
-     zero sous un intitule de groupe. Son encours quitte la base comme celui
-     d'une classe sortie, donc les pourcentages continuent de totaliser 100 %. */
   const cashSorti = exclues.has(CLE_TRESORERIE);
   const horsBase = [...exclues].reduce((s, k) =>
     s + (k === CLE_TRESORERIE ? num(t.cashToInvest) : (encoursDe[k] || 0)), 0);
@@ -3244,17 +2332,6 @@ function rebalanceRows() {
     return { label, cle, value, pct: base ? value / base * 100 : 0,
              targetPct: p, targetVal, delta: targetVal - value };
   };
-  /* Une classe est decoupee par role si sa cible est un objet et non un nombre.
-     La forme de la donnee se decrit elle-meme : aucun drapeau a maintenir a
-     cote, et un etat existant, ou toutes les cibles sont des nombres, reste
-     valide sans migration.
-
-     Decoupee, la classe ne rend plus une ligne mais deux, a plat : « Core » et
-     « Satellite » remplacent « Actions » dans la liste des cibles, sans ligne
-     parente ni retrait. C'est la forme du tableur d'ou vient cette application,
-     ou l'axe d'allocation etait deja ETF Core / Satellites / Gold. Une ligne
-     parente avait ete essayee, elle chargeait la carte pour ne rien apprendre :
-     la somme des cibles se lit au pied. */
   const cibleDe = cle => tg.classes?.[cle];
   const estDecoupee = cle => cibleDe(cle) !== null && typeof cibleDe(cle) === 'object';
 
@@ -3268,15 +2345,8 @@ function rebalanceRows() {
     }
     const parRole = t.parClasseRole?.[cle] || { core: 0, satellite: 0 };
     for (const role of ['core', 'satellite']) {
-      /* Le libelle porte la classe, pas seulement le role. « Core » seul
-         promet tout le core du portefeuille alors que la ligne ne compte que
-         les actions : un metal precieux passe en core resterait dans sa propre
-         ligne sans jamais apparaitre ici. « Actions core » ne melange plus les
-         deux axes — l'axe de la carte reste la classe, le role la subdivise. */
       const ligne = mk(`${label} ${ROLES[role].toLowerCase()}`, num(parRole[role]),
                        cibleDe(cle)?.[role], `classes.${cle}.${role}`);
-      /* De quelle classe vient cette ligne : le bouton de refusion en a besoin,
-         et l'infobulle nomme la classe sans son role. */
       ligne.classeParente = cle;
       ligne.labelClasse = label;
       ligne.role = role;
@@ -3294,8 +2364,6 @@ function rebalanceRows() {
     invested: mk(BASES.placeBourse.nom, t.invested - horsBase,
       Object.entries(tg.classes || {}).filter(([k]) => !exclues.has(k))
         .reduce((s, [, v]) => s + cibleDeClasse(v), 0)),
-    /* Sortie, la tresorerie ne rend plus de ligne : la vue n'a rien a dessiner
-       et l'intitule de groupe disparait avec elle. */
     cash: cashSorti ? null
       : mk(AFFECTATION_LABEL.investir, t.cashToInvest, tg.cashToInvest, CLE_TRESORERIE),
   };
@@ -3348,29 +2416,10 @@ function teinteDominante(comptes) {
   const dominante = [...parClasse.entries()]
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])[0]?.[0];
-  /* Un groupe vide — un etablissement qui ne porte plus qu'une dette — n'a pas
-     de classe dominante : il garde le filet neutre, ce qui est exact. */
   return dominante ? CLASSE_COULEURS[dominante] || 'var(--border-strong)'
                    : 'var(--border-strong)';
 }
 
-/* Peut-on changer un compte de type, et sinon pourquoi.
-
-   Le type n'etait pas modifiable, et la seule issue apres une faute de frappe
-   etait de supprimer puis recreer. Or les releves mensuels sont indexes par
-   identifiant de compte : recreer perd tout l'historique. L'absence de ce
-   reglage ne protegeait donc rien, elle poussait vers un contournement
-   destructeur.
-
-   Elle n'etait pas gratuite pour autant. Le type commande la poche, les classes
-   autorisees, la regle de disponibilite, la capacite a porter des titres. Passer
-   un compte-titres en livret laisserait un Livret A detenant des actions, et
-   aucun ecran ne s'en plaindrait — ils compteraient simplement des actions dans
-   les liquidites.
-
-   La regle est donc : tout ce que le compte porte deja doit avoir sa place dans
-   le type visé. On refuse en disant quoi deplacer, plutot que d'accepter en
-   abimant — un refus qui explique vaut mieux qu'un etat incoherent. */
 function changementDeTypePossible(compte, cibleId) {
   const cible = TYPES_COMPTE.find(t => t.id === cibleId);
   if (!cible) return { ok: false, raison: 'Ce type de compte n’existe pas.' };
@@ -3385,9 +2434,6 @@ function changementDeTypePossible(compte, cibleId) {
       + `remets-la à zéro, ou choisis un type qui accepte des liquidités.` };
   }
 
-  /* Les lignes comptent celles saisies a la main comme les positions de marche :
-     les deux sont rattachees a ce compte et les deux se retrouveraient sans
-     classe d'accueil. */
   const bloquantes = lignesDe(compte).filter(l => !permises.has(l.classe));
   if (bloquantes.length) {
     const noms = bloquantes.slice(0, 3).map(l => l.libelle).join(', ');
@@ -3425,20 +2471,6 @@ function resteAVerser(compte) {
   };
 }
 
-/* Le partage d'une cible de classe entre ses deux roles, au prorata des encours.
-
-   La somme des deux vaut exactement la cible d'avant le decoupage : le total des
-   cibles de la page ne bouge donc pas d'un point, et il n'y a rien a re-regler
-   derriere. L'arrondi va au core, parce que c'est la ligne qu'on renforce.
-
-   L'arrondi tombait sur le palier de 5 le plus proche, du temps ou la liste
-   deroulante ne proposait que ceux-la : une classe a 90 % detenue 70/30 se
-   coupait en 65 et 25 au lieu des 63 et 27 que dit le prorata. La liste va de 1
-   en 1 depuis, donc on arrondit a l'unite.
-
-   Cette fonction vit ici et non dans l'action qui l'appelle, pour la raison
-   habituelle : le harnais ne charge pas app.js, une regle qui y vit ne se
-   verifie que comme du texte. Celle-ci merite une assertion sur son resultat. */
 function partageDeCible(cible, parRole) {
   const core = num(parRole?.core), satellite = num(parRole?.satellite);
   const total = core + satellite;
@@ -3447,14 +2479,6 @@ function partageDeCible(cible, parRole) {
   return { core: Math.max(0, c - sat), satellite: Math.min(c, sat) };
 }
 
-/* Le socle des deux fonctions suivantes : les positions qui passent un filtre,
-   avec leur index — c'est lui qui ouvre la fiche — et leur enveloppe.
-
-   Un seul filtre pour les deux barres cliquables de la page. Elles ne comptent
-   pas la meme chose et c'est justement pourquoi elles partagent ce code : sur
-   cette page, « Satellite » vaut 4 291 EUR dans la carte des roles et 3 543 EUR
-   sur la ligne « Actions satellite », l'ecart etant l'or. Deux filtres ecrits
-   separement auraient fini par se tromper l'un sur l'autre. */
 function positionsFiltrees(garde) {
   return Store.state.positions
     .map((p, i) => ({ p, i }))
@@ -3464,9 +2488,6 @@ function positionsFiltrees(garde) {
       return {
         i, nom: p.name, valeur: posValue(p),
         role: roleDe(p), classe: assetClassDe(p),
-        /* Le compte, parce que la meme classe se detient souvent dans deux
-           enveloppes et que l'arbitrage n'y est pas le meme : vendre dans un PEA
-           de moins de cinq ans ne coute pas ce que coute vendre dans un CTO. */
         compte: c ? nomCompteV2(c) : '',
         etab: c ? nomEtabDe(c) : '',
       };
@@ -3474,8 +2495,6 @@ function positionsFiltrees(garde) {
     .sort((a, b) => b.valeur - a.valeur);
 }
 
-/* Le total est toujours la somme des lignes rendues, jamais un encours relu
-   ailleurs : deux calculs du meme nombre finissent par diverger. */
 const ficheDePositions = (label, lignes) => ({
   label, lignes, total: round2(lignes.reduce((s, l) => s + l.valeur, 0)),
 });
@@ -3494,14 +2513,6 @@ function positionsDeCible(cle) {
   };
 }
 
-/* Les positions d'un role, toutes classes confondues : ce que compte la barre
-   de la carte « Core et satellites ».
-
-   Ici « Core » tout court est le bon intitule, alors qu'il serait faux sur une
-   ligne de cible. La difference n'est pas cosmetique : cette barre compte
-   vraiment tout le core du portefeuille, une ligne de cible ne compte que le
-   core d'une classe. C'est le meme mot pour deux ensembles, et c'est pour cela
-   que la fiche dit la classe de chaque ligne. */
 function positionsDeRole(role) {
   if (!ROLES[role]) return null;
   return {
@@ -3510,18 +2521,6 @@ function positionsDeRole(role) {
   };
 }
 
-/* Etage 2 : le partage socle / satellites, a l'interieur de ce qui est
-   investi. Un constat, pas un objectif.
-
-   Il a porte des cibles pendant une version, et c'etait une erreur : deux
-   series de cibles s'appliquaient au meme argent sans que rien ne verifie
-   leur compatibilite. Avec 40 % d'actions visees et seules les actions en
-   socle, une cible de socle a 78 % devient impossible a atteindre, et l'app
-   affichait un ecart qu'aucun arbitrage ne pouvait combler. Le plan de
-   reequilibrage n'a donc qu'une source, les classes.
-
-   Reste ce que la lecture apporte vraiment : quelle part du portefeuille
-   tient lieu de fondation, et de quoi le reste est fait. */
 function rebalanceRoles() {
   const parRole = { core: 0, satellite: 0 };
   const parClasse = new Map();
@@ -3533,17 +2532,6 @@ function rebalanceRoles() {
     if (!parClasse.has(ac)) parClasse.set(ac, { core: 0, satellite: 0 });
     parClasse.get(ac)[r] += v;
   }
-  /* La base est celle des cibles, cash a investir compris, et non la seule
-     valeur des titres. Sans cela le meme core portait deux pourcentages sur la
-     meme page : 9 267 EUR valaient 68,5 % ici et 60,2 % sur la carte des
-     classes, l'ecart etant les 1 856 EUR pas encore places. « Je vise un core a
-     70 % » n'avait alors pas de sens : 70 % faisaient 10 775 EUR d'un cote et
-     9 476 EUR de l'autre.
-
-     Le cash n'a pas de role, il forme donc sa propre ligne : les trois font
-     100 % de la base, et le core se compare enfin a une cible. Bon effet de
-     bord, a mesure qu'on place ce cash le core monte vers sa cible tout seul,
-     la ou 68,5 % annoncait « presque bon » avec de l'argent qui dort. */
   const cash = num(stockTotals().cashToInvest);
   const base = rebalanceRows().base;
   const mk = (cle, label, valeur) => ({
@@ -3552,27 +2540,12 @@ function rebalanceRoles() {
   });
   return {
     base,
-    /* Les libelles viennent de ROLES, pas d'une liste parallele : cette
-       fonction ecrivait « Socle » et « Satellites » quand le filtre de Marches
-       et les fiches de lignes affichaient « Core » et « Satellite ». Un role,
-       un mot. */
     roles: [mk('core', ROLES.core), mk('satellite', ROLES.satellite),
             mk('cashToInvest', AFFECTATION_LABEL.investir, cash)],
-    /* Le detail poche par poche : c'est la que la question a un sens concret
-       — « dans mes actions, quelle part est du socle ». */
     parClasse: [...parClasse]
       .map(([ac, v]) => ({ classe: ASSET_CLASSES[ac], ...v, total: v.core + v.satellite }))
       .filter(x => x.total > 0)
       .sort((a, b) => b.total - a.total),
-    /* De quoi chaque role est fait. Deux barres empilees valent mieux que deux
-       barres pleines : « satellites, 58 922 EUR » ne dit rien, « satellites,
-       dont 93 % de bitcoin » dit tout. */
-    /* La composition se découpe par classe **et** par nature. Elle ne
-       distinguait que la classe : « Actions » au socle et « Actions » en
-       satellite, sans dire que l'un est un fonds mondial et l'autre une
-       société unique. C'est pourtant toute la différence entre un socle et un
-       pari, et c'est la question qu'on se pose en regardant cette carte —
-       elle ne doit pas être rangée sous un dépliant. */
     composition: ['core', 'satellite'].reduce((acc, r) => {
       const m = new Map();
       for (const p of Store.state.positions) {
@@ -3590,21 +2563,12 @@ function rebalanceRoles() {
       acc[r] = [...m.values()].filter(x => x.value > 0).sort((a, b) => b.value - a.value);
       return acc;
     }, {
-      /* La tresorerie est une ligne du meme tableau, mais elle n'a pas de
-         composition : ce n'est pas encore place, donc pas de classe ni de
-         nature. Sans cette entree sa barre restait une piste vide sous un
-         « aucune ligne » gris, qui se lit comme une panne alors que 1 856 EUR
-         attendent tranquillement. Un bloc plein, de la couleur des liquidites,
-         et la vue tait la legende puisqu'elle repeterait le nom de la ligne. */
       cashToInvest: num(cash) > 0.005 ? [{
         classe: AFFECTATION_LABEL.investir, nature: 'fonds',
         label: AFFECTATION_LABEL.investir,
         couleur: CLASSE_COULEURS.liquidites, value: num(cash),
       }] : [],
     }),
-    /* Le même partage, vu par nature : « Actions 9 128 € » d'un côté et
-       « Actions 3 400 € » de l'autre ne disaient pas que le socle est un
-       fonds mondial et le satellite une société unique. */
     parNature: (() => {
       const m = new Map();
       for (const p of Store.state.positions) {
@@ -3646,49 +2610,22 @@ const KIND_VERS_NATURE = {
   ETF: 'fonds', MUTUALFUND: 'fonds', FUND: 'fonds',
   EQUITY: 'titre', CRYPTOCURRENCY: 'titre', CURRENCY: 'titre', INDEX: 'fonds',
 };
-/* Trois familles d'indices dans le nom d'un fonds, et aucune dans celui d'une
-   action en direct.
-
-   L'emetteur, d'abord : personne n'appelle une action « Amundi » ni
-   « iShares ». C'est le signal le plus fiable, et il manquait — sept noms de
-   fonds courants sur quatorze etaient pris pour des actions, dont « Lyxor
-   Nasdaq-100 », « Amundi Euro Stoxx 50 » et « SPDR Gold Shares ».
-
-   L'habillage juridique ensuite, UCITS, SICAV, FCP, ETC : il ne peut designer
-   qu'un fonds. Et l'indice suivi enfin — CAC, DAX, Nasdaq, Stoxx — qu'une
-   societe ne met pas dans sa raison sociale.
-
-   Deux pieges evites. « Trust » n'y figure pas : une foncière americaine porte
-   « Real Estate Investment Trust » dans son nom et reste une action. Et les
-   mots isoles trop courts, comme « acc » ou « dist » des classes de parts, sont
-   ecartes : « Accenture » commence par « acc ». */
 const INDICES_FONDS = [
-  /* emetteurs */
   /\b(amundi|ishares|lyxor|xtrackers|vanguard|spdr|invesco|vaneck|wisdomtree|blackrock)\b/i,
   /\b(bnp\s*paribas\s*easy|axa\s*im|ossiam|tabula|jpmorgan|jpm|fidelity|hsbc|schwab|ark\s*invest)\b/i,
-  /* habillage juridique */
   /\b(etf|etc|etn|ucits|sicav|fcp|opcvm|fonds|fund|index\s*fund|tracker)\b/i,
-  /* indices suivis */
   /\b(msci|s&p|sp500|ftse|stoxx|cac\s*40|dax|mdax|nasdaq|nikkei|russell|topix|smi|sensex)\b/i,
   /\b(all[-\s]?world|world|emerging|indice|index)\b/i,
 ];
 const nomSentLeFonds = nom => INDICES_FONDS.some(rx => rx.test(String(nom || '')));
 
 function natureDe(p) {
-  /* Ce que l'utilisateur a declare gagne toujours : la detection reste une
-     approximation, et c'est la raison pour laquelle le menu de la fiche existe.
-     Meme bien nourrie, une regle sur un nom se trompera — un ETF nomme d'apres
-     sa seule strategie, une societe dont la raison sociale evoque un indice. */
   if (NATURES[p?.nature]) return p.nature;
-  /* La passerelle sait, quand elle a repondu : elle rend le type de
-     l'instrument, ce qui vaut mieux que n'importe quelle lecture de nom. */
   const auto = KIND_VERS_NATURE[p?.kind];
   if (auto) return auto;
   return nomSentLeFonds(p?.name) ? 'fonds' : 'titre';
 }
 
-/* Une teinte stable par classe : la meme couleur doit designer les actions
-   dans les deux barres, sinon on compare des motifs au lieu de montants. */
 /* Une seule table pour toutes les classes, poches comprises.
    Il y en avait deux — l'une pour les classes de marché, l'autre pour les
    poches de patrimoine — avec des valeurs qui divergeaient : les obligations
@@ -3700,11 +2637,6 @@ const TEINTE_CLASSE = {
   liquidites: 1, monetaire: 1,
   actions: 2,
   nonCote: 3,
-  /* L'immobilier cote prend la teinte de l'immobilier, volontairement : la
-     couleur dit le sous-jacent, et un REIT est de l'immobilier. Deux teintes
-     auraient fait croire a deux natures. Les deux lignes ne se rencontrent
-     jamais sur un meme graphique — l'une est une classe de ligne cotee, l'autre
-     une poche du patrimoine. */
   immobilier: 4, immobilierCote: 4,
   crypto: 5,
   metaux: 6,
@@ -3725,21 +2657,13 @@ const TEINTE_CLASSE = {
      classes fines. Un controle le verifie desormais, pour que l'hypothese cesse
      d'en etre une. */
   garanti: 8,
-  /* La neuvieme, un mauve rose : elle etait en reserve, et c'est la premiere
-     classe a en reclamer une. Franchement a cote du rose du non cote, avec
-     lequel elle voisine dans toutes les barres de repartition. */
   bienValeur: 9,
 };
-/* Douze teintes existent, dont quatre en reserve. Une classe sans attribution
-   tombe sur la douzieme, un gris mauve : elle se lit alors comme « pas encore
-   classee » au lieu d'emprunter la couleur d'une vraie classe. Elle tombait sur
-   la huitieme, qui appartient desormais aux multi-actifs. */
 const TEINTES_DISPONIBLES = 12;
 const TEINTE_SANS_CLASSE = 12;
 const couleurClasse = ac =>
   `var(--series-${TEINTE_CLASSE[CLASSES_ALIAS[ac] || ac] || TEINTE_SANS_CLASSE})`;
 
-/* --- répartition par type de compte --- */
 /* Ce qui est place, groupe par type d'enveloppe.
 
    Meme argent que `allocationByAccount()`, meme perimetre, meme base : les deux
@@ -3779,7 +2703,6 @@ function byAccountType() {
     .sort((a, b) => b.value - a.value);
 }
 
-/* --- objectif --- */
 function objectiveStatus() {
   const { total } = nowTotals();
   const obj = num(Store.state.meta.objective);
@@ -3793,7 +2716,6 @@ function objectiveStatus() {
    `meta.expectedInflow` reste dans l'etat sans lecteur, comme `budget
    .supplements` : un export d'avant doit continuer de se relire. */
 
-/* --- variations --- */
 function deltas() {
   const pts = historySeries({ includeNow: false });
   const t = nowTotals();
@@ -3820,47 +2742,16 @@ function deltas() {
   return { month: d(last), ytd: d(firstOfYear), all: d(first) };
 }
 
-/* =============================================================
-   BUDGET & DÉPENSES
-   ============================================================= */
-
 const B = () => Store.state.budget;
 
-/*   Le revenu vraiment irregulier — la facture de pige, la vente d'un meuble —
-   n'entre PAS ici : il a deja sa place au journal des rentrees
-   exceptionnelles, avec sa date. Une moyenne declaree ici est un choix de
-   budget ; le journal, lui, enregistre des faits. */
 const revenuMensuel = r => auMois(r.amount, r);
 
-/* Au moins une source est declaree estimee : les ecrans qui derivent du
-   revenu (taux d'epargne, reste a vivre) peuvent alors le dire, au lieu
-   d'afficher quatre chiffres apres la virgule sur une hypothese. */
 const revenuEstime = () => (B().income || []).some(r => !!r.estime);
 
 function incomeTotal() {
   return B().income.reduce((s, i) => s + revenuMensuel(i), 0);
 }
 
-/* --- periodicite des charges fixes ------------------------------------
-   Une assurance se paie a l'annee, un abonnement au mois. Les saisir toutes
-   au mois obligeait a diviser de tete et a re-verifier a chaque changement
-   de tarif. Le montant est donc garde tel qu'il est facture, et c'est le
-   calcul qui ramene au mois.
-
-   Les parts d'un contributeur suivent la periode de leur charge : sur une
-   assurance annuelle, on note ce qu'il verse par an. */
-/* « mensuel » plutot que « par mois » : dans la colonne etroite du tableau
-   sur telephone, la preposition mangeait la place du mot qui distingue.
-
-   Cinq periodicites, et non deux. « Mois ou an » forcait a diviser de tete un
-   loyer de garage trimestriel ou une assurance semestrielle, puis a refaire le
-   calcul a chaque changement de tarif — exactement ce que cette table existe
-   pour eviter.
-
-   Le facteur est le nombre de mois que couvre un versement. La semaine vaut
-   52/12 mois et non 4 : douze mois de quatre semaines feraient quarante-huit
-   semaines, et une charge hebdomadaire serait sous-estimee de quatre semaines
-   par an, soit 8 %. */
 const CHARGE_PERIODES = [
   ['semaine',  'hebdo',       12 / 52],
   ['mois',     'mensuel',     1],
@@ -3873,9 +2764,6 @@ const CHARGE_MOIS_COUVERTS = Object.fromEntries(
 const CHARGE_PERIODE_LABEL = Object.fromEntries(
   CHARGE_PERIODES.map(([cle, label]) => [cle, label]));
 
-/* Une periode inconnue — un etat d'avant, un export bricole — retombe sur le
-   mois : c'est la valeur qui ne deforme rien, un montant mensuel etant deja son
-   propre equivalent mensuel. */
 const chargePeriode = c => (c && CHARGE_MOIS_COUVERTS[c.period]) ? c.period : 'mois';
 const auMois = (valeur, c) => num(valeur) / CHARGE_MOIS_COUVERTS[chargePeriode(c)];
 const chargeMensuelle = c => auMois(c.amount, c);
@@ -3884,12 +2772,6 @@ function fixedTotal() {
   return B().fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0);
 }
 
-/* --- charges partagées ------------------------------------------------
-   Une charge peut être partagée avec plusieurs personnes. Ces parts sont
-   informatives : le budget déduit la charge en totalité, parce que c'est bien
-   toi qui la paies — ce que les autres te versent entre de leur côté dans les
-   revenus. La colonne dit donc ce qui reste réellement à ta charge, sans
-   toucher au calcul du reste pour vivre. */
 function contributors() { return B().contributors || []; }
 
 function shareOf(charge, id) { return num((charge.shares || {})[id]); }
@@ -3898,12 +2780,8 @@ function sharedOn(charge) {
   return contributors().reduce((s, p) => s + shareOf(charge, p.id), 0);
 }
 
-/* Ce qui te reste vraiment à payer sur une ligne. */
 function myShare(charge) { return num(charge.amount) - sharedOn(charge); }
 
-/* Les totaux additionnent des lignes de periodes differentes : tout est donc
-   ramene au mois avant d'etre somme, sinon une assurance annuelle pesait
-   douze fois son poids reel dans le budget. */
 const shareMensuelle = (charge, id) => auMois(shareOf(charge, id), charge);
 const myShareMensuelle = charge => chargeMensuelle(charge) - auMois(sharedOn(charge), charge);
 
@@ -3919,8 +2797,6 @@ function sharedTotals() {
 
 function fixedSharePK() { return sharedTotals().partage; }
 
-/* Reste pour vivre = revenus − charges fixes.
-   Il se partage entre l'objectif de dépenses et l'objectif d'investissement. */
 function budgetFrame() {
   const income = incomeTotal();
   const fixed = fixedTotal();
@@ -3940,29 +2816,13 @@ function expenseRowTotal(row) {
   return expenseCategories().reduce((s, c) => s + num(row.v[c]), 0);
 }
 
-/* --- ce qu'on a deja tape dans un champ -------------------------------
-
-   Trois champs se retapent a chaque fois : le preteur d'un credit, l'organisme
-   d'une charge fixe, la source d'un revenu. « Credit Agricole » saisi deux fois
-   donne deux orthographes qui ne se regrouperont jamais, et personne ne s'en
-   apercoit — ce sont des champs qu'on relit rarement.
-
-   Les valeurs se derivent des donnees, jamais d'une table tenue a la main :
-   celle-ci aurait vieilli des le premier organisme ajoute. Le champ reste libre,
-   c'est une proposition et non une contrainte — un nouvel organisme se tape
-   comme avant. */
 const VALEURS_CONNUES = {
-  /* Les preteurs deja nommes, plus les etablissements : quand la banque qui
-     prete est celle qui tient le compte, son nom est deja dans l'application. */
   preteur: () => [
     ...(Store.state.etabs || []).flatMap(e => (e.dettes || []).map(d => d.preteur)),
     ...(Store.state.etabs || []).map(e => e.nom),
   ],
   organisme: () => (B().fixedCharges || []).map(c => c.provider),
   source: () => (B().income || []).map(r => r.label),
-  /* Les postes deja nommes sur un bien, quel qu'il soit : deux appartements
-     portent la meme taxe fonciere, et retaper le mot au second n'apprend rien
-     a personne. Ils viennent apres les postes proposes. */
   posteBien: () => (B().fixedCharges || []).filter(c => c.bienId).map(c => c.label),
 };
 
@@ -3970,17 +2830,10 @@ function valeursConnues(cle) {
   const vues = new Map();
   for (const v of (VALEURS_CONNUES[cle]?.() || [])) {
     const t = String(v || '').trim();
-    /* La cle en minuscules dedoublonne « MAIF » et « Maif ». L'ecriture gardee
-       est la derniere rencontree : peu importe laquelle, ce qui compte est qu'il
-       n'y en ait qu'une et que la regle soit la meme partout. Deux facons de
-       dedoublonner dans un meme fichier finiraient par donner deux listes
-       differentes du meme champ. */
     if (t) vues.set(t.toLowerCase(), t);
   }
   return [...vues.values()].sort((a, b) => a.localeCompare(b, 'fr'));
 }
-
-
 
 /* « 100+50+70 », « 12,50 + 8 » : la somme se tape dans le champ, ce qui evite
    d'ouvrir un panneau pour trois montants. Analyseur strict — pas d'`eval` sur
@@ -3991,8 +2844,6 @@ function parseSomme(texte) {
   const brut = String(texte ?? '').trim();
   if (!brut) return { total: 0, termes: [] };
   if (!/^[\d\s+.,-]+$/.test(brut)) return null;
-  /* Le séparateur est le « + » ou le « - » qui suit un chiffre : sinon un
-     « -50 » d'ouverture se ferait couper en un terme vide. */
   const morceaux = brut.replace(/(\d)\s*([+-])/g, '$1\u0000$2').split('\u0000');
   const termes = [];
   for (const mc of morceaux) {
@@ -4009,7 +2860,6 @@ function expenseRowIsEmpty(row) {
   return expenseRowTotal(row) === 0;
 }
 
-/* Séries mensuelles, éventuellement filtrées sur une année */
 function expenseSeries(year) {
   const all = !year || year === 'all';
   return B().expenses
@@ -4046,17 +2896,10 @@ function niveauDepassement(total, objectif) {
   return (t - o) / o >= SEUIL_DEPASSEMENT_GRAVE ? 'grave' : 'leger';
 }
 
-/* La classe CSS de l'ecart, et donc la couleur. Elle vit ici et non dans les
-   vues : c'est la correspondance niveau -> couleur qui ne doit pas diverger, et
-   la mettre dans app.js la rendait intestable — le harnais ne charge pas les
-   vues. Le graphique peint ses barres depuis les memes trois niveaux, si bien
-   qu'un mois ne peut plus etre orange sur le dessin et rouge dans le tableau
-   juste en dessous. */
 const CLASSE_DEPASSEMENT = { sous: 'up', leger: 'tiede', grave: 'down' };
 const classeDepassement = (total, objectif) =>
   CLASSE_DEPASSEMENT[niveauDepassement(total, objectif)] || 'muted';
 
-/* Bilan d'une année : total, moyenne, mois sous/au-dessus de l'objectif */
 function expenseYearStats(year) {
   const rows = expenseSeries(year).filter(r => r.total > 0);
   const total = rows.reduce((s, r) => s + r.total, 0);
@@ -4077,11 +2920,6 @@ function expenseYearStats(year) {
   const clos = rows.filter(r => r.month !== enCours);
   const base = clos.length ? clos : rows;
 
-  /* Les listes elles-memes, pas seulement leurs comptes : les tuiles publient
-     under/over et leurs fiches doivent lister exactement ces mois-la. Deux
-     filtres paralleles, un ici et un dans la fiche, avaient deja diverge — la
-     fiche comptait le mois en cours vide comme « sous l'objectif ». Une seule
-     source, et l'egalite tuile = fiche tient par construction. */
   const sousObjectif = base.filter(r => r.total <= target);
   const surObjectif = base.filter(r => r.total > target);
 
@@ -4098,9 +2936,6 @@ function expenseYearStats(year) {
   };
 }
 
-/* --- catégories de dépenses -------------------------------------------
-   Elles vivent dans l'état, pas dans le code : chacun ne dépense pas dans
-   les mêmes postes, et les colonnes du tableau en découlent. */
 function expenseCategories() {
   const c = Store.state.budget.categories;
   return (Array.isArray(c) && c.length) ? c : EXPENSE_CATEGORIES;
@@ -4110,8 +2945,6 @@ function expenseCategories() {
    des colonnes du detail mensuel, de la fenetre de saisie, des graphiques et
    des exports : une seule liste, donc un seul geste pour tous ces ecrans.*/
 function deplacerCategorie(cat, delta) {
-  /* La liste par defaut se materialise au premier deplacement : on ne peut
-     pas reordonner une constante partagee. */
   if (!Array.isArray(Store.state.budget.categories) || !Store.state.budget.categories.length) {
     Store.state.budget.categories = [...expenseCategories()];
   }
@@ -4141,8 +2974,6 @@ function deplacerCategorie(cat, delta) {
    reste donc entiere, et c'est la saisie qui se restreint. */
 const categorieRetiree = cat => (Store.state.budget.retirees || []).includes(cat);
 
-/* Ce qu'on propose de remplir ce mois-ci. Derive de la liste complete, jamais
-   recopiee : une categorie ajoutee demain y entre sans qu'on y pense. */
 function categoriesSaisie() {
   return expenseCategories().filter(c => !categorieRetiree(c));
 }
@@ -4173,8 +3004,6 @@ function addExpenseCategory(nom) {
   return propre;
 }
 
-/* Renommer déplace les montants déjà saisis : sans ça, ils resteraient
-   attachés à une colonne qui n'existe plus. */
 function renameExpenseCategory(ancien, nouveau) {
   const propre = String(nouveau || '').trim();
   const liste = Store.state.budget.categories;
@@ -4185,8 +3014,6 @@ function renameExpenseCategory(ancien, nouveau) {
   for (const r of Store.state.budget.expenses) {
     if (r.v && r.v[ancien] !== undefined) { r.v[propre] = r.v[ancien]; delete r.v[ancien]; }
   }
-  /* Le retrait suit le nom. Sans ça, renommer une catégorie retirée la ferait
-     revenir dans la saisie, et le nom d'avant resterait retiré à vie. */
   const ret = Store.state.budget.retirees;
   if (Array.isArray(ret)) {
     const j = ret.indexOf(ancien);
@@ -4195,7 +3022,6 @@ function renameExpenseCategory(ancien, nouveau) {
   return true;
 }
 
-/* Combien a été saisi dans une catégorie, tous mois confondus. */
 function expenseCategoryTotal(cat) {
   return Store.state.budget.expenses.reduce((s, r) => s + num(r.v?.[cat]), 0);
 }
@@ -4206,14 +3032,10 @@ function removeExpenseCategory(cat) {
   if (i < 0) return false;
   liste.splice(i, 1);
   for (const r of Store.state.budget.expenses) if (r.v) delete r.v[cat];
-  /* Et sortir le nom des retirees : sinon recreer une categorie du meme nom la
-     ferait naitre deja retiree, invisible dans la saisie, sans que rien
-     n'explique pourquoi. */
   reprendreCategorie(cat);
   return true;
 }
 
-/* Totaux par catégorie sur une année */
 function expenseByCategory(year) {
   const rows = expenseSeries(year).filter(r => r.total > 0);
   const grand = rows.reduce((s, r) => s + r.total, 0);
@@ -4227,16 +3049,6 @@ function expenseByCategory(year) {
     .sort((a, b) => b.value - a.value);
 }
 
-/* Le mois en cours dès qu'il existe au calendrier, même à zéro.
-   Il fallait auparavant qu'il porte déjà une dépense : le 1er août, la carte
-   « Budget du mois » affichait encore juillet et son total, et continuait
-   jusqu'à la première saisie. On croyait l'application figée alors qu'elle
-   répondait à une autre question.
-
-   Zéro euro dépensé le 3 du mois est une information, pas un vide : c'est le
-   budget entier qui reste devant soi. On ne retombe sur le dernier mois
-   renseigné que si le mois en cours n'a aucune ligne — un calendrier jamais
-   ouvert. */
 function currentExpenseMonth() {
   const key = todayISO().slice(0, 7) + '-01';
   const exact = B().expenses.find(r => r.month === key);
@@ -4249,20 +3061,12 @@ function currentExpenseMonth() {
   return last ? { ...last, isCurrent: false } : null;
 }
 
-/* Épargne : ce que le budget prévoit vs ce que le patrimoine a réellement fait */
 function savingsReconciliation() {
   const f = budgetFrame();
   const stats = expenseYearStats(todayISO().slice(0, 4));
   const spend = stats.average || f.target;
   const theoretical = f.income - f.fixed - spend;
 
-  /* Croissance réelle du patrimoine : la même mesure que le « rythme observé »
-     de l'onglet Objectif, et délibérément le même nombre. Les deux cartes
-     annonçaient la même chose et affichaient des valeurs différentes : celle-ci
-     divisait premier-à-dernier par la durée en incluant la photo du jour,
-     l'autre moyennait les écarts mensuels sans elle. Une seule source
-     désormais : la moyenne des variations sur les mois clos. Le mois en cours
-     reste dehors, il est incomplet et ferait bouger le chiffre chaque jour. */
   const rythme = paceRecent();
   const monthsSpan = rythme.count;
   const realPerMonth = monthsSpan ? rythme.average : null;
@@ -4286,18 +3090,6 @@ function prochainJour(iso) {
   return isoLocal(d);
 }
 
-/* --- les echeances du non cote ------------------------------------------
-   Un pret participatif a une date de fin, un taux annonce, et un etat : en cours,
-   en retard, en defaut, rembourse. Le retard et le defaut sont la realite de ce
-   metier — un portefeuille de trente lignes en compte toujours quelques-unes — et
-   l'application n'avait aucun de ces trois champs. Elle ne pouvait donc ni dire
-   « 3 200 EUR arrivent a echeance en mars », ni signaler une ligne qui a depasse
-   sa date sans rien verser.
-
-   Le statut est declare, jamais deduit. Une date depassee ne veut pas dire
-   « en retard » : le remboursement arrive souvent avec quelques jours de decalage,
-   et une application qui peindrait la ligne en rouge le lendemain de l'echeance
-   crierait au loup a chaque fois. Elle signale, c'est le detenteur qui tranche. */
 const STATUTS_LIGNE = {
   encours:   'En cours',
   retard:    'En retard',
@@ -4309,15 +3101,9 @@ function statutLigne(l) {
   return STATUTS_LIGNE[l.statut] ? l.statut : 'encours';
 }
 
-/* Toutes les lignes non cotees qui portent une echeance, la plus proche d'abord.
-   Une ligne remboursee sort de la liste : son echeance est derriere elle et ne
-   demande plus rien. */
 function echeances() {
   const out = [];
   for (const c of comptesOuverts()) {
-    /* Seuls les comptes de pret portent des echeances : une part de societe non
-       cotee n'a pas de date de remboursement, et lui en reclamer une serait
-       inventer un calendrier qui n'existe pas. */
     if (!typeCompte(c.type).prete) continue;
     (c.lignes || []).forEach((l, i) => {
       if (!l.echeance || l.marche) return;
@@ -4327,8 +3113,6 @@ function echeances() {
         compteId: c.id, compte: nomCompteV2(c), etab: nomEtabDe(c), index: i,
         libelle: l.libelle || 'Placement', valeur: num(l.valeur),
         taux: num(l.taux) || null, echeance: l.echeance, statut: st,
-        /* Depassee, mais pas encore declaree en retard : c'est ce cas-la qui
-           merite un rappel, et lui seul. */
         depassee: st === 'encours' && String(l.echeance) < todayISO(),
         jours: Math.round((new Date(String(l.echeance) + 'T12:00:00')
                          - new Date(todayISO() + 'T12:00:00')) / 86400000),
@@ -4338,10 +3122,6 @@ function echeances() {
   return out.sort((a, b) => String(a.echeance).localeCompare(String(b.echeance)));
 }
 
-/* Ce qui est immobilise dans une ligne a probleme : la somme des retards et des
-   defauts. C'est le chiffre qu'on veut connaitre d'un coup d'oeil, et il ne
-   figure nulle part dans les totaux — un defaut garde sa valeur declaree tant que
-   le detenteur ne l'a pas baissee, et c'est a lui de le faire. */
 function encoursAProbleme() {
   const l = echeances();
   return {
@@ -4388,26 +3168,13 @@ function cashFlowBien(compte) {
      loyer saisi a l'annee valait douze fois trop ici pendant que le budget
      affichait le bon chiffre. Le meme libelle doit donner le meme montant sur
      tous les ecrans. */
-  /* Les pieces, avec leur rang dans le budget, et pas seulement leur somme : une
-     ligne qui s'affiche sans porte pour la corriger oblige a chercher la source
-     ailleurs, et rien a l'ecran ne dit ou. Le rang est celui du budget, c'est lui
-     qui ouvre la bonne fenetre. */
   const sourcesLoyer = B().income
     .map((r, i) => ({ r, i }))
     .filter(({ r }) => r.bienId === compte.id)
     .map(({ r, i }) => ({ i, label: r.label || trad('Loyer'), mensuel: revenuMensuel(r),
                           periode: chargePeriode(r), montant: num(r.amount), estime: !!r.estime }));
   const loyersPleins = sourcesLoyer.reduce((s, x) => s + x.mensuel, 0);
-  /* Les credits de l'etablissement qui tient le bien : c'est la que la dette
-     immobiliere vit, et un bien finance a credit a le sien. */
   const credits = (etabById(compte.etabId)?.dettes || []);
-  /* Une charge qui rembourse un de ces credits est deja lue plus bas comme
-     mensualite : la compter ici aussi la soustrairait deux fois du cash-flow.
-     Rien n'interdit les deux rattachements, et ils sont meme tentants — cette
-     mensualite concerne bien ce logement. C'est le lien vers le credit qui
-     tranche, parce que c'est lui qui porte le montant.
-     Un credit d'un autre etablissement n'est pas concerne : sa mensualite
-     n'entre pas dans le total ci-dessous, donc elle reste une charge. */
   const rembourses = new Set(credits.map(d => d.id));
   const postesCharge = B().fixedCharges
     .map((c, i) => ({ c, i }))
@@ -4415,9 +3182,6 @@ function cashFlowBien(compte) {
     .map(({ c, i }) => ({ i, label: c.label || trad('Charge fixe'), mensuel: chargeMensuelle(c),
                           periode: chargePeriode(c), montant: num(c.amount) }));
   const charges = postesCharge.reduce((s, x) => s + x.mensuel, 0);
-  /* Chaque credit avec de quoi l'ouvrir, et l'endroit ou sa mensualite se regle :
-     chez la charge qui le rembourse quand il y en a une, sinon chez lui. Deux
-     portes sur un meme montant sont saines, deux montants ne le sont pas. */
   const idxEtab = ETABS().findIndex(e => e.id === compte.etabId);
   const creditsListe = credits.map((d, index) => {
     const lien = chargeDuCredit(d.id);
@@ -4427,9 +3191,6 @@ function cashFlowBien(compte) {
   });
   const mensualite = credits.reduce((s, d) => s + mensualiteCredit(d), 0);
   const reste = credits.reduce((s, d) => s + num(d.montant), 0);
-  /* La part de capital de la prochaine mensualite : ce que le mois ajoute au
-     patrimoine pendant que la tresorerie baisse. Meme approximation du premier
-     mois que la carte des credits, et pour la meme raison. */
   /* `null` et non zero quand aucun taux n'est connu : sans taux on ne sait pas
      departager le capital des interets, et annoncer « zero de capital » sur une
      mensualite de 620 EUR serait faux dans l'autre sens. */
@@ -4442,72 +3203,29 @@ function cashFlowBien(compte) {
   const base = achat || valeur;
   const surAchat = achat > 0;
 
-  /* Douze mois pleins etaient supposes. Un bien reloue une fois l'an perd un
-     mois de loyer en etat des lieux, travaux et annonce, et le rendement
-     affiche ignorait cette perte-la. */
   const moisLoues = Math.min(12, Math.max(0, num(compte.moisLoues) || 12));
   const loyers = loyersPleins * moisLoues / 12;
   const vacance = moisLoues < 12;
 
-  /* L'impot porte sur ce que le bien degage avant credit : loyers moins charges.
-     Une base negative ne se taxe pas, et l'annoncer en credit d'impot
-     supposerait des revenus a cote que cette application ne connait pas. */
   const tauxImpot = Math.min(100, Math.max(0, num(compte.tauxImpot)));
   const impot = tauxImpot ? Math.max(0, loyers - charges) * tauxImpot / 100 : 0;
 
   const cashFlow = loyers - charges - mensualite - impot;
-  /* L'apport se saisit : c'est le seul denominateur stable. Le prix paye moins
-     le capital restant du grossissait a chaque mensualite, si bien que le
-     rendement baissait mecaniquement pendant que l'operation s'ameliorait —
-     un signal exactement inverse. */
   const apport = num(compte.apport) || null;
   return {
     loyers, loyersPleins, moisLoues, vacance, charges, mensualite, impot, tauxImpot,
     reste, valeur, achat, base, surAchat, capitalMois,
     sourcesLoyer, postesCharge, creditsListe,
-    /* Ce que la vacance retire, en euros : l'ecran additionne des lignes, et une
-       part invisible casserait l'egalite entre le total et la somme des parts. */
     vacanceEuros: loyersPleins - loyers,
-    /* Le cash-flow : ce qui reste sur le compte en fin de mois, une fois le
-       credit paye. Negatif est normal les premieres annees, et c'est justement
-       le chiffre qu'il faut connaitre. */
     cashFlow,
     rendementBrut: base ? loyers * 12 / base * 100 : 0,
     rendementNet: base ? (loyers - charges) * 12 / base * 100 : 0,
-    /* Net d'impot : le seul des trois qui dise ce qui reste vraiment, et il
-       n'existe que si le taux est declare. */
     rendementNetNet: (base && tauxImpot) ? (loyers - charges - impot) * 12 / base * 100 : null,
     apport,
     cashOnCash: apport ? cashFlow * 12 / apport * 100 : null,
   };
 }
 
-/* --- les premiers pas ----------------------------------------------------
-   Une application vide ne se devine pas. Chaque ecran portait bien son texte
-   d'ecran vide, mais aucun ne disait l'ORDRE, et c'est l'ordre qui manquait :
-   l'accueil, premier ecran ouvert, ne disait rien du tout, et un nouveau venu
-   pouvait tomber sur Projection avant d'avoir un seul compte, ou tenter de
-   saisir des depenses avant d'avoir un revenu a decouper.
-
-   Trois pas, dans cet ordre, et la raison de l'ordre :
-   - les comptes d'abord, parce qu'ils font le patrimoine, la repartition et
-     l'autonomie, soit la moitie des ecrans ;
-   - le revenu ensuite, parce que le budget n'a rien a partager sans lui — la
-     carte des flux le dit deja de son cote ;
-   - les depenses en dernier, parce qu'elles se comparent au revenu et qu'un
-     reste a vivre sans revenu ne veut rien dire.
-
-   L'etat de chaque pas se **derive des donnees**, jamais d'un drapeau pose a
-   part : un drapeau « premiers pas termines » aurait menti des le premier import
-   ou la premiere restauration de sauvegarde. Et l'invite disparait d'elle-meme
-   le jour ou le pas est franchi, sans que rien ne l'eteigne.
-
-   La forme, elle, est celle qui existait deja pour le revenu : un bouton et une
-   phrase courte, posee dans la carte qui manque de la donnee. Pas de panneau
-   d'accueil central — il renverrait ailleurs, quand cette application fait
-   plutot que de renvoyer, et il doublerait les textes d'ecran vide deja ecrits.
-   Chaque ecran ne reclame que ce qui lui manque, et l'ordre se lit alors tout
-   seul : l'accueil demande les comptes, le budget le revenu puis les charges. */
 const PREMIERS_PAS = [
   { cle: 'comptes',
     quoi: 'Ajoute un compte pour commencer : une banque, un livret, un compte de '
@@ -4522,33 +3240,21 @@ const PREMIERS_PAS = [
     quoi: 'Sans revenu déclaré, cette carte n’a pas de total à partager.',
     bouton: 'Entrer ton salaire', action: 'toggle-revenus',
     fait: () => (B().income || []).length > 0 },
-  /* Le releve arrive apres les comptes, et il n'est « a faire » que lorsqu'il
-     devient faisable : sans un compte, il n'y a rien a photographier, et
-     l'annoncer serait envoyer quelqu'un vers un geste impossible. Les cartes qui
-     dependent d'une serie — l'evolution, le rythme — n'ont que lui a demander. */
   { cle: 'releves',
     quoi: 'Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à '
         + 'une date. Il en faut deux pour que la courbe et le rythme d’accumulation '
         + 'aient une pente à montrer.',
     bouton: 'Enregistrer un relevé', action: 'go-snapshot',
     fait: () => !aUnComptePropre() || aDejaServi() },
-  /* Le texte est celui que l'ecran vide des charges fixes portait deja, et qui
-     etait le mieux ecrit des trois : il vient ici pour n'exister qu'une fois. */
   { cle: 'depenses',
     quoi: 'Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident '
         + 'de ce qu’il te reste à vivre chaque mois.',
-    /* Les douze mois du calendrier existent des le premier lancement, vides :
-       compter les lignes aurait declare le pas franchi avant le premier euro.
-       Ce sont les montants qui disent qu'une depense a ete saisie. */
     bouton: 'Entrer tes dépenses', action: 'add-charge',
     fait: () => (B().fixedCharges || []).length > 0
       || (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0)) },
 ];
 const PAS_PAR_CLE = Object.fromEntries(PREMIERS_PAS.map(p => [p.cle, p]));
 
-/* Le pas reste-t-il a faire ? La vue s'en sert pour n'afficher son invite que
-   la ou la donnee manque vraiment, et l'invite disparait d'elle-meme des que le
-   pas est franchi, sans que rien ne l'eteigne. */
 const pasAFaire = cle => !!PAS_PAR_CLE[cle] && !PAS_PAR_CLE[cle].fait();
 
 /* --- ce qu'un bien coute, poste par poste --------------------------------
@@ -4580,9 +3286,6 @@ function chargesProposees(compte) {
   return [...CHARGES_BIEN[''], ...propres];
 }
 
-/* Les comptes qui portent un bien immobilier : la liste que proposent les
-   fenetres de revenus et de charges pour le rattachement. Derivee des types, pas
-   ecrite a la main — un type immobilier ajoute demain entre tout seul. */
 function comptesBiens() {
   return comptesOuverts().filter(c => typeCompte(c.type).bienImmo);
 }
@@ -4607,28 +3310,12 @@ function comptesBiens() {
    puis des « autres depenses » — est un piege pour la migration. */
 const APPORTS = () => (B().apports = B().apports || []);
 
-/* Les apports, du plus recent au plus ancien. Les montants nuls restent : une
-   ligne a zero est une saisie en cours, pas une erreur a masquer. */
 function apportsTries() {
   return [...APPORTS()]
     .map((a, i) => ({ ...a, index: i, montant: num(a.montant) }))
     .sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
 }
 
-/* Ce qui est entre et ce qui est sorti entre deux dates, bornes comprises. Sans
-   bornes, tout.
-
-   La symetrie n'est pas decorative. Une voiture payee 15 000 EUR fait plonger le
-   patrimoine du mois, et sans cette ligne « Rythme d'accumulation » l'impute a
-   l'epargne : mesure sur les donnees reelles, la moyenne passait de +789 EUR a
-   -283 EUR par mois, et y restait, une moyenne portant sur quatorze mois. Le
-   budget, lui, n'avait pas bouge d'un euro.
-
-   Une sortie exceptionnelle ne va donc pas dans les depenses du mois : elle y
-   gonflerait la moyenne annuelle, qui sert de cout de la vie a l'autonomie
-   financiere et a la cible d'epargne de precaution. Mesure la aussi : la moyenne
-   passait de 1 404 a 3 547 EUR, l'autonomie de 0,8 a 0,5 mois, et la cible de
-   precaution de 11 545 a 17 974 EUR — pour une voiture achetee une fois. */
 function apportsDetail(debut = null, fin = null) {
   let entrees = 0, sorties = 0;
   for (const a of APPORTS()) {
@@ -4641,9 +3328,6 @@ function apportsDetail(debut = null, fin = null) {
   return { entrees, sorties, net: entrees + sorties };
 }
 
-/* Le net, qui est ce que le rythme d'accumulation doit retrancher. Il se derive
-   du detail plutot que de refaire la somme : deux boucles sur la meme liste
-   auraient fini par diverger, et c'est le total qui se serait trompe. */
 function apportsTotal(debut = null, fin = null) {
   return apportsDetail(debut, fin).net;
 }
@@ -4660,22 +3344,11 @@ function apportsTotal(debut = null, fin = null) {
    doit continuer de se relire. Ce qui s'y trouvait se saisit desormais dans
    les depenses du mois, ou ces euros comptent pour de vrai. */
 
-/* =============================================================
-   ANALYSES
-   ============================================================= */
-
-/* Autonomie financière : combien de mois tu tiens si les revenus s'arrêtent,
-   par paliers de liquidité. Le coût de la vie = charges fixes + dépenses. */
 function runway() {
   const f = budgetFrame();
   const stats = expenseYearStats(todayISO().slice(0, 4));
   const burn = f.fixed + (stats.average || f.target);
 
-  /* Les paliers suivent la mobilisabilité calculée ligne par ligne —
-     f(classe, type de compte, date d'ouverture) — plus un réglage déclaré.
-     Un ETF dans un PEA de moins de cinq ans compte donc en « bloqué »,
-     les liquidités posées chez un courtier en « sous quelques jours », et les
-     billets d'un portefeuille tout de suite. */
   const p = poches();
   const immediate  = p.mobilisable.immediat;
   const differe    = p.mobilisable.differe;
@@ -4683,15 +3356,6 @@ function runway() {
   const habite     = p.mobilisable.habite;
   const bloque     = p.mobilisable.bloque;
 
-  /* Notes tenues courtes : elles s'affichent sous l'intitule, sur un ecran
-     de telephone. Le detail sur le PEA a rejoint l'aide de la carte. */
-  /* « Titres a vendre » laissait croire que la vente etait lente. Elle est
-     instantanee en seance : ce qui prend deux a trois jours ouvres, c'est le
-     reglement puis le virement vers le compte courant. Ce palier mesure de
-     l'argent qu'on peut depenser, pas de l'argent qu'on peut liquider, et la
-     note doit dire laquelle des deux etapes retarde. */
-  /*     Conditionnel, parce qu'une note qui parle de projets a quelqu'un qui n'en a
-     pas est du bruit. */
   const contenants = trad('comptes courants, livrets, espèces');
   const tiers = [
     { label: trad('Disponible tout de suite'), value: immediate,
@@ -4699,14 +3363,8 @@ function runway() {
     { label: trad('En quelques jours'), value: differe,
       note: trad('liquidités chez un courtier ; un titre se vend en séance, le virement prend 2 à 3 jours') },
     { label: trad('En quelques mois'), value: lent, note: trad('immobilier, non coté, à vendre avec décote si pressé') },
-    /* Hors cumul, et pour une raison qui n'est pas celle du PER : ce bien-la se
-       vend, mais le vendre oblige a se reloger. Compter le toit dans les mois
-       tenus promettait une reserve qui n'existe pas. */
     ...(habite > 0.005 ? [{ label: trad('Le logement que tu habites'), value: habite,
         note: trad('le vendre veut dire te reloger'), horsCumul: true }] : []),
-    /* Hors cumul : un PER ne prolonge aucune autonomie. Il reste affiché,
-       c'est du patrimoine, mais l'ajouter aux mois tenus serait un mensonge —
-       cet argent n'arrivera pas, quoi qu'il se passe demain. */
     { label: trad('Inaccessible'), value: bloque, note: trad('bloqué jusqu’à son échéance'), horsCumul: true },
   ];
   let cum = 0;
@@ -4719,17 +3377,10 @@ function runway() {
     burn, tiers, immediate,
     immediateMonths: burn ? immediate / burn : 0,
     liquidMonths: burn ? (immediate + differe) / burn : 0,
-    // règle courante : 3 à 6 mois de dépenses en épargne de précaution
     targetLow: burn * 3, targetHigh: burn * 6,
   };
 }
 
-/* Variation du patrimoine mois par mois, pour voir le rythme réel d'accumulation */
-/* Les chiffres qui resument une serie de variations. Sortis de monthlyPace()
-   pour que la vue puisse les recalculer sur la plage affichee : ils lisaient
-   la serie entiere pendant que les barres suivaient la plage choisie, et en
-   « depuis janvier » le « meilleur mois » pouvait designer un mois absent du
-   graphique. */
 function statsRythme(points) {
   const n = points.length;
   const somme = points.reduce((s, p) => s + p.delta, 0);
@@ -4750,8 +3401,6 @@ function statsRythme(points) {
     points, count: n,
     average: n ? somme / n : 0,
     apports,
-    /* La moyenne hors apports : ce que le patrimoine a gagne par les marches et
-       par l'epargne, l'argent tombe du ciel mis de cote. */
     averageHorsApports: n ? (somme - apports) / n : 0,
     positive: points.filter(p => p.delta > 0).length,
     best: points.reduce((a, o) => (!a || o.delta > a.delta) ? o : a, null),
@@ -4760,62 +3409,29 @@ function statsRythme(points) {
 }
 
 function monthlyPace() {
-  /* Une cloture au 31/12 est une deuxieme photo du meme mois. Laissee dans la
-     serie, elle donnait deux barres pour decembre et un intervalle de trop :
-     quinze ecarts pour quatorze mois, et une moyenne mensuelle diluee
-     d'autant. On l'ecarte quand son mois porte deja une ligne. */
   const brut = historySeries({ includeNow: false });
   const pts = brut.filter(p => !(Number(String(p.date).slice(8, 10)) > 20
     && brut.some(q => q !== p && String(q.date).slice(0, 7) === String(p.date).slice(0, 7))));
-  /* L'ecart se mesure sur le **net**, comme l'annonce l'aide de la carte.
-     Il se calculait sur le brut : rembourser 400 EUR de capital fait monter le
-     patrimoine net d'autant sans toucher au brut, si bien que tout le
-     desendettement disparaissait du rythme d'accumulation. Sans credit les
-     deux coincident, d'ou un defaut invisible jusqu'a ce qu'un jeu de donnees
-     porte un pret immobilier. */
   const net = p => num(p.total) - num(p.dettes);
   const out = [];
   for (let i = 1; i < pts.length; i++) {
     out.push({ label: pts[i].label, date: pts[i].date, note: pts[i].comment,
-               /* La borne basse de l'intervalle que cet ecart mesure. Le jour
-                  meme du releve precedent est exclu : ce qui est entre ce jour-la
-                  etait deja dans son solde. */
                depuis: prochainJour(pts[i - 1].date),
                delta: net(pts[i]) - net(pts[i - 1]), total: pts[i].total });
   }
   return statsRythme(out);
 }
 
-/* La croissance réelle se mesure sur douze mois glissants, pas sur tout
-   l'historique. Seize mois de relevés en donnaient quatorze, un nombre qui
-   grandit d'un cran chaque mois : « ma moyenne mensuelle » changeait de
-   période à chaque fois qu'on la relisait, et deux relevés de 2025 pesaient
-   encore sur le rythme de 2026. Une fenêtre fixe se compare à elle-même.
-
-   Même fenêtre pour l'onglet Objectif : les deux cartes annoncent le même
-   chiffre et le disent dans leur aide, elles ne peuvent pas diverger. */
 const PACE_WINDOW = 12;
 function paceRecent() {
   return statsRythme(monthlyPace().points.slice(-PACE_WINDOW));
 }
 
-/* Trajectoire vers l'objectif annuel, au rythme observé et au rythme budgété */
-/* --- ventes ------------------------------------------------------------
-   Le reste de l'app est un modèle photo : il décrit ce que tu détiens
-   aujourd'hui. Une vente est le seul événement qui doit laisser une trace,
-   parce qu'elle fait disparaître la ligne qui portait la plus-value. Sans
-   journal, vendre effacerait la performance au lieu de l'encaisser. */
-
-/* Le compte crédité par défaut : celui qui portait la ligne vendue — son
-   entrée « à investir » reçoit le produit. */
 function defaultCashTarget(accountId) {
   if (compteById(accountId)) return accountId;
   return (comptesOuverts().find(c => typeCompte(c.type).titres) || {}).id || '';
 }
 
-/* Comptes proposables comme destination du produit d'une vente : tout
-   compte ouvert peut recevoir des espèces. Les comptes de marché d'abord,
-   puis les comptes du quotidien. */
 function cashTargets() {
   const ouverts = comptesOuverts();
   return [
@@ -4824,7 +3440,6 @@ function cashTargets() {
   ];
 }
 
-/* Aperçu d'une vente, sans rien modifier : sert à l'afficher avant de valider. */
 function salePreview(p, qty, price, fxSell) {
   const q = num(qty), pu = num(price), fx = num(fxSell) || 1;
   const brut = q * pu * fx;
@@ -4841,7 +3456,6 @@ function salePreview(p, qty, price, fxSell) {
   };
 }
 
-/* Applique la vente : réduit la ligne, crédite le cash, journalise. */
 function sellPosition({ index, qty, price, fxSell, cashAccount, date, note }) {
   const p = Store.state.positions[index];
   if (!p) return null;
@@ -4860,7 +3474,6 @@ function sellPosition({ index, qty, price, fxSell, cashAccount, date, note }) {
     note: note || '',
   });
 
-  // le produit de la vente devient des espèces : sans ça le patrimoine chuterait
   if (cashAccount) {
     const compteCash = compteById(cashAccount);
     if (compteCash) {
@@ -4871,7 +3484,6 @@ function sellPosition({ index, qty, price, fxSell, cashAccount, date, note }) {
     }
   }
 
-  // le prix de revient unitaire ne bouge pas : seule la quantité diminue
   if (ap.full) Store.state.positions.splice(index, 1);
   else p.qty = round2(num(p.qty) - ap.qty);
 
@@ -4907,34 +3519,15 @@ function declarerVente({ date, name, gross, realised, note }) {
   return Store.state.sales[0];
 }
 
-/* --- annuler une vente -------------------------------------------------
-   Une vente faite par erreur devait pouvoir se defaire, et la croix du journal
-   ne le faisait pas : elle retirait la ligne sans rendre les titres ni reprendre
-   les especes. Le patrimoine restait donc juste — les titres etaient partis,
-   l'argent etait la — mais la trace disparaissait, et plus rien ne disait d'ou
-   venait ce cash. Pire, le geste ressemblait a une annulation.
-
-   L'enregistrement d'une vente porte tout ce qu'il faut pour la defaire : la
-   quantite, le prix de revient unitaire d'alors, son change, le compte titres,
-   le compte de cash et le produit encaisse. On remonte donc les trois
-   mouvements dans l'ordre inverse.
-
-   Le total du patrimoine ne revient pas forcement a l'euro d'avant la vente, et
-   c'est normal : les titres rendus sont valorises au cours du jour, qui a pu
-   bouger depuis. Ce qui revient exactement, c'est la quantite et le cash. */
 function annulerVente(i) {
   const v = (Store.state.sales || [])[i];
   if (!v) return null;
 
-  /* Une vente declaree n'a rien ecrit : il n'y a rien a defaire. Derouler la
-     suite pousserait une ligne de titres fantome (quantite nulle, prix nul)
-     et retrancherait un produit jamais credite. */
   if (v.declaree) {
     Store.state.sales.splice(i, 1);
     return v;
   }
 
-  /* 1. les especes repartent d'ou elles etaient venues. */
   if (v.cashAccount) {
     const c = compteById(v.cashAccount);
     if (c) {
@@ -4945,11 +3538,6 @@ function annulerVente(i) {
     }
   }
 
-  /* 2. les titres reviennent sur leur ligne. L'ISIN d'abord, le symbole
-     ensuite, le nom en dernier : c'est l'ordre du plus identifiant au moins
-     sur. Une vente totale avait supprime la ligne, elle renait avec ce que
-     l'enregistrement a garde — le cours du jour n'etant pas connu, le prix de
-     vente en tient lieu jusqu'au prochain rafraichissement. */
   const memeLigne = q => q.account === v.account
     && ((v.isin && q.isin === v.isin)
         || (!v.isin && v.symbol && q.symbol === v.symbol)
@@ -4968,12 +3556,10 @@ function annulerVente(i) {
     });
   }
 
-  /* 3. le journal oublie la vente. */
   Store.state.sales.splice(i, 1);
   return v;
 }
 
-/* Date de début d'une plage (YTD, 1 an, 3 ans…), ou null pour « tout ». */
 function rangeStart(range) {
   if (!range || range === 'all') return null;
   /* Une annee vaut son 1er janvier. La garde est ici et pas seulement chez
@@ -4987,7 +3573,6 @@ function rangeStart(range) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/* Plus-values réalisées sur une plage (YTD, 1y, 3y, 5y, all). */
 /* Les totaux d'une liste de ventes, quelle qu'elle soit.
 
    Extrait de `salesStats`, qui commençait par choisir ses ventes sur une plage
@@ -5012,39 +3597,9 @@ function statsDesVentes(ventes) {
   };
 }
 
-/* Les ventes regroupees par periode, pour que le graphique tienne debout.
-
-   Le pas se derive de la plage choisie et non d'un seuil sur le nombre de
-   ventes. Un seuil ferait changer la nature du graphique sans qu'on ait rien
-   demande — on ajoute une vente, et les barres se mettent a vouloir dire autre
-   chose. La plage, elle, est un geste : « 5 ans » demande une vue de cinq ans,
-   et un trimestre y est la bonne maille.
-
-   Un mois vide n'est pas une barre a zero : c'est un mois sans vente, et le
-   dessiner ferait croire a une vente nulle. Seules les periodes qui portent
-   quelque chose apparaissent, dans l'ordre. */
 const PAS_DES_VENTES = { ytd: 'mois', '1y': 'mois', '3y': 'trimestre', '5y': 'trimestre' };
-/* Cette valeur s'affiche telle quelle — « Realisee, par ... » en tete de carte —
-   donc elle porte son accent. Les identifiants du modele n'en portent pas
-   d'habitude ; celui-ci en porte parce qu'il est aussi un mot, et le detour par
-   une table de traduction pour trois valeurs aurait fait deux endroits ou un
-   seul suffit. La premiere version l'ecrivait sans, et la carte affichait le mot
-   estropie. */
-/* Une annee se lit par mois : douze barres nommees, la maille de « qu'est-ce qui
-   s'est passe en 2025 ». La table ne porte que les durees glissantes. */
 const pasDesVentes = range => estAnnee(range) ? 'mois' : (PAS_DES_VENTES[range] || 'année');
 
-/* Nommer chaque vente, ou regrouper : une seule fonction le decide.
-
-   La condition s'est d'abord ecrite deux fois, dans l'intitule de la carte et
-   dans le montage du graphique. Deux copies d'une meme regle finissent par
-   diverger, et celle-ci aurait fait annoncer « vente par vente » au-dessus de
-   barres trimestrielles — un intitule qui dit exactement le contraire de ce
-   qu'on regarde. C'est le defaut que ce projet corrige sans arret.
-
-   Vingt-quatre : au-dela, les intitules de titres se recouvrent sur la largeur
-   d'une carte, meme sur grand ecran. Le nombre ne sert qu'a cette borne haute ;
-   la nature du graphique se decide sur la plage. */
 const VENTES_NOMMEES_MAX = 24;
 const ventesSeNomment = (range, count) =>
   pasDesVentes(range) === 'mois' && count <= VENTES_NOMMEES_MAX;
@@ -5085,12 +3640,8 @@ function salesStats(range) {
   return statsDesVentes(ventes);
 }
 
-/* Les annees ou une vente a eu lieu, pour le menu de la plage. */
 const anneesDesVentes = () => anneesPresentes((Store.state.sales || []).map(v => v.date));
 
-
-/* Cumul des plus-values réalisées, dans l'ordre chronologique. C'est la courbe
-   qui répond à « est-ce que mes ventes m'ont rapporté, au total ». */
 function salesCumulative(range) {
   const ventes = salesStats(range).sales
     .slice()
@@ -5103,16 +3654,11 @@ function salesCumulative(range) {
   });
 }
 
-/* Plus-value latente : ce que valent tes lignes au-dessus de leur prix
-   de revient, tant que tu ne les as pas vendues. */
 function latentPnl() {
   const ps = Store.state.positions;
   const value = ps.reduce((s, p) => s + posValue(p), 0);
   const invested = ps.reduce((s, p) => s + posInvested(p), 0);
   return { value, invested, pnl: value - invested,
-           /* Meme regle que pour les ventes : pas de base, pas de pourcentage.
-              Des lignes saisies sans prix de revient donnaient « +0,00 % » a
-              cote d'un ecart en euros non nul, les deux se contredisant. */
            pct: invested > 0 ? (value / invested - 1) * 100 : null,
            winners: ps.filter(p => posPerfEur(p) > 0).length, count: ps.length };
 }
@@ -5149,8 +3695,6 @@ function latentNonCote() {
         pnl: num(l.valeur) - invested,
         pct: (num(l.valeur) / invested - 1) * 100,
         estimeLe: l.estimeLe || null,
-        /* Une estimation d'il y a plus d'un an : c'est le seuil que la cloche
-           emploie deja pour reclamer une revue, donc le meme ici. */
         vieille: l.estimeLe ? ageAnnees(l.estimeLe) >= 1 : true,
       });
     }
@@ -5160,8 +3704,6 @@ function latentNonCote() {
   const invested = lignes.reduce((s, x) => s + x.invested, 0);
   return {
     lignes, value, invested, pnl: value - invested,
-    /* Meme regle que partout : un pourcentage n'existe que sur une base
-       positive. */
     pct: invested > 0 ? (value / invested - 1) * 100 : null,
     aRevoir: lignes.filter(x => x.vieille).length,
   };
@@ -5172,73 +3714,30 @@ function salesYears() {
   return ans.sort();
 }
 
-/* --- projection longue durée -----------------------------------------
-   Capitalisation mensuelle du capital actuel plus les versements. C'est de
-   l'arithmétique, pas une prévision : aucune donnée de marché n'entre ici,
-   toutes les hypothèses sont celles que tu saisis. Le rendement réel d'un
-   portefeuille ne suit aucune courbe lisse — cette vue montre ce que
-   produisent tes hypothèses, rien d'autre. */
-/* Jalons du tableau : les repères courants d'une projection. */
 const PROJECTION_HORIZONS = [3, 5, 10, 15, 20];
 
-/* Horizons proposés dans la liste déroulante, de 5 en 5 jusqu'à 80 ans — de
-   quoi couvrir une vie d'épargne entière, moins ceux que le tableau porte
-   déjà. Le menu s'ouvre sous les jalons et redonnait ses quatre premières
-   lignes : choisir « 10 ans » y désignait la ligne qu'on avait sous les yeux,
-   et il fallait dérouler quatre crans avant la première option qui apprend
-   quelque chose.
-   La liste se dérive des repères, elle ne les recopie pas : deux listes
-   écrites à la main pour une seule vérité finissent par se contredire, et
-   c'est celle qu'on oublie de changer qui ment. */
 const PROJECTION_CHOICES = Array.from({ length: 16 }, (_, i) => (i + 1) * 5)
   .filter(h => !PROJECTION_HORIZONS.includes(h));
 
 function projectionSettings() {
   const m = Store.state.meta;
   return {
-    // 0 = jamais réglé : on part de l'épargne que dégage le budget
     monthly: num(m.projMonthly) || suggestedMonthly(),
     rate: num(m.projRate),
-    /* Le rendement des poches qui ne sont pas des actifs de marche. Zero par
-       defaut, et c'est le pivot de tout le dispositif : personne ne voit ses
-       chiffres bouger, l'application ne suggere aucun rendement sur du non
-       cote, et le gel qu'on appliquait devient le cas particulier taux = 0.
-       C'est a l'utilisateur d'affirmer un rendement, pas a nous. */
-    /*    Le taux du non cote seul. Il couvrait aussi les liquidites, ce qui melait
-   deux choses sans rapport, et un troisieme selecteur a ete essaye pour les
-   separer. Un projet ne se finance pas au taux d'un livret, et trois
-   calculateurs pour une page d'hypotheses, c'est deux de trop. Elles sont
-   donc portees a plat, sans reglage — une constante n'a pas besoin d'un menu.*/
     rateAutres: num(m.projRateAutres),
-    /* Le taux du capital garanti, zero par defaut comme celui du non cote et
-       pour la meme raison : un fonds euros rapporte, mais son taux est annonce
-       en janvier pour l'annee ecoulee. L'application ne devine pas un rendement
-       que le detenteur seul connait. */
     rateGaranti: num(m.projRateGaranti),
-    /* Ou va le versement mensuel. Le marche par defaut, ce qui etait le
-       comportement code en dur : aucun etat existant ne change de courbe a la
-       mise a jour. */
     versementVers: m.projVersementVers || 'marche',
     inflation: num(m.projInflation),
     target: num(m.projTarget),
   };
 }
 
-/* Les destinations offertes au versement mensuel, et ce que chacune produit.
-
-   Trois, pas plus : ce sont les trois poches que la projection distingue deja,
-   chacune avec son taux. Le libelle dit le taux applique, parce que c'est la
-   seule chose qui change vraiment d'une destination a l'autre — et parce qu'un
-   versement pose sur un livret non remunere ne doit pas se lire comme un
-   placement a 8 %. */
 const VERSEMENT_VERS = [
   ['marche',     'Actifs de marché'],
   ['nonCote',    'Non coté'],
   ['liquidites', 'Liquidités'],
 ];
 
-/* Versement mensuel proposé par défaut : l'épargne que ton budget dégage,
-   sinon le rythme réellement observé sur tes relevés. */
 function suggestedMonthly() {
   const rec = savingsReconciliation();
   const brut = rec.theoretical > 0 ? rec.theoretical
@@ -5266,11 +3765,6 @@ function suggestedMonthly() {
    La part plate peut etre negative : un credit a la consommation sans bien en
    face, ou un bien qui vaut moins que son pret. C'est honnete, et ca evite
    surtout de faire fondre une dette au rythme des marches. */
-/* Les biens de valeur y rejoignent l'immobilier : une montre ne capitalise
-   pas, elle est posee — la faire fructifier au taux du non cote serait le
-   mensonge que cette poche refuse a un compte courant. Et sans elle nulle
-   part, la somme des poches de projection cessait de faire le patrimoine
-   net, la regle que ce fichier teste. */
 function partPlate(t = nowTotals()) {
   return num(t.immo) + num(t.biens) - num(t.dettes);
 }
@@ -5293,35 +3787,6 @@ function partPlate(t = nowTotals()) {
    La propriete qui gouverne tout : la somme des trois fait le patrimoine net.
    Elle est testee, parce que c'est elle qui garantit qu'aucun euro ne se perd
    ni ne se dedouble en changeant de poche. */
-/* Les poches de la projection, et ce qui les separe : non pas leur nature, mais
-   ce qu'on peut dire de leur rendement.
-
-   Trois et non deux. Le non cote et les liquidites partageaient une poche
-   « autres actifs » sous un seul taux, et c'etait un melange indefendable : un
-   livret a un taux connu, affiche par la banque, quand une part de societe non
-   cotee n'en a aucun. Un seul pourcentage pour les deux forcait a choisir entre
-   deux mensonges — sous-estimer le livret, ou inventer un rendement au non cote.
-
-   La part plate reste a part : c'est l'immobilier net de sa dette, gele par
-   decision, voir la note d'ETAT.md sur l'amortissement. */
-/* Les trois poches de la projection, et ce qui capitalise dans chacune.
-
-   Le cash a investir etait compte dans les actifs de marche, au motif qu'il
-   leur est destine. Deux choses le condamnaient.
-
-   La premiere est une contradiction interne : sur l'accueil, ce meme cash
-   compte dans « Liquidites ». La meme somme portait donc deux classements
-   selon l'ecran, et c'est le defaut que ce projet corrige partout ailleurs.
-
-   La seconde est que l'application affirmait un rendement sur de l'argent qui
-   n'en produit aucun. Elle refuse de le faire pour le non cote — zero par
-   defaut, « c'est a toi de l'affirmer, pas a l'application » — et elle le
-   faisait ici sans le demander. Du cash chez un courtier ne rapporte rien tant
-   qu'il n'est pas place, quelle que soit son intention.
-
-   Le versement mensuel, lui, va bien au marche : c'est une hypothese assumee et
-   dite sous son reglage. La difference est qu'on choisit de verser, alors que
-   le cash a investir est un etat de fait. */
 function pochesProjection(t = nowTotals()) {
   return {
     /* Chaque poche est amputee de ce qu'elle a de reserve : sans cela le total
@@ -5331,17 +3796,7 @@ function pochesProjection(t = nowTotals()) {
           - num(t.projetParPoche?.bourse) - num(t.projetParPoche?.crypto),
     nonCote: num(t.pe) - num(t.projetParPoche?.nonCote),
     liquidites: num(t.cash),
-    /* Le capital garanti a son taux, comme le non cote a le sien : il ne suit
-       ni le marche, dont il ne prend pas le risque, ni les liquidites, qui ne
-       rapportent rien. Sans cette poche il rejoignait « marche » et un fonds
-       euros capitalisait a 8 % l'an. */
     garanti: num(t.garanti) - num(t.projetParPoche?.garanti),
-    /* Ce qui est deja promis ne travaille pas trente ans. Une ligne marquee
-       « reserve a un projet » quitte la poche qui la portait et se pose ici, ou
-       elle est portee a plat : l'apport d'un achat prevu dans deux ans n'a pas
-       a capitaliser au taux des actions. Elle reste dans sa classe partout
-       ailleurs — c'est toujours une SCPI ou un fonds euros, et l'allocation
-       doit le dire. */
     projet: num(t.projet),
     /* `autres` reste rendu, somme des quatre : plusieurs appelants la lisent, et
        un total doit continuer d'egaler la somme de ses parts. */
@@ -5366,30 +3821,16 @@ function capitalisation(opts = {}) {
      `start` est impose — la fiche « horizon », des tests — tout va au marche et
      ces deux poches sont vides : l'ancien comportement, a l'identique. */
   const resteAutres = start - departMarche;
-  /* Trois poches se partagent le reste, au prorata de ce qu'elles pesent. La
-     derniere prend le solde plutot que sa propre part : trois arrondis qui ne
-     tombent pas juste laisseraient le total sous la somme de ses parts, et
-     c'est exactement le defaut que ce fichier traque partout. */
   const part = q => (poches.autres ? q / poches.autres : 0);
   const departNonCote = resteAutres * part(poches.nonCote);
   const departGaranti = resteAutres * part(poches.garanti);
-  /* Le reserve rejoint les liquidites : toutes deux traversent la projection a
-     plat, et un argent deja promis ne produit rien pour celui qui le doit. Il
-     garde sa propre part pour que la fenetre puisse le nommer. */
   const departProjet = resteAutres * part(poches.projet);
   const departLiquides = resteAutres - departNonCote - departGaranti - departProjet;
   const departAutres = resteAutres;
 
   const annees = opts.years || Math.max(...PROJECTION_HORIZONS);
   const rMois = Math.pow(1 + s.rate / 100, 1 / 12) - 1;
-  /* Zero par defaut, donc le non cote reste plat tant que personne n'a affirme
-     un rendement pour lui. Les liquidites, elles, ne capitalisent jamais : pas
-     de taux, pas de reglage, elles traversent la projection telles quelles. */
   const rMoisNonCote = Math.pow(1 + num(s.rateAutres) / 100, 1 / 12) - 1;
-  /* Meme regle pour le capital garanti : zero tant que personne n'a affirme un
-     rendement. Un fonds euros en rapporte un, mais il n'est connu qu'apres coup
-     — annonce en janvier pour l'annee ecoulee — donc l'application ne le
-     devine pas. Le zero se trompe du cote prudent, ce qui est le bon cote. */
   const rMoisGaranti = Math.pow(1 + num(s.rateGaranti) / 100, 1 / 12) - 1;
   const anneeDebut = new Date().getFullYear();
 
@@ -5403,34 +3844,13 @@ function capitalisation(opts = {}) {
   let capital = departMarche, verse = departMarche;
   let nonCote = departNonCote, liquides = departLiquides + departProjet, garanti = departGaranti;
 
-  /* Ou va le versement mensuel : une hypothese declaree, plus un choix code en
-     dur.
-
-     Il partait toujours dans le marche, capitalise au taux du marche, et rien a
-     l'ecran ne le disait : quelqu'un qui met 350 EUR par mois sur un livret
-     lisait une courbe calculee a 8 % l'an. L'hypothese etait juste pour le cas
-     courant — on investit son epargne — mais fausse pour qui epargne sans
-     investir, et c'est un cas trop repandu pour rester muet.
-
-     Les trois destinations existaient deja comme poches, chacune avec son taux :
-     le marche au sien, le non cote au sien (zero par defaut), les liquidites a
-     plat. Le versement rejoint donc celle qu'on nomme, et le total continue
-     d'egaler verse plus gains dans les trois cas. */
   const vers = ['liquidites', 'nonCote'].includes(s.versementVers)
     ? s.versementVers : 'marche';
   for (let mois = 1; mois <= annees * 12; mois++) {
     capital = capital * (1 + rMois) + (vers === 'marche' ? s.monthly : 0);
     verse += s.monthly;
     nonCote = nonCote * (1 + rMoisNonCote) + (vers === 'nonCote' ? s.monthly : 0);
-    /* Le capital garanti capitalise, mais ne reçoit aucun versement : les trois
-       destinations offertes restent marche, non cote et liquidites. En ajouter
-       une quatrieme demanderait une question de plus a chacun, pour un cas que
-       personne n'a demande. */
     garanti = garanti * (1 + rMoisGaranti);
-    /* Les liquidites ne capitalisent jamais : pas de taux, pas de reglage. Un
-       versement s'y accumule donc a plat, ce qui est exactement ce qu'un livret
-       non remunere fait — et le seul endroit ou la projection dit la verite a
-       quelqu'un qui epargne sans investir. */
     if (vers === 'liquidites') liquides += s.monthly;
     if (mois % 12) continue;
     const an = mois / 12;
@@ -5444,8 +3864,6 @@ function capitalisation(opts = {}) {
     const misMarche = departMarche + (vers === 'marche' ? cumul : 0);
     const misNonCote = departNonCote + (vers === 'nonCote' ? cumul : 0);
     const misLiquides = departLiquides + departProjet + (vers === 'liquidites' ? cumul : 0);
-    /* Le capital garanti ne reçoit rien : ce qu'on y a mis est ce qu'il y avait
-       au depart, et tout le reste est un gain. */
     const misGaranti = departGaranti;
     const gainsMarche = capital - misMarche;
     const gainsAutres = autres - (misNonCote + misLiquides + misGaranti);
@@ -5454,21 +3872,14 @@ function capitalisation(opts = {}) {
       contributed: misMarche + misNonCote + misLiquides + misGaranti + plat,
       gains: gainsMarche + gainsAutres,
       gainsMarche, gainsAutres,
-      /* Le detail par poche, pour que la fiche des hypotheses puisse dire ce que
-         chaque taux a produit sans refaire le calcul a cote. */
       gainsNonCote: nonCote - misNonCote,
       gainsLiquidites: liquides - misLiquides,
       gainsGaranti: garanti - misGaranti,
       total: capital + autres + plat,
-      // pouvoir d'achat d'aujourd'hui, une fois l'inflation retirée
       real: (capital + autres + plat) / Math.pow(1 + s.inflation / 100, an),
     });
   }
 
-  /* Les repères courants qui tiennent dans l'horizon, plus l'horizon
-     lui-même : sinon choisir 60 ans afficherait un tableau qui s'arrête
-     à 20. Au-delà de 20 ans on jalonne de 10 en 10, pour ne pas produire
-     une liste de seize lignes. */
   const reperes = new Set(PROJECTION_HORIZONS.filter(h => h <= annees));
   for (let h = 30; h <= annees; h += 10) reperes.add(h);
   reperes.add(annees);
@@ -5480,9 +3891,6 @@ function capitalisation(opts = {}) {
            targetReached: targetReachedAt(points, s.target) };
 }
 
-/* Ce qu'il faudrait changer pour atteindre une cible hors de portée. Trois
-   leviers, chacun calculé en laissant les deux autres tels quels : attendre
-   plus longtemps, verser davantage, ou viser un rendement supérieur. */
 function targetRequirements({ start, target, monthly, rate, years }) {
   const T = num(target), P = num(start), M = num(monthly);
   const N = years * 12;
@@ -5490,8 +3898,6 @@ function targetRequirements({ start, target, monthly, rate, years }) {
   const out = { reachable: false, years: null, monthly: null, rate: null };
   if (T <= P) { out.reachable = true; return out; }
 
-  /* Combien d'années au rythme actuel. Valeur future d'une annuité :
-     (P + M/r)·(1+r)^n − M/r = T  →  n = ln((T + M/r)/(P + M/r)) / ln(1+r) */
   if (r > 0) {
     const base = P + M / r, cible = T + M / r;
     if (base > 0) out.years = Math.log(cible / base) / Math.log(1 + r) / 12;
@@ -5500,7 +3906,6 @@ function targetRequirements({ start, target, monthly, rate, years }) {
   }
   if (!isFinite(out.years) || out.years <= 0) out.years = null;
 
-  /* Versement mensuel pour y arriver dans l'horizon affiché. */
   const facteur = Math.pow(1 + r, N);
   if (r > 0) {
     const requis = (T - P * facteur) * r / (facteur - 1);
@@ -5509,8 +3914,6 @@ function targetRequirements({ start, target, monthly, rate, years }) {
     out.monthly = Math.max(0, (T - P) / N);
   }
 
-  /* Rendement nécessaire à versement inchangé : pas de forme fermée, on
-     encadre par dichotomie entre 0 et 60 % par an. */
   const valeurFinale = tauxAnnuel => {
     const rm = Math.pow(1 + tauxAnnuel / 100, 1 / 12) - 1;
     if (rm === 0) return P + M * N;
@@ -5527,7 +3930,6 @@ function targetRequirements({ start, target, monthly, rate, years }) {
   return out;
 }
 
-/* Première année où la cible est franchie, interpolée au mois près. */
 function targetReachedAt(points, cible) {
   if (!cible || cible <= points[0].total) return null;
   for (let i = 1; i < points.length; i++) {
@@ -5541,8 +3943,6 @@ function targetReachedAt(points, cible) {
   return null;
 }
 
-/* Mois d'épargne restants avant la fin de l'année visée. Le mois en cours ne
-   compte pas : son versement est censé être déjà fait. */
 function monthsToObjective() {
   const now = new Date();
   const y = num(Store.state.meta.objectiveYear) || now.getFullYear();
@@ -5583,21 +3983,6 @@ function objectiveProjection() {
    qu'il faut comprendre pour corriger. */
 const RANG_NOTIF = { action: 0, error: 1, warn: 2, info: 3 };
 
-/* Les familles disent le **sujet**, pas la gravite. La table sert au filtre comme
-   au menu de reglages : deux listes a tenir d'accord finiraient par diverger.
-
-   Concretement, avant : faire taire « Cours vieux de 12 jours » coupait tous les
-   avertissements, donc aussi « Epargne de precaution : 0,8 mois », qui n'a rien a
-   voir. Un interrupteur qu'on ne peut pas actionner sans perdre autre chose n'est
-   pas un reglage, c'est un piege.
-
-   La gravite n'a pas disparu : elle trie toujours le panneau et colore la ligne.
-   Elle a cesse d'etre ce qu'on eteint.
-
-   Les anciens reglages, ranges sous action / error / warn / info, deviennent des
-   cles inconnues et sont donc ignores : tout se rallume une fois. C'est le bon
-   defaut — une famille qu'on n'a jamais vue ne peut pas avoir ete refusee, et
-   celles-ci sont neuves. */
 const FAMILLES_NOTIF = [
   ['saisies',   trad('Saisies en attente'),    trad('Le relevé du mois, les dépenses du mois clos')],
   ['cours',     trad('Cours de bourse'),       trad('Prix périmés, ligne sans identifiant ou sans cours')],
@@ -5605,19 +3990,9 @@ const FAMILLES_NOTIF = [
   ['echeances', trad('Échéances du non coté'), trad('Remboursement attendu, retard, défaut')],
   ['budget',    'Budget',                trad('Objectif intenable, épargne de précaution')],
   ['coherence', trad('Cohérence des données'), trad('Un chiffre faux, ou impossible')],
-  /* Une modification qui n'est pas partie ne se voyait que sur la page Donnees,
-     ou personne ne va apres avoir saisi un montant. C'est pourtant le seul etat
-     de l'application ou l'on peut perdre quelque chose en fermant. */
   ['synchro',   trad('Synchronisation'),      trad('Une modification qui n’est pas partie')],
-  //['warn', 'Avertissements', 'Un chiffre qui mérite un coup d\u2019oeil'],
 ];
 
-/* La cle d'une notification, pour se souvenir qu'on l'a masquee.
-
-   Les chiffres sortent du calcul : « Epargne de precaution : 0,7 mois » devient
-   « 3,1 mois » le mois suivant, et une cle qui les garderait ferait reapparaitre
-   la meme alerte a chaque centieme. Ce qui reste, ce sont les mots — ils disent
-   de quel controle il s'agit. */
 function cleNotif(n) {
   return String(n.level) + ':' + String(n.title)
     .toLowerCase()
@@ -5629,8 +4004,6 @@ function cleNotif(n) {
 function reglagesNotifs() {
   const r = Store.state.meta?.notifsReglages || {};
   const out = {};
-  /* Tout est allume par defaut : une notification qu'on n'a jamais vue ne peut
-     pas avoir ete refusee. */
   for (const [cle] of FAMILLES_NOTIF) out[cle] = r[cle] !== false;
   return out;
 }
@@ -5643,33 +4016,20 @@ function masquerNotif(cle) {
 }
 function rendreNotifs() { Store.state.meta.notifsMasquees = []; }
 
-/* Ce que la cloche montre : les controles, moins les familles eteintes, moins
-   ce qu'on a masque, ranges par ce qui presse. */
 function notifications() {
   const actives = reglagesNotifs();
   const masquees = notifsMasquees();
   return healthChecks()
-    /*    La gravite continue de trier, juste en dessous.*/
     .filter(n => actives[n.sujet] !== false && !masquees.includes(cleNotif(n)))
     .map(n => ({ ...n, cle: cleNotif(n) }))
     .sort((a, b) => RANG_NOTIF[a.level] - RANG_NOTIF[b.level]);
 }
 
-/* =============================================================
-   CONTRÔLES DE COHÉRENCE
-   Repère les erreurs de saisie avant qu'elles ne faussent les analyses.
-   ============================================================= */
 function healthChecks() {
   const out = [];
-  /* Le sujet se declare par section et non a chaque appel : dix-neuf controles,
-     dont dix-sept partagent celui de leur voisin. Le passer en argument aurait
-     fait dix-neuf occasions de se tromper pour une information qui change six
-     fois. La variable se pose une fois par bloc, juste au-dessus de lui, la ou
-     on la lit en meme temps que le controle qu'elle qualifie. */
   let sujet = 'coherence';
   const add = (level, title, detail, view) => out.push({ level, sujet, title, detail, view });
 
-  // --- positions ---
   sujet = 'cours';
   for (const p of Store.state.positions) {
     if ((p.isin || '').trim() && !isinIsValid(p.isin))
@@ -5682,12 +4042,6 @@ function healthChecks() {
       add('warn', `« ${p.name} » n'a pas de cours`, 'Valeur calculée à 0 €', 'positions');
   }
 
-  /* --- cours ---
-     Rien de tout cela n'a de sens sans titre cote. Quelqu'un qui n'investit qu'en
-     non cote et en immobilier n'a pas de cours a rafraichir : lui reclamer une
-     actualisation, ou lui annoncer que ses prix sont vieux de trois cents jours,
-     c'est le harceler pour une fonction qu'il n'utilise pas. La cloche doit
-     montrer ce qui est faux chez celui qui la regarde. */
   if (Store.state.positions.length) {
     const last = Store.state.quotes?.lastRun;
     if (!last) add('info', 'Cours jamais actualisés', 'Les prix viennent du sheet, pas du marché', 'positions');
@@ -5714,12 +4068,6 @@ function healthChecks() {
   }
 
   sujet = 'credits';
-  /* --- crédits orphelins ---
-     Un crédit sur un établissement qui ne porte plus aucun compte : le bien
-     qu'il finançait a été supprimé, le prêt est resté. Il se soustrait
-     toujours du patrimoine net, et plus aucun écran ne le montre puisque la
-     liste des comptes saute les établissements vides. C'est le pire genre
-     d'erreur — un chiffre faux que rien ne trahit. */
   for (const e of ETABS()) {
     const du = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
     if (!du) continue;
@@ -5730,23 +4078,7 @@ function healthChecks() {
       'accounts');
   }
 
-  /* --- un capital restant dû qui a vieilli ---
-     C'est le seul champ de l'application qui devient faux sans que personne y
-     touche : chaque mensualité le réduit, l'écran ne bouge pas, et le patrimoine
-     net dérive de quelques centaines d'euros par mois. Au bout d'un an, l'erreur
-     vaut une année de remboursement.
-
-     L'alerte ne dit pas « pensez-y » : elle porte le montant projeté depuis la
-     mensualité et le taux, pour que la correction soit une lecture et non un
-     calcul. Elle ne se déclenche qu'au bout de trois mois — en dessous, l'écart
-     est inférieur à la marge d'un tableau d'amortissement approché. */
   sujet = 'echeances';
-  /* --- les échéances du non coté ---
-     Trois situations, trois niveaux. Une date dépassée sans déclaration est une
-     saisie en attente : l'argent est peut-être arrivé, personne ne l'a dit. Un
-     retard déclaré mérite un œil. Un défaut est une perte probable qui compte
-     encore pour sa valeur pleine dans le patrimoine, et ça, c'est une erreur au
-     sens de ce projet : un chiffre que rien ne trahit. */
   for (const e of echeances()) {
     if (e.depassee) {
       add('action', `« ${e.libelle} » a passé son échéance`,
@@ -5766,31 +4098,6 @@ function healthChecks() {
   }
 
   sujet = 'coherence';
-  /* --- un patrimoine net négatif ---
-     Arithmétiquement possible, et parfois vrai : un prêt étudiant, un
-     surendettement, les premières années d'un crédit sur un bien qui a perdu de
-     la valeur. Mais neuf fois sur dix, c'est une dette saisie sans le bien
-     qu'elle finance — on note le prêt, on remet à plus tard la déclaration de la
-     maison, et l'application annonce un patrimoine effondré.
-
-     Elle ne triche pas avec le chiffre : il reste ce qu'il est. Elle nomme la
-     cause la plus probable, et l'écart exact à combler. */
-  /* Deux causes, deux messages, et le niveau suit.
-
-     Un achat recent finance souvent les frais de notaire par le credit : le
-     capital emprunte depasse alors la valeur du bien, et le net est negatif
-     pendant des mois sans que rien ne soit faux. Envoyer « declare ce bien » a
-     quelqu'un qui vient de le declarer est faux et inquietant, et le peindre en
-     rouge a chaque ouverture, c'est crier au loup — la meme faute que peindre
-     une echeance en retard le lendemain de sa date.
-
-     Le partage se fait sur un fait verifiable : le credit a-t-il un bien en
-     face, chez le meme etablissement ? C'est la ou le modele range la dette
-     immobiliere, donc c'est la que la question se pose.
-
-     Aucune projection ici. On dit ce que le mois fait — la part de capital
-     remboursee fait remonter le net d'autant — sans annoncer de date : elle
-     demanderait de parier sur la valeur du bien, et ce projet s'y refuse. */
   {
     const p = patrimoine();
     if (p.net < 0 && p.dettes > 0) {
@@ -5827,15 +4134,6 @@ function healthChecks() {
   }
 
   sujet = 'credits';
-  /* Les alertes de credit menent aux Comptes, la ou vivent les credits. */
-  /* --- une mensualité de crédit hors du budget ---
-     Un crédit porte une mensualité, aucune charge fixe ne la rembourse : cet
-     argent sort tous les mois et le budget l'ignore, donc le reste à vivre et
-     l'épargne théorique sont surestimés d'autant. La fenêtre du crédit propose la
-     charge au moment où on la saisit ; cette alerte rattrape les crédits déclarés
-     avant, et les « non » regrettés. Elle se masque d'un geste, comme les autres :
-     si la mensualité figure déjà dans les charges sous un autre nom, il n'y a
-     rien à corriger et rien à répéter. */
   for (const c of creditsEnCours().lignes) {
     if (!c.mensualite || c.charge) continue;
     add('action', `Mensualité de « ${c.libelle} » hors du budget`,
@@ -5845,16 +4143,6 @@ function healthChecks() {
   }
 
   sujet = 'credits';
-  /* --- un solde qu'on n'a pas regardé depuis trois mois ---
-     Le rappel ne dépend pas d'une mensualité, et c'est le cas du levier d'un
-     courtier qui l'a montré : sans échéances, il n'y avait aucun rappel — alors
-     que c'est le solde qui bouge le plus, puisque les intérêts le font grossir
-     tout seul et qu'un arbitrage le change du jour au lendemain.
-
-     Trois messages selon ce que l'application sait dire. Avec des échéances, le
-     montant amorti. Avec un taux seul, le montant capitalisé. Sans rien, la date
-     et l'établissement où aller lire. Dans les trois cas c'est une saisie en
-     attente, et elle se masque d'un geste. */
   const RAPPEL_CREDIT_MOIS = 3;
   for (const c of creditsEnCours().lignes) {
     if (!c.verifieLe) {
@@ -5885,7 +4173,6 @@ function healthChecks() {
   }
 
   sujet = 'coherence';
-  // --- allocation ---
   /* Les cibles vivent dans `targets.classes` depuis que le rééquilibrage
      raisonne par classe d'actif. Ce contrôle additionnait encore `coreEtf`,
      `satellites` et `gold`, disparus à la migration : trois `undefined` font
@@ -5893,10 +4180,6 @@ function healthChecks() {
      avait déjà. Même définition que `rebalanceRows()` — une classe mise hors
      jeu ne compte pas, son encours a quitté la base. */
   const sum = sommeCibles();
-  /* Aucune cible posée n'est pas une incohérence, c'est un réglage jamais
-     fait : on ne réclame 100 % qu'à qui a commencé à en fixer. */
-  /* Et rien a repartir n'est pas non plus une incoherence : les cibles posees
-     par defaut ne concernent personne tant qu'aucun euro n'est place. */
   if (sum > 0 && Math.abs(sum - 100) > 0.05 && patrimoine().brut > 0.005)
     add('warn', `Cibles d'allocation à ${fmtPct(sum, 1)}`,
       'La somme devrait faire 100 % pour que les montants cibles aient un sens', 'rebalance');
@@ -5919,8 +4202,6 @@ function healthChecks() {
   ]) {
     if (!trous.length) continue;
     const noms = trous.map(fmtMonth);
-    /* Trois au plus dans le detail : une liste de quatorze mois deborde la
-       ligne de la cloche et ne se lit pas. Le compte, lui, est toujours dit. */
     const cite = noms.length > 3 ? `${noms.slice(0, 3).join(', ')}…` : noms.join(', ');
     add('warn', `Trou dans l'historique ${quoi}`,
       `${noms.length} mois sans donnée : ${cite}. Les moyennes se calculent sur ce qui reste.`,
@@ -5928,11 +4209,6 @@ function healthChecks() {
   }
 
   sujet = 'saisies';
-  /* --- relevé du mois ---
-     On ne signale plus l'écart entre la photo actuelle et la ligne du mois :
-     le relevé est figé le 1er, donc l'écart se creuse naturellement au fil du
-     mois. C'était une alerte garantie fausse. Reste le seul cas utile : le
-     mois n'a pas encore été enregistré du tout. */
   /* Le releve du mois en cours, et il passe par `currentMonthPending` : un
      rappel repousse ou tu pour le mois ne doit pas ressortir ici. Ce controle
      lisait l'etat brut, donc « Plus tard » eteignait le bandeau et la pastille
@@ -5951,7 +4227,6 @@ function healthChecks() {
   }
 
   sujet = 'budget';
-  // --- budget ---
   const b = Store.state.budget;
   /* Les depenses reclamees sont celles du mois clos, pas du mois en cours : le
      2 aout, personne ne sait ce qu'aout coutera. `depensesEnAttente` porte cette
@@ -5965,14 +4240,11 @@ function healthChecks() {
       trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
 
   const f = budgetFrame();
-  /* Sans revenu declare, « 1 000 € visés pour 0 € disponibles » compare un
-     objectif a un vide : le reste a vivre n'existe pas encore. */
   if (f.income > 0 && f.available < f.target)
     add('error', 'Objectif de dépenses au-dessus du reste pour vivre',
       `${fmtEUR0(f.target)} visés pour ${fmtEUR0(f.available)} disponibles`, 'budget');
 
   sujet = 'budget';
-  // --- épargne de précaution ---
   /* « 0 mois d'autonomie, 0 € pour 0 € de coût mensuel » etait la caricature de
      la regle que ce projet s'est donnee : la cloche ne parle que de ce qui existe
      chez celui qui la regarde.
@@ -5996,7 +4268,6 @@ function healthChecks() {
   return out;
 }
 
-/* --- plus/moins-values portefeuille titres --- */
 /*   `perfAnnualisee()` et `perfAnnualiseePortefeuille()` vivaient ici. Elles
    étalaient la plus-value d'une ligne sur la durée depuis sa date d'achat, ce
    qui ne tient que si l'argent est arrivé d'un coup.
@@ -6015,13 +4286,6 @@ function healthChecks() {
    de compter une baisse d'avant l'achat. Un champ qui pilote un calcul n'a pas
    besoin de s'afficher. */
 
-/* « 2 ans et 3 mois », pas « 2,25 ans ».
-
-   L'implementation servait deux entrees : les annees decimales d'une detention et
-   les mois entiers d'une echeance de credit. La premiere est partie avec la ligne
-   « Detenue depuis », donc l'enveloppe en annees aussi — un raccourci sans
-   appelant est du code que rien n'affiche. Il se retrouve dans le commit qui le
-   retire, si une duree en annees redevient utile. */
 function fmtDureeMois(mois) {
   const n = Math.max(0, Math.round(mois));
   const a = Math.floor(n / 12), m = n % 12;

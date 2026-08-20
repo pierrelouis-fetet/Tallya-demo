@@ -1,17 +1,3 @@
-/* =============================================================
-   SEED — jeu de démonstration
-   =============================================================
-   Tout est éditable dans l'app ; ce fichier n'est utilisé qu'au premier
-   lancement (ou après un « Réinitialiser »).
-
-   AUCUNE DONNÉE RÉELLE ICI, ET IL FAUT QUE ÇA RESTE VRAI.
-   Ce dépôt est public. Les montants, les comptes, les noms et les
-   commentaires ci-dessous sont inventés. Un chiffre constaté recopié ici
-   part en ligne au commit suivant, et un dépôt public ne se dépublie pas :
-   il est déjà cloné et indexé. Les instruments cités sont des supports
-   cotés publiquement, choisis pour que les cours se chargent vraiment dans
-   la démonstration ; ils ne décrivent le portefeuille de personne.
-   ============================================================= */
 
 /* Types de compte. `group` pilote tous les calculs (cash de vie / bourse /
    private market) ; `label` n'est qu'un regroupement d'affichage. */
@@ -29,56 +15,21 @@ const SEED_ACCOUNT_TYPES = [
   { id: 'crowdfunding', label: 'Crowdfunding',   group: 'pe' },
 ];
 
-/* La version du jeu de demonstration.
-
-   Ce numero se compare a celui range dans l'etat : quand il change, la
-   demonstration propose de se recharger. A incrementer des qu'on touche aux
-   montants de cette graine. */
 const SEED_VERSION = 4;
 
 const SEED_ACCOUNTS = [
-  // --- Cash de vie -------------------------------------------------
   { id: 'courant',  label: 'Current account', short: 'Current', group: 'cash', broker: 'Online bank', type: 'banque' },
   { id: 'livret',   label: 'Livret A',       short: 'Livret A', group: 'cash', broker: 'Online bank', type: 'banque' },
   { id: 'especes',  label: 'Cash on hand', short: 'Cash',  group: 'cash', broker: 'Cash on hand', type: 'banque' },
 
-  // --- Bourse ------------------------------------------------------
-  // Les deux poches de cash d'un compte titres : de l'argent deja verse au
-  // courtier mais pas encore investi. Il compte dans les liquidites, pas
-  // dans les actifs de marche.
-  //
-  // Deux courtiers plutot qu'un, et c'est ce qui distingue les deux comptes de
-  // titres : deux enveloppes chez le meme etablissement se liraient comme un
-  // doublon, la ou deux courtiers montrent le regroupement par etablissement.
-  //
-  // Les identifiants ne s'affichent nulle part : ce sont les colonnes des
-  // releves mensuels, et les renommer reecrirait seize mois d'historique sans
-  // qu'un ecran change.
   { id: 'cashPea',  label: 'Cash · Broker B', short: 'Cash B',  group: 'bourse', broker: 'Broker B', type: 'cto', role: 'cash', alloc: 'Brokerage cash' },
   { id: 'cashCto',  label: 'Cash · Broker A', short: 'Cash A',  group: 'bourse', broker: 'Broker A', type: 'cto', role: 'cash', alloc: 'Brokerage cash' },
   { id: 'pea',      label: 'Stocks · Broker B', short: 'Stocks B', group: 'bourse', broker: 'Broker B', holdings: true, type: 'cto' },
   { id: 'cto',      label: 'Stocks · Broker A', short: 'Stocks A', group: 'bourse', broker: 'Broker A', holdings: true, type: 'cto' },
   { id: 'crypto',   label: 'Crypto portfolio', short: 'Crypto', group: 'bourse', broker: 'Broker A', type: 'crypto', holdings: true, alloc: 'Crypto' },
 
-  // --- Private market ----------------------------------------------
   { id: 'fondsNonCote', label: 'Unlisted fund', short: 'Unlisted', group: 'pe', broker: 'Fund manager', type: 'pe', alloc: 'Private Equity' },
 
-  /* --- Immobilier, et le crédit qui va avec -------------------------
-     Sans bien immobilier, la démonstration ne montrait ni la classe
-     immobilier, ni un crédit, ni l'écart entre le brut et le net : la
-     bascule Net / Brut de l'accueil traçait deux fois la même courbe.
-
-     Le prêt est un compte de rôle « margin » à valeur négative, et c'est
-     ainsi que le modèle exprime une dette : à la migration, il devient un
-     crédit de son établissement. Il porte donc le même établissement que
-     l'appartement, sans quoi la fiche du bien ne trouverait pas son prêt et
-     annoncerait 150 000 € comme si tout était acquis.
-
-     Cet établissement s'appelle « Flat » et non « Mortgage lender ». Un bien
-     détenu en direct EST son contenant : le groupe porte le nom de la chose,
-     et le prêt s'y range comme une dette. Nommer le contenant d'après le
-     prêteur mettait l'appartement dans le crédit, alors que c'est le crédit
-     qui est sur l'appartement. Le prêteur, lui, se lit sur le crédit. */
   { id: 'appart',     label: 'Flat',            short: 'Flat', group: 'pe',     broker: 'Flat', type: 'immo' },
   { id: 'pretAppart', label: 'Mortgage',        short: 'Loan',        group: 'bourse', broker: 'Flat', type: 'levier', role: 'margin' },
 ];
@@ -162,10 +113,6 @@ const SEED_MONTHLY = [
     v: { courant:1119, livret:9578, especes:145, cashPea:2134, cashCto:896, pea:28636, cto:14059, crypto:2509, fondsNonCote:3000, appart:150000 } },
   { date: '2026-07-01', comment: 'Bonus paid, cash back up', dettes: 75000,
     v: { courant:1398, livret:9828, especes:148, cashPea:2494, cashCto:1094, pea:29399, cto:14416, crypto:2598, fondsNonCote:3000, appart:150000 } },
-  /* Le mois en cours est renseigne : une demonstration ne doit pas s ouvrir
-     sur deux rappels de saisie. Ses montants suivent juillet, et le total
-     colle a ce que les positions valent aux cours du jour — sans quoi la
-     courbe ferait une marche entre le dernier releve et « Auj. ». */
   { date: '2026-08-01', comment: 'Current month: statement taken at the start of the month', dettes: 74615,
     v: { courant:1398, livret:9828, especes:148, cashPea:2494, cashCto:1097, pea:30395, cto:15194, crypto:2597, fondsNonCote:3000, appart:150000 } },
   { date: '2026-09-01', comment: '', v: {} },
@@ -174,48 +121,22 @@ const SEED_MONTHLY = [
   { date: '2026-12-01', comment: '', v: {} },
 ];
 
-/* Photo actuelle "NOW" — seuls les comptes hors titres sont stockés,
-   les comptes titres (pea / cto) sont calculés depuis les positions. */
 const SEED_NOW = {
   courant: 1398, livret: 9828, especes: 148,
   cashPea: 2494, cashCto: 1097,
   fondsNonCote: 3000,
-  /* L'appartement et son prêt. Le prêt est négatif : la migration le lit comme
-     un crédit de l'établissement, il ne reste pas un compte à valeur négative. */
   appart: 150000, pretAppart: -75000,
 };
 
-/* Positions (lignes de titres). value = qty × price × fx, sauf si manual.
-   Supports cotés réels, pour que la démonstration aille chercher de vrais
-   cours. Les quantités, elles, sont inventées.
-
-   Le rôle est posé ici et non laissé au défaut. Sans lui, toute ligne tombait
-   en satellite : la carte « Core et satellites » annonçait 100 % de satellites,
-   le chevron de découpe n'apparaissait jamais faute d'être détenu dans les deux
-   rôles, et la page Objectifs perdait ce qu'elle a de plus utile.
-
-   Six classes sont représentées, pour que l'allocation ne montre pas trois
-   barres sur douze couleurs : actions, obligations, immobilier coté, multi
-   actifs, métaux précieux, et la crypto qui vit sur son propre compte. */
 const SEED_POSITIONS = [
   { id:'p1', name:'MSCI World',       isin:'FR001400U5Q4', symbol:'DCAM.PA', currency:'EUR', qty:2683, buyPrice:5.42,  price:6.241,   fx:1,     fxBuy:1,     assetClass:'actions',       role:'core',      account:'pea', manual:false },
   { id:'p2', name:'S&P 500',          isin:'IE00B5BMR087', symbol:'CSPX.AS', currency:'EUR', qty:10,   buyPrice:640,   price:723.28, fx:1,     fxBuy:1,     assetClass:'actions',       role:'core',      account:'pea', manual:false },
   { id:'p3', name:'ASML',             isin:'NL0010273215', symbol:'ASML.AS', currency:'EUR', qty:3,   buyPrice:1290,   price:1499.0, fx:1,     fxBuy:1,     assetClass:'actions',       role:'satellite', account:'pea', manual:false },
   { id:'p4', name:'LVMH',             isin:'FR0000121014', symbol:'MC.PA',   currency:'EUR', qty:4,   buyPrice:610,   price:480.0, fx:1,     fxBuy:1,     assetClass:'actions',       role:'satellite', account:'pea', manual:false },
   { id:'p5', name:'Microsoft',        isin:'US5949181045', symbol:'MSFT',    currency:'USD', qty:3,   buyPrice:398,   price:499.99, fx:0.879, fxBuy:0.879, assetClass:'actions',       role:'satellite', account:'cto', manual:false },
-  /* Obligations d'État de la zone euro : la classe existait dans les cibles
-     sans qu'aucune ligne ne la porte, donc « 8 % d'obligations » restait un
-     objectif qu'aucun écran ne pouvait montrer atteint. */
   { id:'p6', name:'Obligations d’État zone euro', isin:'LU1650487413', symbol:'', currency:'EUR', qty:43, buyPrice:125.2, price:128.13, fx:1, fxBuy:1, assetClass:'obligations', role:'core', account:'cto', manual:false },
-  /* Immobilier coté : des foncières, qui se vendent en séance. Il ne se
-     confond pas avec l'appartement, qui est de l'immobilier détenu — et c'est
-     précisément la distinction que cette ligne permet de montrer. */
   { id:'p7', name:'Foncières européennes', isin:'IE00B0M63284', symbol:'', currency:'EUR', qty:119, buyPrice:28.4, price:26.235, fx:1, fxBuy:1, assetClass:'immobilierCote', role:'satellite', account:'cto', manual:false },
-  /* Un fonds qui mêle actions et obligations dans une seule ligne : c'est ce
-     que « Multi-actifs » compte, et personne ne peut le ranger ailleurs. */
   { id:'p8', name:'Fonds prudent 30/70', isin:'LU0227384020', symbol:'', currency:'EUR', qty:171, buyPrice:17.1, price:18.187, fx:1, fxBuy:1, assetClass:'diversifie', role:'core', account:'cto', manual:false },
-  // iShares Physical Gold ETC : un ETC adossé à de l'or physique, pas un
-  // ETF américain. Avec le bon ISIN, la ligne se cote toute seule.
   { id:'p9', name:'Or',               isin:'IE00B4ND3602', symbol:'',        currency:'EUR', qty:30,  buyPrice:64.2, price:84.5,  fx:1,     fxBuy:1,     assetClass:'metaux',        role:'satellite', account:'cto', manual:false },
   /* La crypto etait un montant saisi a la main sur son compte, donc invisible
      de `stockTotals()`, qui ne compte que les positions : la cible de 5 %
@@ -224,30 +145,6 @@ const SEED_POSITIONS = [
   { id:'p10', name:'Bitcoin ETP',     isin:'DE000A27Z304', symbol:'',        currency:'EUR', qty:46,  buyPrice:31.5, price:56.45,  fx:1,     fxBuy:1,     assetClass:'crypto',        role:'satellite', account:'crypto', manual:false },
 ];
 
-/* Le journal des ventes.
-
-   Il etait vide, et c'est la fonction qu'une demonstration doit le moins laisser
-   vide : la plus-value encaissee, le rythme des ventes, la courbe de cumul et le
-   detail d'une vente n'ont rien a montrer sans elles. Un ecran vide bien redige
-   convient a qui demarre, pas a qui vient voir ce que l'application sait faire.
-
-   Onze ventes sur dix-huit mois, neuf gagnantes et deux perdantes : c'est la
-   proportion d'un portefeuille qui a tenu, et deux lignes rouges suffisent a
-   montrer que l'application les dit sans les cacher. Elles s'etalent sur 2025 et
-   2026 pour que le menu des annees ait deux crans, et sur assez de mois pour que
-   les barres par mois, par trimestre et par annee se distinguent selon la plage.
-
-   Quatre noms ne figurent pas dans les positions : ces lignes ont ete soldees en
-   entier, et c'est exactement ce que le journal sert a garder — une plus-value
-   encaissee survit a la ligne qui l'a produite.
-
-   Chaque montant se verifie de tete : gross = qte x prix (x change), invested =
-   qte x prix de revient (x change), realised etant leur difference. Les ajouter
-   ne deplace aucun total du patrimoine — le journal est une trace, l'argent est
-   deja sur les comptes — donc les sommes des relevés restent celles qu'elles
-   etaient. Le tout fait +1 519 EUR encaisses.
-
-   Ordre du plus recent au plus ancien, celui que produit une vraie vente. */
 const SEED_SALES = [
   { id:'v11', date:'2026-07-21', name:'Fonds prudent 30/70', isin:'LU0227384020', symbol:'',
     assetClass:'diversifie', role:'core', account:'cto', cashAccount:'cashCto',
@@ -261,9 +158,6 @@ const SEED_SALES = [
     assetClass:'actions', role:'satellite', account:'pea', cashAccount:'cashPea',
     qty:1, price:1450, currency:'EUR', fxSell:1, buyPrice:1290, fxBuy:1,
     gross:1450, invested:1290, realised:160, note:'' },
-  /* Perdante, et sur une ligne encore detenue : la fiche de la position montre
-     une moins-value latente pendant que le journal montre une perte encaissee.
-     Les deux coexistent, et ne s'additionnent jamais. */
   { id:'v8', date:'2026-03-12', name:'Foncières européennes', isin:'IE00B0M63284', symbol:'',
     assetClass:'immobilierCote', role:'satellite', account:'cto', cashAccount:'cashCto',
     qty:25, price:26.6, currency:'EUR', fxSell:1, buyPrice:28.4, fxBuy:1,
@@ -280,8 +174,6 @@ const SEED_SALES = [
     assetClass:'actions', role:'satellite', account:'pea', cashAccount:'cashPea',
     qty:40, price:11.5, currency:'EUR', fxSell:1, buyPrice:13.25, fxBuy:1,
     gross:460, invested:530, realised:-70, note:'soldée, thèse abandonnée' },
-  /* En devise : le change se fige a l'achat comme sur une position, sinon le
-     prix de revient d'une vente passee bougerait avec l'EUR/USD du jour. */
   { id:'v4', date:'2025-06-10', name:'Alphabet', isin:'', symbol:'',
     assetClass:'actions', role:'satellite', account:'cto', cashAccount:'cashCto',
     qty:4, price:200, currency:'USD', fxSell:0.9, buyPrice:150, fxBuy:0.9,
@@ -294,9 +186,6 @@ const SEED_SALES = [
     assetClass:'actions', role:'satellite', account:'pea', cashAccount:'cashPea',
     qty:12, price:168, currency:'EUR', fxSell:1, buyPrice:140, fxBuy:1,
     gross:2016, invested:1680, realised:336, note:'' },
-  /* Une vente d'avant l'application, entree pour memoire : elle n'a ni quantite
-     ni prix, et l'ecran doit taire ces champs au lieu d'ecrire des zeros. C'est
-     le seul moyen de montrer ce cas, qui est celui de tout nouveau venu. */
   { id:'v1', date:'2024-11-15', name:'Ancien fonds en euros', isin:'', symbol:'',
     assetClass:'', role:'', account:'', cashAccount:'',
     qty:null, price:null, currency:'EUR', fxSell:1, buyPrice:null, fxBuy:1,
@@ -304,26 +193,14 @@ const SEED_SALES = [
     declaree:true },
 ];
 
-/* Fiches comptes (dates d'ouverture, dépôts / retraits) */
 const SEED_ACCOUNT_INFO = {
   pea:          { opened:'2023-06-01', liquidity:'illiquid', deposit:null, withdrawal:0 },
   cto:          { opened:'2023-09-01', liquidity:'liquid',   deposit:null, withdrawal:0 },
   crypto:       { opened:'2024-02-01', liquidity:'liquid',   deposit:null, withdrawal:0 },
   fondsNonCote: { opened:'2023-09-01', liquidity:'illiquid', deposit:3000, withdrawal:0 },
-  /* Acheté bien avant le premier relevé : l'historique montre un prêt déjà
-     entamé, ce qui est le cas de tout le monde sauf le mois de la signature. */
   appart:       { opened:'2019-06-01', liquidity:'illiquid', deposit:150000, withdrawal:0 },
 };
 
-/* Cibles d'allocation, une par classe détenue, plus la trésorerie.
-
-   Elles étaient à l'ancien schéma — coreEtf, satellites, gold — que la
-   migration convertit. Le résultat était juste mais pauvre : trois lignes là où
-   la page en propose une par classe. Les actions portent deux cibles, une par
-   rôle, ce qui est le cas le plus intéressant à montrer et celui qui fait
-   apparaître le chevron de refusion.
-
-   La somme fait 100 : 46 + 14 + 8 + 6 + 6 + 5 + 5 + 10. */
 const SEED_TARGETS = {
   cashToInvest: 7,
   classes: {
@@ -337,8 +214,6 @@ const SEED_TARGETS = {
   exclues: [],
 };
 
-/* Stratégie. Des exemples de cadres d'allocation, pas une recommandation :
-   les pourcentages illustrent la mécanique de la page, rien d'autre. */
 const SEED_STRATEGY = {
   rule: "Ordre d'achat sur l'ETF Core toujours à 3 % sous le cours.",
   reserveMonthly: 300,
@@ -370,8 +245,6 @@ const SEED_STRATEGY = {
   ],
 };
 
-/* État vierge : même structure, aucun chiffre. Sert quand quelqu'un d'autre
-   reprend l'app — il n'hérite alors d'aucune donnée personnelle. */
 function blankState() {
   const an = new Date().getFullYear();
   const mois = Array.from({ length: 12 }, (_, i) =>
@@ -392,20 +265,6 @@ function blankState() {
     targets: { coreEtf: 70, satellites: 20, gold: 5, cashToInvest: 5 },
     strategy: structuredClone(SEED_STRATEGY),
     accountTypes: structuredClone(SEED_ACCOUNT_TYPES),
-    /* Aucune ligne de donnee, et c'est tout le sujet de cet etat.
-
-       Il posait un compte courant, un livret, un « Salaire 0 € » et un
-       « Loyer 0 € » : des exemples deguises en donnees. Personne ne saisit
-       « Salaire 0 € » — on saisit son salaire — et le cout se payait ailleurs.
-       Ces quatre lignes vides faisaient croire a l'application qu'elle etait
-       configuree : les invites de premiers pas ne s'affichaient donc jamais, les
-       rappels reclamaient un releve et des depenses a quelqu'un qui n'avait
-       aucun compte, et la page Actifs ouvrait sur deux comptes a zero rattaches
-       a rien.
-
-       Ce qui reste est de la structure, pas de la donnee : les douze mois du
-       calendrier, les categories de depenses, les types de compte, les cibles.
-       Un tableau vide se remplit ; un exemple a zero se confond avec un fait. */
     accounts: [],
     budget: {
       monthlyTarget: 0,
@@ -415,9 +274,6 @@ function blankState() {
       fixedCharges: [],
       toReview: [],
       supplements: [],
-      /* Le journal des rentrees exceptionnelles : un heritage, une prime, la
-         vente d'une voiture. Vide a la premiere ouverture, et present dans la
-         graine pour que la migration le pose sur les etats d'avant. */
       apports: [],
       expenses: mois.map(m => ({ month: m.date, note: '', v: {} })),
     },
@@ -427,56 +283,14 @@ function blankState() {
 const SEED = {
   version: 1,
   meta: {
-    /* L'objectif se place au-dessus du net du jeu, et de peu. A 120 000 il etait
-       deja depasse : la jauge affichait une barre pleine, et la carte ne montrait
-       plus rien de sa mecanique — ni le reste a faire, ni le rythme necessaire.
-       150 000 a fin 2027 laisse une marche a franchir, assez basse pour que ce
-       rythme reste credible.
-
-       Il se relit chaque fois que les valeurs de la graine bougent : un objectif
-       deja atteint ne demontre rien, et c'est le net qui decide, pas ce nombre. */
     objective: 150000,
     objectiveYear: 2027,
     expectedInflow: 600,    // cash attendu d'ici le mois prochain
     modelCapital: 100000,   // base des modèles d'allocation
-    /* Aucune requete de cours au chargement, et c'est ce qui rend cette
-       demonstration montrable.
-
-       Elle interrogeait la passerelle a chaque visite : les valeurs de marche
-       bougeaient donc entre deux visiteurs, et entre deux captures d'ecran. Les
-       quatre images du README se contredisaient a 918,83 EUR pres — cash, non
-       cote et immobilier identiques a l'euro, seuls actions, obligations et
-       crypto differaient — et un lecteur attentif en conclut que l'application
-       compte mal.
-
-       Trois raisons, la premiere suffit : une demonstration montre la meme chose
-       a tout le monde. Un README dont les chiffres vieillissent seuls devient
-       faux sans que personne y touche. Et une demonstration qui depend d'une
-       passerelle externe tombe avec elle.
-
-       Le bouton d'actualisation reste : la fonctionnalite se montre toujours,
-       elle ne se declenche simplement plus d'elle-meme. */
     autoRefresh: false,
     preferredExchange: 'auto', // 'auto' = on suit la place de référence du titre
-    // Hypothèses de la vue Objectif. Ce sont des valeurs de départ neutres,
-    // à ajuster : rien ici ne prétend décrire un rendement futur.
-    /* Une démonstration doit montrer une courbe qui monte : sans versement
-       mensuel ni rendement crédible, la projection s'affiche presque plate et
-       la page la plus parlante de l'application ne dit rien. Le versement
-       reprend l'épargne du budget (0) — celle-ci en dégage assez pour que la
-       courbe décolle. */
     projMonthly: 0,      // 0 = reprend l'épargne dégagée par le budget
-    /* 8 % et non 5 : c'est l'ordre de grandeur du rendement long terme d'un
-       portefeuille d'actions, celui que tout le monde reconnaît. Cinq
-       décrivait un mélange prudent que la répartition de cette graine ne
-       porte pas — elle est à 60 % en actions. */
     projRate: 8,         // rendement annuel supposé des actifs de marché, en %
-    /* Rendement des autres actifs : non coté, compte courant, précaution.
-       Zéro par défaut, et ce n'est pas un oubli. L'application ne doit affirmer
-       aucun rendement sur des parts illiquides sans prix de marché ni sur un
-       compte qui ne rapporte rien : tant que personne n'a réglé ce champ, ces
-       poches sont portées à plat. migrate() pose la clé sur les états existants
-       en fusionnant SEED.meta, donc aucun chiffre ne bouge à la mise à jour. */
     projRateAutres: 0,
     projInflation: 2,    // pour traduire le résultat en euros d'aujourd'hui
     projTarget: 0,       // cible long terme, optionnelle

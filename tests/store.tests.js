@@ -1644,12 +1644,16 @@ suite('Le tirer-pour-rafraîchir résiste au lieu de se laisser étirer', () => 
        partir sur un mouvement qu'on fait aussi pour commencer a lire. Le seuil se
        mesure sur la course du doigt et non sur celle de la page, qui est desormais
        bornee et ne pourrait plus l'atteindre. */
-    /* On vise le commentaire qui suit la constante, et non la premiere occurrence
-       de `SEUIL` : `app.js` en compte plusieurs — le glissement d'une ligne en
-       porte un autre — et le controle lisait celui-la, donc autre chose que ce
-       qu'il croyait lire. C'est la lecon des deux tests verts pour la mauvaise
-       raison : viser un repere unique, jamais un rang. */
-    const m = source.match(/const SEUIL = (\d+);\s*\/\/ au-dela, on lache et ca part/);
+    /* La constante porte son nom, et c'est lui qu'on vise. Le controle s'ancrait
+       auparavant sur le commentaire qui la suit, parce que `app.js` compte
+       plusieurs `SEUIL` — le glissement d'une ligne en porte un autre — et lire
+       le premier venu, c'etait lire autre chose que ce qu'on croyait.
+
+       Un nom unique fait le meme travail et resiste a davantage : les fichiers
+       publies sortent desormais sans leurs commentaires, et un test ancre sur un
+       commentaire tombait sur l'arbre publie. Viser un repere unique, jamais un
+       rang, et jamais un commentaire non plus. */
+    const m = source.match(/const SEUIL_RAFRAICHIR = (\d+);/);
     vrai(m, 'le seuil du tirer-pour-rafraîchir doit être trouvable par son repère');
     const seuil = Number(m[1]);
     vrai(seuil >= 150,
@@ -10853,14 +10857,28 @@ suite('Un graphique de ventes tient debout à huit cents ventes', () => {
        — 1 440, 1 512 — pour ne rien changer a ceux qui les utilisent. */
     const css = lireSource('assets/styles.css');
     vrai(css, 'assets/styles.css doit être lisible pour ce contrôle');
-    const bloc = css.slice(css.indexOf('.view {'), css.indexOf('.view {') + 260);
+    /* Le corps d'une regle se borne a son accolade de fermeture, jamais a un
+       nombre de caracteres. Une fenetre de 400 caracteres apres `body {`
+       s'arretait au milieu du fichier reel, mais atteignait la regle SUIVANTE
+       une fois les commentaires retires — et cette voisine porte un `max-width`.
+       Le controle passait donc au vert ou au rouge selon la longueur des
+       commentaires alentour, ce qui n'est pas son sujet. */
+    const regle = (source, selecteur) => {
+      const d = source.indexOf(selecteur);
+      if (d < 0) return '';
+      const f = source.indexOf('}', d);
+      return f < 0 ? source.slice(d) : source.slice(d, f + 1);
+    };
+    const bloc = regle(css, '.view {');
+    vrai(bloc, 'la règle .view doit être trouvable');
     vrai(/max-width: 1480px/.test(bloc), 'la colonne de contenu est bornée');
     vrai(/margin: 0 auto/.test(bloc), 'et centrée au-delà');
     vrai(/width: 100%/.test(bloc),
       'sans quoi une colonne flex se rétrécirait sur son contenu');
     /* Sur `.view` et non sur `body` : la barre laterale garde son bord d'ecran,
        qui est ce qui la fait lire comme une barre. */
-    const corps = css.slice(css.indexOf('body {'), css.indexOf('body {') + 400);
+    const corps = regle(css, 'body {');
+    vrai(corps, 'la règle body doit être trouvable');
     vrai(!/max-width/.test(corps), 'la grille de page n’est pas bornée, elle');
   });
 });

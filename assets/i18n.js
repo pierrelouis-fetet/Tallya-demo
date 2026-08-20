@@ -14,16 +14,6 @@
 const LANGS = [['fr', 'Français'], ['en', 'English']];
 const LANG_KEY = 'wealth-dashboard:lang';
 
-/* La demonstration s'ouvre en anglais, le depot prive en francais.
-
-   C'est la seule divergence de langue entre les deux, et elle se tient : ici le
-   README, les captures et jusqu'aux donnees de la graine sont anglais. Ouvrir
-   en francais donnait une premiere impression qui contredisait tout le reste,
-   pour un visiteur qui arrive de GitHub.
-
-   Le repli reste le francais partout ailleurs dans le fichier : c'est la langue
-   des clefs, celle qui s'affiche quand une traduction manque. Seul le defaut au
-   premier chargement change, et le selecteur de Preferences reste maitre. */
 function currentLang() {
   try { return localStorage.getItem(LANG_KEY) || 'en'; } catch (e) { return 'en'; }
 }
@@ -44,30 +34,14 @@ const LOCALES = { fr: 'fr-FR', en: 'en-GB' };
 const locale = () => LOCALES[currentLang()] || LOCALES.fr;
 const enAnglais = () => currentLang() === 'en';
 
-/* Les guillemets suivent la langue, comme les nombres et les heures.
-
-   Un nom cite dans un titre de dialogue portait « x » dans les deux langues :
-   la typographie francaise, espaces insecables comprises, au milieu d'une phrase
-   anglaise. Cinquante-cinq citations, presque toutes des noms saisis par le
-   detenteur, donc rien que le dictionnaire pouvait rattraper. */
 const guill = (x) => (enAnglais() ? `“${x}”` : `« ${x} »`);
 
-/* L'espace avant un point d'interrogation est francais, et lui seul.
-
-   Les questions se composent d'un morceau traduit et d'un morceau ecrit dans le
-   gabarit : « Supprimer la categorie {nom} ? ». Le point d'interrogation vit
-   donc hors de la clef, et l'anglais heritait de l'espace insecable francais,
-   « Delete the category “Courses” ? ». Applique aux sinks des dialogues, la ou
-   la question se pose. */
 const ponct = (s) => (enAnglais()
-  /* Les deux espaces de la classe sont ecrits en echappement : l'insecable est
-     invisible dans une source, et ce depot a deja porte des octets fantomes. */
   ? String(s ?? '').replace(/[\u00a0\u0020]+([?!:;])/g, '$1')
   : String(s ?? ''));
 
 const I18N = {
   en: {
-    /* --- navigation --- */
     'nav.group.tracking': 'Steering',
     'nav.group.monthly': 'Tracking',
     'nav.group.portfolio': 'Portfolio',
@@ -75,8 +49,6 @@ const I18N = {
     'nav.overview': 'Overview',
     'nav.performance': 'Performance',
     'nav.objective': 'Projection',
-    /* La rubrique dit deja « mensuel » : le libelle du menu s'allege. Le
-       titre de la vue, lui, reste complet — il s'affiche sans ce contexte. */
     'nav.history': 'Statements',
     'nav.budget': 'Budget',
     'nav.positions': 'Markets',
@@ -89,7 +61,6 @@ const I18N = {
     'nav.networth': 'Net worth',
     'nav.theme': 'Theme',
 
-    /* --- titres et sous-titres des vues --- */
     'view.overview': 'Overview',
     'view.overview.sub': 'A snapshot of your wealth',
     'view.positions': 'Markets',
@@ -116,7 +87,6 @@ const I18N = {
     'view.notifications': 'Notifications',
     'view.notifications.sub': 'What the bell is allowed to tell you',
 
-    /* --- préférences --- */
     'settings.language': 'Language',
     'settings.language.label': 'Interface language',
     'settings.language.hint': 'Amounts stay in euros, only the wording changes.',
@@ -274,10 +244,6 @@ const I18N = {
     "Par année": "By year",
     "Additionner un autre montant dans ce champ": "Add another amount into this field",
 
-    /* Les fiches de comptes, les fiches d'etablissement et la page des marches.
-       Un nombre entre accolades se place par gabarit et non par concatenation :
-       l'anglais met l'anciennete apres la duree, « 5 min ago », et deux
-       fragments cousus dans l'ordre francais donneraient « ago 5 min ». */
     "voir la fiche complète": "see the full card",
     "acheté aujourd’hui": "bought today",
     "Pré-ouverture": "Pre-market",
@@ -309,7 +275,6 @@ const I18N = {
     /* La coquille : ces titres et intitules vivent dans le balisage statique
        d'index.html, et `translateStatic()` les traduit par leur valeur. */
 
-    /* Les vues : intitules de groupe, infobulles, aides. */
     "Saisir les dépenses de": "Enter the expenses for",
     "Séparer {c} en core et satellite": "Split {c} into core and satellite",
     "Sortir {c} du rééquilibrage": "Take {c} out of rebalancing",
@@ -321,9 +286,6 @@ const I18N = {
     "l'efface.": "erases it.",
     "Répartition classée": "Ranked breakdown",
 
-    /* Les dialogues de confirmation. Un dialogue non traduit est un
-       consentement qu'on n'a pas vraiment obtenu : c'est le moment ou l'on
-       s'apprete a supprimer, et ou il faut comprendre ce qui est demande. */
     "L'Excel ne peut pas être réimporté": "The Excel file cannot be imported back",
     "C'est une photo pour lire et retravailler ailleurs : il ne contient pas tous les réglages du tableau de bord. Pour restaurer, prends le fichier « Sauvegarde JSON ».": "It is a snapshot to read and rework elsewhere: it does not hold every dashboard setting. To restore, use the “JSON backup” file.",
     ", qui n’a pas de nom": ", which has no name",
@@ -396,7 +358,6 @@ const I18N = {
     "Cet appareil a des modifications qui n'ont jamais été envoyées, et une version plus récente existe en ligne.": "This device has changes that were never sent, and a newer version exists online.",
     "Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)": "Load the online version? (Cancel keeps this device’s version and sends it.)",
 
-    /* Les avis passagers. */
     ", les placements s’ajoutent dans Marchés": ", holdings are added in Markets",
     "{v} moins {c} de crédit": "{v} less {c} of loan",
     "ajouté, et sa charge de": "added, and its charge of",
@@ -408,7 +369,6 @@ const I18N = {
     "quitte la saisie. Ses {v} restent dans l’historique.": "leaves the monthly entry. Its {v} stay in the history.",
     "quitte la saisie du mois.": "leaves the monthly entry.",
 
-    /* Les intitules de bouton des dialogues, traduits par askConfirm. */
     "Compris": "Got it",
     "Annuler les modifications": "Discard changes",
     "Continuer à modifier": "Keep editing",
@@ -420,9 +380,6 @@ const I18N = {
     "Enregistrer et fermer": "Save and close",
     "Fermer sans enregistrer": "Close without saving",
 
-    /* La fiche d'un compte, tous les types. Une vue parametree ne se verifie pas
-       sur une instance : un compte de liquidites ne rend ni carte de titres ni
-       carte de placements, et c'est sur lui que la mesure avait ete faite. */
     "Actifs": "Assets",
     "Scinder": "Split",
     "Placements détenus": "Holdings",
@@ -463,9 +420,6 @@ const I18N = {
        francais est donc la clef. Identiques dans les deux langues pour
        certains, et l'entree existe quand meme : sans elle, rien ne distingue
        « traduit a l'identique » de « traduction oubliee ». */
-    /* « Actions » sur une fiche veut dire « ce qu'on peut faire », et la clef
-       nue est deja prise par la classe d'actif : « Equities ». Un homographe se
-       resout par une clef pointee, jamais en changeant celle du voisin. */
     "actions.fiche": "Actions",
     "La part de cette ligne dans le portefeuille de titres, pas dans tes avoirs. Le classement est celui de la valeur : le dénominateur est le même pour toutes.": "This holding’s share of the securities portfolio, not of your total assets. The ranking is by value: the denominator is the same for all of them.",
     "Facultative, mais deux chiffres en dépendent. Le rendement par an, qui ramène « +36 % » à une échelle comparable, car sans date il ne dit pas s’il a fallu un an ou cinq. Et l’effet du jour : une ligne achetée aujourd’hui se compare à ton prix d’achat, pas à la clôture d’hier, que tu n’as pas vécue. Pour une ligne renforcée plusieurs fois, mets la date du premier achat.": "Optional, but two figures depend on it. The yearly return, which brings “+36%” to a comparable scale, because without a date it does not say whether it took one year or five. And today’s move: a holding bought today is compared with your purchase price, not with yesterday’s close, which you did not live through. For a holding topped up several times, use the date of the first purchase.",
@@ -1600,9 +1554,6 @@ const I18N = {
     "Enregistré ✓": "Saved ✓",
     "Cette catégorie existe déjà": "This category already exists",
     "Passerelle non détectée": "Gateway not detected",
-    /* La demonstration se lance par serve.py : c'est un depot qu'on clone, pas
-       une machine deja installee. La clef diverge de celle du prive, et c'est
-       voulu — le message doit nommer la commande qui marche ici. */
     "Passerelle non détectée : lance « python serve.py »": "Gateway not detected: run “python serve.py”",
     "Aucun symbole à suivre": "No symbol to track",
     "Rien en ligne": "Nothing online",
@@ -1738,7 +1689,6 @@ const I18N = {
     "Tout ton patrimoine y est.": "All your wealth is in it.",
     "Ils ne figurent pas dans les parts ci-dessus : une répartition dit où est ton argent, et un crédit n’est pas un endroit. Il se retire du total, ici, pour donner le patrimoine net.": "They are not part of the shares above: a breakdown says where your money is, and a loan is not a place. It is subtracted from the total, here, to give net worth.",
 
-    /* --- l'immobilier : usage, quote-part, exploitation, fin de credit --- */
     "Usage": "Use",
     "à préciser": "to be set",
     "Mis en location": "Rented out",
@@ -1809,7 +1759,6 @@ const I18N = {
     "en patrimoine": "in wealth",
     "soldé": "paid off",
 
-    /* --- chaque ligne s'ouvre par son nom --- */
     "Modifier ou supprimer": "Edit or delete",
     "Renommer, corriger ou supprimer": "Rename, correct or delete",
     "Vacance locative": "Vacancy",
@@ -1828,7 +1777,6 @@ const I18N = {
     "il entrera dans le cash-flow et le rendement de ce bien": "it will feed that asset's cash flow and yield",
     "Source supprimée": "Source deleted",
 
-    /* --- les premiers pas, et le prerequis des titres cotes --- */
     "Entrer tes comptes": "Enter your accounts",
     "Enregistrer un relevé": "Record a statement",
     "Versé sur": "Paid into",
@@ -1874,7 +1822,6 @@ const I18N = {
     "Elle se règle dans la charge fixe qui rembourse ce crédit, pour n'exister qu'à un seul endroit. Un second champ ici laisserait les deux diverger, et c'est celui-ci que rien ne relirait.": "It is set in the fixed cost that repays this loan, so that it exists in one place only. A second field here would let the two drift apart, and this is the one nothing would read back.",
     "Une part va de 0 à 100. Au-delà, le bien compte en entier.": "A share runs from 0 to 100. Beyond that, the asset counts in full.",
 
-    /* --- périodes --- */
     'range.ytd': 'YTD',
     'range.1y': '1 year',
     'range.all': 'All',
@@ -1883,8 +1830,6 @@ const I18N = {
   },
 };
 
-/* Traduit une clé. En français on renvoie le texte de repli tel quel :
-   c'est la langue source, elle n'a pas de dictionnaire à maintenir. */
 function t(cle, repli) {
   const lang = currentLang();
   if (lang === 'fr') return repli !== undefined ? repli : FR[cle] ?? cle;
@@ -1902,14 +1847,8 @@ function t(cle, repli) {
 
    `t()` reste pour les clefs pointees (`nav.*`, `view.*`), et un test refuse
    desormais qu'on lui passe autre chose. */
-/* Le repli sert aux homographes : « sur » veut dire « over » devant une
-   duree et « of » devant un objectif, et une clef-phrase ne peut porter
-   qu'un seul sens. La forme est alors une clef pointee avec son francais
-   en second : trad('sur.objectif', 'sur'). Le francais s'affiche par le
-   repli, l'anglais par la clef, et les deux sens cessent de se battre. */
 const trad = (phrase, repli) => t(phrase, repli !== undefined ? repli : phrase);
 
-/* Les libellés français des clés utilisées hors des vues (nav, préférences). */
 const FR = {
   'nav.group.tracking': 'Pilotage',
   'nav.group.monthly': 'Suivi',
@@ -1917,11 +1856,6 @@ const FR = {
   'nav.group.settings': 'Réglages',
   'nav.overview': "Vue d'ensemble",
   'nav.performance': 'Performance',
-/* « Objectif » nommait la page d'apres une seule de ses cinq cartes, et
-     cette carte est aussi sur l'accueil : l'entree de menu menait donc a la
-     projection pendant que son homonyme vivait ailleurs. Quatre cartes sur
-     cinq sont la trajectoire longue. « Trajectoire » etait ecarte, c'est deja
-     le nom d'une carte a l'interieur — le meme defaut d'un cran plus bas. */
   'nav.objective': 'Projection',
   'nav.history': 'Relevés',
   'nav.budget': 'Budget',
@@ -1940,16 +1874,9 @@ const FR = {
   'view.positions': 'Marchés',
   'view.positions.sub': 'Tes lignes de titres, en direct',
   'view.allocation': 'Allocation',
-  /* Un sous-titre par onglet : « Allocation » couvre deux sujets, et le
-     sous-titre unique en decrivait forcement un seul. Celui-ci reste comme
-     repli, il ne s'affiche plus tant que les deux onglets existent. */
   'view.allocation.sub': 'Où est réellement placé ton argent',
   'view.allocation.reel.sub': 'Tout ce que tu possèdes, et comment c’est réparti',
   'view.allocation.cible.sub': 'Ce que tu vises sur la part que tu peux arbitrer',
-  /* Projection est un onglet de la vue d'ensemble : ces deux cles portent le
-     titre et le sous-titre quand cet onglet est ouvert, sans quoi la page
-     s'annoncerait « Vue d'ensemble ». Meme mecanisme que les onglets
-     d'Allocation. */
   'view.overview.projection': 'Projection',
   'view.overview.projection.sub': "Où tes hypothèses mènent ton patrimoine",
   'view.overview.aujourdhui': "Vue d'ensemble",

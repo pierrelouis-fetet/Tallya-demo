@@ -1,20 +1,11 @@
-/* =============================================================
-   QUOTES — récupération des cours via la passerelle locale.
-   Le navigateur ne peut pas appeler Yahoo directement (CORS) :
-   serve.py fait l'intermédiaire. Sans lui, l'app fonctionne
-   normalement, seuls les cours restent en saisie manuelle.
-   ============================================================= */
 
 const Quotes = (() => {
 
-  // en file:// on vise le serveur local s'il tourne ; sinon même origine
   const BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
 
   let online = null;          // null = pas encore testé
   let healthPromise = null;   // mutualisé : un seul appel réseau au démarrage
 
-  /* CloudSync a besoin de la même réponse : on la partage plutôt que de
-     sonder deux fois le serveur à chaque chargement de page. */
   function healthData() {
     if (!healthPromise) {
       healthPromise = fetch(BASE + '/api/health', { cache: 'no-store' })
@@ -31,7 +22,6 @@ const Quotes = (() => {
 
   const isOnline = () => online;
 
-  /* --- ce qu'il faut demander : symboles des lignes + paires de change --- */
   function plan() {
     const symbols = [], currencies = new Set();
     for (const p of Store.state.positions) {
@@ -44,7 +34,6 @@ const Quotes = (() => {
     return { symbols, fxPairs, currencies: [...currencies], all: [...symbols, ...fxPairs] };
   }
 
-  /* --- résout un ISIN en symbole de cotation --- */
   async function resolveIsin(code, prefer) {
     const pref = prefer ?? Store.state.meta.preferredExchange ?? '';
     const r = await fetch(`${BASE}/api/isin?code=${encodeURIComponent(code)}&prefer=${encodeURIComponent(pref)}`,
@@ -53,7 +42,6 @@ const Quotes = (() => {
     return r.json();
   }
 
-  /* --- remplit les symboles manquants à partir des ISIN --- */
   async function resolveMissing() {
     const todo = Store.state.positions.filter(
       p => !(p.symbol || '').trim() && (p.isin || '').trim() && !p.manual);
@@ -76,7 +64,6 @@ const Quotes = (() => {
     return done;
   }
 
-  /* --- rafraîchit les cours et met à jour les positions --- */
   async function refresh() {
     const resolved = await resolveMissing();     // un ISIN suffit, le symbole suivra
     const p = plan();
@@ -87,11 +74,9 @@ const Quotes = (() => {
     if (!r.ok) throw new Error(`passerelle indisponible (HTTP ${r.status})`);
     const data = await r.json();
 
-    // les résultats reviennent dans l'ordre demandé
     const bySym = {};
     p.all.forEach((s, i) => { bySym[s.toUpperCase()] = data.quotes[i]; });
 
-    // taux de change : EURUSD=X donne des USD par euro, on veut l'inverse
     const fx = {};
     for (const c of p.currencies) {
       const q = bySym[`EUR${c}=X`];
@@ -111,25 +96,11 @@ const Quotes = (() => {
 
       const before = { price: num(pos.price), value: posValue(pos) };
       pos.price = q.price;
-      /* La clôture de la veille sert à la performance du jour, et elle est
-         remplacée à chaque rafraîchissement, y compris par rien.
-
-         Elle n'était écrite que si la réponse en portait une : celle qu'on
-         gardait vieillissait donc d'un jour à chaque passage où la passerelle
-         n'en donnait pas — Stooq n'en donne jamais. Le cours montait au jour, la
-         référence restait à trois séances en arrière, et « Aujourd'hui »
-         annonçait +2,14 % là où le courtier disait +0,65 %.
-
-         Sans référence, la ligne n'a pas d'écart du jour et le dit : c'est
-         préférable à un écart calculé sur une clôture d'un autre jour. */
       pos.prevClose = num(q.previousClose) || null;
-      // état de la place et horaires de séance, pour dire si le cours affiché
-      // est celui d'un marché ouvert ou la dernière clôture connue
       pos.marketState = q.marketState || null;
       pos.session = q.session || null;
       pos.quoteTime = q.time || null;
       pos.exchange = q.exchange || pos.exchange || '';
-      // fiche d'identité du titre, telle que la place la publie
       if (q.longName) pos.longName = q.longName;
       if (q.kind) pos.kind = q.kind;
       pos.low52 = q.low52 ?? null;
@@ -157,7 +128,6 @@ const Quotes = (() => {
     return { changes, fx, resolved };
   }
 
-  /* --- recherche de symbole --- */
   async function search(query) {
     const prefer = Store.state.meta.preferredExchange ?? '';
     const r = await fetch(`${BASE}/api/search?q=${encodeURIComponent(query)}`
@@ -166,30 +136,6 @@ const Quotes = (() => {
     return (await r.json()).results || [];
   }
 
-  /* --- reperes de marche -------------------------------------------------
-     Sept lignes qui situent la journee : deux indices americains, deux
-     europeens, la parite qui pese sur toutes les lignes en dollars, l'or et
-     le bitcoin. Ce ne sont pas des avoirs : rien ici ne depend de ce qu'on
-     detient, et ces chiffres restent donc lisibles en mode discret.
-     Le resultat est garde cinq minutes : la barre se redessine a chaque
-     rendu de la vue, et un aller-retour par rendu serait absurde. */
-  /* Quatre familles, une seule affichee a la fois.
-
-     Sept reperes sur une seule ligne melangeaient tout : deux indices
-     americains, deux europeens, une parite, l'or et le bitcoin. Les familles
-     les separent, et permettent d'en offrir davantage sans allonger la
-     bande.
-
-     Des onglets plutot qu'une liste deroulante — le motif de CNBC et non celui
-     de Yahoo. La liste cache le catalogue derriere un clic ; les onglets le
-     montrent d'un coup d'oeil, et le ruban reste court, ce qui compte a 375 px
-     ou vingt tuiles feraient un marathon de pouce.
-
-     Une seule famille chargee a la fois, et une famille pese ce que pesait la
-     barre entiere : le cout par visite ne bouge pas.
-
-     Tous ces symboles ont ete verifies contre la passerelle avant d'etre
-     inscrits ici : une tuile morte est pire que pas de tuile. */
   const FAMILLES_REPERES = [
     ['indices', trad('Indices'), [
       ['^GSPC',     'S&P 500'],
@@ -223,8 +169,6 @@ const Quotes = (() => {
   const listeFamille = cle =>
     (FAMILLES_REPERES.find(f => f[0] === cle) || FAMILLES_REPERES[0])[2];
 
-  /* Un cache par famille, et non un seul : passer d'un onglet a l'autre et
-     revenir ne doit rien redemander. */
   const cacheReperes = new Map();
 
   async function reperes(famille = FAMILLE_PAR_DEFAUT, { force = false } = {}) {

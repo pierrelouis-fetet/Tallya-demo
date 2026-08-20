@@ -20,18 +20,11 @@ const SEED_BUDGET = {
   monthlyTarget: 1200,        // objectif : 1 200 € de dépenses max par mois
   categories: [...EXPENSE_CATEGORIES],   // colonnes du tableau, modifiables dans l'app
 
-  /* Revenus fixes : la part sur laquelle on peut compter chaque mois. Un
-     revenu variable se saisit à son plancher, le surplus se lit ensuite dans
-     l'écart entre l'épargne théorique et la croissance réelle. */
   income: [
     { label: 'Salary', amount: 3400 },
     { label: 'Flatmate’s share', amount: 450 },
   ],
 
-  /* Personnes avec qui des charges sont partagees. Ces parts sont
-     indicatives : le budget deduit la charge en entier, et ce qu'elles
-     versent figure dans les revenus.
-     Un rôle, pas quelqu'un : le jeu de démonstration ne nomme personne. */
   contributors: [{ id: 'coloc', name: 'Flatmate' }],
   fixedCharges: [
     { label: 'Rent (bills included)', amount: 900.00, shares: { coloc: 450.00 }, provider: 'Landlord' },
@@ -46,24 +39,18 @@ const SEED_BUDGET = {
     { label: 'Online backup',       amount: 3.00,   shares: {}, provider: 'Hosting provider' },
   ],
 
-  /* Lignes annuelles à repasser en revue une fois par an. Elles ne pèsent pas
-     sur le budget mensuel, elles servent à ne pas les oublier. */
   toReview: [
     { label: 'Domain name',   amount: 15, period: 'an', when: 'March',    note: 'Worth keeping' },
     { label: 'Antivirus',        amount: 60, period: 'an', when: 'June',    note: 'Check it is still useful before renewing' },
     { label: 'Subscription review', amount: 0, period: '', when: '',      note: 'Go through every yearly direct debit' },
   ],
 
-  /* Achats récurrents dont le coût réel ne se voit qu'à l'année : une petite
-     somme chaque semaine finit par peser autant qu'une charge fixe. */
   supplements: [
     { label: 'Coffee',        perDay: '2 cups',   perYear: '730 cups',   annual: 220.00 },
     { label: 'Bread',         perDay: 'half a loaf', perYear: '365 halves', annual: 240.00 },
     { label: 'Sparkling water', perDay: '1 L',    perYear: '365 L',      annual: 180.00 },
   ],
 
-  /* Dépenses mensuelles par catégorie. Les mois à venir restent vides : c'est
-     ce qui déclenche le rappel de saisie et fait vivre la démonstration. */
   expenses: [
     { month: '2025-03-01', note: 'First month tracked, not everything is split out yet',
       v: { Groceries: 280, Dining: 190, Transport: 40, Other: 260 } },

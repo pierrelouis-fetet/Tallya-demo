@@ -1,16 +1,8 @@
-/* =============================================================
-   APP — routage, rendu des vues et interactions
-   ============================================================= */
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
-/* Un montant masque porte une balise <svg>. La passer dans esc() l'imprimait
-   en clair, « objectif <svg class="oeil-masque"... ». Les intitules qui
-   melangent du texte libre et un montant utilisent donc cette variante :
-   elle echappe tout, puis restitue le seul fragment que nous ayons produit.
-   Rien d'autre ne traverse, un texte saisi reste echappe. */
 const escMontant = s => {
   const t = esc(s);
   return t.includes('oeil-masque') ? t.split(esc(OEIL_MASQUE)).join(OEIL_MASQUE) : t;
@@ -23,10 +15,6 @@ const S4 = () => Charts.cssv('--series-4');
 const S5 = () => Charts.cssv('--series-5');
 
 function cls(v) { return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'; }
-/* Deux fonctions calculaient les mois restants, et pas de la même façon :
-   celle-ci comptait le mois en cours, l'autre non, et les deux plafonnaient
-   à 12 quelle que soit l'année visée. Une seule référence désormais, dans
-   store.js, correcte pour n'importe quelle année. */
 const monthsLeftInYear = () => monthsToObjective();
 function arrow(v) { return v > 0 ? '▲' : v < 0 ? '▼' : '•'; }
 
@@ -40,29 +28,10 @@ function flashSaved() {
   savedTimer = setTimeout(() => { f.classList.remove('flash'); f.textContent = trad('Sauvegardé localement'); }, 1400);
 }
 
-/* Le champ qui vient d'etre enregistre le dit lui-meme.
-
-   « Ça rend fou, il n'y a jamais de bouton enregistrer. » Le defaut n'etait pas
-   l'absence de bouton : c'etait l'absence de reponse. Tout ce qui se saisit dans
-   une page entre dans l'etat a la frappe — ce qui est le bon comportement, on ne
-   peut rien perdre en changeant d'ecran — mais le seul temoin etait
-   « Sauvegardé ✓ », dix pixels et demi au bas de la barre laterale, donc dans le
-   tiroir ferme sur telephone. On tapait dans le vide.
-
-   Un bouton « Enregistrer » sur une page serait pire : on corrige un montant en
-   haut, on descend, on quitte, et tout est perdu. Les fenetres en ont un parce
-   qu'on peut les fermer sans valider — c'est le sens du bouton la-bas. Ici, c'est
-   la confirmation qui manquait, pas la validation.
-
-   Elle se pose donc sur le champ qu'on vient de quitter du regard : un liseré
-   vert qui s'efface en huit dixiemes de seconde. La ou l'oeil est. */
 let champsEcrits = new WeakMap();
 function marquerEcrit(champ) {
   if (!champ) return;
   champ.classList.remove('champ-ecrit');
-  /* Retirer puis reposer la classe dans deux images differentes : sans cela le
-     navigateur ne rejoue pas l'animation, et une seconde frappe ne clignoterait
-     pas. Meme motif que le toast. */
   clearTimeout(champsEcrits.get(champ));
   requestAnimationFrame(() => {
     champ.classList.add('champ-ecrit');
@@ -70,17 +39,9 @@ function marquerEcrit(champ) {
   });
 }
 
-/* Un message peut porter une porte de sortie.
-
-   Le bouton vit le temps du message. Au-dela, la pile reste — l'onglet Donnees
-   y donne acces — mais l'occasion de defaire d'un geste a passe. */
 function toast(msg, action) {
   msg = ponct(msg);
   const t = $('#toast');
-  /* escMontant : une dizaine de toasts annoncent un montant (« ajouté ·
-     160 € »), et en mode discret fmtEUR0 rend l'oeil SVG. Le canal texte
-     l'imprimait en toutes lettres. Tout le reste — noms de comptes compris —
-     ressort echappe, comme avant. */
   t.innerHTML = escMontant(msg); t.hidden = false;
   /* Un vrai bouton, pose apres le texte : la reecriture vient d'effacer les
      enfants du message precedent, donc rien a nettoyer. On l'assemble en DOM
@@ -97,14 +58,8 @@ function toast(msg, action) {
     };
     t.append(b);
   }
-  /* L'entree rejoue a chaque message : retirer puis reposer la classe de
-     sortie remet l'animation d'entree a zero meme si un toast en remplace un
-     autre en plein vol. */
   t.classList.remove('toast-sort');
   clearTimeout(t._t); clearTimeout(t._s);
-  /* Un message qui offre d'annuler vit plus longtemps que les autres. Deux
-     secondes suffisent pour lire « enregistre », pas pour comprendre qu'on
-     s'est trompe de mois, viser le bouton et l'atteindre. */
   const vie = action ? 6000 : 2300;
   t._s = setTimeout(() => t.classList.add('toast-sort'), vie);
   t._t = setTimeout(() => { t.hidden = true; t.classList.remove('toast-sort'); }, vie + 350);
@@ -118,17 +73,6 @@ function toast(msg, action) {
 const porteDeSortie = (label = 'Annuler') =>
   Store.canUndo() ? { label, run: () => ACTIONS['undo']() } : null;
 
-/* Une sauvegarde avant d'ecraser un releve deja rempli.
-
-   C'est le seul geste de l'application qui detruise des chiffres qu'on ne peut
-   pas retrouver ailleurs : les montants d'un mois passe ne se recalculent pas,
-   ils ont ete saisis. La pile d'annulation ne suffit pas ici — elle vit en
-   memoire et se vide au rechargement, donc elle ne protege pas celui qui ferme
-   l'application avant de s'apercevoir de l'erreur, ce qui est le cas le plus
-   probable sur telephone. Une sauvegarde survit.
-
-   Rien pour une ligne vide : il n'y a rien a perdre, et une sauvegarde par mois
-   rempli au fil de l'annee chasserait les vraies de la liste. */
 function sauvegardeAvantEcrasement(row) {
   if (!row || rowIsEmpty(row)) return;
   Store.addBackup(`avant écrasement du relevé de ${fmtMonth(row.date)}`);
@@ -222,8 +166,6 @@ function degelerFond() {
   if (modalesOuvertes > 0) return;
   const b = document.body;
   b.style.position = ''; b.style.top = ''; b.style.left = ''; b.style.right = '';
-  /* La hauteur posee au gel repart avec lui : la laisser bornerait la page a la
-     hauteur d'un ecran plus un decalage qui n'existe plus. */
   b.style.height = '';
   /* Plus d'`overflow` a remettre : `gelerFond()` n'en pose plus. Le laisser ici
      ferait croire que ce reglage est gere a cet endroit, et le prochain qui
@@ -260,14 +202,6 @@ function montrerModal(m) {
   if (!dejaGelee) {
     m.dataset.gele = '1';
     gelerFond();
-    /* La mise en page se paie AVANT le lever de rideau. Le gel vient de
-       changer position, top et hauteur du corps entier : demarrer l'animation
-       dans la meme image lui fait porter cette note, et les premieres trames
-       sautent. C'est pour ca que « juste la premiere ouverture est fluide »
-       sur iPhone : la premiere se fait page en haut, gel a cout nul, les
-       suivantes depuis un defilement. La lecture force la mise en page ici,
-       et l'entree demarre sur une image propre. A confirmer sur l'appareil,
-       le navigateur pilote ne composite pas. */
     void document.body.offsetHeight;
   }
   m.classList.remove('modal-ferme');
@@ -290,12 +224,6 @@ function dureeSortieModal() {
   const s = parseFloat(v);
   return (Number.isFinite(s) && s > 0 ? s * 1000 : 260) + 30;
 }
-/* Un panneau ne survit pas a ce qu'il decrit.
-
-   Le detail d'une vente porte le bouton qui la retire : sans cette fermeture, le
-   panneau restait ouvert sur une vente qui n'existe plus, et son rafraichissement
-   sortait en silence faute de la retrouver — donc un ecran fige, avec des
-   montants justes la seconde d'avant. */
 function fermerApercuSi(cle) {
   if (apercuOuvert !== cle) return;
   apercuOuvert = null;
@@ -313,7 +241,6 @@ function masquerModal(m) {
   }, dureeSortieModal());
 }
 
-/* ---------- lecture / écriture par chemin ---------- */
 function setPath(path, value) {
   const parts = path.split('.');
   let o = Store.state;
@@ -329,21 +256,7 @@ function getPath(path) {
   return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), Store.state);
 }
 
-/* =============================================================
-   VUES
-   ============================================================= */
-
 const VIEWS = {
-  /* Projection est devenue un sous-onglet de la vue d'ensemble.
-     J'avais objecte que le regroupement etait le moins naturel des quatre, en
-     disant que les deux repondent a deux questions differentes. C'etait faux, et
-     il a suffi de regarder ce que la vue d'ensemble contient deja : la courbe de
-     l'evolution passee et la carte « Objectif a fin 20xx ». C'est le meme sujet
-     — le total, dans le temps — sur deux axes, l'un vers l'arriere et l'autre
-     vers l'avant. Les deux autres candidats etaient plus faibles : Allocation
-     porte un nom qui ne couvre pas une projection.
-     Le titre suit l'onglet, sinon « Projection » s'annoncerait
-     « Vue d'ensemble ». */
   overview:   { cle: 'overview', render: () => barreSousOnglets('overview') + (
     sousOngletActif.overview === 'projection' ? viewObjective() : viewOverview()) },
   /* Budget porte trois sous-onglets, sur le meme motif que Marches et
@@ -362,10 +275,6 @@ const VIEWS = {
   allocation: { cle: 'allocation',  render: () =>
     barreSousOnglets('allocation') + viewAllocation() },
   accounts:   { cle: 'accounts',    render: viewAccounts },
-  /* Données et Préférences ont chacune leur entrée de menu depuis que le tiroir
-     ne montre plus les doublons de la barre du bas. Deux portes et une barre de
-     sous-onglets faisaient deux chemins pour le même choix, à quinze pixels
-     l'un de l'autre : ce sont donc deux vues, sans barre. */
   data:       { cle: 'data',        render: viewData },
   settings:   { cle: 'settings',    render: viewSettings },
   notifications: { cle: 'notifications', render: viewNotifs },
@@ -373,7 +282,6 @@ const VIEWS = {
   ficheEtab:  { cle: 'accounts',    render: () => viewFicheEtab(routeParam()?.id) },
 };
 
-/* Les adresses d'avant le regroupement mènent au sous-onglet correspondant. */
 const REDIRECTIONS = {
   /* Projection est devenue un onglet de la vue d'ensemble. Son adresse reste
      `#/objective` : l'entree du menu la porte, elle est dans des signets, et
@@ -392,10 +300,6 @@ const REDIRECTIONS = {
   performance: ['positions',  'positions',  'portefeuille'],
   /* `settings` n'est plus une redirection : Preferences est une vue a part
      entiere, avec son entree de menu. Elle n'a plus rien a rediriger. */
-  /* Les relevés rejoignent Budget en sous-onglet : c'était la seconde entrée
-     du groupe « Suivi », et les deux seules pages où l'on saisit quelque
-     chose méritaient de vivre au même endroit. L'ancienne adresse continue de
-     fonctionner, elle est dans les favoris de quelqu'un. */
   history:       ['budget', 'budget', 'releves'],
   'budget-cadre': ['budget', 'budget', 'cadre'],
 };
@@ -409,7 +313,6 @@ const REDIRECTIONS = {
    cours qui n'ont pas bouge depuis dix minutes. */
 let coursFraichis = new Set();
 
-/* Titre et sous-titre d'une vue, dans la langue choisie. */
 const viewTitle = k => t('view.' + k);
 const viewSub   = k => t('view.' + k + '.sub');
 
@@ -432,42 +335,7 @@ const viewSub   = k => t('view.' + k + '.sub');
    dans une variable se perd au premier F5 — c'est ce qui distingue un
    sous-onglet d'un simple bouton. */
 const SOUS_ONGLETS = {
-  /* Projection rejoint la vue d'ensemble. C'etait le dernier ecran de pilotage
-     qui demandait deux gestes, avec Comptes et Donnees — mais ces deux-la sont
-     des reglages, la projection est une lecture quotidienne.
-     « Aujourd'hui » et non « Vue d'ensemble » : l'onglet doit dire ce qui le
-     distingue de son voisin, et c'est l'axe du temps. */
   overview:   [['aujourdhui', 'Aujourd’hui', 'overview'], ['projection', 'Projection', 'objective']],
-  /* « Positions » et non « Portefeuille ».
-
-     Trois raisons. La page appelait deja cette chose « Titres » deux
-     centimetres plus bas, dans sa premiere barre : deux noms pour le meme
-     contenu. « Portefeuille » est ensuite le sujet de l'application entiere —
-     Allocation en parle, Comptes aussi, l'accueil aussi — alors qu'un onglet
-     doit dire ce qui le distingue de son voisin. Et « Titres », qu'on avait
-     retenu d'abord, exclut les cryptomonnaies, qui vivent pourtant dans cette
-     page.
-
-     « Positions » couvre une action, un ETF, une obligation et un bitcoin sans
-     en privilegier aucun, c'est le mot des courtiers, et c'est deja l'adresse
-     de la vue : le libelle dit enfin ce que dit la route. */
-  /* Performance a quitte la barre.
-
-     La page repondait a une bonne question par des chiffres dont la base se
-     discutait : une plus-value latente en pourcentage, un « resultat » qui
-     melangeait du latent et de l'encaisse, et un ecart annonce sans dire s'il
-     comptait le change. Ce dernier point etait le plus couteux : un courtier
-     convertit ses deux jambes au taux du jour et annonce donc le mouvement du
-     titre, la ou cette application comptait en euros a un taux gele. Deux
-     chiffres justes, aucun moyen de savoir lequel on lisait.
-
-     Ce qui est garde a change de place, pas de nature : la plus-value par ligne
-     etait deja dans Positions, et le journal des ventes l'y rejoint. Ce qui est
-     retire est ce que Positions disait deja — la table « Latente, ligne par
-     ligne » listait les memes lignes, sous le meme calcul.
-
-     Rien n'est mis de cote « au cas ou » : du code que rien n'affiche est un
-     defaut ici. Le commit qui retire cette vue EST l'archive. */
   positions:  [['portefeuille', 'Positions', 'positions'], ['cible', 'Cible', 'rebalance']],
   /* Allocation n'a plus qu'un onglet, et plus de barre : `barreSousOnglets`
      s'efface sous deux choix.
@@ -498,32 +366,11 @@ const SOUS_ONGLETS = {
      Marches : un signet pose du temps d'Allocation continue d'ouvrir la bonne
      page. */
   allocation: [['reel', 'Patrimoine', 'patrimoine']],
-  /* Budget portait 4 344 px de haut pour huit cartes, et melangeait deux
-     sujets : ce qui se repete chaque mois, et ce qui a ete reellement
-     depense. Les relevés, seule autre page ou l'on saisit, les rejoignent.
-     Trois onglets, un seul affiche a la fois, chacun autour de 2 000 px. */
   /* « Depenses » en premier : l'entree du menu s'appelle Budget, et c'est la
      qu'on arrive en la touchant. `currentView()` remet toujours l'adresse de
      base sur le premier onglet de cette liste, c'est donc l'ordre qui decide
      de l'atterrissage. Les releves gardent la pastille ambre, ils se voient
      sans etre au premier plan. */
-  /* L'ordre groupe les deux onglets de budget et laisse le patrimoine au
-     bout. « Depenses | Relevés | Charges » separait les deux sujets voisins
-     par un troisieme sans rapport, et on lisait « depenses » puis « charges »
-     comme deux noms du meme chose.
-
-     « Charges fixes » et non « Charges » : dans la langue courante les deux
-     mots disent la meme chose, de l'argent qui sort. C'est « fixes » qui porte
-     l'opposition avec « Depenses », ce qui se repete contre ce qui varie.
-     Mesure a 375 px : les trois onglets font 112 px, soit 88 px de texte
-     utile, et « Charges fixes » en occupe 78. Ca tient sur une ligne — mais
-     seulement nu. Une pastille ajoute 6 px plus son ecart et le libelle passe
-     a la ligne, la barre gagnant 17 px. Cet onglet ne doit donc jamais porter
-     de pastille ; si un jour il en reclame une, il faut raccourcir le nom
-     d'abord. Voir PASTILLE_SOUS_ONGLET juste en dessous. */
-  /*     Les deux saisies devant, le réglage derrière. C'est déjà ce que fait le menu
-     de l'application, où Données et Préférences sont en queue, et ce qu'on vient
-     de faire sur Allocation en mettant le constat avant la décision. */
   budget:     [['depenses', 'Dépenses', 'budget'],
                ['releves', 'Relevés', 'history'],
                ['cadre', 'Charges fixes', 'budget-cadre']],
@@ -541,9 +388,6 @@ const SOUS_ONGLETS = {
 const sousOngletActif = Object.fromEntries(
   Object.entries(SOUS_ONGLETS).map(([vue, onglets]) => [vue, onglets[0][0]]));
 
-/* Quel sous-onglet reclame une saisie. La pastille se voyait dans le menu et
-   dans la barre du bas, mais pas sur l'onglet lui-meme : on savait que Budget
-   attendait quelque chose sans savoir lequel des trois. */
 const PASTILLE_SOUS_ONGLET = {
   releves:  () => currentMonthPending().missing,
   depenses: () => depensesEnAttente().missing,
@@ -572,15 +416,6 @@ function barreCommutateur(choix, actif, action, cle) {
 function barreSousOnglets(vue) {
   const choix = SOUS_ONGLETS[vue];
   if (!choix) return '';
-  /* Un selecteur a un seul choix n'est pas un selecteur : c'est un bouton
-     enfonce qui ne mene nulle part, et il occupe la hauteur d'une barre pour ne
-     rien offrir. Allocation est passee a un onglet le jour ou Cible a rejoint
-     Marches — la cible ne pilote que le portefeuille investissable, son calcul
-     sort l'immobilier et le non cote de sa base.
-
-     La regle est generale et non un cas particulier d'Allocation : toute page
-     qui perd un onglet perd sa barre, et toute page qui en gagne un second la
-     retrouve sans qu'on y pense. */
   if (choix.length < 2) return '';
   const on = sousOngletActif[vue];
   return `
@@ -595,33 +430,13 @@ function barreSousOnglets(vue) {
   </div>`;
 }
 
-/* ------------------------------------------------------------
-   Vue d'ensemble
-   ------------------------------------------------------------ */
-/* --- les cinq poches du graphique d'evolution -------------------------
-   Elles ne concernent pas tout le monde. Sans bien immobilier ni part non
-   cotee, la serie reste plate a zero : elle n'ajoute qu'une pastille de
-   legende, une ligne « 0 EUR » dans la bulle et une colonne vide dans le
-   tableau. On ne garde que celles qui portent quelque chose sur la periode
-   affichee, les liquidites restent toujours, sinon un patrimoine tout juste
-   ouvert n'aurait plus de graphique du tout. */
 const SERIES_PATRIMOINE = () => [
   { key: 'cash',   label: trad('Liquidités'),       color: S1() },
   { key: 'bourse', label: trad('Actifs de marché'), color: S2() },
   { key: 'crypto', label: trad('Cryptomonnaies'),   color: S5() },
   { key: 'pe',     label: trad('Non coté'),         color: S3() },
   { key: 'immo',   label: trad('Immobilier'),       color: S4() },
-  /* La sixieme poche, nee avec la classe : sans elle, une montre comptait
-     dans le total du graphique sans appartenir a aucune bande, et la pile
-     cessait de faire le total. seriesUtiles() la tait chez qui n'a rien. */
   { key: 'biens',  label: trad('Biens de valeur'),  color: Charts.cssv('--series-9') },
-  /* Le capital garanti a sa bande, et il la merite pour une raison que les
-     obligations n'ont pas : celles-ci SONT des actifs de marche, donc les fondre
-     dans cette bande-la dit vrai. Un fonds euros n'en est pas un, et l'y fondre
-     mentait — un patrimoine entierement en fonds euros s'affichait a 100 %
-     d'actifs de marche sous une carte annonçant 100 % de capital garanti.
-     Sa bande commence le jour ou l'on classe ses supports : un releve mensuel
-     note des montants par compte, et le passe ne se decoupe pas. */
   { key: 'garanti', label: trad('Capital garanti'), color: Charts.cssv('--series-8') },
 ];
 function seriesUtiles(points) {
@@ -666,8 +481,6 @@ function pointsEvolution() {
       q[cle] = (q[cle] || 0) - pris;
       reste -= pris;
     }
-    /* Le total se derive des series tracees : la somme ecrite a la main a
-       deja oublie une poche, et la pile cessait de faire le total. */
     q.total = SERIES_PATRIMOINE().reduce((s, se) => s + (q[se.key] || 0), 0);
     return q;
   });
@@ -695,10 +508,6 @@ function carteEvolution(avecDetail = false) {
   const pts = limitRange(pointsEvolution(), evoRange);
   return `
     <div class="card">
-      <!-- Même bascule que sur le grand chiffre, même réglage : elle se
-           répète là où le regard se pose, comme le sélecteur d'année de
-           Budget. Toujours affichée, y compris sans crédit, elle dit alors
-           ce que la courbe montre. -->
       <div class="card-head"><h2>${trad('Évolution du patrimoine')}</h2>
         <span class="segmented seg-mini">
           <button data-action="evo-base" data-net="1" class="${evoNet ? 'on' : ''}"
@@ -708,21 +517,12 @@ function carteEvolution(avecDetail = false) {
         </span>
         ${rangeControl('evo-range', evoRange)}</div>
       <div class="chart" id="chartEvo"></div>
-      <!-- Une courbe vide se contentait d'un axe a zero. Elle ne peut rien
-           montrer avant deux releves, et c'est elle qui doit le dire : le
-           graphique est monte apres le rendu, il ne connait pas ce qui le
-           remplirait. L'invite s'efface au premier releve enregistre. -->
       ${invitePremierPas('releves')}
       <div class="legend">${legendeSeries(seriesUtiles(pts), true)}</div>
       ${avecDetail ? detailEvolution() : ''}
     </div>`;
 }
 
-/* Le depliant de donnees de la carte, sur l'accueil seulement.
-   Le tableau se choisit par annee, la ou la plage du graphique se pense en
-   duree glissante : « un an » ne repond pas a « qu'est-ce que 2025 a donne ? ».
-   Les deux commandes coexistent donc, chacune sur son objet. Le depliant garde
-   son etat d'un rendu a l'autre, sinon changer d'annee le refermerait. */
 function detailEvolution() {
   const tous = pointsEvolution();
   const annees = [...new Set(tous.map(p => String(p.date).slice(0, 4)))].sort();
@@ -739,19 +539,6 @@ function detailEvolution() {
         <span class="spacer"></span>
         ${yearControl('evo-year', annees, an)}
       </div>
-      <!-- Le total est epingle a droite, et les parts defilent sous lui. Le nombre
-           de colonnes suit les poches remplies : quatre series en font six, soit
-           552 px pour une carte qui en offre 311 a 375 px, et le total sortait de
-           l'ecran a l'ouverture — le chiffre meme que la courbe au-dessus raconte,
-           et le seul qu'on ne voyait pas.
-
-           Le mois porte la classe sticky-col comme dans les tableaux voisins,
-           mais une regle du bloc mobile la neutralise sous 768 px : une colonne
-           de noms figee y mangerait la moitie de l'ecran. Elle sert donc aux
-           ecrans etroits au-dela de ce seuil, ou un patrimoine a six poches
-           deborde aussi. Le total, lui, ne coute que 70 px : il tient partout.
-           (Aucun backtick dans ce commentaire : il vit dans un litteral de
-           gabarit, et fermerait la chaine.) -->
       <div class="table-wrap">
         <table>
           <thead><tr><th class="sticky-col">${trad('Mois')}</th>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th class="sticky-fin">Total</th></tr></thead>
@@ -764,22 +551,12 @@ function detailEvolution() {
     </details>`;
 }
 
-/* Le graphique de la carte ci-dessus. Les deux vues appellent ce montage :
-   deux appels paralleles a Charts finiraient par ne plus passer les memes
-   options, et c'est deja arrive — la legende des relevés omettait l'entree
-   « Total » alors que la courbe, elle, tracait bien la ligne. */
 function monterEvolution() {
   const pts = limitRange(pointsEvolution(), evoRange);
   const cible = $('#chartEvo');
   if (cible) Charts.stackedArea(cible, { points: pts, height: 300, series: seriesUtiles(pts) });
 }
 
-/* Les deux sorties d'un rappel de saisie : « Plus tard », qui le repousse
-   d'une semaine, et la croix, qui s'en tait jusqu'au mois prochain.
-
-   Un seul rendu pour les deux bandeaux, le relevé et les dépenses. Deux
-   listes de boutons a tenir d'accord finissent toujours par diverger : c'est
-   le defaut qu'on vient de corriger trois fois ailleurs. */
 function sortiesRappel(genre, label, avant = '') {
   return `<span class="rappel-sorties">
     ${avant}
@@ -791,13 +568,6 @@ function sortiesRappel(genre, label, avant = '') {
   </span>`;
 }
 
-/* « Plus tard » ne laisse rien à l'écran, et c'est le point : on vient de
-   demander le silence. La date du prochain rappel se dit au moment du clic,
-   dans le toast — assez pour savoir quand il revient, pas assez pour encombrer
-   la page qu'on voulait justement dégager.
-
-   Une note calme a vécu ici, avec sa croix pour la fermer. Deux gestes pour se
-   débarrasser d'un rappel, c'était un de trop. */
 function viewOverview() {
   const t = nowTotals();
   const d = deltas();
@@ -820,9 +590,6 @@ function viewOverview() {
   const depEnAttente = depensesEnAttente();
 
   return `
-  <!-- Le bandeau porte trois gestes, pas un : faire la saisie, la repousser
-       d'une semaine, ou se taire jusqu'au mois prochain. Un <button> englobant
-       n'aurait pas pu contenir les deux derniers, d'ou la couverture. -->
 
   ${moisEnAttente.missing ? `
   <div class="rappel card-cliquable">
@@ -834,13 +601,6 @@ function viewOverview() {
     ${sortiesRappel('releve', moisEnAttente.label)}
   </div>` : ''}
 
-  <!-- Le second rappel, celui des depenses du mois clos.
-
-       Tout le mecanisme existait : le genre « depenses » etait cable dans
-       « Plus tard » et dans la croix, et l'action de saisie attendait son
-       appelant. Il ne manquait que la banniere.
-       (Aucun guillemet oblique : ce commentaire vit dans un litteral de gabarit,
-       un backtick y fermerait la chaine.) -->
   ${depEnAttente.missing ? `
   <div class="rappel card-cliquable">
     <button type="button" class="card-couvre" data-action="saisir-mois-en-attente"
@@ -851,27 +611,11 @@ function viewOverview() {
     ${sortiesRappel('depenses', depEnAttente.label)}
   </div>` : ''}
 
-  <!-- La carte entière ouvre le détail par actif : c'est la question qui suit
-       immédiatement « combien ? ». Un bouton de couverture plutôt qu'un
-       <button> englobant — la carte contient déjà le montant cliquable, qui
-       masque les chiffres, et deux boutons imbriqués n'existent pas. Le
-       montant reste au-dessus et garde son geste. -->
   <div class="hero card-cliquable">
     <button type="button" class="card-couvre" data-action="apercu" data-apercu="patrimoineTotal"
             aria-label="${trad('Voir la répartition du patrimoine par actif')}"
             title="${trad('Voir la répartition par actif')}"></button>
     <div>
-      <!-- Brut ou net, au choix, sur le chiffre que toute la page décline.
-           Net par défaut : c'est ce qu'on possède réellement. Le brut sert
-           quand un crédit écrase la lecture — 180 000 € de biens derrière
-           130 000 € de prêt ne se voient pas dans le seul patrimoine net.
-           Toujours affiché, même sans dette : le sélecteur dit alors ce que le
-           chiffre est, et le jour où un prêt arrive on sait déjà où regarder. -->
-      <!-- « · aujourd'hui » a saute. A 375 px, l'intitule, la bascule net/brut
-           et l'oeil ne tenaient pas sur une ligne : l'oeil passait seul a la
-           ligne suivante, colle au bord droit, ou il avait l'air d'un oubli.
-           Le mot ne manque pas, le sous-titre de la page dit deja « photo
-           instantanee », et les deux ecarts en dessous nomment leurs dates. -->
       <div class="hero-label">
         <span>${evoNet ? trad('Patrimoine net') : trad('Patrimoine brut')}</span>
         <span class="segmented seg-mini">
@@ -880,13 +624,6 @@ function viewOverview() {
           <button data-action="hero-base" data-net="" class="${evoNet ? '' : 'on'}"
                   title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
         </span>
-        <!-- Le masquage vivait sur le montant lui-meme, pour que le geste tombe
-             la ou le regard est deja. Mais le montant est aussi l'endroit ou
-             l'on clique pour ouvrir la repartition, et le bouton mangeait ce
-             clic : la carte semblait morte a l'endroit precis ou elle repond.
-             L'oeil descend donc a cote de Net / Brut. Il reste a un pouce du
-             chiffre, c'est le meme dessin qu'au pied du menu — ou il n'etait
-             qu'a deux gestes sur telephone — et le raccourci « h » demeure. -->
         <button type="button" class="btn-oeil hero-oeil" data-action="toggle-masque"
                 aria-pressed="${masqueActif() ? 'true' : 'false'}"
                 aria-label="${masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants')}"
@@ -901,39 +638,16 @@ function viewOverview() {
       <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>
       ${!evoNet && patrimoine().dettes ? `<div class="hero-sous muted">
         dont ${fmtEUR0(patrimoine().dettes)} de crédits à rembourser</div>` : ''}
-      <!-- Le premier ecran ouvert ne disait rien : « 0,00 € » et deux ecarts a
-           zero, sans un mot sur le geste qui les remplirait. Les autres pages
-           portaient bien leur texte d'ecran vide, mais aucune ne s'ouvrait la
-           premiere. L'invite s'efface d'elle-meme au premier compte saisi. -->
       ${invitePremierPas('comptes')}
     </div>
     <div class="hero-deltas">
-      <!-- La comparaison au mois dernier ne dit rien : elle se mesure sur le
-           dernier releve enregistre, dont la date depend de la saisie, et le
-           marche la fait osciller de quelques dizaines d'euros. Les deux
-           horizons qui restent sont ancres sur des dates fixes. -->
       ${deltaBlock(trad('depuis le 1er janvier'), d.ytd)}
       ${deltaBlock(trad('depuis le début'), d.all)}
     </div>
-    <!-- Une courbe vivait ici. Elle tracait la meme serie que la carte
-         « Evolution du patrimoine », deux cents pixels plus bas, mais sans axe,
-         sans plage et sans infobulle : elle ne pouvait etre qu'une version plus
-         faible de sa voisine, et deux dessins du meme chiffre finissent
-         toujours par se contredire. C'est le defaut qu'on venait de corriger
-         entre les deux cartes d'evolution de l'Apercu et du Budget.
-
-         A la place, la barre empilee des classes : elle ne redit rien, elle
-         decompose le chiffre juste au-dessus. La somme de ses segments fait
-         exactement le montant annonce, donc le haut de page compose au lieu de
-         se repeter. -->
     ${(() => {
       const parts = repartitionClasses();
       if (!parts.length) return '';
       return `
-      <!-- Pas d'infobulle sur les segments : la couverture cliquable de la carte
-           coupe les evenements du contenu, un attribut title ne s'afficherait
-           jamais. La legende est la liste juste en dessous, memes couleurs et
-           memes montants, et la carte entiere ouvre le detail part par part. -->
       <div class="hero-barre" role="img"
            aria-label="${trad('Répartition')} : ${parts.map(x => `${trad(x.label)} ${fmtPct(x.pct, 0)}`).join(', ')}">
         ${parts.map(x => `<i style="width:${x.pct.toFixed(2)}%;background:${x.couleur}"></i>`).join('')}
@@ -941,14 +655,6 @@ function viewOverview() {
     })()}
   </div>
 
-  <!-- Un seul axe : la classe d'actif, chaque euro dans une seule ligne, la
-       somme des parts fait 100,0 %.
-
-       Une liste plutôt qu'une grille de tuiles : une grille à deux colonnes
-       laisse toujours un impair, un trou ou une tuile étirée, et le défaut
-       s'aggrave à chaque classe qui apparaît. Ici, trois lignes aujourd'hui
-       ou six demain se lisent pareil, et la barre donne le poids d'un coup
-       d'œil sans qu'on ait à comparer des pourcentages. -->
   <div class="card repart">
     ${repartitionClasses().map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
@@ -963,13 +669,6 @@ function viewOverview() {
         <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
       </button>`).join('')}
     ${(() => {
-      /* Le rapprochement « avoirs moins credits egale net » a quitte le pied de
-         cette carte.
-
-         La regle est tenue autrement : la base est nommee, avec son montant, et
-         l'ecart avec le net vit dans l'infobulle — a un geste de qui se le
-         demande, invisible pour qui ne se le demande pas. Le detail complet, lui,
-         est dans la carte des credits, plus bas, apres la courbe de progression. */
       const p = patrimoine();
       if (!p.dettes) return '';
       const cr = creditsEnCours();
@@ -979,14 +678,6 @@ function viewOverview() {
         + `en haut de page, vaut ${fmtEUR0(p.net)} : la différence est le capital qu’il te `
         + `reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte `
         + `d’autant, même si la valeur de tes biens ne bouge pas.`)}</p>
-      <!-- Une ligne, sous les parts et hors d'elles : les trois poches font 100 %
-           des avoirs, et une dette n'est pas une quatrieme poche. Pas de
-           pourcentage dans sa colonne, donc, et elle vient apres le filet.
-
-           C'est tout ce que la page dit de ses credits, et c'est assez : le
-           montant, et la porte pour aller le corriger. Le rapprochement en trois
-           lignes qui vivait ici etait de la comptabilite posee sous la premiere
-           chose qu'on voit. -->
       <button type="button" class="repart-credits" data-action="apercu" data-apercu="credits"
               title="${trad('Voir et mettre à jour tes crédits')}">
         <span>${trad('Crédits en cours')}</span>
@@ -997,39 +688,15 @@ function viewOverview() {
   </div>
 
   ${pasAFaire('comptes') ? `
-  <!-- Un premier lancement s'arrete ici.
-
-       Ce qui suivait etait six cartes de zeros : une courbe plate, un rythme
-       « pas assez d'historique », une autonomie de 0 mois, un portefeuille a
-       0,00 €. Aucune ne pouvait rien dire, et les commenter toutes aurait
-       remplace six zeros par six phrases — du bruit a la place du vide.
-
-       Elles reviennent d'elles-memes des le premier compte saisi, et c'est la
-       forme la plus simple d'un accueil : montrer ce qui existe, et une seule
-       porte vers la suite. Ce n'est pas un ecran ampute, c'est un ecran qui n'a
-       pas encore commence. -->
   <div class="card">
     <p class="empty" style="margin:0">${trad('Le reste de cette page se remplit tout seul : '
       + 'la courbe de ton patrimoine, ton rythme d’épargne, ce que tu tiendrais sans '
       + 'revenus, ton portefeuille. Tout part des comptes que tu déclares.')}</p>
   </div>`
   : `
-  <!-- Cette carte occupait la colonne large d'une grille en deux parts ; la
-       petite portait « Allocation par actif », partie le jour ou l'accueil a
-       cesse de dupliquer la page Allocation. La grille est restee, avec une
-       colonne vide : un tiers de la largeur en noir, a cote du graphique.
-       Une grille de deux colonnes pour un seul enfant n'est plus une grille. -->
   <div class="grid">
     ${carteEvolution(true)}
   </div>
-
-  <!-- La carte « Objectif à fin » a quitte cet onglet pour Projection.
-
-       C'est une projection : elle compare ou l'on est a ou l'on veut etre, et
-       calcule ce qu'il faudrait mettre de cote chaque mois pour y arriver.
-       « Aujourd'hui » porte le constat, Projection porte le cap — et Trajectoire
-       comme « Par horizon », qui repondent a la meme question, sont deja
-       la-bas. Elle y ouvre desormais la page, avant la courbe qui la dessine. -->
 
   <div class="grid g-2-1">
     <div class="card">
@@ -1037,29 +704,10 @@ function viewOverview() {
         ${rangeControl('pace-range', paceRange)}</div>
       <div class="chart" id="chartPace"></div>
       ${(() => {
-        /* Sur la plage affichee, pas sur toute la serie : les barres et les
-           chiffres doivent parler du meme intervalle. */
         const p = statsRythme(limitRange(monthlyPace().points, paceRange, { ecarts: true }));
-        /* Les deux chiffres de « combien je mets de cote chaque mois », cote a
-           cote, chacun avec sa base.
-
-           Cette carte disait 756 EUR quand Budget disait 652 : deux nombres pour
-           une meme question, sur deux ecrans, a 104 EUR d'ecart. Les deux etaient
-           justes — l'un est la variation constatee du patrimoine, marches
-           compris, l'autre ce que le budget laisse — et rien ne le disait a
-           l'ecran. C'est la regle du projet : un chiffre annonce sa base.
-
-           L'epargne budgetee est donc rappelee ici, nommee, avec le lien vers la
-           carte qui la calcule. Le rapprochement complet vit dans Budget, avec
-           l'ecart et son explication : on ne le refait pas, on y mene. */
         const budgetee = savingsReconciliation();
         return `<dl class="kv" style="margin-top:12px">
           ${p.apports ? `
-          <!-- Un heritage n'est pas de l'epargne, et une voiture n'est pas un
-               mauvais mois de marche. Sans cette ligne, la moyenne du dessous
-               comptait l'argent tombe du ciel comme un effort mensuel, et une
-               grosse sortie comme un effort manque. Elle ne s'affiche que s'il y a
-               eu un mouvement exceptionnel sur la periode. -->
           <dt>${trad('Dont')} ${p.apports < 0 ? trad('sorties exceptionnelles') : trad('entrées extérieures')}${aide(
               trad('Les entrées et sorties exceptionnelles de la période affichée : un héritage, une prime, la vente d’un bien, ou à l’inverse une voiture, des travaux. Elles déplacent ton patrimoine sans rien dire de ton épargne, et la moyenne du dessous les compte : hors elles, ton rythme propre est de')
             + ' ' + fmtEUR0(p.averageHorsApports) + ' ' + trad('par mois. Le journal est dans Budget, onglet Relevés.'))}</dt>
@@ -1078,23 +726,15 @@ function viewOverview() {
         </dl>`;
       })()}
     </div>
-  <!-- L'autonomie, posée au-dessus de la trajectoire : d'abord le coussin,
-       ensuite le cap. La jauge ne compte que l'épargne de précaution, c'est elle que la
-       règle des 3 à 6 mois vise, pas l'argent déjà promis à autre chose. -->
   <div class="card">
     <div class="card-head"><h2>${trad('Autonomie financière')}${aide(trad("Combien de mois tu tiendrais si tes revenus s'arrêtaient demain. La jauge compte ton épargne de précaution ; la liste ajoute ce qui pourrait être mobilisé ensuite, du plus accessible au plus lent, en mois cumulés. L'immobilier et le non coté se vendent, mais en quelques mois et avec une décote si tu es pressé. Ce qui est bloqué jusqu'à son échéance reste affiché mais sort du cumul : cet argent n'arrivera pas, quoi qu'il se passe demain. Un titre coté se vend en séance, mais le virement met deux à trois jours ouvrés à arriver : c'est ce délai, pas la liquidité, qui le range en « quelques jours ». Casser un PEA de moins de cinq ans lui coûte son avantage fiscal, pas son accès. Coût mensuel retenu : charges fixes plus dépenses moyennes."))}</h2>
       <span class="hint">${trad('si les revenus s\'arrêtaient')}</span></div>
     ${(() => {
       const r = runway();
-      /* Le coussin réel : l'épargne de précaution plus l'argent des dépenses
-         courantes, c'est bien lui qu'on brûlerait en premier. */
       const pk = poches();
       const ep = pk.precaution + pk.courant;
       const cover = r.burn ? ep / r.burn : 0;
       const state = cover >= 3 ? 'up' : cover >= 1.5 ? '' : 'down';
-      /* « 0,0 mois » en rouge sur un coussin de 0 € et un cout de 0 € n'accuse
-         personne de rien : c'est un rapport entre deux vides. La carte dit alors
-         ce qui lui manque, au lieu de peindre en rouge une absence de donnee. */
       if (!ep && !r.burn) return `
         <p class="empty" style="margin:0">${trad('Ce chiffre compare ton argent disponible '
           + 'à ce que te coûte un mois. Il attend donc deux choses : un compte avec du '
@@ -1106,16 +746,7 @@ function viewOverview() {
         </div>
         <div class="goal-bar"><div class="goal-fill" style="width:${Math.min(100, cover / 6 * 100).toFixed(0)}%;
           background:${cover >= 3 ? 'var(--good)' : cover >= 1.5 ? 'var(--warning)' : 'var(--critical)'}"></div></div>
-        <!-- Le « 0 » de l'origine flottait seul sous la barre : une jauge part
-             toujours de zéro, et isolé il se lisait comme une valeur. -->
         <div class="goal-foot"><span></span><span>${trad('cible 3 à 6 mois')}</span></div>
-        <!-- L'argent des projets, nomme.
-
-             Ils n'y rejoignent pas : un argent qui a deja un travail n'est pas
-             une reserve, et c'est la reserve que la regle des 3 a 6 mois vise.
-             Mais il existe, il est disponible, et on y toucherait avant de
-             manquer. La ligne le dit, et les deux nombres s'additionnent
-             desormais a l'ecran. -->
         ${pk.projet > 0.005 ? `
         <p class="small muted" style="margin:8px 0 0">
           + ${fmtEUR0(pk.projet)} ${trad('réservés à un projet, disponibles si tu y touches.')}
@@ -1139,67 +770,13 @@ function viewOverview() {
 
   </div>
 
-  <!-- La carte « Credits en cours » a quitte cette page.
-
-       Son contenu vit maintenant dans un panneau, ouvert par la ligne du pied de
-       la liste des poches, juste au-dessus. Une carte pleine page pour deux
-       lignes de dette, apres avoir cherche sa place trois fois dans la meme
-       journee — en tete, en pied, au milieu — disait surtout qu'elle n'en avait
-       pas : ce n'est pas une brique de constat, c'est un detail qu'on va
-       consulter. Le panneau le donne a la demande, avec les montants modifiables,
-       et chaque intitule y ouvre la fiche complete du credit.
-
-       Ce que la page garde : le total, sur une ligne, sous les parts qu'il ne
-       compose pas. Sa mise en forme est la classe repart-credits. -->
-
-  <!-- « Allocation par actif » et « Répartition » vivaient ici et dans
-       l'onglet Allocation, à l'identique. L'accueil résume et renvoie ; il
-       n'a pas à refaire le travail de la page dédiée. La liste des poches en
-       haut de cette page suffit à la vue d'ensemble. -->
-  <!-- Trois cartes empilees dans les deux tiers de la largeur, le dernier
-       tiers vide : la grille en deux parts avait perdu son second enfant. Ces
-       trois-la portent chacune trois ou quatre chiffres, elles tiennent cote
-       a cote et se lisent d'un seul regard. Sous 768 px, la classe g-3
-       retombe en une colonne, comme avant. -->
   <div class="grid g-3">
       <div class="card">
-        <!-- Les quatre chiffres s'ouvrent, chacun sur le detail qui le compose :
-             la valeur ligne par ligne, le prix de revient ligne par ligne, la
-             plus-value ligne par ligne. Ils ne renvoyaient nulle part, et c'est
-             pourtant la carte ou la question « de quoi est-ce fait ? » se pose
-             le plus vite.
-
-             Les panneaux existaient deja, ouverts depuis le pied de Marches :
-             ce sont eux qu'on ouvre ici, pas un quatrieme ecran a tenir a jour.
-             La performance partage celui de la plus-value — c'est le meme calcul
-             sur la meme base, ecrit en pourcentage. -->
-        <!-- Des lignes cliquables sur toute leur largeur, et non plus quatre
-             montants soulignes de pointilles.
-
-             C'est le composant mlist des listes de telephone : ligne pleine
-             largeur, chevron a droite, appui qui se voit. Plus-value et
-             performance se rejoignent sur une ligne, deux lectures du meme
-             calcul qui ouvraient le meme panneau, et le lien d'en-tete mene a
-             Marches pour qui veut les lignes plutot qu'un total. -->
         <div class="card-head"><h2>${trad('Portefeuille titres')}</h2>
           <a class="hint lien-vue" href="#/positions">${trad('Marchés')} →</a></div>
         <div class="mlist-groupe">
-          <!-- L'ecart du jour en premier, parce que l'onglet s'appelle
-               « Aujourd'hui » et que la carte n'y montrait que des cumuls : la
-               valeur, le prix de revient, la plus-value depuis l'achat. Ce qui a
-               bouge depuis minuit est le seul chiffre que cet onglet promet.
-
-               Hors seance, la ligne le dit au lieu d'afficher zero : aucun titre
-               n'a cote, ce n'est pas une seance atone. C'est le meme principe que
-               le correctif du matin, ou le portefeuille annonçait +2,14 % en
-               additionnant hier et aujourd'hui. -->
           ${(() => {
             const j = dayPerformance();
-            /* Deux causes pour une meme tuile muette, et deux phrases : aucune
-               cloture de reference en memoire, ou des cours qui datent tous
-               d'avant minuit. La seconde manquait, et la tuile annonçait alors
-               « +0 € · +0,00 % » — un ecart du jour nul sur une journee qui
-               n'avait pas encore de cours. */
             if (!j.lignes.length || j.toutHorsSeance) return `
           <div class="mlist" style="cursor:default">
             <span class="ml-nom">${trad('Aujourd’hui')}<span class="sub">${j.lignes.length
@@ -1238,37 +815,6 @@ function viewOverview() {
         </div>
       </div>
 
-      <!--           C'etait vrai trois fois. Sa barre de progression est le heros de
-           Budget → Depenses, qui porte le meme montant sur le meme objectif et
-           ouvre la meme fenetre de saisie. Ses trois lignes du bas — charges
-           fixes, epargne theorique, taux d'epargne — sont la carte « Epargne
-           mensuelle » de Budget → Charges fixes, verifiees mot pour mot avant de
-           couper. Une troisieme copie ne pouvait rien apprendre que les deux
-           autres ne disent mieux, chacune entouree de ce qui l'explique.
-
-           niveauDepassement() n'a plus d'appelant direct ici mais reste vivante :
-           classeDepassement() s'en sert, et sept endroits l'appellent.
-           (Aucun guillemet oblique : ce commentaire vit dans un litteral de
-           gabarit, un backtick y fermerait la chaine.) -->
-
-      <!--           Elle promettait une projection et n'en faisait aucune : elle ajoutait
-           un nombre saisi a la main au patrimoine du jour, sans marches, sans
-           epargne, sans charges. La vraie projection vit dans l'onglet du meme
-           nom, avec ses hypotheses et son horizon.
-
-           Son champ « Rentree exceptionnelle » portait en plus le meme nom, a un
-           « s » pres, que le journal des rentrees exceptionnelles de Budget →
-           Releves — pour deux choses sans rapport : ici une prevision sans date,
-           ecrasee a chaque saisie, la-bas une ligne datee qui explique une marche
-           de la courbe. Le journal reste, la prevision part.
-
-           La fonction projection() est partie avec elle : plus d'appelant, donc
-           du code mort, la moitie qu'on oublie en retirant un affichage. Le champ
-           meta.expectedInflow reste dans l'etat, comme budget.supplements avant
-           lui : retirer un ecran ne doit pas emporter ce que quelqu'un y avait
-           saisi, ni empecher un export d'avant de se relire.
-           (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
-           gabarit, un backtick y fermerait la chaine.) -->
   </div>
 `}
 `;
@@ -1276,16 +822,11 @@ function viewOverview() {
 
 function mountOverview() {
   monterEvolution();
-  /* Tirer pour rafraichir, ici aussi : c'est la page ou l'on se demande « ou
-     j'en suis », et son patrimoine bouge avec les cours. Le geste etait reserve
-     a Marches, alors que personne n'y passe pour verifier un total. */
   monteTirerRafraichir();
 
   const t = nowTotals();
 
   const pace = monthlyPace();
-  /* Meme fenetre que les chiffres du dessous : les barres dessinees et la
-     moyenne annoncee doivent porter sur le meme intervalle. */
   const barres = limitRange(pace.points, paceRange, { ecarts: true });
   const moyenne = barres.length
     ? barres.reduce((s, p) => s + p.delta, 0) / barres.length : pace.average;
@@ -1302,9 +843,6 @@ function mountOverview() {
 /* `goto` = "vue:ancre", rend la tuile cliquable et emmène à l'endroit
    où ce chiffre se modifie réellement. */
 
-/* Sélecteur de période commun à tous les graphiques d'historique : les trois
-   raccourcis courants, puis une liste pour les durées plus rares. Un seul
-   composant, pour que la commande soit identique partout où elle apparaît. */
 /* Les memes cinq boutons partout, dans le meme ordre, quelle que soit la
    profondeur des donnees. Trois graphiques s'en servent — l'evolution du
    patrimoine, le rythme d'accumulation et les ventes realisees — et ils
@@ -1318,19 +856,6 @@ function mountOverview() {
 
    La liste deroulante « ⋯ » a disparu avec les durees calculees. Un selecteur
    ne se justifiait que pour des crans en nombre variable. */
-/* La plage, et les annees quand on en fournit.
-
-   Une seule valeur, deux facons de l'exprimer : les crans disent une duree qui
-   court jusqu'a aujourd'hui, le menu dit une annee civile. C'est le motif des
-   deux portes sur un meme champ — ce qui serait fautif, ce sont deux valeurs
-   rangees separement, et c'est exactement ce qu'il y avait ici : la plage
-   reglait les graphiques pendant qu'un second menu d'annee reglait le journal,
-   et rien n'empechait l'un de dire 2025 et l'autre 2026.
-
-   Le menu ne liste que les annees ou quelque chose s'est passe, et il disparait
-   sous deux : choisir entre une seule annee n'est pas un choix. Quand une annee
-   est active, aucun cran n'est allume — sinon deux contrôles se prevaudraient de
-   la meme valeur. */
 function rangeControl(action, courant, annees = []) {
   const surAnnee = estAnnee(courant);
   const connu = HISTORY_RANGES.some(r => r.id === courant);
@@ -1350,11 +875,6 @@ function rangeControl(action, courant, annees = []) {
     </div>`;
 }
 
-/* Nom d'un compte, modifiable sur place. Renommer est sans danger : c'est
-   l'identifiant interne qui porte les montants, jamais le libellé. Le nom
-   change donc partout à la fois — relevés, allocation, exports — et aucune
-   donnée n'est re-classée. Le nom court, lui, sert d'en-tête de colonne dans
-   les relevés : on le laisse à part pour ne pas casser un tableau serré. */
 function nomCompte(a) {
   const i = Store.state.accounts.indexOf(a);
   return `<input class="acct-nom" data-path="accounts.${i}.label" value="${esc(a.label)}"
@@ -1372,9 +892,6 @@ function pastilleTeinte(couleur) {
   return COULEUR_SURE.test(c) ? `<i class="teinte" style="--c:${c}" aria-hidden="true"></i>` : '';
 }
 
-/* Petite aide contextuelle. Un « ? » discret à côté d'un terme, qui explique
-   d'où vient un chiffre sans encombrer la page. Le panneau se place à droite
-   ou à gauche selon la place disponible — près du bord, il bascule. */
 function aide(texte) {
   /* Un `<span>` et non un `<button>`, et c'est la correction d'un vrai defaut.
 
@@ -1410,10 +927,6 @@ const VERSION_APP = (() => {
   catch { return 'inconnue'; }
 })();
 
-/* La date d'achat est demandee a trois endroits — les deux fenetres de creation
-   et la fiche de la ligne. Le texte vit donc une fois : trois copies auraient
-   diverge des la premiere retouche, et c'est deja arrive ici avec la formule du
-   taux d'achat, qu'on a retrouvee en trois exemplaires dont deux fausses. */
 const DATE_ACHAT_AIDE =
   'Facultative, mais deux chiffres en dépendent. Le rendement par an, qui ramène '
   + '« +36 % » à une échelle comparable, car sans date il ne dit pas s’il a fallu un '
@@ -1421,12 +934,6 @@ const DATE_ACHAT_AIDE =
   + 'prix d’achat, pas à la clôture d’hier, que tu n’as pas vécue. Pour une ligne '
   + 'renforcée plusieurs fois, mets la date du premier achat.';
 
-/* Tout est pose une fois, sur le document, et jamais sur les « ? » eux-memes.
-
-   La delegation le corrige par construction, et pour celles qu'on ajoutera :
-   un ecouteur ne connaît pas les elements, il connaît un attribut. C'est le
-   raisonnement que la fermeture au premier appui ailleurs suivait deja, quelques
-   lignes plus bas — il valait pour tout le reste. */
 function monteAides() {
   if (monteAides.monte) return;
   monteAides.monte = true;
@@ -1442,7 +949,6 @@ function monteAides() {
     const r = btn.getBoundingClientRect();
     const largeur = panneau.offsetWidth;
     const place = window.innerWidth - r.right;
-    // à droite si ça tient, à gauche sinon
     const gauche = place < largeur + 20
       ? Math.max(8, r.left - largeur - 10)
       : r.right + 10;
@@ -1479,8 +985,6 @@ function monteAides() {
     const b = vise(e);
     if (b) { e.preventDefault(); montrer(b); }
   });
-  /* Un span ne repond pas au clavier de lui-meme : ce que le bouton faisait
-     gratuitement, il faut l'ecrire. */
   document.addEventListener('keydown', e => {
     const b = vise(e);
     if (!b || (e.key !== 'Enter' && e.key !== ' ')) return;
@@ -1488,28 +992,9 @@ function monteAides() {
     montrer(b);
   });
 
-  /* Un appui ailleurs referme le panneau.
-
-     Le survol et la perte de focus suffisaient a la souris et au clavier. Au
-     doigt il n'y a pas de survol, et un appui ne donne pas forcement le focus :
-     le panneau restait donc ouvert jusqu'au rendu suivant, pose au milieu du
-     tableau qu'on venait consulter. La phase de capture, pour fermer meme si la
-     cible arrete l'evenement. */
   document.addEventListener('pointerdown', e => { if (!vise(e)) cacher(); }, true);
 }
 
-/* Sélecteur d'année. Une liste plutôt que des onglets : au bout de dix ans
-   de relevés, une rangée de boutons déborderait de l'écran. */
-/* Le cran « Toutes les années » n'existe plus, nulle part.
-
-   Il a d'abord quitte Budget (9 aout, matin), puis tout le reste le meme
-   jour : « ce sera illisible en l'etant apres longtemps ». Verification
-   faite, les quatre selecteurs gouvernent tous des LISTES — releves,
-   journal des apports, journal des ventes, tableau sous la courbe — et dix
-   ans de lignes empilees ne repondent a aucune question. La courbe
-   d'evolution, elle, garde sa vue longue par ses pastilles de duree : une
-   courbe comprime, une liste s'allonge. Le comparatif d'annees note dans
-   ETAT.md est l'autre reponse, celle qui compare au lieu d'empiler. */
 function yearControl(action, annees, courante) {
   return `
     <select data-action-change="${action}" class="annee" title="${trad('Année affichée')}">
@@ -1528,9 +1013,6 @@ function tile(label, value, pct, color, meta, apercu, arg) {
             title="${trad('Voir le détail de')} ${esc(trad(label))}">${inner}<span class="t-go">⋯</span></button>`;
 }
 
-/* ------------------------------------------------------------
-   Préférences — ce qui règle l'app, pas ce qu'elle contient
-   ------------------------------------------------------------ */
 function viewSettings() {
   const m = Store.state.meta;
   return `
@@ -1586,35 +1068,14 @@ function viewSettings() {
     </div>
   </div>
 
-  <!-- Une carte disait ici où trouver l'export et les sauvegardes, avec un
-       bouton pour y aller : elle existait du temps où Données était le
-       sous-onglet voisin, que rien n'annonçait. Le menu porte les deux entrées,
-       à deux lignes l'une de l'autre — l'indication répétait le menu. -->
-
 `;
 }
 
-/* ------------------------------------------------------------
-   Notifications — ce que la cloche a le droit de dire
-   ------------------------------------------------------------ */
-/* Une page à elle, et non une carte au bas des préférences : elle a son entrée
-   de menu, donc sa vue. C'est la règle de cette application — une entrée, une
-   adresse, un titre — et c'est aussi ce qui évite de régler la même chose à
-   deux endroits.
-
-   Les quatre familles viennent du modèle : un niveau ajouté au calcul
-   manquerait sinon à ce menu sans que rien ne le dise. */
 function viewNotifs() {
   const n = notifications();
   const masquees = notifsMasquees();
   return `
   <div class="card">
-    <!-- « Ce que la cloche signale » est devenu « Notifications ».
-
-         Et les listes deroulantes « Signaler / Ignorer » deviennent des
-         interrupteurs. Un menu a deux choix, c'est un interrupteur qui demande
-         deux gestes au lieu d'un, et qui cache son etat derriere un mot la ou
-         une position se lit d'un coup d'oeil. -->
     <div class="card-head"><h2>Notifications</h2>
       <span class="hint">${n.length ? `${n.length} ${trad('en attente')}` : trad('rien à signaler')}</span></div>
     <p class="hint" style="margin:0 0 12px">${trad('La cloche de l’en-tête montre les saisies qui restent à faire et les contrôles de cohérence : ce que l’application sait d’incomplet ou de faux. Une famille éteinte ne compte plus dans sa pastille.')}</p>
@@ -1631,13 +1092,6 @@ function viewNotifs() {
       }).join('')}
     </div>
 
-    <!-- Le jour où la cloche réclame. Ici et non dans Budget : ce réglage ne
-         déplace pas ce qu'on compte, seulement le moment où l'on est relancé, et
-         c'est le sujet de cette page.
-
-         Il vaut pour les deux saisies. Deux jours séparés, un pour le relevé et
-         un pour les dépenses, se seraient contredits sans que rien ne le
-         détecte, et personne ne fait ses comptes deux fois par mois. -->
     <div class="modal-champs" style="margin-top:12px">
       <div class="field">
         <label>${trad('Jour du rappel')}${aide(trad("Avant ce jour, la cloche ne réclame ni relevé ni dépenses. Utile si tu fais tes comptes à date fixe : payé le 15, tu ne veux pas d’une pastille allumée quinze jours pour rien. Les mois, eux, restent calendaires : ce réglage déplace le rappel, pas le calcul."))}</label>
@@ -1646,9 +1100,6 @@ function viewNotifs() {
             `<option value="${j}" ${j === jourRappel() ? 'selected' : ''}>${
               j === 1 ? trad('le 1er du mois') : `${trad('le')} ${j} ${trad('du mois')}`}</option>`).join('')}
         </select>
-        <!-- 28 au plus, parce que fevrier existe : un jour 30 ne serait jamais
-             atteint deux mois par an, et le rappel se tairait sans raison
-             lisible. -->
         <span class="hint">${jourRappelAtteint()
           ? trad('Ce jour est passé : les saisies en attente sont réclamées.')
           : `${trad('La cloche attendra le')} ${jourRappel()} ${trad('pour réclamer les saisies de ce mois.')}`}</span>
@@ -1679,39 +1130,10 @@ function viewNotifs() {
   </div>` : ''}`;
 }
 
-/* ------------------------------------------------------------
-   Objectif, la cible de l'année, puis la trajectoire longue
-   ------------------------------------------------------------ */
-/* Ce qu'une ligne de projection dit quand aucun rendement ne lui est appliqué.
-
-   Trois lignes portent cette phrase — l'immobilier net, le non coté à zéro, les
-   liquidités — et c'est celle des liquidités qui annonçait « 8,00 % par an ».
-   Une phrase recopiée à trois endroits finit toujours par ne plus l'être à l'un
-   d'eux ; c'est arrivé à la formule du taux d'achat, retrouvée en trois
-   exemplaires dont deux faux.
-
-   Le champ « Rendement des liquidités » de la carte des hypothèses ne la porte
-   pas, et ce n'est pas un oubli : il répond à « quel taux ? » par « aucun »,
-   quand ces lignes-ci répondent à « qu'est-ce qui lui arrive ? ». Deux
-   questions, deux réponses ; ce serait la même phrase à deux endroits qui
-   poserait problème. */
 const A_PLAT = trad('porté à plat, sans rendement');
 
-/* La longueur maximale d'un nom de ligne.
-
-   Trente, et pas vingt : « Uber Technologies, Inc. » en fait vingt-trois, et
-   c'est un nom que la recherche remplit toute seule. Une borne qui couperait ce
-   que l'application vient d'ecrire serait une borne fausse.
-
-   Elle s'applique a la saisie, pas aux noms deja enregistres : tronquer en
-   silence ce que quelqu'un a ecrit detruit une donnee sans le lui dire. Les
-   anciens noms trop longs se coupent a l'affichage, avec des points de
-   suspension, et se relisent en entier dans la fiche. */
 const NOM_LIGNE_MAX = 30;
 
-
-/* L'horizon vit dans l'état : le choix survit au rechargement, et la fenêtre
-   d'aperçu peut le modifier par un simple data-path. */
 Object.defineProperty(window, 'projHorizon', {
   get: () => num(Store.state?.meta?.projHorizon) || 20,
   set: v => { Store.state.meta.projHorizon = num(v) || 20; },
@@ -1730,11 +1152,6 @@ Object.defineProperty(window, 'projHorizon', {
    60 ans dans le tableau, à sa place chronologique, et le graphique et le total
    de la première carte y vont avec. */
 const selecteurHorizon = () => {
-  /* L'horizon courant figure toujours dans la liste, même quand les jalons du
-     tableau le portent déjà. Un menu qui n'offre pas sa propre valeur affiche
-     la première venue : il annoncerait alors un horizon qui n'est pas celui du
-     graphique ni de la ligne marquée. Le défaut, vingt ans, est exactement ce
-     cas — et il disparaît de la liste dès qu'on en choisit un autre. */
   const choix = PROJECTION_CHOICES.includes(projHorizon)
     ? PROJECTION_CHOICES
     : [...PROJECTION_CHOICES, projHorizon].sort((a, b) => a - b);
@@ -1745,23 +1162,15 @@ const selecteurHorizon = () => {
   </select>`;
 };
 
-/* Le depliant des hypotheses. Ferme par defaut : le resume des valeurs sert
-   de poignee, on ne deplie que pour regler. */
 let hypoOuvert = false;
 
 function viewObjective() {
-  /* Capitaliser zero pendant cinquante ans donne zero, sur dix horizons et deux
-     graphiques. Le versement mensuel compte autant que le capital : quelqu'un
-     qui part de rien mais versera 300 EUR par mois a une projection qui a du
-     sens, et cette page doit alors s'afficher. */
   if (!(patrimoine().brut > 0.005) && !(num(Store.state.meta.projMonthly) > 0)) {
     return pageAvantDonnees('Une projection part de ce que tu as et de ce que tu mets de '
       + 'côté chaque mois. Sans l’un ni l’autre, elle ne peut que multiplier zéro par les '
       + 'années. Déclare un compte, ou règle un versement mensuel dans tes hypothèses.');
   }
   const g = objectiveStatus();
-  /* La carte de l'objectif, arrivee de l'accueil : le cap d'abord, la
-     trajectoire ensuite. */
   const carteObjectif = () => {
     const an = Store.state.meta.objectiveYear;
     const mois = monthsToObjective();
@@ -1800,26 +1209,9 @@ function viewObjective() {
         ? `${mois} ${mois > 1 ? trad('mois restants') : trad('mois restant')}`
         : trad('dernier mois')} · ${fmtPct(g.pct, 2)} ${trad('atteint')}</span>
     </div>
-    <!-- L'écart en tête, le patrimoine en note.
-
-         Ce que cette carte apporte en propre, personne d'autre ne le dit : la
-         cible, ce qui manque pour l'atteindre, et le rythme qu'il faudrait
-         tenir. Ces trois-là étaient écrits en petit, en bas, autour d'un
-         montant qu'on connaissait déjà. Ils passent devant.
-
-         Le patrimoine reste, en note : c'est lui qui donne son sens au reste —
-         « il te manque 3 847 € » ne se lit pas sans savoir sur quoi. Mais il ne
-         se lit plus en premier.
-
-         « Il te manque » et non « reste à faire » : ce chiffre n'est pas un
-         travail restant, c'est l'écart entre où l'on est et où l'on veut être,
-         et il fait la paire avec « dépassement » de l'autre côté. -->
     <div class="goal-top">
       <b class="${g.remaining >= 0 ? 'up' : ''}">${g.remaining >= 0
         ? `+${fmtEUR(g.remaining)}` : fmtEUR(Math.abs(g.remaining))}</b>
-      <!-- « Restant » et non « à trouver ». Le second sonnait comme une corvée
-           dont on te charge, et il allongeait la phrase pour ne rien ajouter :
-           l'intitule de la carte dit deja qu'il s'agit d'un objectif. -->
       <span class="muted">${g.remaining >= 0
         ? trad('de dépassement')
         : mois
@@ -1838,10 +1230,6 @@ function viewObjective() {
   const dernier = p.points[p.points.length - 1];
   const anneeAtteinte = p.targetReached;
 
-  /* Une liste plutôt qu'un champ libre : on choisit une hypothèse dans des
-     paliers ronds, sans risquer une faute de frappe à un zéro près. La valeur
-     courante est toujours ajoutée si elle ne tombe pas sur un palier — le
-     versement repris du budget vaut 652 €, pas 650. */
   const listeChoix = (path, paliers, valeur, format) => {
     const v = valeur != null ? valeur : num(getPath(path));
     const options = paliers.includes(v) ? paliers : [...paliers, v].sort((a, b) => a - b);
@@ -1887,47 +1275,11 @@ function viewObjective() {
     Array.from({ length: Math.floor((max - depuis) / pas) + 1 }, (_, i) => depuis + i * pas);
 
   return `
-  <!-- Quatre tuiles vivaient ici : patrimoine actuel, objectif, projection à
-       l'horizon, pouvoir d'achat. Quatre nombres sans rapport arithmétique
-       entre eux, dont un badge « 514,24 % » sur un objectif dépassé et un
-       badge « 2,00 % » qui était le taux d'inflation posé là où toutes les
-       autres cartes mettent une part.
-
-       Or il y a une vraie décomposition dessous, et c'est la question que la
-       page pose : de quoi sera fait ce patrimoine futur ? Le champ
-       « contributed » contient le capital de départ, donc départ + versements
-       + rendement font exactement le total. Trois barres qui répondent,
-       plutôt que quatre chiffres qui coexistent.
-       (Pas de guillemet oblique dans ce commentaire : il vit à l'intérieur
-       d'un littéral de gabarit, où un backtick referme la chaîne.) -->
   ${(() => {
-    /* Les mots viennent de la légende du graphique de Trajectoire, deux
-       cartes plus bas — « Ce que tu verses », « Ce que le rendement ajoute »
-       — et gardent ses couleurs. Les mêmes montants s'appelaient ici
-       « Versements » et « Rendement » : deux vocabulaires pour une seule
-       page. Le capital de départ, que le graphique fond dans ses versements,
-       prend la troisième teinte. */
     const verses = Math.max(0, dernier.contributed - g.total);
-    /* L'immobilier a sa propre ligne, et il n'en a une que si l'on en a. Le
-       rendement ne s'y applique pas : il est porte a plat, et le dire ici est
-       le seul endroit ou ca se voit. Sans cette ligne, son apport se cachait
-       dans « ce que tu as deja » et on pouvait croire qu'il capitalisait comme
-       le reste.
-       La part peut etre negative — un credit sans bien en face, ou un bien qui
-       vaut moins que son pret — et le libelle suit. */
     const plat = num(p.plat);
     const parts = [
-      /* Sa fiche est baseProjection, pas « Patrimoine total » : la barre vaut
-         la base qui capitalise, et la fiche qui s'ouvre doit faire exactement
-         ce montant, ligne a ligne. L'autre fiche en montrait le quintuple. */
       { label: trad('Ce que tu as déjà'), value: g.total - plat, couleur: 'var(--series-3)', apercu: 'baseProjection' },
-      /* « net » et non « a plat » : un intitule dit ce qu'il compte, la valeur
-         du bien moins le capital restant du. Comment la projection le traite
-         est dit deux fois ailleurs, dans l'infobulle de cette ligne et sous la
-         courbe de Trajectoire. Meme vocabulaire que la fiche qui s'ouvre. */
-      /* L'intitule suit ce que la part contient vraiment : avec une montre et
-         sans studio, « Ton immobilier net » mentirait. Meme logique que la
-         fiche immobilierNet qui s'ouvre dessus. */
       { label: plat < 0 ? trad('Tes crédits')
              : num(nowTotals().biens) > 0.005
                ? (num(nowTotals().immo) > 0.005 ? trad('Ton immobilier et tes biens, nets')
@@ -1936,16 +1288,9 @@ function viewObjective() {
         value: plat, couleur: couleurClasse('immobilier'), apercu: 'immobilierNet',
         aide: trad('Aucun rendement ne lui est appliqué : la projection le porte tel quel') },
       { label: trad('Ce que tu verses'), value: verses, couleur: S1(), apercu: 'horizon' },
-      /* Le rendement se coupe en deux des que la seconde poche en a un. Tant
-         qu'elle est a zero, une ligne « 0 EUR » ne dirait rien : le filtre plus
-         bas l'ecarte, et « Ce que le rendement ajoute » reste seul et complet.
-         Deux lignes ou une, la somme des parts fait le total. */
       ...(num(s.rateAutres) ? [
         { label: trad('Rendement des actifs de marché'), value: num(dernier.gainsMarche),
           couleur: S2(), apercu: 'horizon' },
-        /* « des autres actifs » designait une poche qui n'existe plus : ce gain
-           est celui du non cote, les liquidites ne produisant rien. Le nom est
-           celui de son reglage, dans « Tes hypotheses ». */
         { label: trad('Rendement du non coté'), value: num(dernier.gainsAutres),
           couleur: couleurClasse('nonCote'), apercu: 'horizon' },
       ] : [
@@ -1957,11 +1302,6 @@ function viewObjective() {
   ${carteObjectif()}
 
   <div class="card repart">
-    <!-- L'horizon vivait dans l'en-tête de « Trajectoire », en bas de page,
-         alors qu'il commande le montant affiché ici, tout en haut. On lisait
-         « dans 20 ans » sans voir ce qui le réglait. Il monte avec le chiffre
-         qu'il gouverne, et quitte Trajectoire : un seul réglage, posé avant
-         tout ce qu'il modifie. -->
     <div class="card-head">
       <h2>${trad('De quoi sera fait ton patrimoine')}</h2>
       <label class="row" style="gap:8px; font-size:12px; color:var(--text-secondary)">
@@ -1984,13 +1324,6 @@ function viewObjective() {
     <!-- L'objectif 2026 figurait aussi dans ce pied. Il a sa propre carte en
          bas de page, et il n'a rien à faire sous un total qui parle
          de ${dernier.year} : deux échéances, deux sujets. -->
-    <!-- L'inflation se reglait dans « Tes hypotheses » sans rien changer a
-         l'ecran : un menu deroulant sans effet visible est un bouton mort. La
-         valeur etait pourtant calculee pour chaque point, dans le champ real,
-         et jamais affichee. Deux issues possibles, montrer la ligne ou retirer le
-         reglage ; on montre, parce que sur vingt ans c'est le seul chiffre
-         qu'on sait vraiment lire. La ligne ne s'affiche qu'avec une inflation
-         non nulle, sans quoi elle repeterait le total. -->
     <dl class="kv repart-pied">
       <dt><b>${trad('Total en')} ${dernier.year}</b></dt><dd><b>${fmtEUR(dernier.total)}</b></dd>
       ${s.inflation ? `<dt>${trad('Soit, après inflation')}${
@@ -2003,22 +1336,8 @@ function viewObjective() {
   <div class="grid g-1-2">
     <div class="card">
       <div class="card-head"><h2>${trad('Tes hypothèses')}</h2></div>
-      <!-- Les cinq reglages et leurs textes d'aide pesaient plus lourd que le
-           graphique qu'ils gouvernent. Ils se replient donc, et c'est le resume
-           des valeurs qui sert de poignee : les hypotheses restent lisibles
-           carte fermee, on ne deplie que pour les changer. Meme motif que
-           « Voir les donnees » sur l'accueil, et meme lecon : l'etat survit au
-           rendu, sinon changer une valeur refermerait le panneau sous le doigt
-           (chaque reglage relance render()). -->
-      <!-- La poignee ne reprend pas .data-view : ce motif sert aux tableaux
-           de donnees et se fait discret par construction, un petit chevron
-           gris que personne ne voyait. Ici la poignee est LE contrôle de la
-           carte : elle se lit comme un bouton, valeurs a gauche, « Régler »
-           et chevron a droite. -->
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
-          <!-- La destination du versement figure dans le resume : c'est une
-               hypothese, et le resume existe pour qu'on les lise sans deplier. -->
           <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} ${trad('sur')}
             ${trad(Object.fromEntries(VERSEMENT_VERS)[s.versementVers]).toLowerCase()} ·
             ${trad('marché')} ${fmtPct(s.rate, 0)} ·
@@ -2029,98 +1348,28 @@ function viewObjective() {
       <div class="modal-champs" style="margin-top:12px">
         ${champ('Versement mensuel', 'meta.projMonthly', paliers(10000, 50),
                 v => `${fmtEUR0(v)} ${trad('/ mois')}`,
-                /* Ou vont ces euros etait une hypothese invisible : ils
-                   capitalisent tous au taux des actifs de marche. Elle est
-                   porteuse, surtout depuis que la poche « autres » vaut zero par
-                   defaut — s'ils y tombaient, l'epargne ne croitrait jamais. Une
-                   hypothese se dit la ou on la regle.
-                   « Versé sur » et non « Investis en » : l'imperatif se lisait
-                   comme un conseil, et cette application n'en donne pas. */
                 num(Store.state.meta.projMonthly)
                   ? `${trad('Ton budget dégage')} ${fmtEUR0(suggestedMonthly())} ${trad('par mois.')}`
                   : trad('Repris de ton budget ; choisis une valeur pour la figer.'),
                 s.monthly)}
-        <!-- Ou va ce versement etait dit dans la bulle d'aide du champ au-dessus,
-             donc invisible tant qu'on ne la survolait pas, et surtout non
-             modifiable : les euros capitalisaient au taux du marche, code en dur.
-             Quelqu'un qui met 350 EUR par mois sur un livret lisait une courbe
-             calculee a 8 % l'an.
-             Un champ plutot qu'une mention, parce que la reponse depend de la
-             personne : on epargne aussi sans investir. -->
         ${champText('Versé sur', 'meta.projVersementVers', VERSEMENT_VERS,
                 s.versementVers,
                 trad('Ces euros capitalisent au taux de la poche que tu choisis. '
                   + 'Sur les liquidités, ils s’accumulent sans rendement : c’est ce que fait '
                   + 'un livret que tu n’as pas déclaré rémunéré, et c’est le seul réglage '
                   + 'honnête si tu épargnes sans investir. '
-                  /* Le partage se dit par le taux, pas par un second montant : trois
-                     champs de versement sur une page qui en a six auraient affine un
-                     chiffre dont l'incertitude du taux pese deja davantage — 24 300 EUR
-                     entre 6 et 10 % contre 21 000 entre les deux poches extremes. */
                   + 'Si tu partages ton versement, garde un seul choix et ajuste le taux : '
                   + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'))}
-        <!-- Un seul taux s'appliquait a tout, et il ne decrivait qu'une partie
-             de ce qu'il touchait. Deux champs maintenant, chacun nommant sa
-             poche : « hors immobilier » ne suffisait plus, il disait ce que le
-             taux exclut au lieu de ce sur quoi il porte.
-
-             Les trois listes s'arretent a 20 % : elles montaient a 100, soit
-             cent une options dont « 87 % par an », qu'aucune hypothese de
-             travail ne justifie. Une valeur deja enregistree au-dela survit,
-             listeChoix ajoute toujours la valeur courante si elle ne tombe pas
-             sur un palier. -->
-        <!-- La poche se dit par son montant, non par la liste de ce qu'elle
-             contient.
-
-             Elle enumerait « Actions, obligations, crypto » : trois classes sur
-             sept, restees figees quand Immobilier cote et Multi-actifs sont
-             arrives, et les metaux n'y ont jamais figure. Une liste tenue a la
-             main a cote de sa source finit toujours par ne plus la decrire.
-
-             La faire descendre de la table des classes reglait l'exactitude et ratait
-             l'essentiel : six noms de classes a la file ne se lisent pas. Le
-             champ voisin, celui du non cote, avait deja la bonne forme — le
-             montant d'abord, puis la raison. Un montant se verifie d'un coup
-             d'oeil contre la carte du patrimoine, une enumeration ne se verifie
-             pas.
-
-             Le cash a investir a quitte cette poche : il ne capitalise plus, donc
-             la phrase n'a plus a le mentionner. Voir pochesProjection(). -->
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de titres et de crypto.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'))}
-        <!--    Ce taux couvrait « les autres actifs », soit le non cote ET les liquidites
-   : deux choses sans rapport sous un seul pourcentage. Les liquidites ne
-   capitalisent pas ici, livret ou non, donc il n'y a rien a regler pour elles
-   : une constante n'a pas besoin d'un menu, et trois calculateurs sur une
-   page d'hypotheses en font deux de trop. Ce taux ne parle plus que du non
-   cote, et son intitule le dit.-->
         ${champ('Rendement du non coté', 'meta.projRateAutres', paliers(20, 1),
                 v => v ? `${fmtPct(v, 0)} ${trad('par an')}` : trad('aucun, porté à plat'),
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} ${trad('de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application')}`)}
-        <!-- Le capital garanti a son taux, et il le fallait : sans poche a lui,
-             un fonds euros tombait dans les actifs de marche et capitalisait a
-             8 % l'an. Pour qui detient l'essentiel de son assurance-vie en
-             fonds euros, c'etait la moitie d'un patrimoine projetee a trois
-             fois son rendement reel, et toujours du cote flatteur.
-             Zero par defaut, comme le non cote : un fonds euros rapporte, mais
-             son taux est annonce en janvier pour l'annee ecoulee. L'application
-             ne devine pas un chiffre que le detenteur seul connait. -->
         ${champ('Rendement du capital garanti', 'meta.projRateGaranti', paliers(8, 0.5),
                 v => v ? `${fmtPct(v, 1)} ${trad('par an')}` : trad('aucun, porté à plat'),
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`)}
-        <!-- La troisieme poche, dite sans etre reglable.
-
-             Deux taux se reglaient, trois poches existaient, et la derniere
-             n'apparaissait nulle part : on ne pouvait pas savoir ce que la
-             projection faisait d'un livret. Le silence laissait deviner, et
-             deviner est ce que cette carte doit eviter.
-
-             Elle prend la forme des trois autres — intitule, valeur, « ? » — et
-             sa valeur est un texte au lieu d'un menu. Les trois poches se lisent
-             ainsi de la meme facon, et celle qui ne se regle pas se voit comme
-             telle sans qu'une phrase ait a l'expliquer. -->
         <div class="field">
           <label>${trad('Rendement des liquidités')}${aide(
             `${fmtEUR0(capitalisation({ years: 1 }).poches.liquidites)} ${trad('de liquidités,')} `
@@ -2137,34 +1386,16 @@ function viewObjective() {
                 v => v ? fmtEUR0(v) : trad('aucune'),
                 trad('Optionnel, pour savoir quand tu la franchis'))}
       </div>
-      <!-- Le bouton ne sert que si une valeur manuelle est figee : quand le
-           versement suit deja le budget, il proposait de reprendre un montant
-           deja repris, et cliquer ne changeait rien a l'ecran. -->
       ${num(Store.state.meta.projMonthly) ? `
       <button class="btn sm ghost" data-action="proj-use-budget" style="margin-top:12px">
         ${trad('Reprendre')} ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} ${trad('depuis le budget')}</button>` : ''}
       </details>
-
-      <!-- Les notes restent hors du depliant : la faisabilite de la cible et
-           l'avertissement « pas une prevision » sont de l'information, pas du
-           reglage, et se cacher avec les selecteurs les ferait manquer. -->
-      <!-- La note « Ce que la courbe ne compte pas » vivait ici, pendant
-           qu'une seconde note sous la courbe de Trajectoire disait presque la
-           meme chose : l'immobilier gele d'un cote, l'amortissement ignore de
-           l'autre. Deux avertissements a deux endroits pour un seul fait, et
-           le lecteur devait les recouper lui-meme. Tout est fusionne sous la
-           courbe, la ou l'on regarde ce que la note corrige. -->
 
       ${s.target ? `<div class="note" style="margin-top:12px">
         ${anneeAtteinte ? `◎ <span>${trad('Cible de')} <b>${fmtEUR0(s.target)}</b> ${trad('franchie en')}
             <b>${anneeAtteinte.year}${anneeAtteinte.months ? ` (+${anneeAtteinte.months} ${trad('mois')})` : ''}</b>,
             ${trad('soit dans')} ${Math.round(anneeAtteinte.yearsFromNow)} ${trad('ans')}.</span>`
           : (() => {
-            /* Seule la part qui capitalise entre dans le calcul des leviers,
-               et la cible se mesure donc au meme etalon : atteindre 500 000 EUR
-               avec 60 000 EUR d'apport immobilier porte a plat, c'est amener le
-               reste a 440 000 EUR. Passer le patrimoine entier avec le taux du
-               seul portefeuille aurait annonce un versement trop faible. */
             const plat = num(p.plat);
             const req = targetRequirements({ start: g.total - plat, target: s.target - plat,
               monthly: s.monthly, rate: s.rate, years: projHorizon });
@@ -2193,82 +1424,27 @@ function viewObjective() {
     </div>
 
     <div class="card">
-      <!-- L'horizon est monté dans la première carte, où vit le chiffre qu'il
-           commande. Le répéter ici donnerait deux listes réglant la même
-           valeur sur un même écran. -->
       <div class="card-head">
         <h2>${trad('Trajectoire')}</h2>
-        <!-- L'en-tete ne disait que la duree, alors que le versement et les
-             taux gouvernent toute la courbe et ne se lisaient que deux cartes
-             plus bas. Un graphique doit porter ses propres hypotheses.
-
-             Mais depuis qu'il y a deux taux, tout empiler ici donnait trois
-             lignes d'en-tete a 375 px. L'en-tete garde donc la duree et le
-             versement, et les taux descendent sous la courbe, ou il y a la
-             place de nommer chaque poche au lieu de dire « hors immobilier »,
-             qui annonçait ce que le taux exclut plutot que ce qu'il touche. -->
         <span class="hint">${trad('Sur')} ${projHorizon} ${trad('ans, jusqu’en')} ${dernier.year} · ${
           fmtEUR0(s.monthly)} ${trad('/ mois')}</span>
       </div>
       <div class="chart" id="chartProjection"></div>
-      <!-- « Ce que tu verses » nommait une bande qui vaut le capital de depart
-           plus les versements : le champ contributed contient les deux. La
-           carte de composition, elle, disait juste en separant « ce que tu as
-           deja » de « ce que tu verses ». Deux vocabulaires pour une seule
-           page, et le plus vague etait sur le graphique. -->
       <div class="legend">
         <span><i style="background:${S1()}"></i>${trad('Ce que tu as déjà et ce que tu verses')}</span>
         <span><i style="background:${S2()}"></i>${trad('Ce que le rendement ajoute')}</span>
-        <!-- La bande etait expliquee, mais dans le paragraphe en petits
-             caracteres sous les taux : personne ne l'y lisait, et deux courbes
-             pointillees sans nom ressemblent a un defaut d'affichage. Sa place
-             est ici, avec les autres cles du dessin, et son echantillon est
-             pointille comme elle. -->
         <span><i class="legend-bande"></i>${trad('Si le rendement fait deux points de plus ou de moins')}</span>
       </div>
-      <!-- Les taux, nommes par ce sur quoi ils portent. Deux phrases plutot
-           qu'une mention dans l'en-tete : chaque poche a un nom, et le lecteur
-           voit d'un coup ce qui capitalise et a combien. -->
-      <!-- Trois cas, parce que tout etat existant herite d'un taux egal a
-           l'autre : « 5,00 % sur tes actifs de marche, 5,00 % sur tes autres
-           actifs » est la phrase que tout le monde verrait par defaut, et elle
-           dit deux fois la meme chose. On la dit une fois quand les deux taux
-           se rejoignent. -->
       <p class="small muted" style="margin:12px 0 0">
-        <!-- Chaque poche nommee. La phrase disait « tes autres actifs » pour deux
-             choses sans rapport, le non cote et les liquidites ; elles sont
-             maintenant citees separement, et les liquidites sont annoncees comme
-             ce qu'elles sont : plates par construction, sans reglage. -->
         ${fmtPct(s.rate)} ${trad('par an sur tes actifs de marché.')}
         ${num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('sur ton non coté.')}`
                             : trad('Ton non coté est porté à plat.')}
-        <!-- « Tes liquidites non investies » laissait croire que les autres,
-             elles, capitalisaient : le cash qui attend chez le courtier est
-             pourtant porte a plat comme le reste. La poche entiere, sans
-             qualificatif, et le versement mensuel dit juste apres ou va
-             l'argent qu'on place vraiment. -->
         ${trad('Tes liquidités sont portées à plat, le cash qui attend chez ton courtier compris.')}
       </p>
-      <!-- LA note de la page, unique : ce que la courbe ne projette pas. Elle
-           remplace deux avertissements qui se recoupaient, l'un ici, l'autre
-           dans « Tes hypotheses ». Un seul endroit, sous la courbe qu'elle
-           corrige, et une phrase finale qui donne le sens de l'erreur : un
-           lecteur qui sait dans quel sens un chiffre se trompe peut s'en
-           servir, sans ca il ne peut rien en faire.
-
-           Les cas sont distingues parce que la verite change avec eux. Avec un
-           pret, le remboursement est certain et non compte : la courbe
-           sous-estime, toujours. Un bien paye, lui, est simplement fige — son
-           prix peut monter comme baisser, et pretendre « sous-estime » serait
-           faux. La version precedente melangait les deux et parlait de
-           mensualites a quelqu'un qui n'en a plus. -->
       ${(() => {
         const t0 = nowTotals();
         const plat = num(p.plat), dettes = num(t0.dettes);
         const bien = num(t0.immo) + num(t0.biens);
-        /* La part plate porte l'immobilier ET les biens de valeur : la phrase
-           doit nommer ce qu'elle couvre, sinon une montre seule ferait dire
-           « ton immobilier » a quelqu'un qui n'en a pas. */
         const aImmo = num(t0.immo) > 0.005, aBiens = num(t0.biens) > 0.005;
         const sujet = aImmo && aBiens ? trad('Ton immobilier et tes biens sont portés à leur')
                     : aBiens ? trad('Tes biens de valeur sont portés à leur')
@@ -2299,40 +1475,17 @@ function viewObjective() {
   <div class="card">
     <div class="card-head">
       <h2>${trad('Par horizon')}</h2>
-      <!-- Meme raison que sur Trajectoire : avec deux taux, l'en-tete ne peut
-           plus les annoncer tous les deux sans deborder. Le tableau porte les
-           memes hypotheses que la courbe juste au-dessus, qui les detaille. -->
       <span class="hint">${fmtEUR0(s.monthly)} ${trad('/ mois')} ${trad('à')} ${fmtPct(s.rate)} ${trad('par an')}${
         num(s.rateAutres) ? trad(', et le détail au-dessus') : ''}</span>
     </div>
-    <!-- Six colonnes sous 768 px, c'est la regle du projet qui casse. Le
-         telephone garde les trois qui repondent a la question de la carte :
-         quand, combien, et combien en pouvoir d'achat. Le detail apports /
-         gains reste sur grand ecran, et la fiche « horizon » le donne au
-         doigt.
-         « Apports » et non « Total versé » : la colonne contient aussi le
-         capital de depart et l'immobilier, le pied le chiffre. -->
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>Horizon</th>
           <th class="large-seulement">${trad('Apports')}</th>
           <th class="large-seulement">${trad('Gains cumulés')}</th>
-          <!-- « Après inflation », comme le pied de la premiere carte et la
-               fiche horizon : un meme montant porte le meme nom partout. Le
-               nom precedent, « En euros d'aujourd'hui », debordait de 45 px a
-               375 px et imposait un en-tete sur deux lignes ; il reste dans
-               les textes d'aide, ou il explique ce que celui-ci veut dire. -->
           <th>${trad('Patrimoine')}</th><th>${trad('Après inflation')}</th>
         </tr></thead>
-        <!-- La ligne de l'horizon retenu se marque, elle ne se nomme pas. La
-             correspondance entre le reglage du pied et la ligne qui bouge doit
-             se voir, sinon changer la duree deplace le graphique et le total de
-             la premiere carte sans qu'on sache ou le choix a atterri ici. Mais
-             la nommer coutait la largeur d'une phrase dans la colonne la plus
-             etroite : a 375 px, « Après inflation » sortait de l'ecran et il
-             fallait faire defiler pour lire la seule colonne que cette carte
-             ajoute a la precedente. Un filet d'accent ne coute aucun pixel. -->
         <tbody>${p.jalons.map(j => {
           const retenu = j.horizon === projHorizon;
           return `
@@ -2344,12 +1497,6 @@ function viewObjective() {
             <td class="muted">${fmtEUR0(j.real)}</td>
           </tr>`;
         }).join('')}
-        <!-- La seconde porte du même réglage. Elle en réglait un autre, à elle
-             seule, et posait une ligne que le graphique ignorait : le
-             raisonnement vit sur selecteurHorizon, en tête de ce fichier.
-             (Aucun accent grave ici : ce commentaire vit à l'intérieur d'un
-             littéral de gabarit, où un backtick referme la chaîne. Il vient de
-             coûter deux tests rouges.) -->
         <tr class="ligne-libre">
           <td colspan="5">
             <label class="row" style="gap:8px">
@@ -2365,22 +1512,12 @@ function viewObjective() {
     </p>
   </div>
 
-  <!-- La carte « Objectif 2026 » fermait cette page alors que l'objectif de
-       l'annee vit sur l'accueil : sa carte y porte la barre de progression, et
-       sa fiche donne deja le detail que la brique redisait ici, rythme
-       necessaire, rythme observe, ecart. La page renommee « Projection » ne
-       parle plus que de la trajectoire longue, son sous-titre suit. -->
   `;
 }
 
 function mountObjective() {
   const p = capitalisation({ years: projHorizon });
   const s = p.settings;
-  /* La bande de scenarios : le meme calcul a deux points de rendement en plus
-     et en moins, sur le seul taux de marche — les autres actifs gardent le
-     taux affirme par l'utilisateur, zero compris, on ne fait pas varier une
-     affirmation. Une courbe seule a l'air d'une promesse ; la bande dit,
-     sans un mot, que le rendement est une hypothese. */
   const bas = capitalisation({ years: projHorizon, rate: num(s.rate) - 2 });
   const haut = capitalisation({ years: projHorizon, rate: num(s.rate) + 2 });
   const points = p.points.map((pt, i) => ({
@@ -2389,35 +1526,17 @@ function mountObjective() {
   Charts.stackedArea($('#chartProjection'), {
     points, height: 320,
     bande: { min: 'bandeBas', max: 'bandeHaut' },
-    /* « Versé » mentait dans la bulle : la bande contient aussi le capital de
-       depart et l'immobilier. Meme rigueur que la legende sous la courbe. */
     series: [
       { key: 'contributed', label: trad('Départ et versements'), color: S1() },
       { key: 'gains', label: 'Rendement', color: S2() },
     ],
-    /*    La cible long terme ne vivait que dans une note en texte ; tracee, on voit
-   l'annee du croisement. Hors de portee, elle ecrase la courbe, et c'est
-   exactement ce qu'il faut voir. Deux courbes quasi paralleles n'ajoutaient
-   que du bruit, et le montant se lit deja au pied de la premiere carte et
-   dans le tableau.*/
     guide: num(s.target) ? { value: num(s.target), label: 'Cible' } : null,
   });
 
-  /* L'etat du depliant survit au rendu, comme celui de « Voir les donnees » :
-     chaque reglage relance render(), et sans ca le panneau se refermerait
-     sous le doigt a chaque valeur changee. */
   const hy = $('#hypoDetail');
   if (hy) hy.addEventListener('toggle', () => { hypoOuvert = hy.open; });
 }
 
-/* ------------------------------------------------------------
-   Positions
-   ------------------------------------------------------------ */
-/* Donner le focus a un champ ouvre le clavier virtuel sur telephone : une
-   fenetre qui s'ouvre avec le clavier deja deploye cache la moitie de son
-   contenu avant qu'on ait decide de saisir quoi que ce soit. Au doigt, le
-   focus attend donc qu'on touche un champ ; au clavier physique, il reste
-   immediat. */
 const POINTEUR_TACTILE = matchMedia('(pointer: coarse)').matches;
 function focusChamp(el) {
   if (!el || POINTEUR_TACTILE) return;
@@ -2425,25 +1544,14 @@ function focusChamp(el) {
   el.select?.();
 }
 
-/* Les listes deroulantes de classe et de role, dans l'ordre du schema. */
 const OPTIONS_CLASSE = Object.entries(ASSET_CLASSES);
 const OPTIONS_ROLE = Object.entries(ROLES);
 
-/* Part d'une ligne dans l'ensemble des titres cotes. Le tableau des lignes la
-   donne deja par le detail ; la voir a cote de la variation du jour dit tout
-   de suite si le mouvement compte ou s'il est anecdotique.
-
-   La ligne recue porte deja sa valeur (dayPerformance la calcule) : plus de
-   .find() par nom, qui donnait aux homonymes le poids du premier trouve. Le
-   nom est un libelle, jamais une identite. */
 function poidsLigne(ligne) {
   const total = Store.state.positions.reduce((s, p) => s + posValue(p), 0);
   return total ? num(ligne.value) / total * 100 : 0;
 }
 
-/* La categorie deduite du type que renvoie la recherche — « Cryptocurrency »,
-   « ETF », « Equity ». On la propose, on ne l'impose pas : un ETF Core et un
-   ETF satellite ne se distinguent pas de ce cote-la, et l'or non plus. */
 const classeDuType = t => {
   const s = String(t || '').toLowerCase();
   if (/crypto/.test(s)) return 'crypto';
@@ -2452,25 +1560,11 @@ const classeDuType = t => {
   return 'actions';
 };
 
-/* Les comptes qui peuvent porter cette categorie, prets pour une liste
-   deroulante : une action ou un ETF ne se proposent que sur un CTO ou un PEA,
-   une crypto que sur un portefeuille de cryptomonnaies. */
 const comptesPourListe = cat => comptesPourCategorie(cat)
   .map(c => [c.id, sousNom('', nomCompteV2(c), nomEtabDe(c))]);
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'CAD', 'JPY'];
 
-/* Places de cotation, par suffixe Yahoo. Ce réglage sert à départager un ISIN
-   coté à plusieurs endroits : il est passé tel quel à la passerelle, donc
-   ajouter une place ici suffit — rien à changer côté serveur. */
 const EXCHANGES = [
-  /* « Automatique » tout court, et la parenthese est partie. Un menu natif se
-     serre a la largeur qu'on lui laisse et tronque sans rien dire : dans la carte
-     de recherche, a cote d'un champ et d'un bouton, il affichait « Automatique
-     (place de ré ». Une etiquette qui ne tient jamais entiere ne renseigne pas,
-     elle encombre. Ce que la parenthese disait est deja sous le champ des
-     Preferences, dans sa bulle — « Sert a departager un ISIN cote sur plusieurs
-     marches » — c'est-a-dire au seul endroit ou l'on vient regler ce choix plutot
-     que le subir. */
   [trad('Par défaut'), [
     ['auto', trad('Automatique')],
   ]],
@@ -2496,8 +1590,6 @@ const EXCHANGES = [
   ]],
 ];
 
-/* Sigles des devises. Sans eux, « 604 » sur une ligne cotée en dollars se lit
-   comme des euros — surtout à côté d'une ligne en euros à « 5,8 ». */
 const CURRENCY_SIGNS = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr', SEK: 'kr', CAD: 'C$', JPY: '¥' };
 const currencySign = c => CURRENCY_SIGNS[c] || c || '€';
 
@@ -2506,42 +1598,16 @@ const currencySign = c => CURRENCY_SIGNS[c] || c || '€';
    parties avec les neuf autres que la fiche portait deja, et la fonction n'avait
    plus d'appelant. */
 
-/* Tri du tableau des positions : clé + sens, ou null pour l'ordre de saisie */
-/* Plage affichée par chaque graphique d'historique. Un an par défaut : assez
-   pour voir une tendance, assez court pour que le mois dernier reste lisible. */
-/* Une seule fenetre temporelle pour la carte d'evolution : elle est la
-   meme sur l'accueil et sur les relevés, donc son reglage aussi. Deux
-   variables donnaient deux cartes differentes a l'ecran. */
 let evoRange = '1y';
-/* Brut ou net : le bandeau annonce le net, la courbe doit dire la meme
-   chose par defaut. Le brut reste accessible — il montre la composition
-   des avoirs, que le net aplatit quand un credit est gros. */
-/* Net ou brut : une seule notion, donc un seul réglage.
-   Le grand chiffre et la courbe avaient chacun le leur : on pouvait afficher
-   le titre en brut au-dessus d'une courbe tracée en net, sur le même écran,
-   sans que rien ne le signale. Les deux contrôles restent — on bascule là où
-   se pose le regard, comme le sélecteur d'année de Budget qui se répète sur
-   chaque carte — mais ils commandent la même variable. */
 let evoNet = true;    // évolution du patrimoine, vue d'ensemble
 let paceRange = '1y';        // rythme d'accumulation
-/* Le tableau « Voir les données » de l'évolution : son année, et son état
-   ouvert/fermé. Le rendu remplace tout le HTML de la vue, donc un <details>
-   perdrait son ouverture au premier changement d'année — celui-là même qu'on
-   vient de faire depuis l'intérieur du dépliant. */
 let evoYear = null;          // null = année en cours · 'all' = toute la série
 let evoDetailOuvert = false;
-/* Le journal des entrees et sorties exceptionnelles, replie par defaut. Meme
-   mecanique que ci-dessus : le drapeau vit en memoire vive, donc il survit aux
-   re-rendus d'une session — enregistrer une ligne ne referme pas la liste qu'on
-   etait en train de lire — et un rechargement le remet a plie, ce qui est l'etat
-   qu'on veut en arrivant. */
 let journalOuvert = false;
 /* La ligne « Revenus » de la carte « Ou va ce que tu gagnes » ouvre ses sources.
    L'etat vit ici, comme les autres replis de vue : un `details` natif se
    refermerait a chaque rendu, et le rendu suit chaque frappe dans un champ. */
 let revenusOuvert = false;
-/* Redessine la fenetre des revenus quand une source y est ajoutee ou retiree :
-   ces deux actions rendent la vue de fond, pas le contenu de la fenetre. */
 const rafraichirRevenus = () => { if (revenusOuvert) fenetreRevenus(); };
 let salesRange = '1y';       // les deux graphiques de Performance
 /* L'annee du journal des ventes, distincte de la plage glissante ci-dessus.
@@ -2556,8 +1622,6 @@ let salesRange = '1y';       // les deux graphiques de Performance
 /* `salesYear` est parti : le journal se borne comme les graphiques, par
    `salesRange`, qui accepte desormais une annee civile autant qu'une duree. */
 
-/* Comment le journal se lit : dans l'ordre du temps, ou par montant. « date »
-   par defaut, parce qu'un journal est un recit avant d'etre un classement. */
 let triVentes = 'date';
 
 /* Le depliant du journal se souvient. Un `<details>` est recree a chaque rendu,
@@ -2566,16 +1630,7 @@ let triVentes = 'date';
    de tuiles au-dessus, donc replie elle ne montrerait qu'un titre. */
 let journalDeroule = true;
 let posSort = null;
-/* Filtre de role sur le portefeuille : « tous », « core » ou « satellite ».
-   Il agit sur la liste des lignes et sur le graphique de performance ligne a
-   ligne, pas sur les tuiles du haut — celles-ci disent ce que vaut le
-   portefeuille, et une valeur qui change selon un filtre d'affichage serait
-   un piege. Le nombre de lignes retenues est rappele a cote du filtre. */
 let posRole = 'tous';
-/*    Filtre de compte, meme regime que le role : la liste des lignes, pas les
-   tuiles du haut. Les poids par ligne ne changent pas avec lui — la part
-   d'une ligne dans le portefeuille est un fait de la ligne, pas de
-   l'affichage — et le compteur « masquées » dit ce que le filtre retient.*/
 let posCompte = 'tous';
 const POS_SORT_KEYS = {
   name:     p => p.name?.toLowerCase() || '',
@@ -2583,11 +1638,6 @@ const POS_SORT_KEYS = {
   invested: p => posInvested(p),
   perfEur:  p => posPerfEur(p),
   perfPct:  p => posPerfPct(p),
-  /* Quatre colonnes ne se triaient pas : la quantite, le prix de revient, le
-     cours et le poids. Rien ne le justifiait — on trie un tableau par la colonne
-     qu'on regarde, et « quelle ligne pese le plus » etait justement la question
-     sans reponse. Le poids se trie par la valeur : c'est le meme classement, le
-     denominateur etant commun a toutes les lignes. */
   qty:      p => num(p.qty),
   pru:      p => num(p.avgPrice),
   cours:    p => num(p.price),
@@ -2654,15 +1704,8 @@ function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, 
 
    `suffixe` porte l'unite (« dev. »), qui fait partie de l'intitule et reste
    donc dans la zone cliquable. */
-/* Le tri de la carte du jour. Meme geste a trois temps que le tableau des
-   lignes, et meme raison de vivre dans une variable de module plutot que dans
-   l'etat : c'est un reglage d'affichage, il n'a pas a etre synchronise ni
-   sauvegarde. */
 let jourSort = null;
 
-/* L'intitule d'une colonne de la carte du jour : un bouton de tri, et son aide
-   si la colonne en a une. Les deux cohabitent — l'aide etait le declencheur, le
-   tri s'y ajoute sans le remplacer. */
 function triJourTh(key, label, explication = '') {
   const on = jourSort && jourSort.key === key;
   const sens = !on ? trad('décroissant')
@@ -2702,15 +1745,6 @@ function sortableTh(key, label, extraClass = '', explication = '', suffixe = '')
        + `</th>`;
 }
 
-/* Le choix du compte d'une ligne de marche.
-   Le nom court herite des anciennes donnees suffisait quand on connaissait
-   par coeur ses quatre comptes : « Crypto » ne dit pas si c'est le
-   portefeuille de cryptomonnaies ou autre chose, et un « CTO » de courtier
-   se tronquait a mi-mot. On donne le nom complet, et l'etablissement
-   devient l'en-tete de groupe — le navigateur le rend en section, sur
-   telephone comme sur ordinateur. On groupe meme a un seul etablissement :
-   savoir chez quel courtier le portefeuille de cryptomonnaies est tenu
-   compte autant quand c'est le seul choix que quand il y en a trois. */
 function optionsCompte(comptes, choisi) {
   const paretab = new Map();
   comptes.forEach(c => {
@@ -2735,13 +1769,10 @@ function viewPositions() {
   const stockBase = stockTotals().balance;
   const brokerAccounts = ACCOUNTS.filter(a => a.holdings);
 
-  /* Un compte disparu — vendu, archive — ne peut pas rester filtre : la page
-     semblerait vide sans qu'aucun controle visible ne l'explique. */
   if (posCompte !== 'tous' && !Store.state.positions.some(p => p.account === posCompte)) {
     posCompte = 'tous';
   }
 
-  // On trie une vue indexée : les data-path continuent de viser la vraie ligne.
   const retenues = Store.state.positions
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => posRole === 'tous' || roleDe(p) === posRole)
@@ -2750,34 +1781,10 @@ function viewPositions() {
     .map(({ p, i }) => Object.assign(Object.create(Object.getPrototypeOf(p)), p, { __i: i }));
   const masquees = Store.state.positions.length - retenues.length;
 
-  /* La devise de cotation d'une ligne, pour les trois colonnes de prix. */
   const dev = q => q.currency || 'EUR';
   const rows = ps.map((p) => {
     const i = p.__i;
     const v = posValue(p), inv = posInvested(p), pe = posPerfEur(p), pp = posPerfPct(p);
-    /* Dix colonnes, contre dix-huit, et plus une seule ou l'on saisit.
-
-       A dix-huit colonnes editables, un ecran de 1 400 px lisait « FR0 » pour un
-       ISIN et n'affichait plus la quantite : le tableau ne se lisait plus. Huit
-       colonnes sont donc parties, celles qu'on regle et qui se reglent dans la
-       fiche : ISIN, symbole, devise, change, valeur manuelle, classe, role,
-       compte.
-
-       Quantite, prix de revient et cours restent, en lecture. Un tableau sert a
-       comparer des lignes entre elles, et ces trois-la sont les termes du calcul
-       que les quatre suivantes donnent en resultat — sans eux, on lit un ecart
-       sans voir d'ou il vient. Elles ne sont plus des champs : la saisie vit dans
-       la fiche, et deux surfaces pour la meme donnee se contredisent tot ou tard.
-
-       L'identite de la ligne passe sous son nom, comme dans la liste du
-       telephone — meme phrase, meme ordre.
-
-       Pas de colonne de suppression. Une croix par ligne, collee contre le nom
-       qu'on clique pour lire, met un geste irreversible a portee de pouce du
-       geste de lecture — et cinq croix alignees font une colonne de destruction
-       la ou le tableau sert a comparer. La suppression vit dans la fiche, avec
-       les autres actes de la ligne : c'est la meme regle qui a sorti
-       l'annulation du journal des ventes. */
     return `<tr>
       <td class="name sticky-col"><button type="button" class="mois-lien"
             data-action="open-position" data-i="${i}"
@@ -2801,15 +1808,6 @@ function viewPositions() {
     </tr>`;
   }).join('');
 
-
-  /* Une page de titres cotes pour quelqu'un qui n'en a pas.
-
-     Elle dit maintenant ce qu'elle est, et ou aller. Ce n'est pas un ecran vide
-     de plus : c'est le seul moment ou l'application peut expliquer sa propre
-     division du travail — les titres cotes ici, parce qu'ils ont un cours qui
-     tombe tout seul ; tout le reste dans Comptes, parce que c'est nous qui en
-     donnons la valeur. Un investisseur en non cote n'a rien a rater ici, et il
-     doit pouvoir le savoir sans essayer. */
   if (!Store.state.positions.length) {
     return `
   <div class="card">
@@ -2821,14 +1819,6 @@ function viewPositions() {
       ils comptent dans ton patrimoine, ta répartition et ton autonomie exactement
       comme le reste.</p>
     ${(() => {
-      /* Le prerequis, et il manquait : un titre se pose sur le compte qui le
-         detient, et sans compte eligible la fenetre d'ajout n'offrait qu'une
-         liste deroulante vide — le titre n'avait nulle part ou aller, et rien ne
-         disait pourquoi. L'ecran expliquait la frontiere avec Actifs, ce qui est
-         utile, mais pas le geste a faire avant.
-
-         Les types sont derives de leur table : celui qu'on ajoutera demain
-         entrera dans cette phrase sans qu'on y pense. */
       const porteurs = TYPES_COMPTE.filter(t =>
         (t.classes || []).some(c => ['actions', 'obligations', 'crypto'].includes(c)));
       const eligibles = comptesOuverts().filter(c =>
@@ -2838,11 +1828,6 @@ function viewPositions() {
       <button class="btn" data-action="goto" data-view="accounts" data-anchor="">${trad('Aller à Actifs')}</button>
       <button class="btn ghost" data-action="ajouter-ligne">${trad('+ Un titre coté')}</button>
     </div>`;
-      /* Le bouton ci-dessus ouvre la carte de recherche, et cette carte doit donc
-         exister : elle ne se rendait qu'avec le tableau des lignes, c'est-a-dire
-         partout sauf ici. Le clic posait son drapeau, relançait le rendu, ne
-         trouvait rien a ouvrir, et ne faisait donc rien — precisement sur l'ecran
-         ou l'on n'a encore aucune ligne. */
       return `
     <div class="row" style="gap:8px">
       <button class="btn" data-action="ajouter-compte">${trad('Créer un compte-titres')}</button>
@@ -2855,10 +1840,6 @@ function viewPositions() {
   ${(() => {
     const porteurs = TYPES_COMPTE.filter(t =>
       (t.classes || []).some(c => ['actions', 'obligations', 'crypto'].includes(c)));
-    /* La carte de recherche, la meme qu'en bas de la page pleine : un seul chemin
-       pour ajouter une ligne, ici comme ailleurs. Elle ne se rend qu'avec un compte
-       capable de porter le titre — sans lui, la fenetre d'ajout n'offrirait qu'une
-       liste vide, et le bouton d'a cote propose deja d'en creer un. */
     return comptesOuverts().some(c => porteurs.some(t => t.id === c.type))
       ? symbolSearchCard() : '';
   })()}`;
@@ -2867,13 +1848,6 @@ function viewPositions() {
   return `
   ${barreEtatCours()}
 
-  <!-- Ou en est la journee, avant de regarder ses propres lignes : deux
-       indices americains, deux europeens, la parite qui pese sur toutes les
-       lignes en dollars, l'or et le bitcoin. Rempli apres coup, la barre ne
-       doit pas retarder l'affichage de la page. -->
-  <!-- Les familles au-dessus du ruban : Indices, Metaux, Crypto, Devises. Une
-       seule s'affiche a la fois, ce qui garde le ruban court — vingt tuiles a
-       la file feraient un marathon de pouce a 375 px. -->
   <div class="reperes-familles" id="reperesFamilles" role="tablist"
        aria-label="${trad('Familles de repères')}" hidden></div>
   <div class="reperes" id="reperes" aria-label="${trad('Marchés')}" hidden></div>
@@ -2892,22 +1866,11 @@ function viewPositions() {
     <div class="card jour" data-anchor="jour">
       <div class="card-head">
         <h2>${trad('Aujourd\'hui')}</h2>
-        <!-- L'anciennete des cours est desormais dite une fois, en haut de
-             page ; la repeter ici donnait « cours de il y a 1 min ».
-
-             Deux comptes, deux phrases, et il ne faut pas les melanger : « sans
-             cours de veille » designe les lignes absentes de la liste, faute de
-             reference ; « sans cours du jour » celles qui y sont avec un ecart
-             nul, parce que notre prix date d'avant minuit. -->
         <span class="hint">${j.hausse} ${trad('en hausse')} · ${j.baisse} ${trad('en baisse')}
           ${j.sansDonnee ? `· ${j.sansDonnee} ${trad('sans cours de veille')}` : ''}
           ${j.horsSeance && !j.toutHorsSeance ? `· ${j.horsSeance} ${trad('sans cours du jour')}` : ''}</span>
       </div>
 
-      <!--    Rien n'a cote depuis minuit : le total est nul par construction, et
-   l'ecrire « +0 € · +0,00 % » se lit « journee sans mouvement ». Le meme
-   principe que les lignes sans cours de veille, deja hors de la liste : un
-   titre qui n'a pas cote ne dit rien, il ne dit pas zero.-->
       ${j.toutHorsSeance ? `
       <div class="jour-total">
         <span class="jour-eur muted">${trad('hors séance')}</span>
@@ -2917,27 +1880,11 @@ function viewPositions() {
       <div class="jour-total ${positif ? 'up' : 'down'}">
         <span class="jour-eur">${fmtSigned(j.eur)}</span>
         <span class="jour-pct">${arrow(j.pct)} ${fmtSignedPct(j.pct)}</span>
-        <!-- La note dit sur quoi porte le total, donc elle change quand la base
-             change : une ligne prise aujourd'hui compte depuis son achat, et
-             annoncer « depuis la clôture d'hier » serait alors faux du montant
-             que le titre avait deja perdu avant qu'on l'achete. -->
         <span class="jour-note">${trad('sur tes lignes de titres depuis la clôture d’hier')}${
           j.lignes.some(l => l.depuisAchat) ? `, ${trad('ou depuis ton achat du jour')}` : ''}</span>
       </div>`}
 
       <div class="jour-lignes">
-        <!-- Chaque colonne porte son explication, l'intitule etant le
-             declencheur : voir la note de monteAides(). Un paragraphe de cinq
-             lignes vivait sous ce tableau et disait la meme chose. Il chargeait
-             l'ecran a chaque visite pour un texte qu'on lit une fois. -->
-        <!-- Les quatre colonnes se trient, du meme geste a trois temps que le
-             tableau des lignes : decroissant, croissant, puis retour a l'ordre
-             naturel. La carte repond a « qu'est-ce qui a bouge aujourd'hui »,
-             et la reponse n'est pas la meme selon qu'on cherche la plus forte
-             variation ou le plus gros effet en euros — l'une se lit en
-             pourcentage sur une petite ligne, l'autre en euros sur une grosse.
-             L'explication de chaque colonne reste ou elle etait, sur son
-             intitule : le tri s'ajoute au declencheur, il ne le remplace pas. -->
         <div class="jour-ligne entete">
           ${triJourTh('nom', 'Ligne')}
           ${triJourTh('poids', 'Poids', 'La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}
@@ -2946,74 +1893,15 @@ function viewPositions() {
         </div>
         ${trierJour(j.lignes).map(l => `
           <div class="jour-ligne">
-            <!-- l.index vient de dayPerformance : la ligne porte sa position,
-                 on ne la retrouve plus par son nom. Deux titres homonymes sur
-                 deux comptes recevaient le poids et la fiche du premier. -->
-            <!-- Le nom, celui que tu as choisi — et le meme qu'en bas de page.
-
-                 Entre les deux, le nom gagne, et pas par gout. Il existe
-                 toujours, y compris sur une ligne saisie a la main qui n'a aucun
-                 symbole. Il porte ce que le detenteur a voulu distinguer — c'est
-                 lui qui a ecrit « PEA » dans « MSCI World PEA ». Et toutes les
-                 autres surfaces le portent deja : la fiche, la performance, le
-                 journal des ventes, l'allocation. Le ticker aurait fait de cette
-                 carte la seule exception.
-
-                 La largeur se regle autrement : le nom est borne a la saisie, et
-                 coupe a l'affichage si la colonne ne suffit pas. Le nom entier
-                 reste en infobulle et dans la fiche. -->
             <span class="jl-nom"><button type="button" class="mois-lien"
               data-action="open-position" data-i="${l.index}"
               title="${esc(l.name)} · ${trad('voir la fiche complète')}">${
                 esc(l.name)}</button></span>
             <span class="jl-poids muted">${fmtPct(poidsLigne(l), 1)}</span>
-            <!-- Les colonnes Cours et Cloture veille sont parties d'ici, et avec
-                 elles les deux regles qui les masquaient sous 460 px. Elles
-                 disaient exactement ce que la ligne du dessous dit maintenant,
-                 et le disaient seulement sur grand ecran : deux ecritures d'un
-                 meme fait, dont celle qui comptait — le telephone — etait la
-                 muette. (Aucun guillemet oblique : ce commentaire vit dans un
-                 litteral de gabarit, un backtick y fermerait la chaine.) -->
-            <!-- Vides hors seance, et non « +0,00 % · +0 € ». Le raisonnement
-                 est celui qui sort deja les lignes sans cours de veille de la
-                 liste : un titre qui n'a pas cote ne fait pas zero de
-                 variation, il ne dit rien. Il restait applique a une moitie du
-                 probleme seulement. -->
             <span class="jl-pct ${l.horsSeance ? '' : cls(l.pct)}">${
               l.horsSeance ? '' : fmtSignedPct(l.pct, 2)}</span>
             <span class="jl-eur ${l.horsSeance ? '' : cls(l.eur)}">${
               l.horsSeance ? '' : fmtSigned(l.eur)}</span>
-              <!-- Le mouvement du jour, sous le nom, a la place de la place.
-
-                   « La brique aujourd'hui donne la perf du jour mais ne donne
-                   plus les mouvements du jour. » Mesure a 375 px : les colonnes
-                   Cours et Cloture veille etaient masquees, il ne restait que le
-                   resultat — « +0,29 % · +3 € » — sans les deux prix qui le
-                   produisent. On voyait l'effet sans le mouvement.
-
-                   Ce qui cede la place est le nom de la place de cotation :
-                   « je m'en fous, on peut voir en cliquant dessus ». Il est dans
-                   la fiche, qui le porte deja, et savoir qu'un titre passe de
-                   19,24 a 19,30 sert tous les jours quand savoir qu'il cote sur
-                   Euronext ne sert qu'une fois.
-
-                   La pastille reste, seule : elle dit si la place est ouverte,
-                   donc si ce prix vit encore ou s'il est fige depuis la cloture.
-                   Son libelle passe en infobulle, le dessin suffit a l'oeil.
-
-                   Sans cloture de veille — une ligne achetee aujourd'hui — le
-                   prix se donne seul : une fleche partant de rien ne dirait
-                   rien.
-
-                   Il occupe toute la largeur de la ligne, et non la seule
-                   colonne du nom. Loge dedans, il etait coupe net : « 588,77 $US
-                   → 5… », la colonne faisant 110 px pour un texte qui en demande
-                   150, et la cellule du nom rognant ce qui depasse pour les noms
-                   longs. Une seconde rangee de la grille, sur toute sa largeur,
-                   lui donne la ligne entiere : c'est un sous-titre de la ligne,
-                   pas du nom.
-                   (Aucun accent grave ici : ce commentaire vit dans un litteral
-                   de gabarit, ou un backtick referme la chaine. Onzieme fois.) -->
               <span class="jl-mouv">${l.market
                 ? `<i class="pastille ${l.market.cle}" title="${esc(
                     (GLYPHES_SEANCE[l.market.cle] || {}).titre || l.market.label)}"></i>`
@@ -3040,23 +1928,9 @@ function viewPositions() {
                  : trad('pas coté aujourd’hui')}</span>` : ''}</span>
           </div>`).join('')}
       </div>
-      <!-- Le paragraphe qui vivait ici est parti dans les intitules de colonnes.
-           Cinq lignes de texte sous un tableau de cinq lignes de titres : la
-           moitie de la carte servait a expliquer l'autre, a chaque visite, pour
-           quelque chose qu'on lit une fois. -->
     </div>`;
   })()}
 
-  <!-- Quatre tuiles en grille 2×2 vivaient ici. Elles ne composaient rien :
-       « Valeur du portefeuille » et « Montant investi » ne diffèrent que de la
-       plus-value, affichée à côté comme si c'était une quatrième grandeur du
-       même ordre, et la part de 12,3 % portée par « À investir » se rapportait
-       à un total — les 15 131,72 € posés chez les courtiers — qui n'était
-       écrit nulle part sur la page. Qui refaisait le calcul trouvait 14 %.
-
-       Deux parts qui font le total, et l'arithmétique au pied : c'est la liste
-       de l'accueil et du haut d'Allocation. Le total y est écrit, donc les
-       pourcentages se vérifient. -->
   ${(() => {
     const st = stockTotals();
     const parts = [
@@ -3083,15 +1957,6 @@ function viewPositions() {
         </span>
         <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
       </button>`).join('')}
-    <!-- « Total chez tes courtiers » vivait ici, en tête de ce pied. Deux
-         raisons de le retirer, et la première suffit : il additionnait les
-         titres et le cash à investir sous un nom qui situe l'argent, alors que
-         ce cash peut dormir sur un livret ou un compte courant. Le nom était
-         donc faux pour une partie de la somme.
-
-         La seconde : les deux barres au-dessus disent déjà ces deux montants, et
-         leur pourcentage se lit sur cette même somme. Un total sous ses parts
-         qu'on vient de lire n'apprend rien. -->
     <dl class="kv repart-pied">
       <dt>${trad('Prix de revient des titres')}</dt>
         <dd><button type="button" class="mois-lien" data-action="apercu" data-apercu="investiTitres"
@@ -3104,31 +1969,9 @@ function viewPositions() {
   </div>`;
   })()}
 
-  <!-- « Performance par ligne » est partie d'ici. C'était le même graphique que
-       « Latente, ligne par ligne » dans Performance : même fonction, mêmes
-       barres, mêmes données, la plus-value latente par position, triée.
-       « Déjà performance par ligne est aussi dans performance non ? » Oui, à la
-       fonction près.
-       (Aucun accent grave dans ce commentaire : il vit à l'intérieur d'un
-       littéral de gabarit, où un backtick referme la chaîne. C'est la neuvième
-       fois que ce piège se referme, et la deuxième aujourd'hui.)
-
-       Cette page listait donc trois fois les mêmes lignes : la carte du jour,
-       ce graphique, puis le tableau. Trois listes qui répondent à deux
-       questions seulement — ce qui a bougé aujourd'hui, et ce que je détiens.
-       Le graphique répondait à une troisième, la plus-value latente, qui est le
-       sujet entier d'une autre page.
-
-       Ce qui reste ici répond à la question de la page : ce que font mes titres,
-       et ce que je détiens. La plus-value, elle, se lit là où elle est le
-       sujet. -->
-
   <div class="card" data-anchor="titres">
     <div class="card-head">
       <h2>${trad('Lignes de titres')}</h2>
-      <!-- L'export vit dans Données, avec les dix autres feuilles et les
-           sauvegardes : deux boutons d'export à deux endroits obligeaient à
-           se demander lequel donne quoi. -->
       <div class="row">
         <button class="btn sm ghost" data-action="sell-position"
                 ${ps.length ? '' : 'disabled'}
@@ -3141,10 +1984,6 @@ function viewPositions() {
             `<button type="button" data-action="filtrer-role" data-role="${v}"
                      class="${posRole === v ? 'on' : ''}" aria-pressed="${posRole === v}">${l}</button>`).join('')}
         </div>
-        <!-- Le filtre de compte se derive des positions : un compte sans ligne
-             n'y figure pas, et il ne se rend qu'a partir de deux comptes — le
-             proposer a qui n'a qu'un PEA serait un controle sans effet, qui se
-             lit comme une panne. -->
         ${(() => {
           const ids = [...new Set(Store.state.positions.map(p => p.account))];
           if (ids.length < 2) return '';
@@ -3162,7 +2001,6 @@ function viewPositions() {
     <div class="row" style="margin:-4px 0 12px">
       <span class="hint">${trad('Une ligne s’ouvre au doigt ou au clic : sa fiche porte la quantité, le prix de revient et le reste.')}</span>
     </div>
-    <!-- Telephone : une ligne par titre, tout le reste dans la fiche. -->
     <div class="liste-mobile">
       ${ps.map(p => {
         const i = p.__i, v = posValue(p), pp = posPerfPct(p);
@@ -3203,58 +2041,9 @@ function viewPositions() {
 
   ${symbolSearchCard()}
 
-  <!-- La carte « Cours automatiques » vivait ici. Elle redisait ce que la
-       pastille du haut dit deja — la fraicheur des cours, cliquable pour
-       forcer une mise a jour — et son interrupteur « Au chargement » doublait
-       celui des Preferences. Deux endroits pour une meme information, dont l'un
-       tenait une demi-carte.
-
-       Ce qui part avec elle : le detail par ligne des echecs de recuperation,
-       et la table de resolution ISIN vers symbole. Le nombre d'echecs reste
-       annonce par le message qui suit chaque actualisation, et l'etat par la
-       pastille ; c'est laquelle qui manque. A remettre dans Donnees, avec les
-       autres diagnostics, le jour ou une ligne echouera sans qu'on comprenne
-       pourquoi. -->
-
-  <!-- La carte « Cash a investir » vivait ici, avec sa table compte par compte.
-       C'etait le troisieme affichage du meme argent sur la meme page : le resume
-       du haut porte deja sa ligne, cliquable, et elle ouvre la fiche qui liste
-       les memes comptes avec les memes champs modifiables.
-
-       On a d'abord cru a un manque — les montants ne se signalaient pas comme
-       modifiables — et c'etait vrai, mais d'un defaut general : la regle des
-       tableaux modifiables rendait leurs champs entierement transparents jusqu'au survol, donc invisibles
-       sur un telephone. Le pointille les revele partout desormais. Restait la
-       redondance, qui n'avait plus d'excuse. -->
-
-  <!-- Le journal des ventes revient sur cette page, et cette fois c'est lui et
-       non un renvoi vers lui.
-
-       Un renvoi avait vecu ici, puis il est parti : il envoyait vers une page
-       qui portait le meme sujet, et deux portes valent moins qu'une. Ce
-       raisonnement etait juste ; c'est sa conclusion qui a change le jour ou la
-       page d'arrivee a disparu.
-
-       Il est ici parce que c'est le meme sujet a deux temps : ce qu'on detient,
-       ce qu'on a vendu. Une vente est d'ailleurs la partie solide de l'ancienne
-       page Performance — un fait date et nomme, pas un pourcentage dont la base
-       se discute — et c'est elle qu'on vient chercher en mai.
-
-       La fonction salesCard porte son propre depliant et sa propre borne de
-       temps : rien a rebrancher ici, sinon les deux lignes de montage du pli.
-       (Pas de backtick dans ce commentaire : il vit dans un litteral de gabarit,
-       ou un backtick refermerait la chaine. C'est arrive en l'ecrivant.) -->
   ${salesCard()}
 
   <div class="card">
-    <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
-         « vente par vente » au-dessus de barres trimestrielles annoncerait la
-         mauvaise lecture. -->
-    <!-- Pas de selecteur de plage ici : le journal, juste au-dessus, porte
-         celui de la page. Deux exemplaires du meme contrôle a deux cents pixels
-         d'ecart se lisent comme deux reglages, et l'un des deux passe pour
-         inerte. Il est en haut parce que c'est la que la borne se choisit, et
-         ces graphiques la suivent. -->
     <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
       ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>
       <span class="hint">${esc(libellePlage)}</span></div>
@@ -3272,32 +2061,11 @@ function viewPositions() {
   </div>` : ''}`;
 }
 
-/* Journal des ventes : la performance encaissée, celle que le tableau des
-   lignes ne peut plus montrer une fois la position soldée. */
 function salesCard() {
   const toutes = Store.state.sales || [];
   const aVendre = (Store.state.positions || []).length;
 
-  /* Une seule borne de temps sur cette page, celle des graphiques au-dessus.
-
-     Il y en avait deux : la plage glissante reglait les courbes, un menu d'annee
-     reglait ce journal, et rien n'empechait l'un de dire 2025 et l'autre 2026.
-     Deux contrôles jumeaux sur un ecran, chacun se prevalant de sa moitie, c'est
-     le motif que ce projet corrige sans arret. Le menu des annees a donc rejoint
-     les crans, dans un contrôle unique qui porte les deux facons de dire une
-     borne : une duree qui court jusqu'a aujourd'hui, ou une annee civile.
-
-     Le depliant reste, et il ne fait pas double emploi avec la borne : celle-ci
-     dit **combien** de lignes existent, celui-la **quand** on les voit. Sur une
-     annee chargee, cinq cents ventes restent cinq cents lignes. */
   const st = salesStats(salesRange);
-  /* Le contrôle est ici aussi, et c'est la meme valeur qu'en haut : deux portes
-     sur un champ unique, jamais deux champs. C'est ce qui separe ce montage du
-     precedent — deux menus d'annee rangeaient deux etats, et l'un pouvait dire
-     2025 pendant que l'autre disait 2026. Ils affichent desormais tous les deux
-     la borne active, donc ils ne peuvent plus se contredire.
-     Il se voit ici parce que c'est ici qu'on cherche une annee : un contrôle
-     range deux cartes plus haut agirait sur ce qu'on lit sans etre sous les yeux. */
   const plages = rangeControl('sales-range', salesRange, anneesDesVentes());
 
   /* La carte porte le bouton qui l'alimente, et elle se rend même vide.
@@ -3319,70 +2087,19 @@ function salesCard() {
   return `
   <div class="card" data-anchor="ventes">
     <div class="card-head">
-      <!-- La reserve fiscale est une bulle et non une phrase en pied de carte :
-           elle vaut pour chaque ligne du journal, elle ne se lit qu'une fois, et
-           posee en clair sous la liste elle occupait trois lignes d'ecran pour
-           dire ce qu'on ne relit jamais. Sur le titre, elle reste a portee du
-           doigt de qui se demande ce que ces montants comptent.
-           Les noms d'enveloppes restent tels quels dans les deux langues : PEA
-           et CTO sont des produits francais, les traduire inventerait des noms
-           qui n'existent pas. -->
       <h2>${trad('Journal des ventes')}${aide(trad('Résultat brut, avant frais et fiscalité : '
         + 'le traitement fiscal dépend de l’enveloppe (PEA, CTO) et de ta situation.'))}</h2>
       ${toutes.length ? `<span class="hint">${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}${
         st.count === toutes.length ? '' : ` ${trad('sur.total', 'sur')} ${toutes.length}`}</span>
       ${plages}` : ''}
-      <!-- Un seul bouton, et la nature se choisit dans la fenetre.
-
-           Ils etaient deux : « Vendre », grise faute de ligne a vendre, et
-           « Vente passee ». Deux entrees pour un seul geste — j'ai vendu quelque
-           chose — dont une souvent inerte, avec une infobulle que personne ne lit
-           au doigt. Le menu qui demande quoi vendre porte donc les lignes du
-           portefeuille, puis « une vente passee, pour memoire » : la meme
-           question, un seul controle.
-
-           Plus d'etat desactive : sans aucune ligne, la fenetre s'ouvre sur ce
-           repli. Un bouton qui a l'air disponible et se derobe est pire qu'un
-           bouton qui dit ce qu'il peut.
-           (Aucun backtick dans ce commentaire : il vit dans un litteral de
-           gabarit, et fermerait la chaine.) -->
       <button class="btn sm ghost" data-action="sell-position"
               title="${trad('Enregistrer une vente et sa plus-value, ou en déclarer une passée')}">− ${trad('Vendre')}</button>
     </div>
     ${!toutes.length ? `<p class="empty">${trad('Aucune vente enregistrée.')} ${aVendre
       ? trad('Le bouton « Vendre » enregistre la vente, sa plus-value, et crédite le compte de ton choix.')
       : trad('Il faut une ligne de titres avant de pouvoir en vendre une.')}</p>` : `
-    <!-- Une liste de ventes, chacune sa porte, et plus trois tuiles au-dessus.
-
-         Les tuiles disaient le produit encaisse, le prix de revient cede et le
-         taux de reussite : trois totaux de page pour des faits qui appartiennent
-         a chaque vente, et dont deux se relisaient deja ailleurs — la plus-value
-         encaissee est en tete de page avec son pourcentage, et le taux de
-         reussite y tenait sa meta. Ils vivent maintenant dans le detail de la
-         vente concernee, ou l'on va quand on veut savoir.
-
-         Une liste et non un tableau, a toutes les largeurs. Celui-ci portait dix
-         colonnes, donc un defilement lateral sous 768 px alors que la regle de la
-         maison l'interdit au-dela de trois : le motif etait deja ecrit, dans
-         ligneListe, et la seule carte qui l'ignorait etait celle-ci. Le nom qu'on
-         lit est le bouton qu'on clique.
-
-         L'annulation part avec le tableau et rejoint le panneau : un ↺ de 24 px
-         colle contre une ligne cliquable, c'est un geste irreversible a portee de
-         pouce du geste de lecture. -->
     ${st.count ? `<details class="data-view" id="pliVentes" ${journalDeroule ? 'open' : ''}>
       <summary>${trad('Voir les')} ${st.count} ${st.count > 1 ? trad('ventes') : trad('vente')}</summary>
-      <!-- Deux lectures d'un journal, et elles repondent a deux questions.
-
-           Par date, c'est ce qu'un journal est : le recit, dans l'ordre ou ca
-           s'est passe. Par montant, c'est le classement : laquelle a rapporte,
-           laquelle a coute. La barre d'ampleur donne deja la seconde a l'oeil,
-           mais seulement au sein de la periode affichee et sans mettre les lignes
-           cote a cote.
-
-           Deux boutons d'etat et non un menu : il n'y a que deux valeurs, et un
-           menu deroulant pour deux choix demande un geste de plus pour la meme
-           chose. -->
       <div class="segmented seg-mini" style="margin:4px 0 8px">
         <button data-action="tri-ventes" data-tri="date" class="${triVentes === 'date' ? 'on' : ''}"
                 aria-pressed="${triVentes === 'date'}">${trad('Par date')}</button>
@@ -3391,22 +2108,7 @@ function salesCard() {
       </div>
       <div class="liste-principale" style="margin-top:4px">
         ${(() => {
-          /* L'ampleur de chaque plus-value, en barre, relative a la plus grosse de
-             la periode affichee. Le journal reste dans l'ordre du temps — c'est ce
-             qu'un journal est — et la barre donne ce que l'ordre chronologique ne
-             donne pas : laquelle a porte la periode. Sans elle, trois montants
-             alignes demandent de les comparer de tete.
-
-             La base est la plus grande valeur absolue, gains et pertes sur la meme
-             echelle : deux echelles separees feraient paraitre une perte de 40 EUR
-             aussi grave qu'un gain de 700. Un plancher de 2 % pour qu'une petite
-             vente ne disparaisse pas, et aucune barre du tout si rien ne depasse
-             zero — comparer des riens n'apprend rien. */
           const plusGrand = Math.max(...st.sales.map(v => Math.abs(num(v.realised))), 0);
-          /* Par montant, la plus grosse plus-value d'abord, et les pertes en
-             queue : c'est un classement de resultat, donc l'ordre est signe et non
-             pas absolu. Trier sur la valeur absolue aurait mis la pire perte en
-             tete du classement des gains. */
           const listees = triVentes === 'montant'
             ? st.sales.slice().sort((a, b) => num(b.realised) - num(a.realised))
             : st.sales;
@@ -3415,8 +2117,6 @@ function salesCard() {
             const pct = num(v.invested) ? num(v.realised) / num(v.invested) * 100 : null;
             const part = plusGrand ? Math.abs(num(v.realised)) / plusGrand * 100 : 0;
             const teinte = num(v.realised) >= 0 ? 'var(--good)' : 'var(--critical)';
-            /* Une vente declaree n'a ni quantite ni prix : son sous-titre dit d'ou
-               elle vient plutot que d'afficher « 0 × 0 € ». */
             return ligneListe({
               action: 'open-sale', index: toutes.indexOf(v),
               titre: v.name,
@@ -3434,12 +2134,6 @@ function salesCard() {
     </details>` : `<p class="empty">${trad('Aucune vente sur cette période.')}</p>`}`}
   </div>`;
 }
-
-/*    Le ticker est reparti — il rendait les deux cartes de Marches illisibles
-   ensemble, « DCAM » en haut pour « MSCI World PEA » en bas — et la fonction
-   avec lui. Une fonction sans appelant est la moitie qu'on oublie en retirant
-   un affichage.*/
-
 
 /* Soleil ou lune, selon que la place cote ou dort. Le cours d'un marche ferme
    est celui de la derniere cloture : sans ce signe, « +0,70 % » se lit comme
@@ -3466,36 +2160,17 @@ function glypheSeance(etat) {
                aria-label="${esc(g.titre)}"><title>${esc(g.titre)}</title>${dessin}</svg>`;
 }
 
-/* La barre de reperes. Les valeurs restent visibles en mode discret : ce ne
-   sont pas des avoirs, elles ne disent rien de ce que l'on possede. */
-/* Les reperes affiches, gardes pour leurs fiches : APERCUS est synchrone, la
-   fiche lit donc ce que la barre vient de recevoir plutot que de refetch. */
 let REPERES_AFFICHES = [];
 
-/* L'unite d'un repere : des points pour un indice, sinon sa devise.
-
-   Le prefixe « ^ » designe un indice chez Yahoo, pour toutes les places : il ne
-   se confond avec aucun ticker d'action ou d'ETF. On se garde de lire la devise
-   plutot que de tenir une liste des cinq indices du ruban, qui oublierait le
-   sixieme.
-
-   La fonction vit ici parce que deux surfaces l'emploient, la tuile du ruban et
-   la fiche qu'elle ouvre : un nombre nu se lisait « 1,08 » sans dire de quoi, et
-   deux calculs separes auraient fini par donner deux unites pour un meme cours. */
 const uniteRepere = l => String(l?.symbole || '').startsWith('^') ? ` ${trad('pts')}`
   : l?.devise === 'USD' ? ' $' : l?.devise === 'EUR' ? ' €'
   : l?.devise ? ` ${l.devise}` : '';
 
-/* La famille affichee, gardee d'un rendu a l'autre. En memoire et non dans
-   l'etat : c'est un reglage d'affichage, pas une donnee de patrimoine, et
-   l'ecrire ferait une sauvegarde a chaque coup d'oeil sur les metaux. */
 let familleReperes = null;
 /* Vrai le temps d'un rendu, pose par le clic sur un onglet de famille. Le meme
    mecanisme que `tapeSousOnglets` : l'intention vit dans le geste, la classe
    est posee au rendu suivant puis retiree quand l'animation a fini. */
 let reperesEntrent = false;
-/* +1 si la nouvelle famille est a droite de l'ancienne dans la barre, -1 sinon.
-   Les tuiles entrent alors du cote d'ou l'on vient. */
 let reperesSens = 1;
 
 async function mountReperes() {
@@ -3506,10 +2181,6 @@ async function mountReperes() {
   const familles = Quotes.famillesReperes();
   const onglets = $('#reperesFamilles');
   if (onglets) {
-    /* La barre ne se reconstruit qu'une fois. C'est ce qui permet au
-       soulignement de glisser : un element recree a chaque rendu n'a pas d'etat
-       precedent, donc rien a animer — il apparaitrait deja en place. On ne
-       reecrit donc que la classe active et la position du curseur. */
     if (!onglets.querySelector('[data-famille]')) {
       onglets.innerHTML = familles.map(([cle, nom]) => `
         <button type="button" class="rp-famille" data-famille="${esc(cle)}">${esc(nom)}</button>`).join('')
@@ -3518,26 +2189,14 @@ async function mountReperes() {
     for (const b of onglets.querySelectorAll('[data-famille]')) {
       b.onclick = () => {
         if (b.dataset.famille === familleReperes) return;
-        /* Le sens du trajet, avant de changer de famille : on va vers la droite
-           dans la liste, les tuiles entrent donc par la droite. Sans ça le
-           mouvement serait toujours le meme et ne dirait rien du chemin
-           parcouru — c'est ce qui distingue un carrousel d'un simple
-           remplacement. */
         const cles = familles.map(f => f[0]);
         reperesSens = cles.indexOf(b.dataset.famille) >= cles.indexOf(familleReperes) ? 1 : -1;
         familleReperes = b.dataset.famille;
         retourHaptique();
-        /* La cascade ne joue qu'ici, au changement de famille, et jamais au
-           rafraichissement des cours : c'est le clic qui la demande, pas le
-           rendu. Une barre qui frissonne toutes les cinq minutes fatiguerait. */
         reperesEntrent = true;
         mountReperes();
       };
     }
-    /* La classe active et le curseur, a chaque passage. Le curseur se mesure sur
-       le bouton plutot que de se deduire d'un index : les libelles n'ont pas la
-       meme largeur, « Crypto » est plus court que « Devises », et un
-       soulignement de largeur fixe glisserait sous un mot qu'il ne couvre pas. */
     for (const b of onglets.querySelectorAll('[data-famille]'))
       b.classList.toggle('on', b.dataset.famille === familleReperes);
     const actif = onglets.querySelector('.rp-famille.on');
@@ -3545,9 +2204,6 @@ async function mountReperes() {
     if (actif && curseur) {
       curseur.style.width = `${actif.offsetWidth}px`;
       curseur.style.transform = `translateX(${actif.offsetLeft}px)`;
-      /* Le premier placement ne s'anime pas : au chargement de la page, un
-         soulignement qui arrive en glissant depuis la gauche se lit comme un
-         mouvement dont personne n'a donne l'ordre. */
       if (!curseur.dataset.pose) {
         curseur.dataset.pose = '1';
         requestAnimationFrame(() => curseur.classList.add('glisse'));
@@ -3574,27 +2230,16 @@ async function mountReperes() {
         ${glypheSeance(marketStatus(l))}
       </span>
       <span class="rp-prix">${nb(l.prix, l.prix < 10 ? 4 : 0)}<span class="rp-unite">${esc(uniteRepere(l))}</span></span>
-      <!-- « hors séance » plutôt qu'un pourcentage de la veille. La tuile fait
-           quatre-vingt-dix pixels : la date exacte du cours n'y tient pas, elle
-           est dans l'infobulle et dans la fiche que la tuile ouvre. -->
       <span class="rp-var ${l.pct == null ? 'muted' : cls(l.pct)}">${
         l.pct == null ? trad('hors séance') : fmtSignedPct(l.pct, 2)}</span>
     </button>`).join('');
   box.hidden = false;
-  /* La classe est retiree une fois l'animation finie : la laisser ferait
-     rejouer la cascade au premier changement de style, et le ruban est
-     redessine a chaque rendu de la vue. */
   if (reperesEntrent) {
     reperesEntrent = false;
     box.style.setProperty('--sens', String(reperesSens));
     box.classList.add('rp-entre');
-    /* 0,42 s d'animation plus 0,22 s de decalage pour la derniere tuile : on
-       retire la classe apres les deux, sinon la fin de la cascade est coupee. */
     setTimeout(() => box.classList.remove('rp-entre'), 700);
   }
-  /* Le ruban revient a gauche : on vient de changer de famille, et rester au
-     milieu du defilement precedent montrerait le troisieme repere d'une liste
-     qu'on n'a pas encore lue. */
   box.scrollLeft = 0;
 }
 
@@ -3602,17 +2247,9 @@ async function mountReperes() {
    de recherche n'existe pas encore au moment du clic si l'on arrive d'une
    autre vue. */
 let ouvrirRechercheApresRendu = false;
-/* Le compte d'ou l'on est parti, quand on vient de la fiche d'un compte. La
-   fenetre de creation s'ouvre dessus au lieu du compte par defaut : on vient de
-   dire ou l'on veut poser le titre, le redemander serait poser deux fois la
-   meme question. Vide des qu'une ligne est creee, sinon le compte d'hier
-   deciderait de la ligne d'aujourd'hui. */
 let compteVisePourAjout = null;
 
 function mountPositions() {
-  /* Le depliant du journal des ventes retient son etat, comme il le faisait sur
-     l'ancienne page Performance : c'est le meme composant, deplace, pas
-     reecrit. */
   const pli = $('#pliVentes');
   if (pli) pli.ontoggle = () => { journalDeroule = pli.open; };
 
@@ -3638,8 +2275,6 @@ function mountPositions() {
     });
   }
 
-  /*    Le montage de « Performance par ligne » est parti avec sa carte : c'était
-   le même graphique que celui de Performance.*/
   /* La recherche se monte meme sans aucune ligne, et c'est le correctif : l'etat
      vide porte le bouton « + Un titre coté » et desormais la carte qu'il ouvre.
      Le montage sortait avant, donc le champ restait inerte au moment precis ou
@@ -3663,55 +2298,29 @@ function mountPositions() {
     if (carte) setTimeout(() => carte.scrollIntoView({ block: 'center', behavior: 'smooth' }), 320);
   }
 
-  /* Ce qui suit a besoin du tableau et de ses voisins : sans une seule ligne, la
-     vue ne rend ni graphique ni barre de reperes, et monter dessus jetait
-     « clientWidth de null » en laissant la page a moitie construite. */
   if (!Store.state.positions.length) return;
   mountReperes();
   monteTirerRafraichir();
 }
 
-/* ------------------------------------------------------------
-   Cours automatiques
-   ------------------------------------------------------------ */
 function fmtWhen(iso) {
   if (!iso) return trad('jamais');
   const d = new Date(iso), mins = Math.round((Date.now() - d) / 60000);
   if (mins < 1) return trad("à l'instant");
-  /* Le nombre se place par gabarit et non par concatenation : l'anglais met
-     l'anciennete apres la duree, « 5 min ago », et deux fragments cousus dans
-     l'ordre francais donneraient « ago 5 min ». */
   if (mins < 60) return trad('il y a {n} min').replace('{n}', mins);
   if (mins < 1440) return trad('il y a {n} h').replace('{n}', Math.round(mins / 60));
   return d.toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
 }
 
-/* L'etat des cours, ecrit une fois pour les deux pages qui en vivent.
-
-   Il datait les chiffres de Positions et pas ceux de Performance, ou la
-   plus-value latente vaut exactement ce que les cours disent : le grand chiffre
-   s'affichait sans une heure, et « depuis le debut » ne datait rien non plus.
-   L'anciennete se dit une fois par page, en haut, avant les chiffres qu'elle
-   date — la repeter dans chaque carte donnait « cours de il y a 1 min ».
-
-   Une seule declaration : deux exemplaires de cette barre auraient porte deux
-   boutons, et c'est arrive assez souvent dans ce depot pour qu'on n'essaie pas. */
 function barreEtatCours() {
   return `
   <div class="barre-etat">
-    <!-- Le ↻ manquait : « • il y a 2 min » se lit comme une étiquette d'état,
-         et rien ne disait qu'on pouvait cliquer dessus pour relancer une
-         récupération qui a échoué. L'icône tourne pendant l'appel. -->
     <button class="etat-cours" id="btnQuotes" type="button" data-action="refresh-quotes"
             title="${trad('Récupérer les cours de bourse')}"><i class="pt"></i><span id="coursQuand">${trad('Cours')}</span><span
             class="etat-maj" aria-hidden="true">↻</span></button>
   </div>`;
 }
 
-/* --- pastille d'etat des cours, dans la barre du haut ---
-   Elle remplace le bouton « Cours » : les cours arrivent seuls, un bouton
-   d'action promettait donc un travail deja fait. Reste l'information —
-   fraicheur et anciennete — cliquable pour forcer une mise a jour. */
 const COURS_FRAIS = 15 * 60 * 1000;   // en deca, on considere le cours a jour
 
 function majEtatCours(etat) {
@@ -3769,15 +2378,6 @@ function majEtatCours(etat) {
      n'ouvrent pas aux memes heures, et un ETF europeen dans un portefeuille
      americain ferait mentir n'importe quelle table. Ce qui compte n'est pas
      l'heure qu'il est, c'est qu'aucune ligne detenue n'ait bouge. */
-  /* Trois etats, parce qu'un portefeuille peut etre a cheval sur deux places.
-
-     Ni un age, donc, ni « hors seance » qui serait faux tant qu'une place cote :
-     le compte de ce qui n'a pas bouge. « 2 hors seance » se lit sans effort, et
-     l'infobulle nomme le reste. C'est le meme mot que sur les tuiles d'indices et
-     dans la carte du jour, qui compte deja « n sans cours du jour ».
-
-     La pastille reste tiede dans ce cas : un point vert au-dessus d'un
-     portefeuille a moitie perime dirait que tout va bien. */
   const j = dayPerformance();
   const ferme = !!j.toutHorsSeance;
   const partiel = !ferme && j.horsSeance > 0;
@@ -3786,11 +2386,6 @@ function majEtatCours(etat) {
                     : partiel ? `${j.horsSeance} ${trad('hors séance')}`
                     : marche ? fmtWhen(new Date(marche * 1000))
                     : last ? fmtWhen(last) : trad('Cours');
-  /* Les deux heures dans l'infobulle, parce que leur ecart est justement ce
-     qu'on cherche a savoir quand les chiffres ne bougent pas. */
-  /* Le compte des lignes passe par un gabarit a deux nombres : l'accord du
-     verbe et du pluriel differe d'une langue a l'autre, et l'anglais n'a qu'une
-     forme la ou le francais en a deux. */
   btn.title = marche
     ? `${trad('Cours')} ${fmtCoursQuand(marche)}, ${trad('relevés')} ${fmtWhen(last)}`
       + (ferme ? ` · ${trad('aucune de tes lignes n’a coté depuis minuit')}`
@@ -3809,27 +2404,11 @@ function symbolSearchCard() {
   const on = Quotes.isOnline();
   return `
     <div class="card">
-      <!-- Pas de renvoi en tete. Il donnait le mode d'emploi de la carte,
-           « cherche, puis ... », donc il nommait un controle qu'on a sous les
-           yeux : le premier a changer de nom l'a rendu faux, et un mode
-           d'emploi faux se lit avant le controle qu'il decrit. Un renvoi de
-           carte porte ce que la carte ne montre pas, jamais l'ordre des gestes
-           qu'elle affiche. -->
       <div class="card-head"><h2>${trad('Ajouter une ligne')}</h2></div>
-      <!-- Le recours, et pas l'inverse. Ce formulaire etait le chemin principal,
-           offert par le bouton de l'en-tete du tableau, alors qu'il fait taper a
-           la main ce que la recherche remplit seule. Il garde sa raison d'etre :
-           un titre sans ISIN, ou cote nulle part, n'a pas d'autre porte. -->
       <p class="small muted" style="margin:0 0 12px">
         ${trad('Pas d’ISIN, ou un titre coté nulle part ?')}
         <button class="lien-nu" data-action="add-position">${trad('Saisir la ligne à la main')}</button>
       </p>
-      <!-- La barre est posee, pas depliee. Un depliant coute un clic pour
-           reveler ce que le titre de la carte annonce deja, et son resume
-           redisait mot pour mot le champ qu'il cachait : « ISIN ou nom du
-           titre » au-dessus de « ISIN ou nom, ex. ... ». Un panneau se replie
-           quand il porte des reglages qu'on ne touche qu'une fois ; celui-ci
-           porte le geste pour lequel on vient. -->
       <div class="barre-recherche" style="margin-top:12px">
         <input id="symQuery" placeholder="${trad('ISIN ou nom, ex. IE000OJ5TQP4')}" style="text-align:left">
         <button class="btn sm" id="symSearch" ${on === false ? 'disabled' : ''}>${trad('Chercher')}</button>
@@ -3844,9 +2423,6 @@ function symbolSearchCard() {
           })()}
         </select>
       </div>
-      <!-- La consigne tient en une ligne ; les trois suivantes disaient
-           pourquoi, et c'est une limite technique qui interesse le jour ou l'on
-           se demande pourquoi le champ ISIN est reste vide. -->
       <p class="small muted" style="margin:8px 0 0">
         <b>${trad('Colle plutôt l\'ISIN de ton relevé')}</b>${trad(' : la ligne se remplit alors entièrement.')}${aide(trad("Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout."))}
       </p>
@@ -3909,16 +2485,6 @@ function mountSymbolSearch() {
         ${isinCode ? `<p class="small muted" style="margin:0 0 8px">ISIN valide · ${res.length}
            cotation${res.length > 1 ? 's' : ''} trouvée${res.length > 1 ? 's' : ''}, la première
            correspond à ta place privilégiée.</p>` : ''}
-        <!-- Un bouton, et non un menu de destinations : chercher un titre,
-             c'est en ajouter un. Une ligne deja detenue se complete depuis sa
-             fiche, ou la verification de l'ISIN pose le symbole ; deux portes
-             sur le meme geste, c'est le defaut que ce projet defait ailleurs.
-             Deux colonnes, pas trois : la place et le type descendent sous le
-             nom, ou ils se lisent aussi bien. Le tableau n'a pas de conteneur
-             defilant et la page coupe net ce qui depasse, donc une troisieme
-             colonne rendrait l'action inatteignable a 343 px.
-             (Aucun guillemet oblique ici : ce commentaire vit dans un
-             littéral de gabarit, un backtick y fermerait la chaîne.) -->
         <table class="table-serree cols-nom-action"><tbody>${res.map(r => `
         <tr>
           <td class="name">${esc(r.symbol)}${r.symbol === bestSymbol ? ' <span class="tag">retenu</span>' : ''}
@@ -3932,40 +2498,10 @@ function mountSymbolSearch() {
 
       out.querySelectorAll('.assign-target').forEach(bouton => {
         bouton.addEventListener('click', async () => {
-          /* Le cours du titre choisi, avant d'ouvrir la fenetre.
-             Elle demande un prix de revient « par titre », et sans la devise ni
-             un ordre de grandeur la question se pose a l'aveugle : la recherche
-             de Yahoo ne rend ni l'un ni l'autre. Les chercher pour les vingt-cinq
-             resultats couterait vingt-cinq appels pour un seul qu'on retient ;
-             sur celui qu'on vient de designer, c'en est un.
-             L'echec n'empeche rien : la fenetre s'ouvre sans le repere plutot
-             que de refuser d'ouvrir parce que la passerelle dort. */
           bouton.disabled = true;
           const cote = await coteDuSymbole(bouton.dataset.symbol);
           bouton.disabled = false;
 
-          /* Le titre doit atterrir quelque part, et pas n'importe ou : la
-             categorie se deduit du type renvoye par la recherche, et le compte
-             se limite a ceux qui peuvent la porter.
-
-             Le compte se demande en premier : c'est la question a laquelle on
-             sait repondre en arrivant — j'achete ce titre sur tel compte — la
-             ou la classe et le role sont des reglages de rangement. La liste
-             des comptes depend malgre tout de la classe, et se refait quand on
-             la change. */
-          /* La classe se deduit quand la recherche a rendu un type, et elle ne
-             se demande pas alors : qu'un titre soit une action ou un ETF est un
-             fait de l'instrument, pas une preference, et poser la question
-             donnait a choisir une reponse qu'on connait deja. Elle s'affiche
-             donc en lecture, avec d'ou elle vient.
-
-             Le chemin de correction ne disparait pas pour autant, et il le
-             faut : une classe n'est pas toujours un fait — un ETC sur l'or est
-             « metaux » ici et « actions » ailleurs. La fiche de la ligne porte
-             le menu, et la bulle dit ou aller.
-
-             Sans type renvoye, la question redevient une vraie question, et le
-             lien qui refait la liste des comptes revient avec elle. */
           const cat = classeDuType(bouton.dataset.type);
           const deduite = !!bouton.dataset.type;
           const v = await askForm({
@@ -3978,20 +2514,8 @@ function mountSymbolSearch() {
               { cle: 'account', label: 'Compte', type: 'liste', options: comptesPourListe(cat),
                 valeur: compteVisePourAjout || defaultHoldingAccount(),
                 aide: trad('limité aux comptes compatibles') },
-              /* La quantite et le prix paye se demandent ici, sous le compte,
-                 parce qu'ils font partie du meme geste : j'ai achete tant de
-                 titres, a tel prix, sur tel compte. Les laisser a zero
-                 obligeait a rouvrir la fiche juste apres, pour la seule ligne
-                 qu'on vienne de creer. Zero reste accepte : on cree aussi une
-                 ligne avant de l'acheter, et le champ n'est pas requis. */
               { cle: 'qty', label: 'Quantité', type: 'nombre', exemple: '0',
                 aide: trad('laisse zéro si tu n’as pas encore acheté') },
-              /* La devise se lit sur l'intitule, pas dans une bulle : c'est
-                 l'unite du nombre qu'on tape, et une unite se pose contre le
-                 champ. Le cours du jour sert de repere en fond de champ, sans
-                 jamais remplir : un prix de revient est ce qu'on a paye, et
-                 pre-remplir avec le cours d'aujourd'hui donnerait une valeur
-                 fausse a l'air officiel, que personne ne relit. */
               { cle: 'buyPrice', type: 'nombre',
                 label: cote && cote.currency
                   ? `${trad('Prix de revient unitaire')} (${cote.currency})`
@@ -4001,14 +2525,6 @@ function mountSymbolSearch() {
                   ? `${trad('cours du jour')} ${fmtCur(cote.price, cote.currency)} · ${
                       trad('ce que tu as payé peut être différent')}`
                   : trad('le prix payé par titre, dans la devise du titre') },
-              /* Acheter sort de l'argent, ici comme ailleurs. Renforcer une
-                 ligne demandait deja « Paye depuis » et debitait le cash du
-                 compte choisi ; la creation, qui demande desormais une quantite
-                 et un prix, faisait naitre des titres sans que rien ne parte.
-                 Le meme geste doit avoir le meme effet, sinon le cash d'un
-                 compte-titres ne baisse jamais et le total de l'enveloppe monte
-                 tout seul. Le dernier choix reste « ne rien toucher », pour la
-                 ligne qu'on installe sans venir de l'acheter. */
               ...(cashTargets().length ? [{
                 cle: 'cash', label: trad('Payé depuis'), type: 'liste',
                 options: [...cashTargets().map(c => [c.id, sousNom('', nomCompteV2(c), nomEtabDe(c))]),
@@ -4024,12 +2540,6 @@ function mountSymbolSearch() {
                     options: OPTIONS_CLASSE, valeur: cat },
               { cle: 'role', label: 'Rôle', type: 'liste', options: OPTIONS_ROLE,
                 valeur: 'satellite', aide: trad('coeur de portefeuille ou pari satellite') },
-              /* Proposee au jour, parce qu'on cree une ligne le jour ou l'on
-                 achete — et changeable, parce qu'on la cree aussi en installant
-                 l'application sur un portefeuille deja constitue. Le champ est
-                 pose ici plutot que laisse a la fiche : deux chiffres en
-                 dependent, et l'un d'eux se trompe le jour meme si personne ne
-                 repond. */
               { cle: 'dateAchat', label: trad('Date d’achat'), type: 'date', valeur: todayISO(),
                 aide: DATE_ACHAT_AIDE },
             ],
@@ -4061,7 +2571,6 @@ function mountSymbolSearch() {
           toast(`${p.name || p.symbol} ${trad('ajouté')}`);
           render();
 
-          // complète devise, cours et taux de change
           await lookupSymbol(i);
 
           /* Le debit vient APRES la resolution du symbole, et c'est la seule
@@ -4091,9 +2600,6 @@ function mountSymbolSearch() {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 }
 
-/* ------------------------------------------------------------
-   Allocation
-   ------------------------------------------------------------ */
 /* Les poches du patrimoine, telles que la page Allocation les montre : une
    entrée par poche non vide, dans l'ordre et avec les libellés de la légende
    du graphique d'évolution. Une seule définition pour le tableau et pour le
@@ -4103,66 +2609,33 @@ function mountSymbolSearch() {
    de 179 985 € : 150 000 € d'immobilier manquaient à l'appel. */
 function pochesPatrimoine() {
   const t = nowTotals();
-  /* Le cash qui dort sur un PEA ou un CTO compte dans les liquidités, comme
-     sur l'accueil. La ligne le précise : ces euros sont bien disponibles,
-     mais ils ne sont pas du même cash que celui du compte courant — ils
-     attendent d'être placés. */
   const attente = num(patrimoine().investir);
   return SERIES_PATRIMOINE()
     .filter(s => Math.abs(num(t[s.key])) > 0.005)
     .map(s => ({ key: s.key, label: s.label, color: s.color,
-                 /* Formulation courte, et sans centimes : sur un écran de
-                    téléphone, la colonne des libellés impose sa largeur aux
-                    deux autres. « en attente d'investissement » la poussait
-                    à 171 px et cassait « 150 000,00 € » en deux lignes.
-                    « À investir » est déjà le nom de cette poche ailleurs
-                    dans la page — même mot, même argent. */
                  note: s.key === 'cash' && attente > 0.005
                    ? `${trad('dont')} ${fmtEUR0(attente)} ${trad('à investir')}` : '',
                  value: num(t[s.key]), pct: t.brut ? num(t[s.key]) / t.brut * 100 : 0 }));
 }
 
-/* Zone, secteur et type de compte n'ont pas de couleur intrinsèque : leurs
-   parts sont numérotées, pas classées. La teinte vient donc du rang — mais elle
-   doit être attribuée au même endroit pour le tableau et pour le camembert,
-   sinon la pastille d'une ligne ne désigne pas sa part. La vue et le montage
-   appellent cette fonction sur la même liste, dans le même ordre : ils
-   obtiennent les mêmes couleurs sans avoir à se les transmettre. */
 const teinterParRang = items =>
   items.map((x, i) => ({ ...x, couleur: x.couleur || x.color || `var(--series-${(i % 8) + 1})` }));
 
 function viewAllocation() {
   const t = nowTotals();
-  /* Repartir zero entre sept classes donne sept fois zero, et trois tableaux
-     vides sous trois camemberts absents. */
   if (!(patrimoine().brut > 0.005)) {
     return pageAvantDonnees('Une répartition dit où est ton argent : dans quelles classes '
       + 'd’actifs, chez quels intermédiaires. Elle attend donc que tu déclares au moins un '
       + 'compte ou un placement.');
   }
   const poches = pochesPatrimoine();
-  /* Sans la ligne des credits : la carte compte en brut, comme son camembert.
-     Le pied les porte, une fois, pour donner le net. */
   const byAsset = allocationByAsset({ credits: false });
   const byAcct = allocationByAccount();
   const byType = teinterParRang(byAccountType());
 
-  /* La pastille rattache chaque ligne à sa part du camembert juste au-dessus.
-     Sans elle, il fallait comparer des pourcentages pour savoir quelle tranche
-     était laquelle — un tableau et un graphique qui parlent des mêmes données
-     sans jamais se désigner l'un l'autre. */
   const tbl = (items, totalLabel, total) => `
     <table>
       <thead><tr><th>${trad('Ligne')}</th><th>${trad('Montant')}</th><th>%</th></tr></thead>
-      <!-- escMontant et non esc : cette note porte un montant, « dont 1 856 € à
-           investir », et un montant masqué est une balise SVG. Échappée comme du
-           texte, elle s'imprimait en clair — la ligne « Liquidités » d'Allocation
-           affichait cent caractères de balisage au lieu de son sous-titre.
-           C'est le seul endroit du fichier où une note mêle du texte et un
-           montant ; les autres portent de la prose ou une saisie, et gardent
-           l'échappement strict, qui doit rester la règle.
-           (Aucun accent grave dans ce commentaire : il vit dans un littéral de
-           gabarit, où un backtick referme la chaîne.) -->
       <tbody>${items.map(i => `<tr><td class="name">${pastilleTeinte(i.couleur || i.color)}${esc(i.label)}
         ${i.note ? `<span class="sub">${escMontant(i.note)}</span>` : ''}</td>
         <td>${fmtEUR(i.value)}</td>
@@ -4170,41 +2643,16 @@ function viewAllocation() {
       <tfoot><tr><td>${esc(totalLabel)}</td><td>${fmtEUR(total)}</td><td></td></tr></tfoot>
     </table>`;
 
-  /* Trois tuiles vivaient ici : « Total de vos avoirs », « Total
-     investissements », « Argent disponible ». Elles ne composaient rien —
-     la première contenait les deux autres — et surtout il en manquait une :
-     le cash posé chez un courtier n'est ni du cash de vie ni de l'investi.
-     Il n'apparaissait donc nulle part. Les deux parts affichées totalisaient
-     98,97 % d'un patrimoine dont elles prétendaient rendre compte.
-
-     Même axe pour les trois lignes maintenant — non pas la classe d'actif,
-     mais l'état de l'argent : engagé, en attente, libre — et la somme fait
-     100 %. Le total passe au pied, où il ne concurrence plus ses propres
-     parts. C'est la liste de l'accueil, à l'identique : une grille de tuiles
-     laisse toujours un impair, une liste se lit pareil à trois ou à six. */
   /* Trois teintes franchement distinctes, et pas voisines dans la palette :
      `series-7` (#00a5c3) et `series-2` (#00ab92) sont deux cyans que rien ne
      sépare sur une pastille de 8 px. L'ambre est déjà, dans l'application, la
      couleur de ce qui attend une action — c'est le point du menu quand un
      relevé manque. Il dit ici la même chose d'un argent qui ne travaille pas
      encore. */
-  /* Le cash se decompose ici comme partout ailleurs : les quatre poches
-     d'AFFECTATIONS, jamais un agregat. Cette carte agregeait courant +
-     precaution + projet sous « Argent disponible », un montant de 3 270 EUR
-     que l'accueil ne connaissait pas et qui portait presque le nom d'une de
-     ses propres parts, « Cash disponible » a 3 250 EUR. Vingt euros d'ecart et
-     deux ecrans qui se contredisent : c'est en grossissant l'epargne de
-     precaution que la contradiction devient visible, donc trop tard.
-     Les poches vides sont ecartees par le filtre plus bas, comme avant. */
   const teintesPoche = { courant: 'var(--series-1)', precaution: 'var(--series-7)',
                          projet: 'var(--series-5)', investir: 'var(--series-4)' };
   const disponibilite = [
     { label: BASES.place.nom, value: t.invested, couleur: 'var(--series-2)', apercu: 'investiTotal' },
-    /* Chaque poche ouvre SA poche. Les trois lignes de cash pointaient sur la
-       fiche « Liquidites » sans argument : on cliquait une ligne de 20 EUR
-       d'epargne de precaution et on obtenait les 5 126 EUR des quatre poches.
-       Le total etait juste, la question posee n'etait pas celle a laquelle on
-       repondait. */
     ...pochesLiquidites().map(p => ({
       label: p.nom, value: p.value, couleur: teintesPoche[p.cle] || 'var(--series-1)',
       apercu: p.cle === 'investir' ? 'cashInvestir' : 'cash',
@@ -4214,26 +2662,7 @@ function viewAllocation() {
    .map(x => ({ ...x, pct: t.brut ? num(x.value) / t.brut * 100 : 0 }));
 
   return `
-  <!-- Le renvoi vers l'autre onglet est parti.
 
-       Il disait « pour fixer des cibles, va dans X », ou X etait lu dans la table
-       des sous-onglets par son index, le second. L'ordre des onglets a change
-       depuis, et l'index n'a pas suivi : la phrase invitait a aller dans
-       « Patrimoine » depuis Patrimoine. Encore un index ecrit a la main a cote de
-       la liste qui fait foi, et le defaut ne se voit qu'a la lecture. -->
-
-  <!--       Elle ne dit pas la meme chose, et c'est voulu. Sur Cible, le perimetre
-       surprend : un livret A n'y compte pas. Ici rien ne surprend, tout est
-       compte — le repeter serait redire le sous-titre de la barre du haut, qui
-       annonce deja « tout ce que tu possedes ». -->
-  <!--    « immobilier et non cote compris » est devenu « non cote compris ». Deux
-   mots de moins, et le « ? » cesse de tomber seul sur la ligne suivante. Le
-   dernier mot et le « ? » sont colles par la classe sans-veuve, en
-   white-space nowrap : c'est ce qui garantit que le rond ne s'isole pas,
-   quelle que soit la largeur. Raccourcir la phrase seul ne le garantissait
-   pas, il aurait suffi d'un montant plus long. (Aucun guillemet oblique ici :
-   ce commentaire vit dans un litteral de gabarit, un backtick y fermerait la
-   chaine.)-->
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${trad('tout est compté')}</b> :
     ${fmtEUR0(t.brut)}, <span class="sans-veuve">${trad('non coté compris')}${aide(trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
 
@@ -4259,30 +2688,11 @@ function viewAllocation() {
     </dl>
   </div>
 
-  <!-- Deux cartes, deux questions, deux bases. Et une seule base par carte.
-
-       Il y en avait quatre. « Allocation par actif » comptait en net, « Répartition »
-       en brut : le meme axe, deux granularites, et surtout le meme montant sous
-       deux noms differents tant qu'aucun credit n'existe — ce qui se lit comme une
-       incoherence alors que les deux etaient justes. Le jour ou un credit parait,
-       elles divergent sans que rien n'explique pourquoi. « Type de compte » et
-       « Comptes » etaient la meme paire sur l'axe du contenant, avec deja la meme
-       base.
-
-       Une carte porte donc un axe, du gros grain au detail, sous une base unique
-       annoncee une fois. Les credits redescendent au pied, la ou ils ne
-       concurrencent plus les parts qu'ils ne composent pas. -->
   <div class="card" data-anchor="actifs">
-    <!-- Le titre nomme l'axe de la repartition, et non la question posee a voix
-         haute : « Dans quoi c'est reparti » redoublait « c'est » et sonnait
-         familier a cote du reste. Le sous-titre dit deja la base en euros. -->
     <div class="card-head"><h2>${trad('Par classe d’actif')}</h2>
       <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
     <div class="chart" id="aMacro"></div>
     ${tbl(poches, BASES.avoirs.nom, t.brut)}
-    <!-- Le detail sous le gros grain, sans separateur de carte : c'est la meme
-         question posee de plus pres, et la barre la plus longue du bas est une
-         part de la plus grosse tranche du haut. -->
     <h3 class="sous-titre-carte">${trad('Ligne par ligne')}</h3>
     <div class="chart" id="aAsset"></div>
     ${t.dettes ? `<dl class="kv" style="margin-top:8px">
@@ -4293,12 +2703,6 @@ function viewAllocation() {
   </div>
 
   <div class="card">
-    <!-- Un titre pour une chose. La carte s'appelait « Par compte » et son
-         premier graphique repartissait par TYPE de compte : « Assurance-vie »
-         y apparaissait comme s'il s'agissait d'un compte, alors que c'est
-         l'enveloppe qui en contient. Le second, lui, etait le vrai.
-         « Enveloppe » est deja le mot du projet pour une assurance-vie ou un
-         PER, et il dit exactement ce que ce graphique regroupe. -->
     <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2>
       <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
     <h3 class="sous-titre-carte">${trad('Par enveloppe')}</h3>
@@ -4308,17 +2712,7 @@ function viewAllocation() {
     <div class="chart" id="aAcct"></div>
   </div>
 
-  <!-- « Zone géographique » et « Secteur » vivaient ici. Ils agrégeaient des
-       classements devinés du libellé de chaque ligne, faute de source gratuite
-       donnant la composition d'un fonds — et l'agrégat mentait plus que
-       chacune de ses parts : un MSCI World compte pour 100 % « Monde » et
-       100 % « Diversifié » quand il est en réalité à ~70 % américain et très
-       concentré en technologie. Deux camemberts qui répondent faux à la seule
-       question qu'on leur pose valent moins que pas de camembert du tout.
-       Le classement reste affiché sur la fiche de chaque ligne, où il est
-       juste : « Amérique du Nord » pour un S&P 500 ne trompe personne. Le jour
-       où on saura lire la composition réelle d'un fonds, ces cartes
-       reviendront — les données du modèle sont intactes. -->`;
+`;
 }
 
 function mountAllocation() {
@@ -4329,8 +2723,6 @@ function mountAllocation() {
     height: 200, centerLabel: trad('Tes avoirs'), centerValue: t.brut,
     items: pochesPatrimoine().map(p => ({ label: p.label, value: p.value, color: p.color })),
   });
-  /* Même liste, même fonction de teinte que dans la vue : les pastilles du
-     tableau et les parts du camembert ne peuvent plus diverger. */
   const bt = teinterParRang(byAccountType());
   Charts.donut($('#aType'), {
     height: 200, centerLabel: trad('Bourse'),
@@ -4339,13 +2731,6 @@ function mountAllocation() {
   });
 }
 
-/* ------------------------------------------------------------
-   Rééquilibrage
-   ------------------------------------------------------------ */
-/* Ce que le partage socle / satellites apprend, en une phrase. Un tableau de
-   deux lignes ne dit rien qu'on ne voie deja ; ce qui compte, c'est de quoi
-   la part arbitrable est faite, « satellites 58 922 EUR » n'informe pas,
-   « dont 93 % de bitcoin » informe. */
 function diagnosticRoles(rr) {
   if (!rr.base) return '';
   const socle = rr.roles.find(x => x.cle === 'core');
@@ -4376,26 +2761,13 @@ function viewRebalance() {
   const rr = rebalanceRoles();
   const per = perimetreReequilibrage();
   const tg = Store.state.targets;
-  /* Une seule definition de la somme des cibles, dans le modele : elle sait
-     descendre dans une classe decoupee par role, et elle ecarte les classes
-     mises hors jeu. Trois copies vivaient ici et ailleurs, dont deux
-     annoncaient zero des qu'une classe portait deux cibles. */
   const sumT = sommeCibles();
 
-  /* Ce qui reste hors du rééquilibrage, nommé morceau par morceau. La liste
-     était écrite en dur — « cash du quotidien, précaution, non coté » — et un
-     studio de 150 000 € s'y ajoutait sans être cité, alors qu'il pesait plus
-     que tout le reste réuni. Elle se calcule maintenant, donc elle reste vraie
-     quoi qu'on détienne. Les trois parts totalisent exactement le montant
-     annoncé : l'immobilier et le non coté vivent hors des comptes
-     d'investissement, et le cash hors « à investir » aussi. */
   const dehorsDetail = (() => {
     const p = patrimoine();
     return [
       [trad('immobilier'), "d'immobilier", p.classes.immobilier],
       [trad('non coté'), 'de non coté', per.nonCote],
-      /* Les noms viennent d'AFFECTATIONS, comme partout : cette liste ecrivait
-         « cash du quotidien et precaution », un huitieme mot pour ces euros. */
       [`${AFFECTATION_LABEL.courant.toLowerCase()} ${trad('et')} ${AFFECTATION_LABEL.precaution.toLowerCase()}`,
        `de ${AFFECTATION_LABEL.courant.toLowerCase()} et d’${AFFECTATION_LABEL.precaution.toLowerCase()}`,
        p.courant + p.precaution + p.projet],
@@ -4408,11 +2780,6 @@ function viewRebalance() {
   const valeurCible = chemin =>
     num(chemin.split('.').reduce((o, k) => (o == null ? o : o[k]), tg));
 
-  /* Le plan : ce qu'il faut vendre, ce qu'il faut acheter. Quand les cibles
-     totalisent 100 %, les deux colonnes s'equilibrent au centime : une seule
-     vente finance tout le reste. C'est la phrase que la page doit dire en
-     premier, et elle etait jusqu'ici en bas, apres deux graphiques et trois
-     tableaux. */
   /* `r.cash` vaut null quand la tresorerie est sortie du reequilibrage : elle
      ne figure alors ni dans les mouvements, ni dans la phrase « ta tresorerie
      disponible en couvre tant ». Trois lectures la supposaient presente, et la
@@ -4431,24 +2798,11 @@ function viewRebalance() {
      a plus de phrase. Une fonction sans appelant est du code mort, et c'est la
      moitie qu'on oublie en retirant un affichage. */
 
-  /* Meme raison que pour l'ecart des lignes : un mouvement a faire n'est ni une
-     bonne ni une mauvaise nouvelle, et le rouge d'alerte sur « a placer »
-     faisait de la moitie de ce plan une liste d'incidents. La couleur de la page
-     porte les deux sens, le signe les distingue. */
   const listeMvt = (lignes, sens) => lignes.map(c =>
     `<li><b>${esc(c.label)}</b> <span class="montant-plan${sens > 0 ? ' renfort' : ''}">${
       sens > 0 ? '+' : '−'}${fmtEUR0(Math.abs(c.delta))}</span>
       <span class="muted">${trad('pour atteindre')} ${fmtPct(c.targetPct, 0)}</span></li>`).join('');
 
-  /* Une ligne par classe, pas un tableau.
-     Six colonnes ne tiennent pas dans 375 px : le tableau debordait de 109 px
-     et la colonne la plus utile, l'ecart, sortait de l'ecran. Ici tout
-     s'empile : intitule et montant sur une ligne, la jauge en dessous, la part
-     et la cible sous elle. Rien ne defile lateralement, a aucune largeur.
-
-     La jauge porte la part reelle en barre pleine et la cible en repere : on
-     voit d'un coup de quel cote et de combien on s'ecarte, sans avoir a
-     comparer deux nombres. */
   const ligneReeq = (row, key, base) => {
     const part = Math.max(0, Math.min(100, row.pct));
     const cible = Math.max(0, Math.min(100, row.targetPct));
@@ -4459,30 +2813,14 @@ function viewRebalance() {
         <span class="reeq-nom">${esc(row.label)}</span>
         <span class="reeq-droite">
           <b class="reeq-val">${fmtEUR(row.value)}</b>
-          <!-- Toute classe se retire, detenue ou non. Quand elle porte un
-               encours, son montant quitte la base plutot que de disparaitre
-               en silence : les pourcentages continuent de totaliser 100 %. -->
           ${key && key.startsWith('classes.') ? `
-            <!--                 Le chevron est le seul pictogramme que personne n'a besoin
-                 d'apprendre : ferme il annonce qu'il y a quelque chose dedans,
-                 ouvert il annonce qu'on peut refermer. Il tourne d'un quart de
-                 tour, comme celui des depliants de la page. En violet, parce que
-                 c'est le seul outil de cette liste qui change la forme des
-                 lignes et non un chiffre. -->
             ${row.classeParente
-              /* Ligne de role : le chevron ouvert referme le groupe. Il figure
-                 sur les deux lignes, chacune etant une poignee du meme groupe —
-                 ne le mettre que sur la premiere aurait laisse la seconde sans
-                 explication de sa presence. */
               ? `<button class="chevron-role ouvert" data-action="refusionner-classe"
                          data-cle="${esc(row.classeParente)}"
                          aria-expanded="true"
                          title="Refermer : une seule cible pour ${esc(row.labelClasse)}"
                          aria-label="Refermer les deux rôles de ${esc(row.labelClasse)}"
                          >›</button>`
-              /* Classe entiere : elle se decoupe par role, mais seulement si
-                 elle est reellement detenue dans les deux — sinon l'un des deux
-                 roles serait une ligne morte a zero. */
               : (() => {
                   const pr = stockTotals().parClasseRole?.[key.split('.')[1]];
                   return pr && pr.core > 0.005 && pr.satellite > 0.005
@@ -4496,33 +2834,15 @@ function viewRebalance() {
             <button class="btn icon xs" data-action="retirer-classe-cible"
                     data-cle="${esc(key.split('.')[1])}"
                     title="${trad('Sortir {c} du rééquilibrage').replace('{c}', esc(row.labelClasse || row.label))}">✕</button>` : ''}
-          <!-- La tresorerie se retire aussi. Quelqu'un qui place tout le jour
-               meme garde une ligne a zero sous un intitule de groupe, pour rien.
-               Meme action que les classes : elle passe par la meme liste
-               d'exclusions, donc le meme chemin de retour. -->
           ${key === CLE_TRESORERIE ? `
             <button class="btn icon xs" data-action="retirer-classe-cible"
                     data-cle="${esc(CLE_TRESORERIE)}"
                     title="${trad('Sortir {c} du rééquilibrage').replace('{c}', esc(row.label))}">✕</button>` : ''}
         </span>
       </div>
-      <!-- La jauge ouvre les placements qu'elle compte.
-           « Actions core, +1 200 EUR a renforcer » laissait sans reponse la
-           seule question qui reste : renforcer laquelle. Il fallait aller dans
-           Marches et lire le role ligne par ligne. La barre est donc un bouton,
-           et chaque ligne de la fiche ouvre la sienne.
-
-           La tresorerie mene a ses poches de cash : elle n'est pas faite de
-           positions, sa fiche existe deja ailleurs et c'est celle-la.
-
-           L'attribut aria-hidden a saute avec la souris : une barre qui s'ouvre
-           doit s'annoncer. Elle porte donc son intitule complet, la part et la
-           cible etant deja lues juste en dessous par le lecteur d'ecran. -->
       ${(() => {
         const jauge = `
           <i class="reeq-reel ${row.delta > 0 ? 'sous' : row.delta < 0 ? 'sur' : 'ok'}" style="width:${part.toFixed(2)}%"></i>
-          <!-- Le repere est dessine meme a zero : « cible 0 % » est une decision,
-               son absence se lirait comme un oubli. -->
           <i class="reeq-cible" style="left:${cible.toFixed(2)}%"></i>`;
         const ouvre = key === CLE_TRESORERIE
           ? { apercu: 'cashCible', arg: 'investir', quoi: 'les poches de cash' }
@@ -4545,77 +2865,27 @@ function viewRebalance() {
                 `<option value="${v}" ${v === valeurCible(key) ? 'selected' : ''}>${v}</option>`).join('')
             }</select><span class="u">%</span>`
                 : `<span class="muted">· cible ${fmtPct(row.targetPct, 0)}</span>`}</span>
-        <!-- L'ecart dit ce qu'il y a a faire, pas si c'est bien ou mal.
-             Il portait le vert des hausses et le rouge des baisses : « −1 086
-             EUR a placer » s'affichait donc en rouge d'alerte, alors qu'avoir de
-             la tresorerie a placer n'est pas un probleme, et « a alleger » non
-             plus. Les deux sont des arbitrages, un seul poids leur suffit. La
-             couleur de la page les porte, le signe et le verbe disent le sens. -->
         <span class="reeq-ecart ${ecartFait ? 'muted' : 'a-faire'}">${ecartFait
           ? trad('à la cible')
-          /* Le montant se detache du verbe pour porter sa couleur seul : vert
-             quand il faut renforcer — on ajoute, c'est le sens de la croissance
-             et le geste qu'on vient chercher ici — neutre quand il faut alleger
-             ou placer, car ni l'un ni l'autre n'est une mauvaise nouvelle. Le
-             verbe reste gris dans les deux cas : c'est une consigne, pas un
-             chiffre. */
           : `<b class="${row.delta > 0 ? 'renfort' : ''}">${
                 row.delta > 0 ? '+' : '−'}${fmtEUR0(Math.abs(row.delta))}</b> ${
               row.delta > 0 ? trad('à renforcer')
-              /* Réduire de la trésorerie, c'est la placer, pas l'alléger. */
               : row.cle === 'cashToInvest' ? trad('à placer') : trad('à alléger')}`}</span>
       </div>
     </li>`;
   };
 
   return `
-  <!-- Le perimetre en premier, avant meme le plan.
-
-       Cette phrase vivait dans la troisieme carte, sous « Allocation par
-       classe ». Or la premiere chose que la page dit est « Place 1 076 EUR de
-       tresorerie » : un ordre, donne sans avoir precise sur quel argent il
-       porte. Un lecteur qui a 20 000 EUR sur un livret A se demande s'ils sont
-       comptes — ils ne le sont pas, et il l'apprenait trois cartes plus bas, ou
-       jamais.
-
-       Elle porte le montant, parce qu'un perimetre nomme sans chiffre laisse
-       encore chercher. Et elle ne vaut que pour cet onglet : « Patrimoine »
-       couvre tout, ses cartes annoncent chacune leur base. -->
-  <!--       « Liquides » : le PER est dans le perimetre et c'est la chose la moins
-       liquide qu'on puisse detenir. « Arbitrable » : le non cote de Trade
-       Republic s'arbitre tres bien, le mot ne separe rien. « Ce qui a un
-       cours » separe juste, mais alourdit une phrase qui se lit deja bien.
-
-       Le libelle reste donc celui d'origine, et c'est la bulle qui porte la
-       precision — ce qui est sa fonction. Le vrai critere, pour memoire : le
-       perimetre est celui de stockTotals(), les lignes de marche. Une cible se
-       mesure contre un prix qu'on n'a pas fixe soi-meme ; la valeur d'une part
-       non cotee est celle qu'on saisit, il n'y a rien contre quoi la
-       rebalancer.
-       (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
-       gabarit, un backtick y fermerait la chaine.) -->
   <p class="perimetre perimetre-tete">${trad('Ces cibles ne portent que sur')}
     <b>${trad('tes comptes d’investissement')}</b> ${trad('et leur trésorerie,')}
     ${fmtEUR0(r.base)}${aide(trad("PEA, compte-titres, assurance-vie, PER, portefeuille de cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger donnerait des pourcentages qu’aucune décision ne peut suivre. L’onglet Patrimoine, lui, montre tout."))}.</p>
 
-  <!-- Ce qu'il y a a faire, avant tout le reste. -->
   <div class="card plan">
     <div class="card-head"><h2>${trad('Ce qu’il y a à faire')}${aide(trad("Les mouvements qui ramènent chaque classe à sa cible. Quand tes pourcentages totalisent 100 %, ce qu’il faut vendre finance exactement ce qu’il faut acheter."))}</h2>
       <span class="hint">${mouvements.length ? `${mouvements.length} ${mouvements.length > 1 ? trad('mouvements') : trad('mouvement')}` : trad('rien à faire')}</span></div>
     ${!mouvements.length
       ? `<p class="empty">${trad('✓ Chaque classe est à sa cible. Rien à arbitrer.')}</p>`
       : `
-      <!-- La phrase de tete est partie. Elle disait « Vends 1 956 EUR et
-           redeploie-les : 1 800 EUR en actions core, 156 EUR en metaux
-           precieux » — c'est-a-dire les deux listes qui la suivent
-           immediatement, recopiees dans une autre grammaire. « On s'en fout,
-           c'est ecrit juste en dessous ce qu'il y a a faire. »
-
-           C'est le defaut que ce projet defait partout : une liste se derive,
-           elle ne se recopie pas. Ici la copie etait meme automatique, donc
-           toujours d'accord avec sa source — elle ne coutait pas un risque de
-           divergence, seulement le double de lecture pour la meme information,
-           en tete de la carte, a chaque visite. -->
       <div class="plan-cols">
         ${alleger.length ? `<div>
           <h3>${alleger.every(c => c.cle === 'cashToInvest') ? trad('À placer') : trad('À alléger')}</h3>
@@ -4624,10 +2894,6 @@ function viewRebalance() {
         ${renforcer.length ? `<div>
           <h3>${trad('À renforcer')}</h3>
           <ul>${listeMvt(renforcer, 1)}</ul>
-          <!-- Inutile de préciser « sans rien vendre » quand la seule ligne à
-               réduire est déjà la trésorerie : il n'y a alors aucune vente dont
-               se dispenser, et l'intitulé d'à côté dit « À placer », pas
-               « À alléger ». -->
           ${dispo && !alleger.every(c => c.cle === 'cashToInvest')
             ? `<p class="hint" style="margin:8px 0 0">${trad('Ta trésorerie disponible en couvre')} ${fmtEUR0(Math.min(dispo, totalAchat))} ${trad('sans rien vendre.')}</p>` : ''}
         </div>` : ''}
@@ -4647,14 +2913,7 @@ function viewRebalance() {
       : `Les ${100 - sumT} % restants ne sont attribués à aucune classe.`}</span>
   </div>`}
 
-  <!-- Etage 1 : dans quoi l'argent est place. -->
   <div class="card">
-    <!-- Le pave de perimetre faisait quatre a six lignes avant le premier
-         chiffre, et il repetait ce que le pied de carte chiffre deja. Il ne
-         reste que la phrase qui repond a « de quoi parle cette page ». Le
-         detail — composition du perimetre, montants dehors, traitement du non
-         cote — descend dans l'infobulle du titre, qui existait deja : c'est la
-         qu'on va chercher une precision, pas en haut d'une carte. -->
     <div class="card-head"><h2>${trad('Allocation par classe')}${aide(`${trad('L’allocation stratégique : quelle part du portefeuille dans chaque classe d’actif. C’est la première décision, celle qui pèse le plus sur le résultat. Modifie une cible dans le champ, la jauge et le plan suivent.')}
 
 ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, assurance-vie, PER, portefeuille crypto), avec leurs lignes et leur trésorerie à investir.')} ${
@@ -4664,8 +2923,6 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
            per.nonCote > 0 ? ` ${trad('Le non coté se suit en lignes de compte et non en lignes de marché : il se lit dans l’onglet')} ${SOUS_ONGLETS.allocation[0][1]}.` : ''}`
         : trad('Tout ton patrimoine y est.')}`)}</h2>
       <span class="hint">${mentionBase(BASES.baseCibles, r.base)}</span></div>
-    <!-- La phrase de perimetre est partie en tete de page : elle repondait ici a
-         une question qu'on se posait deux cartes plus haut. -->
     ${per.exclues.length ? `<p class="perimetre exclues">
       Sorties du rééquilibrage à ta demande :
       ${per.exclues.map(x => `<button type="button" class="mois-lien" data-action="reintegrer-classe"
@@ -4681,23 +2938,9 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
       mais sur un compte hors de cette base. La jauge restera à zéro
       quoi que tu achètes. Mets sa cible à 0, ou suis cette classe depuis Allocation.
     </span></div>` : ''}
-    <!-- La tresorerie se lisait au meme niveau qu'Actions et Metaux precieux,
-         comme si « du cash » etait une classe d'actif de plus. Ce n'en est pas
-         une : c'est ce qui n'est pas encore place, et sa cible ne dit pas la
-         meme chose — 5 % d'actions est une conviction, 5 % de cash est une
-         reserve. Deux intitules de groupe et un filet suffisent a le dire, sans
-         toucher a un seul calcul : les pourcentages et les cibles sont ceux
-         d'avant, la somme fait toujours la base. -->
     <ul class="reeq">
       <li class="reeq-groupe">${trad('Classes d’actif')}</li>
       ${r.classes.map(c => ligneReeq(c, c.cle)).join('')}
-      <!--    Le bouton vivait dans l'en-tete, ou il s'est perdu des que la mention de
-   base l'a fait passer sur deux lignes : 79 px, et un bouton pousse hors du
-   regard. Il est ici, sous la liste, la ou l'on constate qu'une classe
-   manque.-->
-      <!-- Sortie, la tresorerie n'a plus ni ligne ni intitule de groupe : un
-           titre au-dessus de rien se lirait comme une panne. Elle se remet
-           depuis la phrase de perimetre, comme une classe. -->
       ${r.cash ? `<li class="reeq-groupe reeq-groupe-suite">${trad('Trésorerie')}</li>
       ${ligneReeq(r.cash, CLE_TRESORERIE)}` : ''}
     </ul>
@@ -4706,10 +2949,6 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
     <dl class="kv reeq-pied">
       <dt>${BASES.placeBourse.nom}</dt><dd>${fmtEUR(r.invested.value)} <span class="muted">· ${fmtPct(r.invested.pct, 1)}</span></dd>
       <dt>${BASES.baseCibles.nom}<span class="sub">${trad('base des pourcentages ci-dessus')}</span></dt><dd>${fmtEUR(r.base)}</dd>
-      <!-- « Hors perimetre » nommait ces euros par ce qu'ils ne sont pas, et
-           les laissait sans destination : on apprenait qu'un tiers du patrimoine
-           echappait a cette page sans savoir ou le retrouver. La ligne dit
-           maintenant ce qu'ils sont, et mene la ou ils se lisent. -->
       ${per.montantDehors > 0 ? `<dt class="muted">${trad('Reste de')} ${BASES.avoirs.nom.toLowerCase()}${trad(', non arbitrable')}<span class="sub">${
         esc(dehorsDetail.map(([lib]) => lib).join(' · '))}${trad(', suivis dans l’')}<button type="button"
           class="mois-lien" data-action="sous-onglet" data-route="allocation"
@@ -4719,16 +2958,9 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
     </dl>
   </div>
 
-  <!-- Etage 2 : pourquoi tu le detiens. Un sous-niveau du precedent, pas un
-       concurrent : le pourcentage se lit sur l'investi. -->
   <div class="card">
     <div class="card-head"><h2>${ROLES.core} ${trad('et satellites')}${aide(trad("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale."))}</h2>
       <span class="hint">${mentionBase(BASES.baseCibles, rr.base)}</span></div>
-    <!-- Ce paragraphe repetait mot pour mot la premiere phrase de la bulle du
-         titre, deux centimetres plus bas. Il definissait deux mots de metier,
-         ce qui etait juste — mais la bulle le fait deja, et une definition lue
-         deux fois se lit une fois de trop. La carte garde ses barres et son
-         diagnostic ; l'explication vit dans le « ? », a un geste. -->
     ${diagnosticRoles(rr)}
     <ul class="reeq">
       ${rr.roles.map(x => {
@@ -4739,24 +2971,6 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
             <span class="reeq-nom">${esc(x.label)}</span>
             <b class="reeq-val">${fmtEUR(x.value)} <span class="muted">· ${fmtPct(x.pct, 1)}</span></b>
           </div>
-          <!-- Deux dimensions dans une barre : la couleur dit la classe, la
-               hachure dit le titre en direct. Une seconde teinte aurait laissé
-               croire à une autre classe ; un motif se lit comme une variante
-               et reste visible en cas de daltonisme. -->
-          <!-- La barre ouvre les placements du role, comme les jauges de cibles
-               au-dessus. Elle en compte un autre ensemble : ici « Satellite »
-               couvre toutes les classes, la-haut il ne couvre qu'une. La fiche
-               nomme donc la classe de chaque ligne, sans quoi on lirait les
-               memes mots pour deux montants differents.
-
-               La tresorerie mene a ses poches de cash : elle n'a pas de role et
-               elle n'est pas faite de positions. -->
-          <!-- La barre vaut la part, et non toute la largeur.
-
-               Les deux lectures tiennent maintenant ensemble : la longueur dit
-               la part, les segments a l'interieur disent de quoi le role est
-               fait, et les trois barres mises bout a bout font la largeur
-               entiere. Un plancher de 1,5 % garde visible un role minuscule. -->
           ${(() => {
             const empile = parts.map(p =>
               `<i class="${p.nature === 'fonds' ? '' : 'raye'}"
@@ -4776,9 +2990,6 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
                          ><span class="role-barre">${dedans}</span></button>`
               : `<div class="role-barre">${dedans}</div>`;
           })()}
-          <!-- Une legende qui ne dirait que le nom de la ligne au-dessus
-               n'apprend rien : la tresorerie est d'un seul tenant, sa couleur
-               et son intitule suffisent. -->
           ${parts.length === 1 && parts[0].label === x.label ? '' : `
           <div class="role-legende">${parts.map(p =>
             `<span><i class="${p.nature === 'fonds' ? '' : 'raye'}" style="--c:${p.couleur}"></i>${
@@ -4787,13 +2998,6 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
         </li>`;
       }).join('')}
     </ul>
-    <!-- Le dépliant « Fonds ou titres en direct » répétait ce que les barres
-         disent maintenant d'elles-mêmes. Restait un paragraphe de 48 mots dont
-         sept seulement servaient a lire le dessin ; les 41 autres expliquaient
-         d'ou vient la nature et pourquoi elle n'entre pas dans les cibles.
-         C'est vrai, c'est utile, et ça n'a pas à occuper le bas d'une carte
-         qu'on ouvre pour regarder des barres. La legende decode, le « ? »
-         explique. -->
     ${rr.parNature.some(n => n.nature === 'Titre en direct') ? `
       <p class="hint" style="margin:12px 0 0">
         ${trad('Hachuré : titre en direct. Plein : fonds.')}${aide(trad("La nature est déduite de l’instrument et se corrige dans la fiche de chaque ligne. Elle n’entre pas dans les cibles, qui portent sur la classe d’actif : sur le risque, pas sur l’enveloppe."))}
@@ -4802,14 +3006,8 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
 }
 
 function mountRebalance() {
-  /* Plus de graphique a monter : le tableau porte ses barres d'ecart et les
-     roles leurs barres empilees, en HTML. Moins de code, et tout reste lisible
-     sur un telephone sans axe a comprimer. */
 }
 
-/* ------------------------------------------------------------
-   Releves mensuels
-   ------------------------------------------------------------ */
 let historyShowLegacy = false;
 let historyYear = null;      // null = année en cours
 
@@ -4839,26 +3037,12 @@ function viewHistory() {
       return { r, i, g: rowGroups(r), total, dlt: prev && total ? total - prev : 0 };
     });
 
-  /* Les poches vides ne prennent pas de colonne, et celles qui portent
-     quelque chose en ont une : le tableau est deja large, mais un total qui
-     ne se retrouve pas dans ses parts ne se verifie pas. Meme liste, memes
-     libelles que la legende du graphique juste au-dessus. */
   const poches = seriesUtiles(lignes.map(({ g }) => g));
-  /* Le plafond commun des barres de la liste : le plus gros mois affiche. Sans
-     lui, chaque barre se normalise sur son propre total et les douze font la
-     meme longueur. Il suit l'annee choisie, donc les barres se recalibrent en
-     changeant d'annee — c'est voulu : on compare ce qui est a l'ecran. */
   const maxTotal = Math.max(0, ...lignes.map(({ total }) => Math.abs(num(total))));
 
   const rows = lignes.map(({ r, i, g, total, dlt }) => {
     const estMoisCourant = r.date === currentMonthKey();
-    /* Le ⤒ du mois qui attend sa photo s'allume. Douze glyphes gris
-       identiques ne disaient pas lequel réclamait un geste, et c'est
-       pourtant la seule ligne où il y a quelque chose à faire. */
     const attendSaPhoto = estMoisCourant && rowIsEmpty(r);
-    /* Le ⤒ des mois a venir s'eteint. Le geste y est refuse de toute facon,
-       mais un bouton qui a l'air disponible et se derobe au clic est pire
-       qu'un bouton qui annonce qu'il ne l'est pas. */
     const aVenir = !moisRevolu(r.date);
     return `<tr ${estMoisCourant ? 'data-anchor="mois-courant" class="mois-courant"' : ''}>
       <td class="snap-cell">
@@ -4900,25 +3084,8 @@ function viewHistory() {
         `<button class="btn sm" data-action="go-snapshot">${trad('Aller à la ligne')}</button>`)}</div>`;
   })()}
 
-  <!-- La courbe d'evolution vivait ici, identique a celle de l'accueil : meme
-       titre, meme graphique, memes commandes. Elle y etait redondante deux fois
-       plutot qu'une — l'accueil la porte, et le tableau des releves, juste en
-       dessous, donne les memes montants mois par mois avec leur ecart. Cette
-       page sert a saisir ; on relit ailleurs. -->
-
-  <!-- Le relevé ouvre la page, et c'est le sujet de la page.
-
-       Il venait après le journal des entrées exceptionnelles, donc après un écran
-       de défilement : on arrivait sur un journal d'événements rares pour trouver
-       le calendrier des douze mois, qui est ce qu'on vient remplir. Une page
-       s'ouvre sur son geste. -->
   <div class="card">
     <div class="card-head">
-      <!-- Ce tableau compte le meme total que le graphique de l'accueil, par
-           rowTotal(), donc lui aussi sans retirer les dettes. Il ne dit pas
-           « net », il ne dit pas « brut » non plus : « du patrimoine » suffit a
-           lever l'ambiguite qu'on lui reprochait, savoir de quoi ces euros
-           sont le releve. -->
       <h2>${trad('Relevé mensuel du patrimoine')}</h2>
       ${yearControl('history-year', annees, annee)}
     </div>
@@ -4928,45 +3095,15 @@ function viewHistory() {
       <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
       <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
     </div>
-    <!-- Douze lignes cliquables et pas un mot sur ce qu'on y met. Le calendrier
-         existe des le premier lancement, donc la carte n'a jamais l'air vide : sa
-         phrase ne peut pas dependre du nombre de lignes, seulement de ce qu'un
-         releve suppose — un compte a photographier. -->
     ${pasAFaire('comptes') ? `
     <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
       + 'à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton '
       + 'patrimoine et ton rythme d’épargne. Il attend donc un compte.')}</p>
     ${invitePremierPas('comptes')}`
     : invitePremierPas('releves')}
-    <!-- La liste sur tous les ecrans, et non plus seulement sur telephone.
-
-         Cette page portait une grille de treize colonnes sur le web et une liste
-         cliquable sur le telephone. Or le ⤒ remplit une ligne entiere d'un clic :
-         la grille est une surface de saisie pour quelque chose qu'on ne saisit
-         presque jamais case par case. Ce qu'on vient chercher ici, c'est comment
-         le patrimoine a bouge et quelle poche a bouge — une lecture.
-
-         La grille reste, derriere un depliant, pour la correction manuelle rare
-         et pour comparer douze mois sur treize axes — c'est la seule chose
-         qu'une grille fait mieux que tout le reste. -->
     <div class="liste-principale">
       ${lignes.map(({ r, i, g, total, dlt }) => {
         const courant = r.date === currentMonthKey();
-        /* La barre ne se dessine que si le mois porte quelque chose : douze
-           pistes vides sous douze lignes vides feraient un accordeon gris.
-
-           Sa LONGUEUR vaut le total, rapporte au plus gros mois affiche ; ses
-           segments valent la composition. Sans ce plafond commun, chaque mois
-           etait normalise sur lui-meme et remplissait toute la largeur : aout a
-           36 107 EUR faisait exactement la longueur de janvier a 24 110. On
-           lisait la repartition, jamais la taille — alors que douze barres
-           alignees sont precisement l'endroit ou la taille se compare.
-
-           C'est la troisieme fois que ce defaut se presente dans cette
-           application, apres les barres de role et celles des charges fixes.
-           La regle est devenue celle de la maison : une barre posee a cote d'un
-           montant ou d'un pourcentage doit valoir ce montant, sinon elle le
-           contredit. */
         const barre = total ? `<span class="ml-poches" aria-hidden="true">
           <span class="ml-part" style="width:${(total / maxTotal * 100).toFixed(2)}%">${
           poches.map(p => {
@@ -4989,23 +3126,8 @@ function viewHistory() {
         });
       }).join('') || `<p class="empty">${trad('Aucun mois sur cette année.')}</p>`}
     </div>
-    <!-- La classe est celle du graphique juste au-dessus, et non un nom
-         invente : elle porte l'espacement, les pastilles de couleur et la
-         teinte du texte. Une premiere version employait un nom qui n'existe
-         pas, et les quatre libelles sortaient colles, sans pastille et dans la
-         mauvaise couleur. Meme legende que la courbe, memes mots, memes
-         teintes : c'est la meme decomposition.
-         (Aucun guillemet oblique dans ce commentaire : il vit dans un litteral
-         de gabarit, un backtick y fermerait la chaine.) -->
     ${poches.length ? `<div class="legend">${legendeSeries(poches)}</div>` : ''}
 
-    <!-- Le tableau de correction ne se propose plus sous 767 px, et ce n'est pas
-         un renoncement : il porte quinze colonnes dans un conteneur qui defile,
-         quand la liste juste au-dessus ouvre le meme mois dans une fenetre qui
-         tient dans l'ecran. La fenetre offre tout ce que le tableau offre, la
-         reprise des montants actuels comprise, et desormais l'effacement de la
-         ligne. Deux surfaces pour la meme saisie, dont une inutilisable au
-         doigt : c'est la regle des trois colonnes. -->
     <details class="data-view large-seulement" style="margin-top:12px">
       <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
       <p class="hint" style="margin:12px 0 0">${trad('Le ⤒ d’une ligne y reprend tous les '
@@ -5026,15 +3148,6 @@ function viewHistory() {
     </details>
   </div>
 
-  <!-- Le journal des rentrees exceptionnelles.
-
-       Ici, dans les releves, parce que c'est la page des evenements du passe : un
-       apport explique une marche du patrimoine, et c'est cette page qui garde le
-       mois ou elle s'est produite. Il en faut la memoire, pas une prevision.
-
-       Ce que ce journal change ailleurs : « Rythme d'accumulation » peut enfin
-       dire « dont tant d'apports exterieurs », et l'export du classeur a sa
-       feuille. Un heritage n'est pas de l'epargne. -->
   ${(() => {
     /* Le journal suit l'annee choisie en tete de page, comme « Notes de marche »
        deux cartes plus bas. C'est la reponse a « si j'ai 300 lignes on va
@@ -5059,28 +3172,7 @@ function viewHistory() {
         : tout.length
           ? `aucune en ${annee === 'all' ? 'mémoire' : esc(String(annee))} · ${tout.length} au total`
           : trad('héritage, prime, vente d’un bien, ou une grosse dépense')}</span>
-      <!-- Le meme selecteur que celui du releve mensuel, et la meme variable.
-
-           Le journal suit l'annee de la page, mais il se rend **au-dessus** de la
-           carte qui la choisit — mesure : journal a 749 px, selecteur a 953. Il
-           annonçait donc « 30 lignes, 2026 » avec sa commande deux cents pixels
-           plus bas, sur une autre carte. « Notes de marche » n'a pas ce probleme,
-           elle se rend en dessous.
-
-           Deux portes sur un meme champ sont saines, c'est la regle de la
-           maison : les deux ecrivent la variable historyYear, il n'y a qu'une
-           valeur et elles ne peuvent pas se contredire. Ce qui serait fautif, ce
-           serait deux annees rangees separement.
-           (Aucun guillemet oblique : ce commentaire vit dans un litteral de
-           gabarit, un backtick y fermerait la chaine.)
-
-           Pas de selecteur sur un journal vide : il n'y aurait rien a filtrer, et
-           un controle sans effet se lit comme une panne. -->
       ${tout.length ? yearControl('history-year', annees, annee) : ''}
-      <!-- Deux boutons plutot qu'un menu de nature dans la fenetre : le sens est
-           connu au moment ou l'on appuie, et le demander ensuite ferait repondre
-           deux fois a la meme question. La fenetre de modification, elle, le
-           propose — c'est le seul endroit ou l'on peut s'etre trompe. -->
       <span class="paire-btn">
         <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
         <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button>
@@ -5089,9 +3181,6 @@ function viewHistory() {
     <p class="small muted" style="margin:0">${trad('Rien pour l’instant. Une somme reçue ou dépensée '
       + 'une seule fois se note ici, avec sa date : le rythme d’accumulation sait alors que '
       + 'ce mois-là ne dit rien de ton épargne.')}</p>`
-    /* Une annee vide n'est pas un journal vide, et les deux ne se disent pas
-       pareil : « rien pour l'instant » devant dix lignes rangees ailleurs serait
-       faux, et enverrait chercher un defaut. */
     : !liste.length ? `
     <p class="small muted" style="margin:0">Aucune ligne en ${esc(String(annee))}.
       Le journal en compte ${tout.length} au total : change l’année en tête de page.</p>`
@@ -5126,10 +3215,6 @@ function viewHistory() {
         </button>`).join('')}
       </div>
     </details>
-    <!-- Les deux sens puis leur net : le total est la somme de ses parts, et sans
-         les parts un net de -5 000 EUR ne dirait pas s'il vient d'une grosse
-         sortie ou de l'absence d'entrees. Ils restent hors du depliant : ce sont
-         trois lignes, et c'est ce qu'on vient lire. -->
     <dl class="kv" style="margin-top:12px">
       ${d.entrees ? `<dt>${trad('Entrées')}</dt><dd class="up">${fmtSigned(d.entrees)}</dd>` : ''}
       ${d.sorties ? `<dt>${trad('Sorties')}</dt><dd class="down">${fmtSigned(d.sorties)}</dd>` : ''}
@@ -5160,39 +3245,12 @@ function mountHistory() {
   if (j) j.addEventListener('toggle', () => { journalOuvert = j.open; });
 }
 
-/* ------------------------------------------------------------
-   Avoirs — comptes, portefeuilles, parts non cotées, dettes
-   ------------------------------------------------------------ */
-/* ------------------------------------------------------------
-   Comptes — la vue de la barre d'onglets
-
-   Trois lectures du même patrimoine, par un contrôle segmenté :
-   par banque, par type de compte, par type de placement. La liste
-   est hiérarchique et repliable ; les en-têtes de groupe collent en
-   haut de l'écran avec leur total et leur part du patrimoine.
-
-   Tout est cliquable : un groupe se replie, un compte ouvre sa
-   fiche, un montant d'espèces se modifie sur place. Sur téléphone,
-   glisser une ligne de compte vers la gauche révèle Modifier et
-   Archiver.
-   ------------------------------------------------------------ */
 let compteVue = 'banque';            // banque | type
 let compteRecherche = '';
-/* Les groupes repliés survivent au rechargement.
-   Ils vivaient dans une variable : on repliait ses six établissements pour
-   avoir la structure d'un coup d'œil, et tout se rouvrait au premier F5. Un
-   réglage d'affichage qu'il faut refaire à chaque visite n'est pas un
-   réglage. Déplié reste le défaut — la page existe pour montrer les comptes,
-   les cacher derrière un appui serait un mauvais échange — mais qui préfère
-   le contraire ne le règle qu'une fois. */
 /* L'etat vit dans `meta`, pas dans une variable qui le recopie : le `Set`
    etait construit au chargement du script, donc avant que le store soit lu —
    il partait toujours vide et le repli memorise ne s'appliquait jamais. Une
    seule source, interrogee au moment du rendu. */
-/* Les groupes d'usage de la fenetre des liquidites partagent ce registre, sous
-   un prefixe : c'est le meme fait — « ce groupe est replie » — et deux listes
-   auraient fini par se contredire. Le prefixe evite qu'un usage nomme comme un
-   contenant ne referme le mauvais groupe. */
 const cleLiqPli = aff => `liq:${aff}`;
 
 const compteReplies = {
@@ -5201,14 +3259,9 @@ const compteReplies = {
   add(cle) { if (!this.has(cle)) Store.state.meta.comptesReplies = [...this.liste(), cle]; },
   delete(cle) { Store.state.meta.comptesReplies = this.liste().filter(c => c !== cle); },
 };
-/* Les groupes du dernier rendu, dans l'ordre : « tout replier » a besoin de
-   savoir sur quoi il agit, et cela dépend de la lecture choisie. */
 let groupesRendus = [];
 function memoriserReplies() { Store.save(); }
 
-/* Le libellé court sert au badge comme à la liste déroulante : « Auto,
-   Disponible sous quelques jours » ne tient dans aucune colonne, et se faisait
-   couper en « Auto, Disponible s… ». La phrase entière reste en infobulle. */
 const MOBILISABLE_COURT = {
   immediat: 'Immédiat', differe: 'Quelques jours',
   lent: 'Quelques mois', bloque: 'Inaccessible',
@@ -5218,7 +3271,6 @@ function badgeMobilisable(niveau) {
   return `<span class="tag mob-${niveau}" title="${esc(trad(MOBILISABLE_LABEL[niveau]))}">${trad(MOBILISABLE_COURT[niveau])}</span>`;
 }
 
-/* Variation d'un compte depuis le dernier relevé qui le mentionne. */
 function variationCompte(id) {
   const releves = Store.state.monthly
     .filter(r => r.v && r.v[id] != null && num(r.v[id]) !== 0)
@@ -5231,7 +3283,6 @@ function variationCompte(id) {
   return { eur: maintenant - avant, pct: (maintenant / avant - 1) * 100, depuis: fmtMonth(dernier.date) };
 }
 
-/* Mini-courbe d'un compte : ses relevés passés, puis aujourd'hui. */
 function sparkCompte(id) {
   const vals = Store.state.monthly
     .filter(r => r.v && r.v[id] != null)
@@ -5247,13 +3298,6 @@ function sparkCompte(id) {
   </svg>`;
 }
 
-/* Une ligne de compte, avec son tiroir d'actions révélé au glissement. */
-/* Une teinte par etablissement, tiree de son nom.
-   Six blocs gris empiles se ressemblaient tous : on ne voyait plus ou l'un
-   finissait et l'autre commencait, et rien ne rattachait une ligne a son
-   groupe une fois l'en-tete parti en haut de l'ecran. La couleur vient du
-   nom, donc elle ne bouge pas quand on ajoute ou retire un compte — une
-   teinte attribuee par rang aurait tout redistribue au premier ajout. */
 /* Une teinte neutre, et non plus une couleur tiree du nom.
 
    Elle etait un hachage du nom du groupe vers les huit teintes de serie. Trois
@@ -5285,14 +3329,8 @@ function teinteGroupe() {
    sur chaque ligne n'apprend rien et pousse le type du compte sur deux
    lignes. « le courtier · Portefeuille de cryptomonnaies » devient
    « Portefeuille de cryptomonnaies ». */
-/* Ce qui se dit sous le nom d'un compte : son établissement, son type. Un
-   compte sans libellé prend le nom de son type — « Espèces » sous « Espèces »,
-   deux fois le même mot sur deux lignes. Le sous-titre ne répète pas le titre,
-   et la règle vit ici plutôt qu'en deux copies, la liste et la fiche. */
 function sousTitreCompte(c, avecEtab = true) {
   const nom = nomCompteV2(c);
-  /* Le libelle du type se traduit a l'affichage : la table le porte en
-     francais, et les noms saisis (compte, etablissement) restent tels quels. */
   return [avecEtab ? nomEtabDe(c) : '', trad(typeCompte(c.type).label)]
     .filter(x => x && x !== nom).join(' · ');
 }
@@ -5318,10 +3356,6 @@ function ligneCompte(c, avecEtab = true) {
   </div>`;
 }
 
-/* Une ligne de placement ou d'espèces, feuille de l'arborescence.
-   Dans une fiche, la disponibilité devient un réglage : la règle calculée
-   se trompe parfois — un non coté qui se revend sur un marché secondaire
-   n'est pas bloqué — et c'est le placement qui sait, pas le type. */
 function lignePlacement(l, compte, editable = false) {
   const mob = mobiliteLigne(l, compte);
   const gain = l.prixDeRevient ? l.valeur - l.prixDeRevient : null;
@@ -5349,13 +3383,8 @@ function lignePlacement(l, compte, editable = false) {
           `<option value="${v}" ${l.mobilite === v ? 'selected' : ''}>${esc(trad(lib))}</option>`).join('')}
       </select>
     </span>` : badgeMobilisable(mob);
-  /* Ce que la ligne dit d'elle-meme, sous son nom : sa classe, son compte, et pour
-     un placement non cote son echeance et son etat. C'est la que se lit « en
-     retard » — un portefeuille de prets participatifs vit avec ça. */
   const st = statutLigne(l);
-  /* Le nom affiche de la ligne. */
   const libelle = nomLignePlacement(l, compte);
-  /* Un sous-titre ne repete pas le titre. */
   const replie = x => String(x || '').trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
   const pareil = (a, b) => {
@@ -5390,11 +3419,6 @@ function lignePlacement(l, compte, editable = false) {
         data-action="editer-placement" data-id="${esc(compte.id)}" data-i="${l.ref}"
         title="${trad('Modifier')} ${esc(libelle)}">${trad('Modifier')}</button>` : ''}`;
 
-  /* Dans une fiche, la ligne porte déjà une liste déroulante : elle reste
-     inerte, un bouton dans un bouton n'existe pas. Ailleurs — la vue par type
-     de placement — toute la ligne ouvre la fiche, comme une ligne de compte.
-     Une ligne de marché mène à son titre, une ligne saisie à la main au compte
-     qui la porte : c'est là que chacune se modifie. */
   if (editable) return `<div class="plc-ligne plc-placement">${corps}</div>`;
 
   const cible = l.marche
@@ -5419,46 +3443,19 @@ function viewAccounts() {
   const filtre = compteRecherche.trim().toLowerCase();
   const correspond = texte => !filtre || texte.toLowerCase().includes(filtre);
 
-  /* Un seul propriétaire pour « ce compte correspond à la recherche ».
-     Les comptes ouverts se filtraient ici, le groupe des archivés se
-     construisait cent cinquante lignes plus bas sans rien filtrer du tout : la
-     page répondait « Rien ne correspond à "Aaa" » en laissant les archivés
-     dessous. Deux endroits pour une seule règle, et seul le premier la tenait. */
   const correspondAuCompte = c =>
     correspond(nomCompteV2(c)) || correspond(nomEtabDe(c)) ||
     lignesDe(c).some(l => correspond(l.libelle));
 
   const ouverts = comptesOuverts().filter(correspondAuCompte);
-  /* Calculé ici et non au moment du rendu du groupe, parce que le message
-     « Rien ne correspond » se décide plus haut : un compte archivé qui porte le
-     mot cherché est une réponse, et annoncer l'absence juste au-dessus de lui
-     serait la contredire dans la même page. */
   const archives = COMPTES().filter(c => c.statut === 'archive' && correspondAuCompte(c));
 
-  /* Un groupe : en-tête collant (total, part du brut), lignes repliables. */
   /* `teinte` : la couleur d'un groupe n'est tirée de son nom que faute de
      mieux. Quand le groupe *est* une classe d'actif, il porte la couleur que
      la classe a déjà partout ailleurs — le camembert de l'accueil, la légende
      de la courbe, la répartition. Liquidités bleu, actifs de marché vert,
      immobilier jaune : la même chose se reconnaît à la même couleur d'un écran
      à l'autre, sinon la couleur ne veut plus rien dire. */
-  /* Le pourcentage a quitte l'en-tete des groupes.
-
-     Chacun annoncait « 10,0 % du total » alors que le total n'etait ecrit nulle
-     part sur la page : six pourcentages renvoyant a un nombre absent, ce que la
-     regle de ce projet interdit. La question s'est posee d'afficher le total pour
-     leur donner leur base, et la reponse a ete de retirer les pourcentages.
-
-     Parce que l'axe ne commande aucune decision : on ne reequilibre pas entre ses
-     banques. Ce qui se pilote est la repartition par classe et le partage entre
-     roles, et Allocation le fait deja, avec sa base nommee et ses totaux testes.
-     Comptes est un annuaire — on y vient retrouver un compte, verifier un solde,
-     corriger un montant — et un annuaire n'a pas besoin de poids. Les montants
-     restent, donc qui veut la part la voit a l'oeil.
-
-     Le total de la page reste affiche, pour une autre raison : elle montre douze
-     parties, elle doit dire leur somme, ne serait-ce que pour qu'on la recoupe
-     avec l'accueil. Il sert a verifier, pas a fonder un pourcentage. */
   const groupe = (cle, titre, sousTitre, corps, total, lien = '', teinte = null) => {
     if (!corps.trim()) return '';
     const replie = compteReplies.has(cle);
@@ -5470,38 +3467,20 @@ function viewAccounts() {
                 aria-expanded="${!replie}">
           <span class="cpt-pastille" aria-hidden="true"></span>
           <span class="cpt-gnom">${esc(trad(titre))}${sousTitre ? `<span class="sub">${esc(trad(sousTitre))}</span>` : ''}</span>
-          <!-- Rien et non zero : un groupe peut n'avoir aucun total a donner.
-               C'est le cas des comptes archives, sortis de tous les cumuls, ou
-               un « 0,00 € » se lirait comme un solde.
-               (Pas d'accent grave ici : ce commentaire vit dans un litteral de
-               gabarit, ou un backtick referme la chaine.) -->
           <span class="cpt-gtotal">${total == null ? '' : fmtEUR(total)}</span>
           <span class="cpt-chev">${replie ? '›' : '⌄'}</span>
         </button>
         ${lien}
       </div>
-      <!-- Le pli est une grille qui passe de 0fr a 1fr : c'est ce qui permet
-           une hauteur animee sans la mesurer, et la visibilite differee sort
-           le contenu replie du clavier et des lecteurs — le role que tenait
-           l'attribut hidden avant l'animation. -->
       <div class="cpt-pli${replie ? '' : ' ouvert'}"><div class="cpt-corps">${corps}</div></div>
     </section>`;
   };
 
-  /* Les intertitres de la vue par contenant, et le drapeau qui dit s'ils sont
-     la. Le groupe des comptes archives se rend en dehors du if/else, tout en
-     bas : sans ce drapeau il tombait sous « Biens et especes », qui ne le
-     contient pas. Un titre pose une etagere, il doit donc en poser une pour
-     tout ce qui suit. */
   let sectionsAffichees = false;
   const titreSection = (t, sous) => `
       <h3 class="cpt-section">${esc(trad(t))}<span class="sub">${esc(trad(sous))}</span></h3>`;
 
   let corps = '';
-  /* Le compte des especes existe pour tout le monde, pose par le modele : la page
-     n'etait donc jamais « vide » a ses yeux, et son texte d'accueil ne s'affichait
-     pas. C'est un compte que personne n'a cree, il ne peut pas tenir lieu de
-     premier pas. */
   if (!ouverts.some(c => !typeCompte(c.type).interne) && !filtre) {
     corps = `<div class="card">${invitePremierPas('comptes')
       || `<p class="empty">${trad('Aucun compte pour l’instant.')}</p>`}</div>`;
@@ -5535,18 +3514,11 @@ function viewAccounts() {
     };
     const groupeEtab = e => {
       const siens = ouverts.filter(c => c.etabId === e.id);
-      /* Un établissement sans compte disparaissait de la liste — y compris
-         quand il portait encore un crédit, qui continuait de peser sur le
-         patrimoine net sans qu'aucun écran ne le montre. S'il doit de
-         l'argent, il reste visible : c'est le seul moyen d'aller le retirer. */
       const doitEncore = (e.dettes || []).reduce((s, x) => s + num(x.montant), 0);
       if (!siens.length && !doitEncore) return '';
       const totalE = siens.reduce((s, c) => s + valeurCompte(c), 0);
       const credits = (e.dettes || []).reduce((s, x) => s + num(x.montant), 0);
       const lignes = siens.map(c => ligneCompte(c, false)).join('');
-      /* Le total du groupe reste la valeur des avoirs ; le credit s'affiche
-         en dessous avec le net, sinon on ne sait pas ce que le bien vaut
-         reellement une fois la dette deduite. */
       const dette = credits ? `
         <div class="plc-ligne">
           <span class="cpt-nom">${trad('Crédits en cours')}
@@ -5573,19 +3545,8 @@ function viewAccounts() {
     };
 
     const chezUnTiers = ETABS().filter(e => !estEtabDeBiens(e)).map(groupeEtab).join('');
-    /* Les espèces et les biens de valeur n'ont aucun contenant : sans ce groupe
-       ils n'apparaîtraient nulle part, et le total de la page cesserait d'égaler
-       la somme de ses parts sans que rien ne le dise. */
     const enDirect = ETABS().filter(estEtabDeBiens).map(groupeEtab).join('')
       + (sansContenant.length
-        /* Le titre dit ce qui unit ces lignes, le sous-titre ce qu'on y trouve.
-           Il a d'abord dit « Hors etablissement », une absence sous un
-           sous-titre qui disait deja laquelle ; puis « Chez toi », qui affirme
-           un lieu que l'application ne connait pas — une voiture n'est pas chez
-           toi, une montre peut dormir dans un coffre en banque. Ce qui est vrai
-           de toutes ces lignes, et d'elles seules, c'est que personne ne les
-           tient pour toi. La paire s'inverse donc : l'absence monte en titre,
-           parce qu'elle est le seul fait commun, et le contenu descend. */
         ? groupe('e-sans', trad('Sans intermédiaire'), trad('espèces et objets de valeur'),
             sansContenant.map(c => ligneCompte(c, false)).join(''),
             sansContenant.reduce((s, c) => s + valeurCompte(c), 0), '',
@@ -5593,10 +3554,6 @@ function viewAccounts() {
         : '');
 
     sectionsAffichees = !!chezUnTiers.trim() && !!enDirect.trim();
-    /* Les trois appels s'ecrivent pareil, sans raccourci : le troisieme vit
-       cent lignes plus bas, avec le groupe des archives, et un alias local ne
-       l'aurait pas atteint. Trois lignes qui se lisent de la meme facon valent
-       mieux qu'une abreviation qui ne couvre que deux des trois. */
     corps = (sectionsAffichees ? titreSection('Comptes', 'chez une banque ou un courtier') : '')
           + chezUnTiers
           + (sectionsAffichees ? titreSection('Biens et espèces', 'ce que tu détiens en direct') : '')
@@ -5609,34 +3566,8 @@ function viewAccounts() {
       groupe(`t-${g.id}`, trad(g.label), '', g.comptes.map(c => ligneCompte(c)).join(''),
              g.total, '', teinteDominante(g.comptes))).join('');
   }
-  /* Il y avait un troisieme onglet, « Placement », qui groupait les lignes par
-     classe d'actif. Il disait pour la troisieme fois la meme chose : l'accueil
-     porte la carte « Repartition », qui donne les memes classes avec leur
-     montant, leur part et une barre, et dont chaque ligne ouvre la liste des
-     placements qui la composent ; Allocation la reprend avec les cibles. Celui-ci
-     n'avait ni pourcentage ni base, donc la moins bonne des trois versions. */
 
   return `
-  <!-- Le patrimoine net occupait ici une carte entière, en gros caractères.
-       Il est déjà écrit en permanence au pied de la barre latérale et dans
-       l'en-tête du tiroir sur téléphone, et l'accueil lui consacre une carte
-       avec sa variation et sa courbe. Sans crédit, celle-ci répétait trois
-       fois le même nombre — le grand chiffre, « Total de vos avoirs », et un
-       net qui lui est égal — en repoussant la liste des comptes, seule raison
-       d'ouvrir cette page, sous la ligne de flottaison du téléphone.
-
-       Le total, lui, s'affiche toujours, et il a change de raison d'etre.
-
-       Il ne paraissait qu'en presence de credits, et les en-tetes de groupes
-       annoncaient pendant ce temps « 10 % du total » : six pourcentages renvoyant
-       a un nombre absent. Les pourcentages sont partis — l'axe ne commande aucune
-       decision, on ne reequilibre pas entre ses banques — mais le total reste.
-
-       Sa raison n'est plus de fonder une part : c'est que cette page montre douze
-       parties, et qu'elle doit dire leur somme. C'est la regle cardinale du projet
-       prise dans l'autre sens, et elle sert a recouper cette page avec l'accueil.
-       Les lignes de credits et de net ne s'y ajoutent que s'il y a une dette :
-       sans dette, « net » repeterait « avoirs ». -->
   <dl class="kv cpt-resume">
     <dt>${BASES.avoirs.nom}${aide(trad("La somme des comptes ouverts de cette page. Le même nombre que sur l’accueil : si les deux diffèrent, c’est qu’un compte est archivé ou qu’un montant vient d’être corrigé."))}</dt><dd>${fmtEUR(pat.brut)}</dd>
     ${pat.dettes ? `
@@ -5645,21 +3576,6 @@ function viewAccounts() {
     <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(pat.net)}</b></dd>` : ''}
   </dl>
 
-  <!-- Ce commutateur a la forme des sous-onglets des autres pages, et sa place :
-       une barre a lui, en tete, plutot qu'un bouton coince a gauche d'un champ
-       de recherche. C'est le meme geste — choisir comment lire la page — et
-       Comptes etait la seule ou il ne se presentait pas pareil.
-
-       La forme impose la place : le lavis glissant se deplace par index sur des
-       cellules egales, ce que la barre pleine largeur garantit. Dans la rangee,
-       les boutons se dimensionnaient sur leur texte et le lavis serait tombe a
-       cote.
-
-       « Comptes et supports » et non « Établissement » : cet onglet montre deux
-       sections, les comptes tenus par un tiers et les biens tenus soi-meme, et
-       un appartement n'est dans aucun etablissement. Le mot doit couvrir les
-       deux. « Type », en face, nomme le regroupement par nature de compte,
-       du meme mot que la fenetre qui regle ce type. -->
   ${barreCommutateur([
     ['banque', 'Comptes et avoirs'], ['type', 'Type'],
   ], compteVue, 'compte-vue', 'vue')}
@@ -5669,9 +3585,6 @@ function viewAccounts() {
       <input id="chercheCompte" type="search" placeholder="${trad('Rechercher…')}" value="${esc(compteRecherche)}"
              style="max-width:12em; text-align:left" aria-label="${trad('Rechercher un compte ou un placement')}">
       <span class="spacer"></span>
-      <!-- Replier les sept groupes un par un pour obtenir la vue de structure,
-           personne ne le fait deux fois. Le choix est mémorisé : replié une
-           fois, l'écran rouvre replié. -->
       ${groupesRendus.length > 1 ? `<button class="btn sm ghost" data-action="plier-tout"
         title="${groupesRendus.every(c => compteReplies.has(c))
           ? 'Rouvrir tous les groupes' : 'Ne garder que les totaux'}"
@@ -5683,15 +3596,6 @@ function viewAccounts() {
   <div class="cpt-liste">${corps}</div>
 
   ${(() => {
-    /* Les comptes archivés dans un groupe repliable, comme les autres.
-
-       Il se replie et se déplie comme les autres, et retient son état par le
-       même mécanisme : « comme le reste des comptes » veut dire le même
-       comportement, pas un cas de plus à connaître.
-
-       Le total est celui de ces comptes, et le sous-titre dit qu'il ne compte
-       nulle part ailleurs. L'écrire sans le dire aurait posé un montant qui ne
-       s'additionne à rien de ce que la page affiche. */
     if (!archives.length) return '';
     /* Aucun montant sur un compte archivé, ni ici ni dans sa fiche.
 
@@ -5714,7 +3618,6 @@ function mountAccounts() {
   if (cherche) {
     cherche.addEventListener('input', () => {
       compteRecherche = cherche.value;
-      /* On re-rend la liste seule, pas le champ : il garderait pas le focus. */
       const pos = cherche.selectionStart;
       render();
       const encore = $('#chercheCompte');
@@ -5724,15 +3627,6 @@ function mountAccounts() {
   monteSwipeComptes();
 }
 
-/* ------------------------------------------------------------
-   Fiche compte — une page entière, pas une fenêtre
-
-   La fiche s'adapte à ce que l'enveloppe contient. Un studio n'a pas de
-   trésorerie, un livret n'a pas de lignes de titres, et « Placements détenus »
-   ne veut pas dire la même chose pour un CTO et pour un bien : la même mise en
-   page pour les onze types donnait à chacun deux cartes vides et une carte
-   mal nommée.
-   ------------------------------------------------------------ */
 const estBien = t => !!t.bienImmo;
 
 /* Les crédits qui financent ce compte. Le modèle les range sur l'établissement
@@ -5765,17 +3659,6 @@ function invitePremierPas(cle) {
       <p class="small muted" style="margin:12px 0 0">${trad(p.quoi)}</p>`;
 }
 
-/* Une page entiere qui n'a rien a montrer.
-
-   Trois pages restaient des murs de zeros : Allocation repartissait 0 € entre
-   sept classes, Projection etalait « 0 € » sur cinquante ans et dix horizons,
-   Releves ouvrait un tableau de douze mois vides. Un tableau de zeros n'est pas
-   un resultat, c'est une question mal posee — et sur une application qui va au
-   grand public, c'est la premiere impression.
-
-   Une carte, une phrase qui dit ce qui la remplira, la porte du pas manquant, et
-   rien d'autre. Le contenu revient de lui-meme des que la donnee existe : ce
-   n'est pas un ecran ampute, c'est un ecran qui n'a pas encore commence. */
 function pageAvantDonnees(phrase, cle = 'comptes') {
   return `
   <div class="card">
@@ -5784,10 +3667,6 @@ function pageAvantDonnees(phrase, cle = 'comptes') {
   </div>`;
 }
 
-/* Les trois reglages d'exploitation : ce qu'on a mis, ce qu'on encaisse
-   vraiment, ce que l'impot prend. Ils vivent sur le compte et non sur la ligne,
-   au meme niveau que les loyers et les charges qui s'y rattachent — un compte
-   qui tiendrait deux lots n'aurait pas deux vacances ni deux taux. */
 function reglagesExploitation(c, idx, { apport = true } = {}) {
   return `
     <div class="grid g-3" style="margin-top:12px">
@@ -5807,18 +3686,10 @@ function reglagesExploitation(c, idx, { apport = true } = {}) {
     </div>`;
 }
 
-/* Les deux boutons qui rattachent, communs aux deux visages de la carte.
-
-   Ils font, ils ne renvoient pas : la carte Financement montrait deja la bonne
-   forme avec « + Credit ». Le rattachement se fait tout seul puisqu'on part du
-   bien ; la fenetre generique reste, pour rattacher un loyer deja saisi. */
 function boutonsRattachement(c) {
   return `
       <button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
               title="${trad('Créer un loyer déjà rattaché à ce bien')}">+ ${trad('Loyer')}</button>
-      <!-- L'infobulle se derive de la table des postes : elle les listait a la
-           main, si bien qu'ajouter un poste demandait de penser a deux endroits
-           et que celui qu'on oubliait disait le contraire de l'autre. -->
       <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
               title="${esc(chargesProposees(c).map(([l]) => trad(l)).join(', '))}">${trad('+ Charge')}</button>`;
 }
@@ -5835,9 +3706,6 @@ function boutonsRattachement(c) {
    du budget, la taxe fonciere dans les charges fixes, la mensualite chez le
    preteur. La fenetre ouverte est celle du budget, la meme : deux portes sur un
    meme champ sont saines, deux champs pour un meme montant ne le sont pas. */
-/* Les lignes du mois, communes aux deux versants : leur somme fait le solde, et
-   ce solde est le meme nombre des deux cotes — « Cash-flow » ou « Sortie du
-   compte » selon la question posee, jamais deux calculs. */
 function lignesDuMois(cf) {
   const periodeDite = p => p !== 'mois' ? trad(CHARGE_PERIODE_LABEL[p]) : '';
   return [
@@ -5847,10 +3715,6 @@ function lignesDuMois(cf) {
       sub: [s.periode !== 'mois' ? `${fmtEUR0(s.montant)} ${periodeDite(s.periode)}` : '',
             s.estime ? trad('estimé') : ''].filter(Boolean).join(' · '),
     })),
-    /* La vacance n'a pas de source a ouvrir : elle se regle par « Mois loues par
-       an », au bas de cette carte. Elle s'affiche quand meme, parce qu'elle
-       retire des euros et qu'une part invisible casserait l'egalite entre le
-       total et la somme de ses parts. */
     cf.vacanceEuros > 0.005 ? `
       <dt>${trad('Vacance locative')}${aide(trad("Les mois où le bien n'est pas loué, lissés sur l'année. Se règle par « Mois loués par an », au bas de cette carte."))}
         <span class="sub">${fmtNombre(cf.moisLoues)} ${trad('mois loués sur 12')}</span></dt>
@@ -5864,8 +3728,6 @@ function lignesDuMois(cf) {
       <dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte."))}
         <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
         <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : '',
-    /* La mensualite s'ouvre la ou son montant se regle : chez la charge qui
-       rembourse le credit quand il y en a une, sinon chez le credit. */
     ...cf.creditsListe.filter(x => x.mensualite > 0.005).map(x => ligneSource({
       nom: x.libelle, montant: x.mensualite, signe: -1,
       action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
@@ -5884,23 +3746,6 @@ function ligneSource({ nom, montant, signe, action, donnees, sub = '', aideTxt =
         <dd class="${signe > 0 ? 'up' : 'dette'}">${signe > 0 ? '+' : '−'}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
 }
 
-/* Ce que ce bien fait chaque mois : il rapporte, ou il coute.
-
-   Le meme logement ne pose pas la meme question selon son usage, et la carte
-   n'en posait qu'une. Rattacher sa taxe fonciere a sa propre maison suffisait a
-   declencher « Rendement brut 0,00 % » : le garde-fou testait l'absence de
-   loyer ET de charge, or une residence principale a des charges.
-
-   Les pieces se listent nommees, au lieu d'un « Loyer perçu » et d'un « Charges
-   rattachees » qui sommaient sans dire quoi. Deux raisons : le nom qu'on a donne
-   en dit plus que la categorie, et chaque ligne porte alors sa propre porte. La
-   somme des lignes affichees fait le cash-flow, a l'euro — la vacance comprise,
-   qui etait la seule part a agir sans se montrer.
-
-   Deux chiffres separes et jamais un seul agrege pour dire le mois : la
-   tresorerie baisse pendant que le patrimoine monte, les deux sont vrais, et
-   leur somme ne veut rien dire — elle melangerait de l'argent disponible avec
-   de l'argent immobilise dans des murs. */
 function carteExploitation(c, idx) {
   const cf = cashFlowBien(c);
   if (!cf) return '';
@@ -5913,12 +3758,6 @@ function carteExploitation(c, idx) {
     <div class="card-head"><h2>${trad('Ce que ce bien rapporte, et ce qu’il coûte')}</h2>
       <span class="hint">${trad('loyer, charges, cash-flow')}</span>
       ${boutonsRattachement(c)}</div>
-    <!-- Classe « empty » et non « small muted » : c'est un ecran vide, pas une
-         note en bas de carte. La classe le dit, et la regle des 35 mots
-         l'exempte pour cette raison, quand il n'y a aucun chiffre a montrer le
-         texte est le contenu.
-         (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
-         gabarit, un backtick y fermerait la chaine.) -->
     <p class="empty" style="margin:0">${trad('Aucun loyer ni charge rattaché à ce bien. '
       + '« + Loyer » et « + Charge » les créent déjà rattachés ; un loyer déjà saisi dans le '
       + 'budget se rattache par sa liste « Bien ». Le cash-flow et le rendement se calculent '
@@ -5926,19 +3765,9 @@ function carteExploitation(c, idx) {
       + 'annuelle : c\'est la dépense que tout le monde oublie et qui décide du vrai rendement.')}</p>
   </div>`;
 
-  /* Ce que le logement coute pour de bon. La mensualite sort du compte en
-     entier, mais sa part de capital revient a son proprietaire : c'est de
-     l'epargne forcee, pas une depense, et confondre les deux fait passer un
-     achat pour deux fois plus lourd qu'il ne l'est. */
   if (habite) {
-    /* La sortie compte l'impot, parce qu'il sort vraiment du compte. Il ne
-       s'affichait pas ici alors qu'un logement partiellement loue peut en
-       porter un : le total aurait ete plus petit que la somme de ses lignes. */
     const sortie = cf.charges + cf.mensualite + cf.impot - cf.loyers;
     const interets = cf.capitalMois == null ? null : Math.max(0, cf.mensualite - cf.capitalMois);
-    /* Signe et non moins force : une chambre bien louee peut couvrir plus que la
-       mensualite. Borner a zero aurait affiche « −0 € » sur un logement qui
-       rapporte, et c'est l'intitule qui aurait menti. */
     const reel = cf.capitalMois == null ? null : sortie - cf.capitalMois;
     return `
   <div class="card">
@@ -5957,9 +3786,6 @@ function carteExploitation(c, idx) {
       ${interets ? `<dt>${trad('Dont intérêts')}</dt>
         <dd class="muted">−${fmtEUR(interets)} ${trad('/ mois')}</dd>` : ''}` : ''}
     </dl>
-    <!-- Les reglages suivent le loyer, pas l'usage : declares sur un locatif puis
-         bascules en residence principale, la vacance et l'impot continueraient
-         d'agir sans qu'aucun champ ne permette de les corriger. -->
     ${cf.loyersPleins ? reglagesExploitation(c, idx, { apport: false }) : ''}
   </div>`;
   }
@@ -5968,16 +3794,10 @@ function carteExploitation(c, idx) {
   return `
   <div class="card">
     <div class="card-head"><h2>${trad('Ce que ce bien rapporte, et ce qu’il coûte')}</h2>
-      <!-- Le loyer plein, celui que le locataire verse et que le budget compte,
-           et non le montant lisse par la vacance : le meme libelle donnait deux
-           chiffres sur le meme ecran, 688 en tete et 750 sur la ligne juste en
-           dessous. La vacance a sa propre ligne, c'est la qu'elle se lit. -->
       <span class="hint">${fmtEUR0(cf.loyersPleins)} ${trad('de loyer par mois')}</span>
       ${boutonsRattachement(c)}</div>
     <dl class="kv">
       ${lignesDuMois(cf)}
-      <!-- Negatif est normal les premieres annees d'un credit, et c'est justement
-           ce qu'il faut savoir : la couleur le dit sans le juger. -->
       <dt><b>${trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
         <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
       ${cf.capitalMois ? `<dt>${trad('En patrimoine, le même mois')}${aide(trad("La part de capital de ta mensualité : elle quitte ta trésorerie et rejoint tes murs. Les deux lignes ne s'additionnent pas, elles répondent à deux questions différentes."))}</dt>
@@ -5999,17 +3819,11 @@ function carteExploitation(c, idx) {
   </div>`;
 }
 
-/* L'espace d'un bien : ce qu'il vaut, ce qu'il a coûté, et où en est le prêt.
-   « 150 000 € » tout seul ne dit pas ce qu'on possède — le capital restant dû
-   change la réponse du tout au tout. */
 function espaceBien(c, idx, t) {
   if (!estBien(t)) return '';
   const biens = (c.lignes || []).map((l, i) => ({ l, i }))
     .filter(({ l }) => (l.classe || 'immobilier') === 'immobilier');
   const { idxEtab, dettes, total: credit } = creditsDuCompte(c);
-  /* Deux valeurs, et l'ecran dit laquelle : celle du bien entier, qui se compare
-     a une annonce, et la part qu'on en detient, qui seule entre au patrimoine.
-     Sans quote-part saisie les deux se confondent, et rien ne s'affiche en plus. */
   const entiere = biens.reduce((s, { l }) => s + num(l.valeur), 0);
   const achatEntier = biens.reduce((s, { l }) => s + num(l.prixDeRevient), 0);
   const valeur = biens.reduce((s, { l }) => s + num(l.valeur) * partDetention(l), 0);
@@ -6023,19 +3837,10 @@ function espaceBien(c, idx, t) {
       <span class="hint">${biens.length > 1 ? `${biens.length} lots` : esc(t.label)}</span></div>
     ${biens.map(({ l, i }) => `
       <div class="modal-champs">
-        <!-- Le nom du bien, une seule fois. Il vivait en double — sur la ligne
-             et sur le contenant — et les deux pouvaient diverger : « studio »
-             ici, « Studio Lyon 3e » là, sans que rien ne dise lequel comptait.
-             Ce champ renomme les deux. -->
         <div class="field"><label>${trad('Nom du bien')}</label>
           <input data-action-change="renommer-bien" data-compte="${esc(c.id)}"
                  value="${esc(l.libelle || '')}" placeholder="${trad('ex. Studio Lyon 3e')}"></div>
         <div class="grid g-2">
-          <!-- Deux champs voisins, l'un frais compris et l'autre pas, et un seul
-               le disait. La confusion a une consequence chiffree : saisir ici le
-               prix paye frais compris surevalue le bien de ses frais de notaire,
-               qui sont partis en taxes et ne se revendent pas. C'est aussi ce qui
-               explique qu'un achat recent affiche un patrimoine net negatif. -->
           <div class="field"><label>${trad('Valeur estimée aujourd\'hui (€)')}${aide(trad("Ce qu'un acheteur te paierait aujourd'hui, frais de notaire exclus : ceux-là sont partis en taxes le jour de l'achat et ne se revendent pas. C'est pour ça qu'un achat récent financé à crédit peut afficher un patrimoine net négatif, sans que rien ne soit faux."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.valeur" value="${num(l.valeur)}"></div>
@@ -6052,9 +3857,6 @@ function espaceBien(c, idx, t) {
                    data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>
         </div>
         <div class="grid g-2">
-          <!-- L'usage se declare : la fiche d'une residence principale n'a pas
-               les memes questions que celle d'un locatif, et rien ne permet de
-               le deviner. Un bien sans loyer saisi peut etre en travaux. -->
           <div class="field"><label>${trad('Usage')}${aide(trad("Il décide de ce que la fiche te montre : un logement mis en location a un rendement, celui que tu habites a un coût. Ta résidence principale sort aussi des avoirs mobilisables en quelques mois, parce que la vendre veut dire te reloger."))}</label>
             <select data-path="comptes.${idx}.lignes.${i}.usage" class="annee">
               <option value="">${trad('à préciser')}</option>
@@ -6065,9 +3867,6 @@ function espaceBien(c, idx, t) {
             <input type="number" step="any" min="0" max="100" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.part" value="${num(l.part) || ''}"
                    placeholder="100">
-            <!-- Une saisie hors bornes vaut le bien entier, et le taire laisserait
-                 croire qu'elle a ete prise en compte : le champ garde le chiffre
-                 tape, seul ce mot dit ce que le calcul en fait. -->
             ${num(l.part) && (num(l.part) < 0 || num(l.part) > 100) ? `<p class="hint" style="margin:4px 0 0">${
               trad('Une part va de 0 à 100. Au-delà, le bien compte en entier.')}</p>` : ''}</div>
         </div>
@@ -6076,16 +3875,8 @@ function espaceBien(c, idx, t) {
                  placeholder="${trad('facultatif')}" style="text-align:left"></div>
       </div>`).join('')}
     ${(() => {
-      /* Le prix au mètre carré : c'est lui qu'on compare aux annonces du
-         quartier, et il dit tout de suite si l'estimation a vieilli. Il
-         n'apparaît qu'avec une surface renseignée, et se double du prix payé
-         à l'époque quand on le connaît — l'écart entre les deux est
-         l'histoire du bien en une ligne. */
       const surface = biens.reduce((s, { l }) => s + num(l.surface), 0);
       if (!surface || !entiere) return '';
-      /* Le prix au metre carre est celui du bien entier, quote-part ou pas :
-         c'est le chiffre des annonces, et le diviser par deux ne se comparerait
-         a rien. */
       return `<dl class="kv" style="margin-top:12px">
         <dt>Prix au m²<span class="sub">${fmtNombre(surface)} m² au total</span></dt>
         <dd><b>${fmtEUR0(entiere / surface)}</b> / m²${achatEntier ? `
@@ -6112,8 +3903,6 @@ function espaceBien(c, idx, t) {
     <div class="card-head"><h2>Financement</h2>
       <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">${trad('+ Crédit')}</button></div>
     ${!dettes.length ? `
-      <!-- Un état vide qui n'indique pas la sortie n'est qu'un constat : le
-           bouton y est répété, parce que c'est ici qu'on se demande où il est. -->
       <div class="empty">
         <p style="margin:0 0 12px">Aucun crédit déclaré : le bien est compté en entier dans
           ton patrimoine, et sa valeur nette est donc sa valeur tout court.</p>
@@ -6127,17 +3916,10 @@ function espaceBien(c, idx, t) {
       return `
       <div class="pret">
         <div class="bien-tete">
-          <!-- Le nom ouvre la fenetre du credit : renommer et supprimer ne se
-               faisaient que depuis la fiche de l'etablissement, un ecran qu'on
-               n'ouvre pas quand on regarde son bien. Les champs de montant
-               restent en place juste dessous, ils se corrigent chaque mois. -->
           <span class="cpt-nom"><button type="button" class="lien-nu"
                   data-action="editer-credit" data-etab="${esc(c.etabId)}" data-i="${i}"
                   title="${trad('Renommer, corriger ou supprimer')}">${esc(d.libelle)}</button>
             ${(() => {
-              /* L'organisme prêteur rejoint la mensualité sous le libellé :
-                 « Crédit Agricole · 1 186 € par mois ». Les deux sont
-                 facultatifs, la ligne s'adapte à ce qui est renseigné. */
               const bits = [
                 d.organisme ? esc(d.organisme) : '',
                 d.mensualite ? `${fmtEUR0(num(d.mensualite))} par mois` : '',
@@ -6155,11 +3937,6 @@ function espaceBien(c, idx, t) {
           </div>`
         : `<p class="hint" style="margin:8px 0 0">${trad('Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé.')}</p>`}
         ${(() => {
-          /* Quand ce sera paye, et ce que ca coutera d'ici la. La question que
-             tout emprunteur se pose, et les trois pieces necessaires etaient
-             deja saisies. Rien a voir avec la projection de patrimoine, gelee a
-             dessein : ici on ne lit qu'un contrat, sans le rapporter a la valeur
-             du bien. */
           const f = finCredit(d);
           if (!f) return num(d.taux) || !restant ? '' : `
             <p class="hint" style="margin:12px 0 0">${trad('Renseigne le taux et la mensualité : l’application dira alors quand ce crédit sera soldé et ce qu’il te reste à payer d’intérêts.')}</p>`;
@@ -6182,14 +3959,6 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Capital restant dû (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.montant" value="${restant}"></div>
-          <!-- La mensualite n'a qu'un porteur, et le lien decide lequel : quand
-               une charge fixe rembourse ce credit, c'est elle qui la detient, et
-               la lecture va la chercher chez elle. Offrir le champ ici en ferait
-               une seconde surface d'edition, et la perdante : on y ecrirait un
-               montant que rien ne relirait. La regle vaut deja pour la fenetre
-               du credit ; elle valait pour cette fiche aussi.
-               (Aucun backtick dans ce commentaire : il vit dans un litteral de
-               gabarit, et fermerait la chaine.) -->
           ${chargeDuCredit(d.id) ? `
           <div class="field"><label>${trad('Mensualité (€)')}${aide(trad("Elle se règle dans la charge fixe qui rembourse ce crédit, pour n'exister qu'à un seul endroit. Un second champ ici laisserait les deux diverger, et c'est celui-ci que rien ne relirait."))}</label>
             <p class="hint" style="margin:0">${fmtEUR(mensualiteCredit(d))} ${trad('par mois, depuis la charge')}
@@ -6198,16 +3967,9 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Mensualité (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.mensualite" value="${num(d.mensualite) || ''}"></div>`}
-          <!-- Le taux sert a lire le contrat : date de fin, interets restants,
-               part de capital de la mensualite. Il n'ecrit jamais le capital
-               restant du, qui reste ce que dit le releve de la banque. -->
           <div class="field"><label>Taux annuel (%)${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.taux" value="${num(d.taux) || ''}"></div>
-          <!-- Qui prête. Le contenant porte le nom du bien, « Appartement », pas
-               celui de la banque : sans ce champ, rien dans l'application ne
-               disait aupres de qui le pret est souscrit. « Organisme » est deja
-               le mot employe par les charges fixes. -->
           <div class="field"><label>Organisme</label>
             <input class="champ-large" style="text-align:left"
                    data-path="etabs.${idxEtab}.dettes.${i}.organisme"
@@ -6262,17 +4024,6 @@ function barreValiderFiche(retour = 'accounts') {
     </div>`;
 }
 
-/* L'etat d'une fiche a son ouverture, pour pouvoir y revenir.
-
-   « Annuler » ne peut pas vouloir dire « ne rien ecrire » : la fiche ecrit a
-   chaque frappe, et c'est ce qui garantit qu'on ne perd jamais un montant en
-   changeant d'ecran. La regle du projet est explicite la-dessus, avec sa raison :
-   un bouton qui conditionne l'ecriture jette tout ce qu'on a tape si on quitte
-   sans le voir.
-
-   L'instantane se prend au premier rendu d'une route, pas a chaque rendu : la
-   fiche se re-rend a chaque frappe de certains champs, et reprendre la photo a
-   ce moment-la la rendrait toujours identique. */
 let ficheAvant = null;
 
 function memoriserFiche(cle, objet) {
@@ -6319,30 +4070,11 @@ function viewFicheCompte(id) {
 
   <div class="card cpt-entete">
     <div>
-      <!-- Les deux fiches se ressemblent maintenant, et c'est le but : on ne
-           savait pas dire si l'on regardait un compte ou un etablissement.
-           Les deux pages portaient le meme titre de barre du haut, « Comptes »,
-           et le nom se lisait dans une etiquette grise de 11 px qui melangeait
-           le nom du compte et celui du courtier, separes d'un point median.
-
-           Meme structure des deux cotes : la nature en petit, le nom en grand,
-           le montant, puis ce qui precise. La difference se lit a la pastille —
-           un titre pastille est un etablissement, un titre nu est un compte. -->
       <span class="hero-label">${majuscule(motCompte(t))}</span>
       <h2 class="fiche-nom">${esc(nomCompteV2(c))}</h2>
-      <!-- Un compte archive n'affiche pas de montant. La valeur d'un compte
-           sorti des totaux vaut zero : le chiffre ne disait pas ce que le compte
-           contient, il disait ce qu'il pese. Et « 0,00 € » en gros, sous le nom,
-           se lit comme un solde. Le sous-titre dit « archive », c'est tout ce
-           qu'il y a a savoir.
-           (Pas d'accent grave ici, meme raison qu'ailleurs dans ce fichier.) -->
       ${c.statut === 'archive' ? '' : `<div class="cpt-net">${fmtEUR(valeurCompte(c))}</div>`}
       <span class="sub">${esc([sousTitreCompte(c, false), c.statut === 'archive' ? trad('archivé') : '']
         .filter(Boolean).join(' · '))}</span>
-      <!-- Ce qu'il reste a verser, sous le montant : c'est la que la question se
-           pose, en regardant ce qu'il y a dessus. Une jauge et une phrase, parce
-           que « 12 950 EUR » sans la barre ne dit pas si on en est loin, et que
-           la barre sans le montant ne dit pas de combien. -->
       ${(() => {
         const p = resteAVerser(c);
         if (!p) return '';
@@ -6356,15 +4088,6 @@ function viewFicheCompte(id) {
             : `Il reste <b>${fmtEUR0(p.reste)}</b> à verser sur ${fmtEUR0(p.plafond)}`}</span>
         </div>`;
       })()}
-      <!-- Le chemin vers l'etablissement, toujours la quand le compte en a un.
-           Il existait deja, mais au fond de la carte « Financement », qui ne se
-           rend que s'il y a un credit : un compte sans dette n'avait aucun
-           chemin vers la banque qui le tient, alors que la liste, elle, range
-           les comptes sous leur etablissement.
-           La teinte vient de teinteDominante() sur les comptes de cet
-           etablissement, la meme source que la liste et que sa fiche.
-           (Aucun guillemet oblique dans ce commentaire : il vit dans un
-           litteral de gabarit, un backtick y fermerait la chaine.) -->
       ${(() => {
         const et = c.etabId && etabById(c.etabId);
         if (!et) return '';
@@ -6380,12 +4103,6 @@ function viewFicheCompte(id) {
       ${[...parClasse.entries()].filter(([, v]) => v).map(([k, v]) =>
         `<dt>${esc(CLASSES_ACTIFS[k] || k)}</dt><dd>${fmtEUR(v)}</dd>`).join('')}
     </dl>
-    <!-- L'anciennete, la ou elle compte : huit ans pour une assurance-vie, cinq
-         pour un PEA. L'application reclamait la date d'ouverture a la creation
-         en promettant qu'elle « conditionne la disponibilite » — ce qui etait
-         faux — et ne l'affichait ensuite nulle part. Le seuil est fiscal, la
-         phrase le dit, et le compte a rebours est le repere que tout detenteur
-         d'assurance-vie guette. -->
     ${(() => {
       const a = ancienneteCompte(c);
       if (!a) return '';
@@ -6404,12 +4121,6 @@ function viewFicheCompte(id) {
 
   ${espaceBien(c, idx, t)}
 
-  <!-- Un studio n'a pas de trésorerie : la carte ne s'affiche que pour les
-       enveloppes qui peuvent en porter, ou celles qui en portent déjà. -->
-  <!-- Un contrat n'a pas de poche de cash : l'argent verse est sur un support
-       des son arrivee. La carte disparait donc, sauf si elle porte deja quelque
-       chose — retirer un ecran ne doit pas emporter ce que quelqu'un y avait
-       saisi, et ces euros-la doivent pouvoir etre reclasses a la main. -->
   ${(t.sansCash || !t.classes.includes('liquidites')) && !(c.cash || []).length ? '' : `
   <div class="card">
     <div class="card-head"><h2>${BASES.liquidites.nom} ${trad('sur ce compte')}</h2>
@@ -6422,28 +4133,8 @@ function viewFicheCompte(id) {
         <select data-path="comptes.${idx}.cash.${i}.affectation" class="annee" title="${trad('À quoi sert cet argent ?')}">
           ${AFFECTATIONS.map(([v, l]) => `<option value="${v}" ${v === e.affectation ? 'selected' : ''}>${l}</option>`).join('')}
         </select>
-        <!-- L'unite se dit a cote du champ. « Le champ liquidite, c'est precise
-             nulle part euro ou autre. » Tous les autres montants de l'application
-             s'affichent formates, donc avec leur symbole ; celui-ci est un champ
-             de saisie, il montrait un nombre nu. L'ambiguite ne coutait rien tant
-             qu'on savait, et c'est exactement le genre de chose qu'on ne sait plus
-             six mois apres.
-
-             L'application compte en euros de bout en bout — seules les lignes de
-             titres portent une devise, avec leur taux de change. Ce n'est donc pas
-             un choix a offrir ici mais un fait a rappeler. -->
         <input type="number" step="any" class="champ-inline" data-path="comptes.${idx}.cash.${i}.montant" value="${num(e.montant)}">
         <span class="champ-unite" aria-hidden="true">€</span>
-        <!-- Retirer la derniere part d'un compte d'especes le laisserait sans
-             champ ou saisir un montant, sur un compte qu'on ne peut pas
-             supprimer : un cul-de-sac. Mettre a 0 est le geste. -->
-        <!-- Nomme, comme le bouton qui retire un credit : un ✕ gris est le signe
-             le plus discret de l'ecran pour l'acte qui en efface un montant, et
-             on ne le trouve que par accident. Fantome et non plein, a la
-             difference du credit : un compte peut declarer trois parts, et trois
-             aplats rouges dans une carte se lisent comme une alerte. C'est aussi
-             le traitement de « Cloturer et supprimer », l'autre acte destructeur
-             de cette page. -->
         ${t.interne && (c.cash || []).length < 2 ? ''
           : `<button class="btn sm ghost danger" data-action="retirer-cash" data-id="${esc(c.id)}" data-i="${i}" title="${trad('Retirer cette part')}">${trad('Retirer')}</button>`}
       </div>`).join('')
@@ -6452,39 +4143,11 @@ function viewFicheCompte(id) {
         : trad('Pas d’argent déclaré sur ce compte. « Scinder » ajoute une première part.')}</p>`}
   </div>`}
 
-  <!-- Un bien a déjà sa carte au-dessus : la répéter en « placement détenu »
-       montrerait deux fois la même ligne, dans deux mises en forme. Un compte
-       courant ou un livret ne portent que des espèces : la carte y restait
-       vide à vie, sous un titre qui promettait autre chose. -->
   ${estBien(t) || (!t.classes.some(x => x !== 'liquidites') && !lignes.length) ? '' : `
   <div class="card">
-    <!-- La liste deroulante de chaque ligne n'avait d'explication que dans son
-         attribut title : invisible au doigt, et « Auto, Quelques jours » est une
-         valeur, pas un intitule. On ne pouvait donc pas savoir ce que ce menu commande.
-
-         L'explication est posee une fois, sur l'en-tete, parce que toutes les
-         listes de la carte font la meme chose — une par ligne aurait repete la
-         meme phrase autant de fois qu'il y a de placements. Le mot
-         « Disponibilite » sert de titre de colonne, ce qui manquait aussi. -->
-    <!-- « Supports » sur une enveloppe : la carte y porte les deux natures, et
-         « Lignes de titres » en nommait une seule — le fonds euros et la SCPI
-         qui vivent dessous auraient ete annonces comme des titres. C'est aussi
-         le mot du contrat, celui qu'on lit sur son releve d'assurance. -->
     <div class="card-head"><h2>${trad(t.melange ? 'Supports du contrat'
       : t.titres ? 'Lignes de titres' : 'Placements détenus')}</h2>
       <span class="hint">${trad('Disponibilité')}${aide(trad("Sous combien de temps chaque placement redevient de l’argent disponible. Elle alimente la carte « Autonomie financière » de l’accueil. « Auto » suit la règle du type de compte : un PEA de moins de cinq ans est bloqué, un compte-titres se vend en séance. La règle se trompe parfois : un non coté peut se revendre sur un marché secondaire, c’est pourquoi chaque ligne peut la contredire."))}</span>
-      <!-- Le geste, jamais l'itineraire. Un compte a titres renvoyait a Marches
-           par un lien : quand une page doit donner le chemin vers son propre
-           geste, c'est le geste qui est mal place. Le bouton ouvre la recherche
-           en visant ce compte, et la ligne creee y atterrit sans qu'on ait a le
-           rechoisir.
-           Deux boutons sur une enveloppe, celle que son type dit melangee : la
-           moitie de ses supports cote et l'autre non, il faut les deux portes.
-           Un compte-titres n'en garde qu'une, sinon on saisirait a la main un
-           titre dont le cours arrive seul, et cette ligne-la ne se mettrait
-           plus jamais a jour.
-           (Aucun backtick ici : ce commentaire vit dans un litteral de gabarit,
-           et le premier refermerait la chaine.) -->
       ${t.titres ? `<button class="btn sm ghost" data-action="ajouter-ligne" data-compte="${esc(c.id)}"
                    title="${trad('Chercher un titre coté et le poser sur ce compte')}">${trad('+ Titre coté')}</button>` : ''}
       ${!t.titres || t.melange ? `<button class="btn sm ghost" data-action="ajouter-placement" data-id="${esc(c.id)}"
@@ -6545,9 +4208,6 @@ function viewFicheCompte(id) {
       <dt>${trad('Valeur du')} ${motCompte(t)}</dt><dd>${fmtEUR(valeur)}</dd>
       <dt>${trad('Crédits chez')} ${esc(etab.nom)}</dt><dd class="dette">−${fmtEUR(total)}</dd>
       <dt><b>${trad('Ce que tu possèdes')}</b>${aide(trad("La valeur du compte moins ce que tu dois à cet établissement. C’est ce montant qui compte dans ton patrimoine net. Si l’établissement tient plusieurs comptes, le crédit est déduit une seule fois du patrimoine, pas une fois par compte."))}</dt>
-      <!-- Un solde negatif se peint comme une dette : devoir plus que ce que le
-           compte porte est un etat reel, et il ne doit pas se lire comme un
-           avoir. -->
       <dd class="${valeur - total < 0 ? 'dette' : ''}"><b>${fmtEUR(valeur - total)}</b></dd>
       ${valeur - total > 0.005 ? `<dt>Effet de levier${aide(trad("Ce que tu contrôles rapporté à ce qui est vraiment à toi sur ce compte. À 150 %, une baisse de 10 % des titres coûte 15 % de tes capitaux propres. Ce chiffre ne dit rien de la marge d’appel : l’application ne connaît pas les règles de ton courtier."))}</dt>
         <dd>${fmtPct(valeur / (valeur - total) * 100, 0)}
@@ -6561,41 +4221,9 @@ function viewFicheCompte(id) {
   <div class="card">
       <div class="card-head"><h2>${trad('Informations')}</h2>
         <button class="btn sm ghost" data-action="modifier-compte" data-id="${esc(c.id)}">${trad('Modifier')}</button></div>
-      <!-- Ces champs se lisent, ils ne se saisissent plus.
-
-           Le montant des liquidites, lui, reste en saisie directe ailleurs sur
-           cette page : c'est le seul champ de la fiche qu'on revient corriger
-           tous les mois. La regle n'est pas « tout derriere un bouton », elle
-           est « la frequence commande la forme ».
-
-           Les notes restent ouvertes pour la meme raison, en sens inverse :
-           une note s'ajoute a n'importe quel moment, souvent parce qu'on vient
-           justement de penser a quelque chose.
-
-           Ce qui n'est pas renseigne ne s'affiche pas, sauf la ou son absence
-           est un manque : un PEA sans date d'ouverture ne peut pas dire quand
-           il se debloque, donc la ligne reste et reclame. -->
       <dl class="kv">
-        <!-- Sans nom propre, la ligne repetait le type mot pour mot juste
-             au-dessus de la ligne « Type de compte » : « Bien de valeur /
-             Bien de valeur ». Un champ vide se dit vide, il ne se remplit pas
-             du voisin. -->
         <dt>${trad('Nom du')} ${motCompte(t)}</dt><dd>${c.libelle ? esc(c.libelle)
           : `<span class="muted">${trad('non renseigné')}</span>`}</dd>
-        <!-- Le type se change, ce qui n'etait pas le cas.
-
-             La seule issue apres une faute de frappe etait de supprimer et
-             recreer, et les releves mensuels etant indexes par identifiant de
-             compte, recreer perd tout l'historique. L'absence de ce reglage ne
-             protegeait rien, elle poussait vers un contournement destructeur.
-
-             Tous les types restent proposes, meme ceux qui ne conviennent pas :
-             un choix impossible se refuse avec sa raison, et cette raison dit
-             quoi deplacer. Griser l'option aurait laisse deviner pourquoi. Cette
-             validation vit maintenant dans l'action modifier-compte, qui rouvre
-             la fenetre en gardant la saisie plutot que de la perdre.
-             (Aucun guillemet oblique ici : ce commentaire vit dans un litteral
-             de gabarit, un backtick y fermerait la chaine.) -->
         <dt>${trad('Type de')} ${motCompte(t)}${aide(t.interne
           ? trad('Les espèces n’ont pas d’établissement : personne ne les tient pour '
           + 'toi. Ce compte existe une fois, il ne se choisit pas dans la liste '
@@ -6611,13 +4239,6 @@ function viewFicheCompte(id) {
           + 'avec une échéance et un état : ces lignes-là portent une date de '
           + 'remboursement, et l’application te rappelle celles qui l’ont dépassée.'))}</dt>
         <dd>${esc(trad(t.label))}${t.interne ? trad(', sans établissement') : ''}</dd>
-        <!-- Le plafond, sur les livrets seulement, et saisi plutot que deduit :
-             le modele connait le type « livret », pas le produit. Une table des
-             plafonds par produit aurait demande d'etre tenue a jour a chaque
-             revalorisation reglementaire, pour un chiffre que le detenteur a sous
-             les yeux. Il reste facultatif, mais la ligne s'affiche meme vide :
-             sur un livret, savoir qu'on peut declarer un plafond fait partie de
-             ce que la fiche doit dire. -->
         ${t.id === 'livret' ? `
         <dt>${trad('Plafond de versement')}${aide(trad("Facultatif. Une fois posé, la fiche dit ce qu’il reste à verser. Les plafonds courants : 22 950 € pour un Livret A, 12 000 € pour un LDDS, 10 000 € pour un LEP. Les intérêts peuvent faire dépasser le plafond, c’est normal et la fiche l’annonce alors comme plein."))}</dt>
         <dd>${num(c.plafond) ? fmtEUR(c.plafond)
@@ -6627,41 +4248,16 @@ function viewFicheCompte(id) {
         <dd>${c.ouvertLe ? esc(fmtDate(c.ouvertLe))
               : `<span class="muted">${trad('à renseigner')}</span>`}</dd>`
         : c.ouvertLe ? `<dt>${motDateCompte(t)}</dt><dd>${esc(fmtDate(c.ouvertLe))}</dd>` : ''}
-        <!-- L'autre bout de la vie du compte. Elle ne s'affiche que sur un
-             compte archivé : sur un compte ouvert, une ligne « Date de
-             clôture » vide inviterait à la remplir, ce qui reviendrait à
-             déclarer une fermeture par un champ de date au lieu du bouton qui
-             la fait. Un état se déclare, il ne se déduit pas d'une date. -->
         ${c.statut === 'archive' ? `<dt>${trad('Date de clôture')}</dt>
         <dd>${c.clotureLe ? esc(fmtDate(c.clotureLe))
               : `<span class="muted">${trad('non renseignée')}</span>`}</dd>` : ''}
         ${!t.interne && c.numero ? `<dt>${trad('Numéro de compte')}</dt><dd>${esc(c.numero)}</dd>` : ''}
       </dl>
-      <!-- Le depliant portait numero, notes et date d'ouverture. Les deux
-           champs administratifs sont passes derriere « Modifier » avec le reste
-           de l'identite du compte ; il ne restait que les notes, et un depliant
-           qui cache une seule ligne coute un geste pour ne rien ranger. La note
-           s'ecrit donc a decouvert, en saisie directe : c'est le champ qu'on
-           remplit au moment ou l'on y pense. -->
       <div class="field" style="margin-top:12px"><label>Notes</label>
         <input data-path="comptes.${idx}.notes" value="${esc(c.notes || '')}"
                placeholder="${trad('facultatif')}" style="text-align:left"></div>
       ${barreValiderFiche()}
     </div>
-    <!-- La carte ne porte que la vie du compte, et son titre le dit.
-
-         Rassembles, les quatre boutons formaient un mur : quatre rectangles de meme
-         taille empiles sous un seul titre, sans ordre de lecture, et deux natures
-         d'acte que seul le remplissage distinguait. La validation appartient au
-         formulaire qu'elle valide, donc au bas de la carte des champs ; ici ne reste
-         que ce qui decide de la vie du compte, juste au-dessus de la phrase qui
-         explique archiver et supprimer.
-
-         Les deux rangees gardent la meme classe et donc la meme geometrie : les deux
-         cartes ont la meme largeur, leurs colonnes coincident, et les quatre boutons
-         partagent leur taille et leur bord droit d'une carte a l'autre.
-         (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
-         et fermerait la chaine.) -->
     <div class="card">
       <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
       <div class="fiche-actes">
@@ -6677,9 +4273,6 @@ function viewFicheCompte(id) {
     </div>`;
 }
 
-/* ------------------------------------------------------------
-   Fiche établissement
-   ------------------------------------------------------------ */
 function viewFicheEtab(id) {
   const e = etabById(id);
   if (!e) return `<div class="card"><p class="empty">${trad('Cet établissement n’existe plus.')}</p>
@@ -6693,28 +4286,9 @@ function viewFicheEtab(id) {
   return `
   <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
 
-  <!-- Le nom s'ecrit, il ne se saisit plus.
-
-       Il n'etait affiche nulle part ailleurs sur cette page : le titre de la
-       barre du haut dit « Comptes », pas le nom du courtier. Le seul endroit ou on lisait
-       le nom de l'etablissement etait donc l'interieur de son champ de saisie —
-       une valeur qu'on ne peut lire qu'en la mettant en danger. Il devient un
-       titre, et le champ part derriere « Modifier ». -->
   <div class="card cpt-entete" style="--teinte:${teinteDominante(siens)}">
     <div>
-      <!-- Pas de bulle d'aide ici : ce mot se lit comme une etiquette de
-           categorie, il ne pose aucune question. L'explication de sa derivation
-           reste dans la fenetre « Modifier », a cote du champ en lecture qui la
-           porte : c'est la seule ou quelqu'un peut se demander pourquoi il ne
-           se regle pas. -->
       <span class="hero-label">${esc(trad(contenantDeLEtab(e.id).titre))}</span>
-      <!-- La meme pastille que dans la liste, et surtout la meme teinte : elle
-           vient de teinteDominante(siens), la fonction qui colore deja le
-           groupe. La recalculer autrement aurait donne deux couleurs pour un
-           seul etablissement, celle de la liste et celle de sa fiche, sans que
-           rien ne dise laquelle a raison.
-           (Aucun guillemet oblique ici : ce commentaire vit dans un litteral
-           de gabarit, un backtick y fermerait la chaine.) -->
       <h2 class="fiche-nom"><span class="cpt-pastille" aria-hidden="true"></span>${esc(e.nom)}</h2>
       <div class="cpt-net">${fmtEUR(total - credits)}</div>
       <span class="sub">${siens.length} ${motContenu(e.id, siens.length)}${credits ? ` · ${fmtEUR0(credits)} ${trad('de crédits')}` : ''}</span>
@@ -6724,9 +4298,6 @@ function viewFicheEtab(id) {
   </div>
 
   <div class="card">
-    <!-- La carte s'appelait « Comptes rattachés » sans offrir d'en rattacher
-         un : il fallait revenir à la liste, relancer l'ajout, et rechoisir
-         l'établissement sur la page duquel on se trouvait déjà. -->
     <div class="card-head"><h2>${majuscule(motContenu(e.id, 2))} ${trad('rattachés')}</h2>
       <button class="btn sm ghost" data-action="ajouter-compte" data-etab="${esc(e.id)}"
               title="${trad('Ajouter un')} ${motContenu(e.id, 1)} ${trad('chez')} ${esc(e.nom)}"
@@ -6747,10 +4318,6 @@ function viewFicheEtab(id) {
         <input data-path="etabs.${idx}.dettes.${i}.libelle" value="${esc(d.libelle)}" style="text-align:left; max-width:14em">
         <span class="spacer"></span>
         <input type="number" step="any" class="champ-inline" data-path="etabs.${idx}.dettes.${i}.montant" value="${num(d.montant)}">
-        <!-- Un ✕ gris pour retirer un prêt de 30 000 € : l'action la plus
-             lourde de l'écran portait le signe le plus discret. Elle est
-             nommée et rouge — c'est ce qu'on vient faire ici quand un crédit
-             ne finance plus rien. -->
         <button class="btn sm danger" data-action="retirer-credit"
                 data-id="${esc(e.id)}" data-i="${i}">${trad('Supprimer')}</button>
       </div>`).join('') + `
@@ -6761,10 +4328,6 @@ function viewFicheEtab(id) {
     : `<p class="empty">${trad('Aucun crédit déclaré chez')} ${esc(e.nom)}.</p>`}
   </div>
 
-  <!-- La carte des champs de cette fiche, donc celle qui porte la validation. Un
-       etablissement ne s'archive ni ne se cloture depuis sa fiche : il n'y a pas de
-       carte « Actions » ou la ranger, et une carte a elle seule pour deux boutons
-       pesait plus que ce qu'elle annonce. -->
   <div class="card">
     <div class="card-head"><h2>${trad('Notes')}</h2></div>
     <input data-path="etabs.${idx}.notes" value="${esc(e.notes || '')}" placeholder="${trad('facultatif')}" style="text-align:left">
@@ -6836,10 +4399,6 @@ function monteSwipeComptes() {
   }
 }
 
-
-/* ------------------------------------------------------------
-   Stratégie
-   ------------------------------------------------------------ */
 function viewStrategy() {
   const st = Store.state.strategy;
   const capital = Store.state.meta.modelCapital;
@@ -6907,9 +4466,6 @@ function viewStrategy() {
   </div>`;
 }
 
-/* ------------------------------------------------------------
-   Budget & dépenses
-   ------------------------------------------------------------ */
 let budgetYear = null;   // null = l'année en cours
 /* Tri du detail mensuel : { key, dir }, ou null pour l'ordre du calendrier.
    `key` vaut 'mois', 'total', ou le nom d'une categorie. Il ne trie que le
@@ -6917,10 +4473,6 @@ let budgetYear = null;   // null = l'année en cours
    n'a pas d'en-tetes pour dire son ordre, et un ordre muet est un piege. */
 let depSort = null;
 
-/* L'année affichée par défaut est l'année en cours, pas la dernière du
-   calendrier : ouvrir 2027 d'avance faisait basculer tout l'onglet sur une
-   année vide. La vue et son montage la calculent au même endroit, sinon le
-   tableau et son graphique peuvent parler de deux années différentes. */
 function budgetAnnee() {
   const annees = expenseYears();
   const courante = todayISO().slice(0, 4);
@@ -6931,25 +4483,15 @@ function budgetAnnee() {
   return budgetYear ?? (annees.includes(courante) ? courante : annees[annees.length - 1]);
 }
 
-/* « Revenus et charges » : le cadre du mois, ce qu'on regle une fois puis
-   qu'on ne touche plus. Meme fonction que les depenses, meme etat calcule une
-   seule fois — seuls les blocs affiches changent. Decouper en deux fonctions
-   aurait duplique la vingtaine de constantes du haut, et la moindre evolution
-   se serait faite a deux endroits. */
 const viewBudgetCadre = () => viewBudget('cadre');
 
 function viewBudget(section = 'depenses') {
-  /* Quatre cartes vont au cadre — revenus, charges fixes, epargne, autres
-     depenses — le reste au suivi des depenses. Un seul onglet s'affiche a la
-     fois, la page passe de 4 400 px a environ 2 000. */
   const cadre = section === 'cadre';
   const f = budgetFrame();
   const years = expenseYears();
   const year = budgetAnnee();
   const stats = expenseYearStats(year);
   const cats = expenseByCategory(year);
-  /* On garde l'index réel de chaque ligne : les champs de saisie pointent
-     dessus, et le filtre par année ne doit pas les décaler. */
   const lignesDepenses = Store.state.budget.expenses
     .map((r, i) => ({ r, i }))
     .filter(({ r }) => year === 'all' || String(r.month).startsWith(year));
@@ -6963,16 +4505,6 @@ function viewBudget(section = 'depenses') {
   return `
   ${cadre ? '' : `
   <div class="grid g-hero">
-    <!-- La brique s'ouvre sur la saisie du mois courant : c'est le geste que
-         l'on vient faire ici.
-
-         Un <button> englobant ne peut pas contenir de champ — deux controles
-         imbriques n'existent pas — et l'objectif mensuel se reglait donc trois
-         cartes plus bas, dans l'en-tete du graphique, alors que son montant
-         s'affiche ici, la ou le regard tombe. Le motif de couverture resout
-         les deux : la carte entiere declenche la saisie, et ce qui porte son
-         propre geste le garde. C'est celui de la carte patrimoine de
-         l'accueil. -->
     <div class="hero card-cliquable">
       <button type="button" class="card-couvre" data-action="saisir-mois-courant"
               aria-label="${trad('Saisir les dépenses du mois')}"
@@ -6982,24 +4514,6 @@ function viewBudget(section = 'depenses') {
         <div class="hero-value">${cur ? fmtEUR0(cur.total) : ''}</div>
       </div>
       <div class="hero-deltas">
-        <!-- L'objectif se regle en touchant son montant, la ou il s'affiche.
-
-             Un champ discret a vecu ici, souligne d'un pointille : il etait joli
-             et il ne se trouvait pas, faute d'intitule. Il est ensuite descendu
-             au bas de la carte, etiquete, ou il se trouvait mais doublonnait avec
-             son jumeau de l'onglet Charges fixes — une valeur, deux champs.
-
-             Le montant cliquable leve les deux objections a la fois : il est la
-             ou le regard tombe, et c'est la fenetre qui porte l'intitule. Un
-             reglage a besoin de son nom, pas d'etre ecrit en petit a cote du
-             chiffre qu'il commande. -->
-        <!-- Le chevron et l'accent, comme le montant des revenus deux cartes
-             plus bas. « On ne voit pas bien ou on peut changer l'objectif » :
-             c'est mot pour mot la remarque qui avait valu son chevron au
-             4 500 EUR de « Ou va ce que tu gagnes », et le pointille seul
-             n'avait pas suffi ici. Meme probleme, meme signal — inventer une
-             troisieme facon de dire « ceci s'ouvre » aurait surtout ajoute une
-             convention a apprendre. -->
         <button type="button" class="hero-delta hero-delta-reglable"
                 data-action="regler-objectif-depenses"
                 aria-label="${trad('Régler l’objectif de dépenses mensuel,')} ${fmtEUR0Texte(f.target)}">
@@ -7011,11 +4525,6 @@ function viewBudget(section = 'depenses') {
           <b class="${classeDepassement(cur ? cur.total : 0, f.target)}">${
             curDiff > 0 ? '▲' : '▼'} ${fmtSigned(curDiff)}</b>
         </div>
-        <!--    La part de l'objectif deja consommee. L'ecart en euros dit combien il
-   reste, le pourcentage dit ou l'on en est du chemin — a mi-mois, « 80 % »
-   alerte la ou « −900 € » rassure. Il ne se rend que sur une base positive,
-   la regle de la maison : sans objectif, pas de pourcentage. Sa base est
-   nommee par la carte elle-meme, l'objectif est deux lignes plus haut.-->
         ${cur && f.target > 0 ? `
         <div class="hero-delta">
           <span>${trad('Budget consommé')}</span>
@@ -7028,11 +4537,6 @@ function viewBudget(section = 'depenses') {
       </div>
       ${cur && cur.note ? `<p class="small muted" style="margin:0">${esc(cur.note)}</p>` : ''}
       ${(() => {
-        /* La carte s'arretait aux trois ecarts et laissait, sur grand ecran,
-           un grand vide : elle est etiree a la hauteur de sa voisine, qui est
-           longue. Plutot que de la raccourcir seule, elle dit ce qu'on vient
-           y chercher — ou l'argent du mois est parti. Un mois vide le dit
-           aussi, et invite au geste que la carte declenche. */
         const ligne = cur && Store.state.budget.expenses.find(r => r.month === cur.month);
         const parts = Object.entries((ligne && ligne.v) || {})
           .map(([nom, v]) => ({ nom, v: num(v) }))
@@ -7047,9 +4551,6 @@ function viewBudget(section = 'depenses') {
           ${parts.slice(0, 6).map(p => `
             <div class="flow-row">
               <span class="flow-label">${esc(p.nom)}</span>
-              <!-- Le degrade du budget, celui de la jauge de l'accueil : la
-                   meme couleur pour le meme sujet sur les deux ecrans. Le jaune
-                   qui vivait ici ne se retrouvait nulle part ailleurs. -->
               <div class="flow-bar"><div style="width:${Math.max(2, p.v / haut * 100)}%;
                 background:var(--degrade-budget)"></div></div>
               <b class="flow-val">${fmtEUR0(p.v)}</b>
@@ -7058,60 +4559,21 @@ function viewBudget(section = 'depenses') {
             et ${parts.length - 6} autre${parts.length - 6 > 1 ? 's' : ''} catégorie${parts.length - 6 > 1 ? 's' : ''}</p>` : ''}
         </div>`;
       })()}
-      <!-- Le champ etiquete qui vivait ici est parti : l'objectif se regle en
-           touchant son montant, en haut de la carte, et la fenetre qui s'ouvre
-           porte l'intitule qui manquait a la premiere version. -->
     </div>
 
-    <!-- « Ou va ce que tu gagnes » vivait dans l'onglet Charges fixes, le
-         troisieme. Or la barre « Revenus fixes » est le seul endroit de
-         l'application ou l'on declare ce que l'on gagne : il fallait ouvrir un
-         onglet nomme d'apres les depenses pour regler ses revenus. Elle est
-         maintenant sur l'ecran d'arrivee de Budget, a cote de la saisie du mois.
-
-         Son nom disait « salaire », alors que les sources qu'elle ouvre
-         comptent aussi les loyers percus et les revenus d'un conjoint. -->
     <div class="card">
       <div class="card-head"><h2>${trad('Où va ce que tu gagnes')}</h2><span class="hint">${trad('chaque mois')}</span></div>
-      <!-- Une barre empilee, et non quatre barres.
-
-           Les deux cartes du haut de cet onglet se ressemblaient trop depuis
-           qu'elles sont cote a cote : meme forme, libelle a gauche, barre fine,
-           montant a droite, on lisait deux fois le meme objet. Or elles ne
-           repondent pas a la meme question. Celle de gauche classe les
-           categories d'un mois les unes contre les autres — des barres
-           paralleles sont faites pour ca. Celle-ci decompose un seul total, et
-           quatre barres dont la premiere valait toujours 100 % le disaient mal :
-           le revenu n'est pas une part a cote des autres, c'est le tout.
-
-           La barre empilee le montre, et elle apporte ce que l'autre forme
-           taisait — que les trois parts font exactement le revenu, 54,3 + 26,7 +
-           19,0 = 100. C'est la regle du projet rendue visible.
-
-           Le montant du haut ouvre les sources de revenus : c'est le seul endroit
-           de l'application ou l'on declare ce que l'on gagne, et il etait cache
-           derriere la premiere des quatre barres. -->
       ${(() => {
         const parts = [
           [trad('Charges fixes'), f.fixed, 'var(--series-2)', f.fixedPct, 'ancre'],
           [trad('Objectif dépenses'), f.target, 'var(--series-4)', f.targetPct, 'objectif'],
           [trad('Reste à investir / épargner'), f.investTarget, 'var(--series-1)', f.investTargetPct],
         ];
-        /* Sans revenu declare, il n'y a pas de tout a decouper : la carte le dit
-           et mene la ou on le declare, au lieu d'afficher une piste vide. */
         /* Le motif vient de `PREMIERS_PAS` : il est ne ici, et les deux autres
            invites le reprennent depuis la meme table plutot que de le recopier. */
         if (!f.income) return invitePremierPas('revenus');
-        /*    Le chevron n'est pas un ornement. Un grand montant ressemble a un titre,
-   pas a un bouton, et c'est pourtant la seule porte vers les sources de
-   revenus. Le nombre de sources annonce la liste, le chevron dit qu'elle
-   s'ouvre. Meme signal que les lignes de comptes et les fiches
-   d'etablissement.*/
         const sources = Store.state.budget.income.length;
         return `
-        <!-- Le ≈ suit la declaration : une source marquee « estimee » rend le
-             total estime lui aussi, et le partage qui en decoule. Le dire ici
-             plutot que sur chaque ecran derive : c'est le chiffre-source. -->
         <button type="button" class="flux-total" data-action="toggle-revenus"
                 title="${trad('Voir et modifier les sources de revenus')}${revenuEstime()
                   ? trad(' · une partie est déclarée en montant estimé') : ''}">
@@ -7158,7 +4620,6 @@ function viewBudget(section = 'depenses') {
         </div>`;
       })()}
       </div>
-      <!-- Le second champ d'objectif est parti d'ici. -->
     </div>
   </div>`}
 
@@ -7170,8 +4631,6 @@ function viewBudget(section = 'depenses') {
            `${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, hors charges fixes')}`
              + (stats.moisEnCoursExclu ? ' ' + trad('et hors mois en cours') : ''),
            'depensesCategories')}
-    <!-- Chaque tuile ouvre SA liste : les deux partageaient une fiche melangee
-         ou il fallait retrouver soi-meme les mois de sa couleur. -->
     <button type="button" class="tile tile-link" style="--tile-color:var(--good)"
             data-action="apercu" data-apercu="moisObjectif" data-arg="sous">
       <span class="t-label">${trad('Mois sous objectif')}</span>
@@ -7189,20 +4648,12 @@ function viewBudget(section = 'depenses') {
   </div>
 
   <div class="card">
-    <!-- L'objectif est rappele ici, pas reglable ici : sa ligne pointillee
-         traverse ce graphique, donc son montant doit se lire a cote. Le reglage
-         vit dans la brique du haut de cet onglet, et lui seul — deux champs
-         editables pour une meme valeur sur un meme ecran, c'est le doublon que
-         ce projet passe son temps a supprimer. -->
     <div class="card-head">
       <h2>${trad('Dépenses mensuelles')}</h2>
       <span class="hint">${trad('objectif')} ${fmtEUR0(b.monthlyTarget)}</span>
       ${yearControl('budget-year', years, year)}
     </div>
     <div class="chart" id="bChart"></div>
-    <!-- La moyenne sous le graphique : la barre de chaque mois se lit contre
-         l'objectif, pas contre les autres mois, et « est-ce que je dépense
-         plus que d'habitude ? » n'avait plus de reponse sur cette carte. -->
     <div class="goal-foot" style="margin-top:12px">
       <span>${trad('Moyenne')} ${esc(year)}
         <b>${fmtEUR0(stats.average)} ${trad('/ mois')}</b>${stats.moisEnCoursExclu
@@ -7226,16 +4677,6 @@ function viewBudget(section = 'depenses') {
     </details>
   </div>
 
-  <!-- Une carte, un axe. « Par catégorie » et « Moyenne par mois » etaient les
-       memes categories vues deux fois cote a cote : un graphique donnant le
-       total de l'annee, un tableau donnant la moyenne mensuelle. Deux cartes
-       pour un seul axe, et il fallait comparer deux listes pour rapprocher les
-       deux chiffres d'une meme categorie.
-
-       Le tableau descend sous le graphique et porte les deux colonnes. Il se
-       replie, comme celui des depenses mensuelles juste au-dessus : c'est
-       l'idiome de cette page pour les donnees qu'on verifie sans les regarder
-       tout le temps. -->
   <div class="card">
     <div class="card-head"><h2>${trad('Par catégorie')}</h2>
       <div class="row">
@@ -7259,13 +4700,6 @@ function viewBudget(section = 'depenses') {
       </table>
     </details>
   </div>
-  <!-- Le tableau de correction ferme la page, il ne la coupe plus.
-
-       Il s'intercalait entre les cartes qui font lire — la repartition, le
-       graphique des mois, les categories — avec ses 880 px : on traversait l'outil
-       de saisie pour atteindre la lecture. C'est l'argument qui a deja range
-       l'onglet voisin : un tableau est un outil de correction, on y vient changer
-       un montant, et on ne l'ouvre qu'une fois qu'on a vu ce qui cloche. -->
   <div class="card" data-anchor="detail-mensuel">
     <div class="card-head">
       <h2>${trad('Détail mensuel')}</h2>
@@ -7278,9 +4712,6 @@ function viewBudget(section = 'depenses') {
       <button class="btn sm ghost" data-action="add-expense-month">${trad('+ Ouvrir l’année suivante')}</button>
     </div>
     ${(() => {
-      /* La relance se pose juste au-dessus du tableau qu'elle designe, et la
-         ligne concernee y porte un liseré : on comprend d'ou vient la
-         pastille sans avoir a la chercher parmi douze mois. */
       const att = depensesEnAttente();
       if (!att.missing) return '';
       const visible = year === 'all' || String(att.key).startsWith(year);
@@ -7292,7 +4723,6 @@ function viewBudget(section = 'depenses') {
           `<button class="btn sm" data-action="saisir-mois-en-attente">Saisir ${esc(att.label)}</button>`)}
       </div>`;
     })()}
-    <!-- Telephone : mois, total, ecart. Le reste dans la fenetre de saisie. -->
     <div class="liste-mobile">
       ${lignesDepenses.map(({ r, i }) => {
         const tot = expenseRowTotal(r);
@@ -7308,27 +4738,8 @@ function viewBudget(section = 'depenses') {
         });
       }).join('')}
     </div>
-    <!-- Il defile en largeur, jamais en hauteur.
-
-         Un plafond de 60 vh enfermait douze mois dans une boite de 530 px : sur un
-         ecran de 900, on faisait defiler un tableau a l'interieur d'une page qui
-         defile deja, et la barre du conteneur se confondait avec celle du
-         navigateur. Douze lignes sont douze lignes — l'annee entiere tient sur la
-         page, et c'est justement ce qu'on vient comparer d'un mois a l'autre.
-
-         La largeur, elle, garde son defilement : onze categories plus le mois, le
-         total et l'ecart ne rentrent dans aucun ecran, et la classe table-wrap est
-         faite pour ca. La hauteur n'a pas ce probleme, elle n'a que le nombre de
-         mois — douze, et le selecteur d'annee les borne.
-         (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
-         et fermerait la chaine.) -->
     <div class="table-wrap large-seulement">
       <table class="editable">
-        <!--    Les en-tetes trient, comme celles des lignes de titres : on trie un tableau
-   par la colonne qu'on regarde, et « quel mois a le plus coute en Voyages »
-   n'avait pas de reponse. « vs obj. » ne trie pas, son classement serait
-   exactement celui du total (l'objectif est le meme pour tous les mois) ; la
-   note non plus, on ne classe pas de la prose.-->
         <thead><tr>
           ${(() => {
             const th = (key, label, classe = '') => {
@@ -7370,20 +4781,6 @@ function viewBudget(section = 'depenses') {
               estAttendu ? '<span class="marque-attendu" title="Le mois que la relance attend">⚠</span>' : ''}</td>
             <td><b>${tot ? fmtEUR0(tot) : ''}</b></td>
             <td class="${classeDepassement(tot, f.target)}">${tot ? fmtSigned(diff) : ''}</td>
-            <!-- Les cases se lisent, elles ne se saisissent plus.
-
-                 Onze champs par ligne, douze lignes : la grille se presentait
-                 comme la surface de saisie, et c'est ce qu'on croyait devoir
-                 remplir. Or la fenetre du mois fait tout ce que les cases ne
-                 savent pas faire — un libelle par montant, la somme qui suit la
-                 frappe, l'objectif compare en direct, et la question avant de
-                 jeter une saisie. Elle etait a un clic sur le nom du mois, et
-                 rien ne le disait.
-
-                 Toute la ligne ouvre la fenetre, pas seulement le nom : viser
-                 huit caracteres quand la ligne en fait mille est un peage
-                 inutile. La croix de suppression garde sa propre action, le clic
-                 ne remonte pas jusqu'a la ligne. -->
             ${expenseCategories().map(c => `<td>${r.v[c] != null && r.v[c] !== ''
                 ? fmtEUR0(r.v[c]) : ''}</td>`).join('')}
             <td class="name prose">${esc(r.note || '')}</td>
@@ -7404,25 +4801,7 @@ function viewBudget(section = 'depenses') {
 
     <details class="data-view" style="margin-top:12px">
       <summary>${trad('Renommer, retirer ou supprimer une catégorie')}</summary>
-      <!-- Classe « table-serree » : ce tableau vit hors de tout conteneur
-           defilant, il doit donc tenir dans sa carte. Sans mise en page fixe, la
-           cellule des deux boutons imposait sa largeur et poussait l'ensemble a
-           347 px pour 311 disponibles.
-           (Aucun guillemet oblique ici : ce commentaire vit dans un litteral de
-           gabarit, un backtick y fermerait la chaine.) -->
       <table class="editable table-serree">
-        <!-- Une colonne « Colonne » donnait le rang de la catégorie, « 3ᵉ ».
-             L'ordre des lignes le dit déjà, et elle coûtait 75 px sur les
-             311 disponibles à 375 px : le tableau débordait de 44 px, hors de
-             tout conteneur défilant, donc le bouton de suppression tombait
-             derrière le bord de l'écran, hors d'atteinte.
-
-             Deux gestes et non un seul. Supprimer efface les montants de tous
-             les mois : c'est ce qu'il faut pour une colonne créée par erreur,
-             et jamais pour un poste dans lequel on a cessé de dépenser. Retirer
-             sort la catégorie de la saisie du mois et ne touche à rien d'autre.
-             La croix seule poussait à effacer un historique pour faire de la
-             place à l'écran. -->
         <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total saisi')}</th><th></th></tr></thead>
         <tbody>${expenseCategories().map(c => {
           const total = expenseCategoryTotal(c);
@@ -7432,17 +4811,7 @@ function viewBudget(section = 'depenses') {
                 data-cat="${esc(c)}" title="${trad('Modifie le nom puis quitte le champ')}">
               ${retiree ? '<span class="tag">retirée</span>' : ''}</td>
             <td class="${total ? '' : 'muted'}">${total ? fmtEUR0(total) : ''}</td>
-            <!-- Les deux gestes dans une seule cellule. En colonnes separees le
-                 tableau passait a quatre et debordait de 40 px a 375 px, hors de
-                 tout conteneur defilant : la croix tombait derriere le bord de
-                 l'ecran, injoignable. C'est le defaut exact que le commentaire
-                 du dessus decrit, et que la colonne « Retirer » a fait revenir. -->
             <td class="cat-actions">
-              <!-- L'ordre des colonnes se regle ici, sur grand ecran seulement :
-                   c'est la que les colonnes existent — le telephone lit une
-                   liste — et la cellule est deja a l'etroit a 375 px. Une seule
-                   liste porte l'ordre, budget.categories : la saisie du mois,
-                   les graphiques et les exports suivent d'eux-memes. -->
               <span class="large-seulement">
                 <button class="btn icon" data-action="monter-category" data-cat="${esc(c)}"
                   title="${trad('Avancer cette colonne d’un cran')}">↑</button>
@@ -7467,19 +4836,7 @@ function viewBudget(section = 'depenses') {
   </div>`}
 
   ${!cadre ? '' : `
-  <!-- La tete de l'onglet.
-
-       Depuis que « Ou va ce que tu gagnes » a rejoint l'onglet Depenses, celui-ci
-       s'ouvrait sur un tableau de huit colonnes et rien d'autre. Or un tableau
-       est un outil de correction : on y vient changer un montant. La question
-       qu'on se pose en arrivant, elle, est « combien sort tous les mois, et pour
-       quoi » — et elle se lisait en additionnant treize lignes de l'oeil. -->
   <div class="card">
-    <!-- Le compte porte sur les postes qui pesent, pas sur les lignes
-         declarees : la carte annoncait « 13 postes » et le panneau qu'elle
-         ouvre en montrait 12, la treizieme etant a zero. Un intitule dit
-         exactement ce qu'il compte, et deux ecrans qui comptent la meme chose
-         doivent donner le meme nombre. -->
     <div class="card-head"><h2>${trad('Ce qui sort chaque mois')}</h2>
       ${(() => {
         const n = b.fixedCharges.filter(c => chargeMensuelle(c) > 0).length;
@@ -7522,18 +4879,6 @@ function viewBudget(section = 'depenses') {
           </div>` : ''}
         </div>
       </div>
-      <!-- Les barres prennent le degrade du budget, celui des categories de
-           depenses : c'est le meme sujet, de l'argent qui sort.
-
-           Toute la liste ouvre le panneau qui montre les treize postes avec
-           leur part. Elle renvoyait au tableau du dessous, qui repond mal a
-           « lequel pese le plus » : neuf colonnes de nombres a comparer ligne a
-           ligne, la ou six barres le disaient d'un regard. Le renvoi disait donc
-           d'aller lire ailleurs une reponse moins bonne que celle qu'on avait
-           sous les yeux.
-
-           Ici les barres restent proportionnelles au plus gros poste, pas a la
-           part. -->
       <button type="button" class="flow-lien" style="margin-top:12px"
               data-action="apercu" data-apercu="chargesFixes"
               title="${trad('Voir les')} ${postes.length} ${trad('postes avec leur part')}">
@@ -7555,15 +4900,6 @@ function viewBudget(section = 'depenses') {
     })()}
   </div>
 
-  <!-- Une seule colonne, et l'ordre d'affichage renverse : « Charges fixes » et
-       « Autres dépenses » portent neuf et sept colonnes, elles etaient a l'etroit
-       cote a cote dans une grille en deux parts. Elles se suivent maintenant sur
-       toute la largeur, les variables puis les fixes, et l'epargne mensuelle
-       passe devant : elle resume, elle ne detaille pas.
-       C'est la propriete CSS d'ordre qui les remet dans cet ordre, pas un
-       deplacement de balisage : les deux cartes font soixante lignes chacune,
-       les bouger a la main coute un fichier casse pour un resultat
-       identique. -->
   <div class="grid budget-charges">
     <div class="card" data-anchor="charges">
       <div class="card-head"><h2>${trad('Charges fixes')}</h2>
@@ -7577,20 +4913,10 @@ function viewBudget(section = 'depenses') {
         const gens = contributors();
         const st = sharedTotals();
         return `
-      <!-- Telephone : une ligne par charge, la fenetre fait le reste. Le
-           tableau a huit colonnes reste le chemin du bureau — c'est la regle
-           du projet, aucun tableau de plus de trois colonnes sous 768 px. -->
       <div class="liste-mobile">
         ${b.fixedCharges.map((c, i) => ligneListe({
           action: 'edit-charge', index: i,
           titre: c.label || 'Sans nom',
-          /* La periodicite se nomme quelle qu'elle soit. La ligne ne disait
-             « facturée à l'année » que pour l'annuel : un abonnement
-             trimestriel affichait son equivalent mensuel sans rien qui explique
-             l'ecart avec le montant qu'on a sous les yeux sur sa facture. */
-          /* Une charge qui rembourse un credit n'est pas une depense comme une
-             autre : sa part de capital rejoint le patrimoine. La ligne le dit,
-             sinon on la lit comme un abonnement de plus. */
           sous: [c.provider || '', chargePeriode(c) === 'mois' ? ''
             : `${trad('facturée')} ${CHARGE_PERIODE_LABEL[chargePeriode(c)]}`,
             (() => {
@@ -7608,11 +4934,6 @@ function viewBudget(section = 'depenses') {
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
           ${gens.length ? `<dt><b>${trad('À ma charge')}</b></dt><dd><b>${fmtEUR(st.mine)}</b></dd>` : ''}
         </dl>
-        <!-- Les personnes qui partagent, et le moyen de les retirer.
-             Le ✕ ne vivait que dans l'en-tete du tableau, donc sur grand ecran
-             seulement : sur telephone on pouvait ajouter une personne et plus
-             jamais la retirer. Chaque nom porte ici son total mensuel, ce que
-             l'en-tete du tableau ne dit pas. -->
         ${gens.length ? `<div class="contrib-liste">
           ${st.parPersonne.map(p => `
             <span class="contrib-jeton">
@@ -7637,24 +4958,12 @@ function viewBudget(section = 'depenses') {
             <th title="${trad('Ce qui sort réellement de ton compte, ramené au mois')}">${trad('À ma charge')}</th>
             <th>Organisme</th><th></th>
           </tr></thead>
-          <!--               Ce que la fenetre sait faire et que les cases ne savaient pas : le
-               rattachement a un credit ou a un bien, qui n'a pas de colonne ici,
-               l'equivalent mensuel annonce en sous-titre, et la question posee
-               avant de jeter une saisie. Les champs en place, eux, offraient une
-               deuxieme surface d'edition pour un sous-ensemble des champs — celle
-               qui perd, puisqu'elle ne peut pas tout dire. -->
           <tbody>${b.fixedCharges.map((c, i) => `<tr class="ligne-ouvre"
               data-action="edit-charge" data-i="${i}"
               title="Modifier ${guill(esc(c.label || 'Sans nom'))}">
             <td class="name sticky-col"><span class="mois-lien">${esc(c.label || 'Sans nom')}</span></td>
             <td>${fmtEUR(num(c.amount))}</td>
-            <!-- La periodicite se lit dans la meme table que la liste de la
-                 fenetre : deux libelles pour une periode finiraient par diverger. -->
             <td>${esc(CHARGE_PERIODE_LABEL[chargePeriode(c)])}</td>
-            <!-- L'equivalent mensuel s'affiche en clair des qu'il differe du
-                 montant saisi, et en grise quand il le repete. Le test portait
-                 sur « annuel » : un trimestriel voyait donc son calcul grise
-                 comme s'il n'apportait rien. -->
             <td class="${chargePeriode(c) === 'mois' ? 'muted' : ''}">${fmtEUR(chargeMensuelle(c))}</td>
             <td class="muted">${fmtPct(f.fixed ? chargeMensuelle(c) / f.fixed * 100 : 0, 1)}</td>
             ${gens.map(p => `<td>${shareOf(c, p.id) ? fmtEUR(shareOf(c, p.id)) : ''}</td>`).join('')}
@@ -7670,14 +4979,6 @@ function viewBudget(section = 'depenses') {
           </tr></tfoot>
         </table>
       </div>
-      <!-- Le message rapprochait ces parts des lignes de revenu pour annoncer
-           un ecart. Il le faisait sur le libelle : une ligne comptait pour une
-           personne si son intitule portait son nom, rien ne reliant les deux
-           dans les donnees. Renommer « PK » en « Virement colocation » faisait
-           tomber le compte a zero et annoncait un manque inexistant ; un
-           contributeur nomme « Lea » aurait ramasse un revenu « Galea ». Un
-           chiffre faux vaut moins que pas de chiffre : la note se contente
-           desormais de dire la regle, qui est vraie sans rien apparier. -->
       ${gens.length ? `<p class="hint" style="margin:12px 0 0">
         ${trad('Ces parts sont indicatives : les charges retenues sont les charges fixes '
         + 'totales. La part de quelqu’un doit être ajoutée dans tes revenus.')}
@@ -7687,14 +4988,6 @@ function viewBudget(section = 'depenses') {
 
     <div class="grid" style="gap:16px; align-content:start">
       <div class="card">
-        <!-- Le titre nomme les deux natures, parce que la carte en porte deux et
-             qu'une seule s'appelle « epargne ». Le haut est un flux de budget :
-             ce que les revenus laissent une fois les charges et les depenses
-             retirees. Le bas est la variation du patrimoine net d'un mois sur
-             l'autre, qui contient les marches, les apports exterieurs et le
-             capital rembourse d'un credit. Sous un titre unique « Epargne
-             mensuelle », le second se lisait comme de l'epargne, ce qu'il
-             n'est pas. -->
         <div class="card-head"><h2>${trad('Épargne et croissance')}</h2>
           <span class="hint">${trad('ce que le budget prévoit, ce que le patrimoine fait')}</span></div>
         <dl class="kv">
@@ -7709,13 +5002,6 @@ function viewBudget(section = 'depenses') {
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
           <dl class="kv">
             <dt>${trad('Croissance réelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif."))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
-            <!-- « Ce qui ne vient pas du budget » et non « Écart avec la
-                 théorie ». Le mot « écart » invitait à lire une erreur de
-                 saisie, alors que cette différence est faite de marchés,
-                 d'apports extérieurs et de capital remboursé : des choses que le
-                 budget ne peut pas prévoir parce qu'elles ne le traversent pas.
-                 Un intitulé dit ce qu'il compte, et celui-là comptait tout ce
-                 que l'épargne n'explique pas. -->
             <dt>${trad('Ce qui ne vient pas du budget')}${aide(trad("Ce qui sépare la croissance de ton patrimoine de l'épargne que ton budget dégage : les marchés, un apport extérieur, le capital d'un crédit que tu rembourses. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n'est une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
           </dl>
           <p class="small muted" style="margin:12px 0 0">
@@ -7725,41 +5011,10 @@ function viewBudget(section = 'depenses') {
           </p>` : ''}
       </div>
 
-      <!-- Deux cartes ont quitte cet onglet, pour la meme raison.
-
-           « A verifier » etait un reliquat du tableur d'origine, jamais utilise
-           ici : les charges annuelles se saisissent dans le tableau des charges
-           fixes, avec leur periode.
-
-           « Autres depenses » etait un memo chiffre qui ne comptait nulle part,
-           ni dans les charges fixes ni dans le budget : son propre pied le
-           disait. Un intitule doit dire ce qu'il compte, et celui-la comptait
-           zero tout en annoncant des depenses de plus. Il faisait aussi mentir
-           l'onglet qui le portait. Une whey ou un abonnement sont de vraies
-           depenses : leur place est dans les depenses du mois, ou elles
-           comptent, pas dans un tableau parallele qu'il fallait tenir a jour
-           pour ne rien calculer.
-
-           Dans les deux cas les donnees restent dans l'etat et dans l'export
-           tant qu'elles n'ont pas ete effacees a la main : retirer un ecran ne
-           doit pas emporter ce que quelqu'un y avait saisi. -->
     </div>
   </div>`}`;
 }
 
-/* Paliers de cible, de 0 a 100 % par pas de 1.
-   Le pas etait de 5, au motif que « personne ne vise 63 % d'actions ». C'etait
-   faux pour une raison qu'on ne voit qu'en s'en servant : une cible ne se
-   choisit pas toujours en premier, elle se deduit souvent des autres. Qui pose
-   3 % d'or et 5 % de crypto n'a plus 92 % a repartir, il a un reste, et le pas
-   de 5 lui refusait de l'ecrire. Le total devait tomber juste a 100, avec un
-   outil qui ne savait compter que de cinq en cinq.
-   La liste fait donc 101 entrees. C'est long a derouler, mais le clavier saute
-   a la valeur des qu'on tape « 92 », et la liste deroulante reste preferable au
-   champ libre : elle borne a 0-100 sans validation, et elle s'ajuste par crans
-   en comparant a la jauge d'a cote.
-   La valeur courante y est glissee si elle n'est pas entiere, sinon un 62,5 %
-   deja enregistre serait ecrase au premier rendu. */
 function paliersCible(courant) {
   const p = [];
   for (let v = 0; v <= 100; v += 1) p.push(v);
@@ -7768,8 +5023,6 @@ function paliersCible(courant) {
   return p.sort((a, b) => a - b);
 }
 
-/* Paliers de 100 €, de 0 a 5 000. La valeur courante y est glissee si elle
-   n'est pas ronde, sinon la liste l'ecraserait au premier rendu. */
 /* `paliersObjectif()` vivait ici : les cent-en-cent d'une liste deroulante
    pour l'objectif de depenses. Elle est partie avec la liste. Un objectif se
    saisit maintenant a l'euro, parce que quelqu'un qui vit avec 640 EUR par mois
@@ -7788,9 +5041,6 @@ function mountBudget() {
   Charts.rankedBars($('#bCats'), { items: expenseByCategory(year) });
 }
 
-/* ------------------------------------------------------------
-   Données
-   ------------------------------------------------------------ */
 function viewData() {
   const checks = healthChecks();
   const backups = Store.backups();
@@ -7805,8 +5055,6 @@ function viewData() {
   <div class="card">
     <div class="card-head">
       <h2>${trad('Contrôles de cohérence')}</h2>
-      <!-- Le decompte suit les familles du modele : il en nommait trois sur
-           quatre, et les saisies en attente ne se comptaient nulle part. -->
       <span class="hint">${checks.length
         ? FAMILLES_NOTIF.map(([cle, nom]) => [nom, checks.filter(c => c.sujet === cle).length])
             .filter(([, n]) => n).map(([nom, n]) => `${n} ${nom.toLowerCase()}`).join(' · ')
@@ -7821,9 +5069,6 @@ function viewData() {
       : `<p class="empty">${trad('✓ Aucune incohérence détectée.')}</p>`}
   </div>
 
-  <!-- L'etat de l'application suit ses controles : les deux repondent a la meme
-       question, comment elle va. Il fermait la page, coince entre les sauvegardes
-       et la remise a zero — un encart de lecture au milieu de deux actes. -->
   <div class="card">
     <div class="card-head"><h2>${trad('État')}</h2></div>
     <dl class="kv">
@@ -7855,11 +5100,6 @@ function viewData() {
         <dt><b>JSON</b>, sauvegarde</dt><dd class="up">${trad('réimportable ✓')}</dd>
         <dt><b>Excel</b>, lecture</dt><dd class="muted">${trad('non réimportable')}</dd>
       </dl>
-      <!-- Soixante-dix mots sous deux lignes de tableau qui disaient deja
-           l'essentiel : « réimportable » contre « non réimportable ». Le
-           paragraphe detaillait la structure du fichier Excel a quelqu'un qui
-           ne l'a pas encore ouvert. La phrase garde la decision, la bulle garde
-           le detail. -->
       <p class="small muted" style="margin:12px 0 0">
         ${trad('Le <b>JSON</b> pour restaurer, l’<b>Excel</b> pour lire ailleurs.')}${aide(trad("Le JSON restitue ton tableau de bord à l’identique : c’est celui à garder pour restaurer ou changer de machine. L’Excel est une photo pour lire et retravailler ailleurs : une feuille par thème, montants au format €, pourcentages calculables. Le découpage d’une catégorie de dépenses y a sa propre feuille, une ligne par montant. Il ne contient pas tous les réglages, il ne peut donc pas être rechargé ici."))}
       </p>
@@ -7871,12 +5111,6 @@ function viewData() {
       <p class="small muted" style="margin:12px 0 0">
         <b>${trad('Fichier JSON uniquement')}</b>${trad(', celui produit par « Sauvegarde JSON ». L’import écrase l’état enregistré ; une confirmation est demandée. Exporte d’abord si tu as un doute.')}
       </p>
-      <!-- La demonstration se charge d'ici : c'est un jeu de donnees qui remplace
-           l'etat, donc un import, et elle reste dans la carte qui porte les imports.
-           Elle a longtemps vecu a cote de la remise a zero, les deux gestes qui
-           changent tout l'etat d'un coup ; celle-ci est partie dans sa propre carte,
-           en bas de page, parce qu'elle detruit. Celle-la n'efface rien : elle n'a
-           pas suivi. -->
       <div class="row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--grid)">
         ${modeDemo()
           ? `<button class="btn sm" data-action="quitter-demo">← Revenir à mes données</button>
@@ -7921,13 +5155,6 @@ function viewData() {
     </div>`;
   })()}
 
-
-  <!-- Revenir en arriere, et le dire quelque part.
-
-       Deux chemins, du plus leger au plus lourd, et dans cet ordre : ce bouton
-       defait le dernier geste, les sauvegardes ci-dessous refont la journee. Le
-       bouton dit combien de gestes la pile porte, sinon « annuler » ne dit pas
-       s'il reste quelque chose a annuler. -->
   <div class="card">
     <div class="card-head">
       <h2>${trad('Revenir en arrière')}</h2>
@@ -7935,13 +5162,6 @@ function viewData() {
         ? `${Store.undoCount()} ${Store.undoCount() > 1 ? trad('modifications annulables') : trad('modification annulable')}`
         : trad('rien à annuler pour l’instant')}</span>
     </div>
-    <!-- Un bouton de la taille des autres, et non la classe « pleine ». Celle-ci
-         existe pour l'action qui remplace douze gestes de saisie, et elle donnait
-         ici un quatrieme gabarit de bouton sur une page qui en portait deja trois :
-         30, 31, 36 et 43 px. La hierarchie se dit par le remplissage, jamais par la
-         taille, et celui-ci est deja seul dans sa carte, en plein.
-         (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
-         et fermerait la chaine.) -->
     <button class="btn" data-action="undo" ${Store.undoCount() ? '' : 'disabled'}
       >${trad('↶ Annuler la dernière modification')}</button>
     <p class="small muted" style="margin:12px 0 0">
@@ -7958,12 +5178,6 @@ function viewData() {
       </div>
     </div>
     ${backups.length ? `
-      <!-- Cinq colonnes ne passent pas sous 768 px, et la regle du projet
-           l'interdit. Celles-la se pliaient d'une facon spectaculaire : la date
-           cassait en « 03/0 08/20 26 », le motif en « quoti dienn e », et le
-           bouton « Restaurer » se lisait verticalement, une lettre par ligne. Le
-           tableau reste sur grand ecran ; en dessous, la liste cliquable, comme
-           partout ailleurs. -->
       <table class="large-seulement">
         <thead><tr><th>${trad('Date')}</th><th>${trad('Motif')}</th><th>${trad('Patrimoine')}</th><th>${trad('Taille')}</th><th></th></tr></thead>
         <tbody>${backups.map((b, i) => {
@@ -7982,9 +5196,6 @@ function viewData() {
         ${backups.map((b, i) => ligneListe({
           action: 'restore-backup', index: i,
           titre: new Date(b.at).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }),
-          /* Motif, anciennete et taille sur une seule ligne de sous-titre : ce
-             sont trois precisions sur la meme sauvegarde, pas trois grandeurs a
-             comparer entre elles. */
           sous: `${b.reason} · ${fmtWhen(b.at)} · ${(JSON.stringify(b.data).length / 1024).toFixed(0)} Ko`,
           valeur: `${(b.data.positions || []).length} positions`,
           second: trad('Restaurer'),
@@ -7996,16 +5207,6 @@ function viewData() {
       : `<p class="empty">${trad('Aucune sauvegarde pour l\'instant.')}</p>`}
   </div>
 
-  <!-- L'acte le plus destructeur de l'application vivait sous le titre
-       « Importer », en petit bouton fantome, sous un filet, a cote d'un champ de
-       fichier : le titre n'annoncait rien de ce qu'il fait, et les boutons d'une
-       carte doivent porter sur le sujet de cette carte. Il a donc la sienne, et
-       elle vient en dernier, comme sur la fiche d'un compte : ce qui detruit se
-       range apres ce qui repare, pour que le doigt ne le traverse pas.
-
-       Le glyphe ↻ est retire. Il veut dire « actualiser » partout ailleurs — les
-       cours, la synchronisation, le symbole depuis l'ISIN — et le meme signe ne
-       peut pas dire aussi « effacer seize mois de releves ». -->
   <div class="card">
     <div class="card-head"><h2>${trad('Repartir de zéro')}</h2>
       <span class="hint">${trad('Pour qu\'une autre personne parte de ses propres chiffres')}</span>
@@ -8048,9 +5249,6 @@ function mountData() {
   });
 }
 
-/* =============================================================
-   EXPORTS
-   ============================================================= */
 function download(filename, content, type = 'application/json') {
   const blob = new Blob([content], { type: type + ';charset=utf-8' });
   const a = document.createElement('a');
@@ -8061,14 +5259,6 @@ function download(filename, content, type = 'application/json') {
 }
 const stamp = () => new Date().toISOString().slice(0, 10);
 
-
-
-
-/* =============================================================
-   EXPORT EXCEL (.xlsx)
-   Les pourcentages sont écrits en fraction : Excel applique le
-   format %, donc 0,0483 s'affiche « 4,83 % » et reste calculable.
-   ============================================================= */
 const POCKET = { cash: 'Quotidien', bourse: 'Bourse', pe: 'Non coté' };
 
 function sheetPositions() {
@@ -8111,24 +5301,6 @@ function sheetAllocation() {
   };
 }
 
-/* Deux axes, deux feuilles.
-
-   Une seule feuille les melangeait : « Actions core » et « Actions satellite »
-   voisinaient avec « Metaux precieux » — jusque-la coherent, la cible se fixe par
-   classe et une classe peut se decouper par role — mais deux lignes d'agregat
-   fermaient le tableau, « Cash a investir » puis « Place en bourse », cette
-   derniere valant la somme des precedentes. Dans un tableur, une ligne de somme
-   posee au milieu de ses membres est un piege : elle passe dans les filtres,
-   dans les sous-totaux et dans les graphiques comme si elle etait une part, et
-   la colonne « % actuel » y annonçait 83,93 % sur une base differente des
-   lignes du dessus.
-
-   La feuille des classes ne porte donc plus que des membres, et leur somme fait
-   la base. Le partage socle / satellites devient sa propre feuille : c'est le
-   second etage de la page Cible, il repond a une autre question — « dans ce qui
-   est place, quelle part je n'ai pas l'intention de vendre » — et il a sa propre
-   base. Une troisieme feuille dit de quoi chaque role est fait, la seule qui
-   apprenne quelque chose qu'un total ne dit pas. */
 function sheetRebalance() {
   const r = rebalanceRows();
   const line = c => [c.label, round2(c.value), c.pct / 100, c.targetPct / 100, round2(c.targetVal), round2(c.delta)];
@@ -8139,21 +5311,11 @@ function sheetRebalance() {
       { h: '% actuel', t: 'pct', w: 12 }, { h: 'Cible %', t: 'pct', w: 12 },
       { h: 'Montant cible', t: 'eur', w: 16 }, { h: 'À ajuster', t: 'eur', w: 16 },
     ],
-    /* La tresorerie sortie du reequilibrage ne figure pas dans l'export : la
-       feuille doit dire ce que la page dit, sans quoi le total ne retomberait
-       pas sur la base annoncee. */
     rows: [...r.classes.map(line), ...(r.cash ? [line(r.cash)] : [])],
     total: [BASES.baseCibles.nom, round2(r.base), 1, null, null, null],
   };
 }
 
-/* Les entrees et sorties exceptionnelles : la memoire de ce qui est passe une
-   fois. Sans elle, un mois a +12 000 EUR — ou a -15 000 — dans l'onglet Relevés
-   reste inexplicable un an plus tard.
-
-   Le signe porte le sens, ici comme dans l'etat : une colonne « Nature » en plus
-   serait une seconde ecriture du meme fait, et le tableur sait deja peindre un
-   negatif. Le total est donc un net, et la ligne le dit. */
 function sheetApports() {
   const liste = apportsTries();
   return {
@@ -8180,9 +5342,6 @@ function sheetRoles() {
   };
 }
 
-/* De quoi chaque role est fait, par classe et par nature : « satellites,
-   58 922 EUR » n'apprend rien, « satellites, dont 93 % de bitcoin » apprend
-   tout. C'est ce que la carte de la page montre en barres empilees. */
 function sheetRoleComposition() {
   const rr = rebalanceRoles();
   const rows = [];
@@ -8262,8 +5421,6 @@ function sheetHistory() {
   };
 }
 
-/* Journal des ventes. Cette feuille porte la seule information que les
-   autres ne peuvent plus montrer : la performance des lignes soldées. */
 function sheetSales() {
   const ventes = (Store.state.sales || [])
     .slice()
@@ -8289,8 +5446,6 @@ function sheetSales() {
       num(v.invested) ? round2(num(v.realised) / num(v.invested) * 100) : null,
       ACC[v.cashAccount]?.label || '', v.note || '',
     ]),
-    /* Une cellule vide, et non un zero, quand il n'y a pas de base : dans un
-       tableur un 0 se moyenne, se trie et se recopie comme un resultat. */
     total: ['Total', `${st.count} vente${st.count > 1 ? 's' : ''}`, '', '', null, null, '', null,
             null, round2(st.gross), round2(st.invested), round2(st.realised),
             st.pct == null ? null : round2(st.pct), '', ''],
@@ -8342,12 +5497,6 @@ function sheetFixedCharges() {
   };
 }
 
-/* =============================================================
-   ACTIONS
-   ============================================================= */
-
-/* Après un ajout, on place le curseur dans la nouvelle ligne et on la
-   sélectionne : la valeur par défaut se remplace en tapant directement. */
 function focusLast(listPath, field) {
   const list = getPath(listPath) || [];
   const el = $(`[data-path="${CSS.escape(`${listPath}.${list.length - 1}.${field}`)}"]`);
@@ -8357,12 +5506,6 @@ function focusLast(listPath, field) {
   el.select?.();
 }
 
-/* Suppression d'une ligne d'une liste du budget, avec confirmation.
-
-   Le nom peut manquer, et la question doit rester lisible : « Supprimer la
-   charge fixe «  » ? » designait un vide par un vide. Une ligne sans nom est
-   justement celle qu'on veut le plus souvent effacer — c'est celle qu'on a
-   creee par megarde. */
 function makeDeleter(listKey, what, nameOf) {
   return async function (btn) {
     const i = +btn.dataset.i;
@@ -8370,14 +5513,6 @@ function makeDeleter(listKey, what, nameOf) {
     const item = list[i];
     if (!item) return;
     const nom = String(nameOf(item) || '').trim();
-    /* Ce que la suppression emporte ailleurs.
-
-       Un loyer rattache a un bien alimente son cash-flow et ses trois
-       rendements ; une charge qui rembourse un credit lui donne sa mensualite,
-       donc sa date de fin et sa part de capital. Supprimer la ligne fait tomber
-       tout cela, sur un ecran qu'on ne regarde pas a ce moment-la : une
-       consequence a deux ecrans de distance doit se lire avant, pas se
-       decouvrir apres. */
     const suites = [];
     const bien = item.bienId ? compteById(item.bienId) : null;
     if (bien) {
@@ -8408,26 +5543,12 @@ function makeDeleter(listKey, what, nameOf) {
    le meme credit doubleraient la mensualite lue, et la premiere trouvee
    gagnerait sans qu'on sache laquelle. Celui de la charge en cours d'edition, lui,
    reste dans la liste : sinon la modifier le detacherait. */
-/* Les biens proposables au rattachement d'un loyer ou d'une charge. Plusieurs
-   charges peuvent viser le meme bien — une taxe fonciere et une copropriete le
-   font — donc pas de garde d'unicite ici, contrairement aux credits. */
 function optionsBiens() {
   return [['', trad('aucun, ce n’est pas lié à un bien')],
     ...comptesBiens().map(c => [c.id, nomCompteV2(c)])];
 }
 
-/* Les champs d'un placement saisi a la main, et la lecture du formulaire.
-
-   Ecrits une fois pour l'ajout et pour la modification : deux listes de champs a
-   tenir d'accord auraient fini par diverger, et c'est le defaut que ce projet
-   corrige sans arret. Les trois champs de l'echeance ne s'affichent que pour du
-   non cote — un bien immobilier n'a pas de date de remboursement, et une SCPI
-   n'en a pas non plus. */
 /* `type` : le type du compte qui porte la ligne, pas seulement sa classe. */
-/* L'exemple suit la classe du support, parce qu'il enseigne autant qu'il
-   illustre : « ex. Projet Bordeaux » sous l'intitule d'un fonds euros ne dit pas
-   ce qu'on attend, il fait douter d'etre au bon endroit. Le motif est celui des
-   autres exemples de l'application, qui nomment tous une chose de leur espece. */
 const EXEMPLE_PLACEMENT = {
   actions:     'ex. ETF MSCI World',
   garanti:     'ex. Fonds euros',
@@ -8453,14 +5574,8 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
     { cle: 'prixDeRevient', label: trad('Montant investi (€)'), type: 'nombre',
       valeur: l ? (num(l.prixDeRevient) || '') : '', exemple: '0',
       aide: trad('facultatif, il donne la plus-value') },
-    /* « Date d'entree » et non « date d'achat » : ce libelle-la est reserve aux
-       lignes de marche, ou il porte une aide commune sur le rendement par an et
-       l'effet du jour, textes qui ne veulent rien dire pour une moto. */
     { cle: 'dateAcquisition', label: trad('Date d’entrée'), type: 'date',
       valeur: l ? (l.dateAcquisition || '') : todayISO() },
-    /* La date de l'estimation, pour les seules classes dont la valeur est une
-       appreciation. Un pret non cote vaut son nominal, une SCPI a un prix de
-       part publie : ni l'un ni l'autre ne se « revoit ». Une Rolex, si. */
     ...(estime ? [{ cle: 'estimeLe', label: trad('Estimée le'), type: 'date',
       valeur: l ? (l.estimeLe || '') : todayISO(),
       aide: trad('la cloche te rappellera de la revoir dans un an') }] : []),
@@ -8476,16 +5591,6 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
         valeur: l ? statutLigne(l) : 'encours',
         aide: trad('à déclarer : une échéance dépassée ne veut pas dire en retard') },
     ] : []),
-    /* De l'argent deja promis n'est pas de l'argent qui travaille trente ans.
-
-       Le cash porte deja cette notion — l'affectation « Projet prevu » — mais
-       elle s'arretait au cash, alors que le cas le plus courant est ailleurs :
-       l'assurance-vie qui financera l'apport d'un achat dans deux ans. Ces
-       euros se lisaient comme du patrimoine long terme et entraient dans la
-       projection a trente ans, sans que rien ne dise qu'ils sont deja depenses.
-
-       Ce n'est pas le reglage de disponibilite, qui vit a cote : celui-la dit
-       quand on POURRAIT vendre, celui-ci dit que c'est deja engage. */
     { cle: 'projet', label: trad('Réservé à un projet'), type: 'case',
       valeur: l ? !!l.projet : false,
       aide: trad('cet argent est déjà promis : la projection le porte à plat au lieu de le faire travailler') },
@@ -8530,15 +5635,10 @@ const ACTIONS = {
     render();
   },
   'go-performance'() { location.hash = '#/performance'; },
-  /* Annuler une vente, pour de bon. Ce bouton ne retirait que la ligne du
-     journal, en annonçant que ni les titres ni le cash ne bougeaient : un geste
-     qui ressemble à une annulation et n'en est pas. Il en est une maintenant. */
   async 'del-sale'(btn) {
     const i = +btn.dataset.i;
     const v = Store.state.sales[i];
     if (!v) return;
-    /* Une vente declaree n'a rien ecrit : la question n'est pas la meme, et
-       promettre un retour de titres qui n'existent pas serait un mensonge. */
     if (v.declaree) {
       if (!await askConfirm(`${trad('Retirer')} ${guill(v.name)} ${trad('du journal ?')}\n\n`
         + trad("Cette vente était déclarée pour mémoire : elle n'avait rien écrit "
@@ -8570,9 +5670,6 @@ const ACTIONS = {
   async 'sell-position'() {
     const v = await askSale();
     if (!v) return;
-    /* Le dernier choix du menu des lignes est « une vente passee » : la fenetre
-       rend alors ce que rendait sa jumelle, et c'est ici que les deux chemins se
-       separent — l'un touche le portefeuille, l'autre le seul journal. */
     if (v.passee) {
       declarerVente(v);
       Store.save(); render();
@@ -8604,9 +5701,6 @@ const ACTIONS = {
   },
 
   async 'add-position'() {
-    /* La categorie vient avant le compte : c'est elle qui decide des comptes
-       proposes. Les deux champs sont lies, la liste se refait a chaque
-       changement. */
     const v = await askForm({
       titre: trad('Nouvelle ligne de titres'),
       sous: trad('L’ISIN suffit : le symbole et le cours se remplissent à la prochaine actualisation'),
@@ -8647,13 +5741,7 @@ const ACTIONS = {
     Store.save(); render();
     toast(`${guill(v.name)} ${trad('ajoutée')}`);
   },
-  /* Depuis une tuile : on change de vue, on descend à la bonne carte,
-     et on la fait clignoter une fois pour qu'on la repère. */
   'apercu'(btn) { openApercu(btn.dataset.apercu, btn.dataset.arg); },
-  /* Fermer un panneau ou l'on a saisi sans enregistrer : on le dit, et on propose
-     de garder. Sans cette question, quatre montants corriges disparaissaient au
-     premier « Fermer » — le contraire de ce que la saisie differee doit apporter.
-     Meme geste et memes mots que la fiche d'une ligne de titres. */
   async 'modal-close'() {
     const corps = $('#modalBody');
     if (corps?.dataset.differe === 'sale') {
@@ -8665,15 +5753,8 @@ const ACTIONS = {
     closeApercu();
   },
 
-  /* « Enregistrer » d'un panneau d'apercu : les champs entrent dans l'etat, la
-     page derriere suit, et le panneau reste ouvert — c'est la qu'on verifie que le
-     total a bouge comme prevu. */
   'apercu-enregistrer'() {
     appliquerDiffere();
-    /* Relever ses soldes de credit, c'est les avoir regardes : la date de
-       verification se pose donc ici comme elle se pose dans la fenetre d'un
-       credit, et le rappel des trois mois repart de zero. Sans cela, le panneau
-       corrigeait les montants et l'alerte continuait de reclamer. */
     if (apercuOuvert === 'credits') {
       for (const e of ETABS()) for (const d of (e.dettes || [])) d.verifieLe = todayISO();
     }
@@ -8691,9 +5772,6 @@ const ACTIONS = {
     if (navsInternes > 0) history.back(); else location.hash = '#/overview';
   },
   'fermer-notifs'() { fermeNotifs(); },
-  /* Masquer une notification, pas la corriger : elle ne reviendra plus tant que
-     ses mots ne changent pas. Le panneau se refait sur place — le fermer aurait
-     obligé à le rouvrir pour masquer la suivante. */
   'masquer-notif'(btn) {
     masquerNotif(btn.dataset.cle);
     Store.save();
@@ -8706,7 +5784,6 @@ const ACTIONS = {
     Store.save(); render();
     toast(trad('Toutes les notifications sont réaffichées'));
   },
-  /* Une famille entière s'éteint, depuis le menu de réglages. */
   /* L'interrupteur bascule ce qu'il trouve, il ne recoit plus une valeur.
      C'etait un `data-action-change` sur une liste deroulante, qui lisait
      `sel.value` ; c'est un bouton, et l'etat vit dans les reglages. Lire l'etat
@@ -8721,7 +5798,6 @@ const ACTIONS = {
     toast(`${actif ? trad('Activé') : trad('Éteint')} : ${
       (FAMILLES_NOTIF.find(f => f[0] === cle) || [, cle])[1].toLowerCase()}`);
   },
-  /* Depuis un panneau : la fiche s'ouvre a la place, la fenetre se ferme. */
   'aller-fiche'(btn) { closeApercu(); location.hash = btn.dataset.route; },
 
   'goto'(btn) {
@@ -8731,10 +5807,6 @@ const ACTIONS = {
     if (currentView() === view) { focusAnchor(); return; }
     location.hash = '#/' + view;
   },
-  /* Suivre une classe qu'on ne detient pas encore : sans cela, impossible de
-     se fixer un objectif d'obligations avant d'en avoir achete une. La ligne
-     n'apparait que si elle porte un encours ou une cible — c'est la cible
-     qu'on pose ici. */
   /* Decouper une classe en deux cibles, une par role. Le partage au prorata est
      dans `partageDeCible()`, cote store, pour qu'un test l'exerce vraiment. */
   'decouper-classe'(btn) {
@@ -8746,8 +5818,6 @@ const ACTIONS = {
     toast(`${ASSET_CLASSES[cle]} · ${ROLES.core} ${tg[cle].core} % ${trad('et')} ${ROLES.satellite.toLowerCase()} ${tg[cle].satellite} %`);
   },
 
-  /* Revenir a une seule cible : la somme des deux, pour que le total des cibles
-     ne bouge pas davantage au retour qu'a l'aller. */
   'refusionner-classe'(btn) {
     const cle = btn.dataset.cle;
     const tg = Store.state.targets.classes || {};
@@ -8758,14 +5828,6 @@ const ACTIONS = {
     toast(`${ASSET_CLASSES[cle]} · ${trad('une seule cible,')} ${tg[cle]} %`);
   },
 
-  /* « Suivre une classe » propose aussi les classes qu'on a sorties.
-
-     Elles en etaient exclues par une logique defendable — une classe sortie se
-     remet depuis la ligne de perimetre — mais cette ligne est une phrase de
-     prose au-dessus de la liste, et personne ne l'y cherche. Qui vient de
-     retirer « Actions » par megarde ouvre le seul bouton qui parle d'ajouter une
-     classe, ne l'y trouve pas, et conclut qu'elle est perdue. Le chemin de
-     retour doit passer par la porte qui porte le nom du geste. */
   async 'ajouter-classe-cible'() {
     const cibles = Store.state.targets;
     const tg = cibles.classes || (cibles.classes = {});
@@ -8777,8 +5839,6 @@ const ACTIONS = {
       .map(([k, label]) => [k, sorties.includes(k) ? `${label} (sortie, à remettre)` : label]);
     if (!libres.length) { toast(trad('Toutes les classes sont déjà suivies')); return; }
     const somme = sommeCibles();
-    /* La cible mise de cote au retrait est proposee par defaut : celui qui
-       remet une classe veut presque toujours retrouver ce qu'il avait. */
     const premiere = libres[0][0];
     const gardee = cibles.ciblesRetirees && cibles.ciblesRetirees[premiere];
     const v = await askForm({
@@ -8793,9 +5853,6 @@ const ACTIONS = {
       ],
     });
     if (!v) return;
-    /* Remettre une classe sortie, c'est la reintegrer : sans cela sa cible
-       s'inscrivait pendant que son encours restait hors de la base, et la ligne
-       revenait avec une jauge condamnee a rester vide. */
     if (sorties.includes(v.classe)) {
       cibles.exclues = (cibles.exclues || []).filter(x => x !== v.classe);
       if (cibles.ciblesRetirees) delete cibles.ciblesRetirees[v.classe];
@@ -8833,7 +5890,6 @@ const ACTIONS = {
     const k = btn.dataset.cle;
     const tg = Store.state.targets;
     tg.exclues = (tg.exclues || []).filter(x => x !== k);
-    /* La cible d'avant revient telle quelle, decoupage par role compris. */
     const gardee = tg.ciblesRetirees && tg.ciblesRetirees[k];
     if (gardee !== undefined && gardee !== null) {
       if (k === CLE_TRESORERIE) tg.cashToInvest = gardee;
@@ -8845,8 +5901,6 @@ const ACTIONS = {
       ? `, cible ${sommeCibleDe(gardee)} %` : ''}`);
   },
   'filtrer-role'(btn) { posRole = btn.dataset.role; render(); },
-  /* Meme cycle que le tableau des positions : décroissant, croissant, puis
-     retour au calendrier. */
   'sort-depenses'(btn) {
     const key = btn.dataset.key;
     depSort = !depSort || depSort.key !== key ? { key, dir: 'desc' }
@@ -8881,29 +5935,12 @@ const ACTIONS = {
     else posSort = null;                       // 3e clic : retour à l'ordre de saisie
     render();
   },
-  /* Entrer en demonstration. Rien n'est ecrase : le mode bascule la cle de
-     stockage, si bien que les vraies donnees restent ou elles sont et se
-     retrouvent intactes en sortant.
-     Le jeu de donnees n'est pas charge par index.html : il est lu ici, au
-     clic, pour ne rien couter au demarrage. */
   async 'charger-demo'() {
     if (modeDemo()) return;
     if (!await askConfirm(trad('Voir la démonstration ?') + '\n\n'
       + trad('Tes données ne sont pas touchées : elles restent enregistrées de leur côté, '
       + 'et tu les retrouves en quittant le mode. Rien ne part en ligne pendant ce temps.'),
       { ok: 'Charger la démonstration' })) return;
-    /* Le jeu de demonstration est la graine, et il n'en existe pas de second.
-
-       Un instantane a part a vecu a cote d'elle, decrivant la meme personne
-       fictive : il fallait se souvenir de modifier les deux, c'est le motif que
-       ce projet defait partout ailleurs, et ils avaient deja diverge. La graine
-       est de toute facon ce qu'un visiteur voit au premier chargement, donc
-       c'est elle qui doit etre bonne.
-
-       Le mode demonstration n'a plus qu'a la reposer, sous sa propre cle de
-       stockage : il sert a quelqu'un qui a deja saisi ses donnees et veut
-       regarder sans y toucher. Aucune requete, donc aucune « Demonstration
-       indisponible » possible. */
     setModeDemo(true);
     Store.state = structuredClone(SEED);
     Store.migrate();
@@ -8912,8 +5949,6 @@ const ACTIONS = {
     toast(trad('Démonstration chargée, tes données sont en sécurité'));
   },
 
-  /* Sortir. On remet la cle reelle et on relit : l'etat de demonstration reste
-     dans son coin, pret a etre repris sans avoir a le recharger. */
   'quitter-demo'() {
     if (!modeDemo()) return;
     setModeDemo(false);
@@ -8941,7 +5976,6 @@ const ACTIONS = {
     toast(trad('Tableau de bord vierge, à toi de le remplir'));
   },
 
-  /* --- espace Comptes ------------------------------------------------- */
   /* Corriger le type d'un compte. La regle vit dans `changementDeTypePossible`,
      cote store, pour qu'un test l'exerce : c'est elle qui empeche un Livret A de
      se retrouver a detenir des actions.
@@ -8962,11 +5996,6 @@ const ACTIONS = {
     toast(`${nomCompteV2(c)} : ${avant} ${trad('devient')} ${trad(typeCompte(cible).label)}`);
   },
 
-  /* Le nom d'un etablissement, et la note qu'on lui attache.
-
-     Les credits gardent leur propre fenetre : ils ont sept champs a eux, une
-     echeance et une projection, et les entasser ici ferait une fenetre qui
-     melange l'identite du contenant et le detail de ses dettes. */
   async 'modifier-etab'(btn) {
     const e = etabById(btn.dataset.id);
     if (!e) return;
@@ -8977,14 +6006,7 @@ const ACTIONS = {
       champs: [
         { cle: 'nom', label: 'Nom', type: 'texte', requis: true,
           valeur: e.nom, exemple: 'ex. ta banque en ligne' },
-        /* En lecture, et nomme comme tel : c'est une consequence, pas un choix.
-           Le libelle porte le compte qui le determine, sinon « deduit des comptes
-           rattaches » obligerait a aller les compter ailleurs. */
         { cle: 'type', label: 'Type', type: 'texte', valeur: trad(mot.titre), lecture: true,
-          /* La phrase entiere est la clef, ponctuation comprise : l'anglais ne
-             met pas d'espace avant un deux-points, et coudre « deduit de son
-             compte » + « : » + la liste imposait la typographie francaise aux
-             deux langues. */
           aide: siens.length
             ? (siens.length === 1
                 ? trad('déduit de son compte : {types}. Pour le changer, change ce qu’il contient.')
@@ -8999,10 +6021,6 @@ const ACTIONS = {
     });
     if (!v) return;
     e.nom = v.nom.trim();
-    /* Cas miroir du champ « Nom du bien » : le contenant d'un bien detenu en
-       direct et ce bien ne designent qu'une chose, ils ne doivent porter qu'un
-       nom. Renommer l'etablissement renomme donc aussi la ligne et le compte,
-       sinon la carte de la liste des actifs et son contenu divergent. */
     const tous = COMPTES().filter(x => x.etabId === e.id);
     if (tous.length === 1 && estDetenuEnDirect(typeCompte(tous[0].type))
         && (tous[0].lignes || []).length === 1 && !(tous[0].cash || []).length) {
@@ -9017,21 +6035,6 @@ const ACTIONS = {
     toast(`${e.nom} ${trad('enregistré')}`);
   },
 
-  /* L'identite d'un compte : nom, type, plafond, date d'ouverture, numero.
-     Cinq champs qu'on regle une fois, et qui restaient ouverts sur la fiche.
-
-     La boucle n'est pas une precaution de style. Un changement de type peut
-     etre refuse — il laisserait un placement sans place — et refuser en
-     fermant la fenetre jetterait aussi le nom que la personne venait de
-     corriger. On rouvre donc en gardant la saisie, avec la raison du refus
-     dans un toast. Annuler reste le seul chemin qui n'ecrit rien.
-
-     Les champs proposes suivent le type actuel, pas celui qu'on est en train
-     de choisir : le plafond n'apparait que sur un livret. Passer un compte en
-     livret puis lui donner son plafond demande donc deux passages, ce qui est
-     le cas rare ; faire suivre la liste en direct demanderait de reconstruire
-     la fenetre a chaque changement de menu, pour un gain qui ne se produit
-     presque jamais. */
   async 'modifier-compte'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
@@ -9049,17 +6052,6 @@ const ACTIONS = {
         valeur: valeur('type', c.type),
         aide: trad('il commande la poche du patrimoine et la disponibilité') });
 
-      /* Le rattachement, modifiable apres coup.
-
-         Depuis ce matin chaque bien cree le sien, donc le cas ne se reproduit
-         plus ; restaient les biens poses avant, qu'aucun geste ne pouvait
-         separer. « Supprime et recree » n'est pas une reponse quand un credit et
-         un historique sont derriere.
-
-         Les contenants proposes sont ceux du meme mot — on ne range pas un PEA
-         dans un appartement — plus le sien, qui doit rester choisissable pour
-         pouvoir ne rien changer, et « Nouveau », qui est justement le geste qui
-         separe. */
       if (!t.interne && !t.sansEtab) {
         const mot = contenantDuType(c.type);
         const compatibles = ETABS().filter(e => e.id === c.etabId
@@ -9068,9 +6060,6 @@ const ACTIONS = {
         champs.push({ cle: 'etab', label: trad(mot.titre), type: 'liste',
           options: [...compatibles.map(e => [e.id, e.nom]), ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
           valeur: valeur('etab', c.etabId || compatibles[0]?.id || '__nouveau'),
-          /* La phrase tient en une clef : coupee en deux, la seconde moitie
-             restait francaise derriere une premiere traduite, et la bulle
-             disait « two assets attached to the same le partagent ». */
           aide: trad('un crédit se pose sur ce niveau : deux biens rattachés au même le partagent') });
       }
 
@@ -9085,11 +6074,6 @@ const ACTIONS = {
         { cle: 'numero', label: trad('Numéro de compte'), type: 'texte',
           valeur: valeur('numero', c.numero || ''), aide: trad('facultatif') });
 
-      /* La date de cloture ne se corrige que sur un compte deja archive. Elle
-         se pose au moment ou l'on archive ; ce champ sert a la retoucher quand
-         on s'est trompe, ou a la renseigner sur un compte archive avant qu'elle
-         n'existe. L'offrir sur un compte ouvert ferait de ce formulaire une
-         seconde facon de cloturer, muette et sans confirmation. */
       if (c.statut === 'archive') champs.push(
         { cle: 'clotureLe', label: trad('Date de clôture'), type: 'date',
           valeur: valeur('clotureLe', c.clotureLe || ''),
@@ -9099,9 +6083,6 @@ const ACTIONS = {
                                 champs, ok: 'Enregistrer' });
       if (!v) return;
 
-      /* Le type libre suit le motif du contenant, juste en dessous : l'option
-         « + Autre… » se regle a la validation, et un renoncement ne doit rien
-         avoir change. */
       if (v.type === '__nouveau') {
         const id = await demanderTypePerso();
         if (!id) { saisi = v; continue; }
@@ -9122,8 +6103,6 @@ const ACTIONS = {
       const avant = typeCompte(c.type).label;
       const typeChange = v.type && v.type !== c.type;
 
-      /* Le contenant se change avant le reste : creer le nouveau peut echouer
-         — on ferme la fenetre du nom — et rien ne doit avoir bouge alors. */
       if ('etab' in v && v.etab !== c.etabId) {
         let cible = v.etab;
         if (cible === '__nouveau') {
@@ -9181,21 +6160,12 @@ const ACTIONS = {
       return;
     }
   },
-  /* Le clic haptique et le tassement d'appui, comme sur les sous-onglets : la
-     barre a leur forme, elle doit avoir leur réponse. Sans cela, deux barres
-     identiques réagiraient différemment sous le doigt. */
   'compte-vue'(btn) {
     retourHaptique();
     tapeSousOnglets = true;
     compteVue = btn.dataset.vue;
     render();
   },
-  /* Le pli s'anime SUR PLACE : render() remplacerait l'element, et une
-     transition a besoin qu'il survive au geste — c'est la meme lecon que le
-     lavis des sous-onglets. L'etat s'ecrit pareil qu'avant ; seul le chemin
-     visuel change, et le prochain render() relira l'etat sans desaccord.
-     Rien d'autre ne depend du pli : les totaux du groupe restent affiches
-     sur son en-tete, replie ou non. */
   'replier-groupe'(btn) {
     const cle = btn.dataset.cle;
     const ouvre = compteReplies.has(cle);          // etat d'avant : replie, donc on ouvre
@@ -9210,14 +6180,7 @@ const ACTIONS = {
     const chev = groupe.querySelector('.cpt-chev');
     if (chev) chev.textContent = ouvre ? '⌄' : '›';
   },
-  /* Tout replier d'un geste : sept groupes à refermer un par un pour obtenir
-     la vue de structure, personne ne le fait deux fois. Le bouton bascule —
-     s'il reste un groupe ouvert il ferme tout, sinon il rouvre tout.
-     Sur place aussi, pour la meme raison : les sept plis glissent ensemble. */
   'plier-tout'() {
-    /* Les cles viennent du dernier rendu, pas d'un attribut : elles portent
-       des identifiants de compte, et les recoller en une chaine pour les
-       redecouper aurait fini par casser sur un separateur. */
     const cles = groupesRendus;
     const tousReplies = cles.length && cles.every(c => compteReplies.has(c));
     for (const c of cles) tousReplies ? compteReplies.delete(c) : compteReplies.add(c);
@@ -9243,13 +6206,6 @@ const ACTIONS = {
      L'etat vit donc dans le DOM du panneau, qui ne survit pas a sa fermeture —
      c'est voulu, une fenetre s'ouvre repliee ou depliee de la meme facon a
      chaque fois, sans se souvenir d'un geste fait la fois d'avant. */
-  /* La portee est la fenetre entiere et non son corps : le bouton collectif vit
-     sur la ligne du sous-titre, les groupes dans le corps. Deux parents
-     differents, un seul ancetre commun. */
-  /* Le geste bascule la classe sur place — c'est ce qui permet l'animation, un
-     re-rendu la tuerait — et il ecrit dans l'etat, pour que le rendu suivant la
-     retrouve. Les deux, pas l'un ou l'autre : sans l'ecriture, « Enregistrer »
-     redepliait tout ; sans la bascule sur place, le pli sauterait. */
   'liq-plier'(btn) {
     const section = btn.closest('.liq-groupe');
     const pli = section?.querySelector('.cpt-pli');
@@ -9267,8 +6223,6 @@ const ACTIONS = {
   'liq-plier-tout'(btn) {
     const corps = btn.closest('#modal');
     const plis = $$('.liq-groupe .cpt-pli', corps);
-    /* Le bouton bascule : s'il reste un groupe ouvert il ferme tout, sinon il
-       rouvre tout. Meme regle que « Tout replier » de la page Actifs. */
     const ouvrir = !plis.some(p => p.classList.contains('ouvert'));
     for (const p of plis) {
       p.classList.toggle('ouvert', ouvrir);
@@ -9295,17 +6249,12 @@ const ACTIONS = {
   async 'ajouter-compte'(btn) {
     const etabImpose = btn?.dataset?.etab && etabById(btn.dataset.etab) ? btn.dataset.etab : null;
     let etapes = etabImpose ? 2 : 3;
-    /* Le type vient en premier : c'est lui qui dit comment nommer le
-       contenant. Demander « banque ou courtier » avant de savoir qu'il
-       s'agit d'une maison n'avait pas de sens. */
     const e1 = await askForm({
       titre: trad('Qu’ajoutes-tu ?'),
       sous: `${trad('Étape')} 1 ${trad('sur.etape', 'sur')} ${etapes}${etabImpose
         ? `, ${trad('chez')} ${etabById(etabImpose).nom}`
         : `, ${trad('cela détermine les placements possibles')}`}`,
       ok: 'Continuer',
-      /* Les especes sont hors liste : il en existe deja un, pour tout le monde.
-         En creer un second partagerait le meme argent en deux endroits. */
       champs: [{ cle: 'type', label: 'Type', type: 'liste',
         options: [...typesCompteChoix().map(t => [t.id, t.label]),
                   ['__nouveau', trad('+ Autre type…')]], valeur: 'courant' }],
@@ -9318,17 +6267,12 @@ const ACTIONS = {
     const t = typeCompte(e1.type);
     const mot = contenantDuType(t.id);
 
-    // Étape 2 : le contenant, nommé selon ce qu'il contient
     /*       `sansEtab` porte deja cette propriete sur le type — les especes s'en
        servent — mais l'assistant ne la lisait pas : il n'avait jamais eu a le
        faire, les especes etant posees par le code et non par ce formulaire.
        L'etape saute, et le compte se cree sans contenant. */
     let etabId = etabImpose;
     let nomNouveauContenant = null;      // cree apres le dernier ecran, pas avant
-    /* Le nom du contenant, qu'il existe deja ou qu'il vienne d'etre tape. Les
-       ecrans en ont besoin avant que l'etablissement ne soit pose dans l'etat :
-       une seule porte, pour que « le nom de la banque » veuille dire la meme
-       chose des deux cotes de sa creation. */
     const nomContenant = () => etabById(etabId)?.nom || nomNouveauContenant || '';
     if (t.sansEtab) { etabId = null; etapes--; }
     /* Un bien detenu en direct cree toujours le sien.
@@ -9363,11 +6307,6 @@ const ACTIONS = {
         ...ETABS().filter(e => aDesComptes(e) && memeFamille(e)),
         ...ETABS().filter(e => !aDesComptes(e)),
       ];
-      /* Un contenant vide se dit vide.
-
-         On continue de le proposer : on peut vouloir le repeupler, et le retirer
-         d'office jetterait un nom qu'il a fallu taper. Mais il porte desormais la
-         raison de sa presence. */
       const e2 = await askForm({
         titre: trad(mot.titre),
         sous: `${trad('Étape')} 2 ${trad('sur.etape', 'sur')} ${etapes}`,
@@ -9376,10 +6315,6 @@ const ACTIONS = {
           options: [...proposables.map(e => [e.id,
             aDesComptes(e) ? e.nom : `${e.nom} (aucun compte)`]),
             ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
-          /* Le defaut ne tombe que sur un contenant de la bonne famille. Sans
-             lui, mieux vaut ouvrir sur « + Nouveau » que sur un nom qui ne
-             veut rien dire ici : on valide une fenetre a trois champs sans
-             relire celui qui etait deja rempli. */
           valeur: proposables.find(e => aDesComptes(e) && memeFamille(e))?.id || '__nouveau' }],
       });
       if (!e2) return;
@@ -9389,17 +6324,10 @@ const ACTIONS = {
       const nom = await askText(trad(mot.nouveau),
         trad('Son nom, tel qu’il s’affichera partout.'), trad(mot.exemple));
       if (!nom) return;
-      /* Le contenant se nomme ici, il ne se cree qu'a la fin.
-
-         Un parcours qu'on abandonne ne doit rien laisser. */
       nomNouveauContenant = nom;
       etabId = null;
     }
 
-    /* Étape 3 : deux questions differentes selon la nature.
-       Un bien ou une part de societe n'a pas d'« argent qui sert a quelque
-       chose » : il a une valeur et un prix d'acquisition. Demander une
-       affectation pour 150 000 EUR de studio le rangeait en liquidites. */
     const bien = estUnBien(t);
     const classeDuBien = t.classes.find(c => c !== 'liquidites') || 'nonCote';
 
@@ -9408,31 +6336,14 @@ const ACTIONS = {
                   : `Valeur ${t.classes.includes('nonCote') ? 'de la participation' : 'du bien'}`)
                   : t.sansCash ? trad('Nommer le contrat')
                   : `${BASES.liquidites.nom} ${trad('sur ce compte')}`,
-      /* Le compte des étapes suit le parcours réellement suivi : annoncer
-         « 3 sur 3 » après un « 1 sur 2 » ferait douter d'en avoir sauté une. */
       sous: `${trad('Étape')} ${etapes} ${trad('sur.etape', 'sur')} ${etapes}${bien
         ? `, ${trad('la plus-value se calcule sur ces deux montants')}`
         : t.sansCash ? `, ${trad('sa valeur viendra des supports que tu y ajouteras')}` : ''}`,
       ok: 'Créer',
       champs: bien ? [
-        /* Le nom, pour un bien sans contenant.
-
-           Pour un appartement, l'etape 2 l'a deja nomme : le contenant EST le
-           bien, et le redemander ferait deux champs pour une valeur. Un bien de
-           valeur saute cette etape — « quand je mets bien de valeur il ne doit
-           pas se cabler a une banque mais a rien » — donc plus rien ne le nomme,
-           et la ligne retombait sur le libelle du type : deux montres et un
-           tableau s'affichaient tous les trois « Bien de valeur ». Signale dans
-           le meme echange : « il faut pouvoir mettre un nom sur le bien ». */
         ...(t.sansEtab ? [{ cle: 'nom', label: trad('Nom du bien'), type: 'texte', requis: true,
           max: NOM_LIGNE_MAX, exemple: 'ex. Rolex Submariner',
           aide: trad('une montre, une voiture, un tableau : ce nom s’affichera partout') }] : []),
-        /* « Valeur estimée » et non « valeur actuelle » pour un bien de valeur.
-
-           La demande vaut pour le bien de valeur, mais l'immobilier est logé à
-           la même enseigne : une maison n'a pas de cours non plus. Seule la
-           participation garde « valeur actuelle », son prix venant d'une
-           derniere levee ou d'un pacte, pas d'une appreciation. */
         { cle: 'valeur',
           label: `${estDetenuEnDirect(t) ? 'Valeur estimée' : 'Valeur actuelle'} (€)`,
           type: 'nombre', exemple: '0',
@@ -9452,30 +6363,15 @@ const ACTIONS = {
            saisit ce qu'on vient d'estimer. */
         { cle: 'estimeLe', label: trad('Estimée le'), type: 'date', valeur: todayISO(),
           aide: trad('la cloche te rappellera de la revoir dans un an') },
-        /* L'usage se demande a la creation, la ou on le sait : pose plus tard
-           dans une fiche, il resterait vide chez presque tout le monde, et la
-           fiche d'une residence principale continuerait de parler rendement.
-           Reserve a l'immobilier — une montre ne s'habite pas. */
         ...(classeDuBien === 'immobilier' ? [{ cle: 'usageBien', label: trad('Usage'),
           type: 'liste', options: [['', trad('à préciser')], ...USAGES_BIEN],
           aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }] : []),
-        /* Le credit se saisit ici, pas plus tard : un bien finance a credit
-           sans sa dette affiche un patrimoine net faux des la creation.
-
-           Sauf sans contenant : une dette se pose sur un etablissement, et un
-           bien de valeur n'en a aucun. Offrir le champ demanderait d'en inventer
-           un pour le porter, ce que ce parcours vient justement d'eviter. */
         ...(t.sansEtab ? [] : [
         { cle: 'credit', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
           aide: trad('laisse 0 si c’est payé, sinon la dette se déduit du patrimoine net') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
           suggestions: valeursConnues('preteur'),
           aide: trad('la banque qui prête, si ce n’est pas toi') },
-        /* La mensualite et le taux, ici aussi.
-
-           Deux champs de plus et la case, les memes que la fenetre du credit. Le
-           taux n'est pas un ornement : c'est lui qui permet de dire quelle part de
-           la mensualite rembourse vraiment, et de projeter le solde. */
         { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, mais c’est elle qui entre dans ton budget') },
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
@@ -9487,25 +6383,10 @@ const ACTIONS = {
               + 'budget sous ce nom' },
         ]),
       ] : [
-        /* Le nom du compte, demande a la creation.
-
-           Pre-rempli plutot que vide, pour ne pas ajouter une corvee a un
-           parcours en trois etapes : le type et la banque sont deja connus,
-           leur assemblage fait un nom juste, qu'on corrige si on veut. Un champ
-           efface reste possible et retombe sur l'ancien comportement.
-
-           Seuls les comptes tenus par une banque le demandent. Pour un bien ou
-           une part de societe, l'etape 2 a deja nomme la chose elle-meme, et
-           redemander ici ferait deux champs pour une seule valeur. */
         { cle: 'libelle', label: trad(t.sansCash ? 'Nom du contrat' : 'Nom du compte'), type: 'texte',
           valeur: `${t.label} ${nomContenant()}`.trim(),
           aide: trad(t.sansCash ? 'c’est lui qui distingue deux contrats du même type'
                                 : 'c’est lui qui distingue deux comptes du même type') },
-        /* Un contrat ne porte pas de poche de cash : ces trois questions y
-           inventaient une affectation pour de l'argent qui est deja sur un
-           support, au pire le fonds euros. Sa valeur vient donc de ce qu'on y
-           ajoutera, et la fenetre le dit plutot que de demander un montant qui
-           n'aurait nulle part ou se ranger. */
         ...(t.sansCash ? [] : [
         { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', exemple: '0' },
         { cle: 'usage', label: trad('À quoi sert cet argent ?'), type: 'liste',
@@ -9520,7 +6401,6 @@ const ACTIONS = {
     });
     if (!e3) return;
 
-    /* Plus rien ne peut echouer : le contenant peut naitre. */
     if (nomNouveauContenant) {
       const slug = nomNouveauContenant.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'etab';
@@ -9537,16 +6417,9 @@ const ACTIONS = {
         valeur: num(e3.valeur), prixDeRevient: num(e3.revient),
         dateAcquisition: e3.ouvertLe || '', estimeLe: e3.estimeLe || todayISO(),
         ...(e3.usageBien ? { usage: e3.usageBien } : {}) });
-      /* La dette se pose sur le contenant du bien, pas sur la banque qui
-         prete : c'est la que la valeur nette se lit — le bien a son prix
-         plein dans la repartition, le credit s'en deduit au niveau du
-         patrimoine. Le preteur est note dans l'intitule. */
       if (num(e3.credit)) {
         const et = etabById(etabId);
         et.dettes = et.dettes || [];
-        /* L'intitule ne recopie plus le preteur : il a son champ, et l'affichage
-           compose les deux. Et la date de verification est posee des la creation,
-           pour que la projection du solde ait un point de depart. */
         et.dettes.push({ id: 'd' + Date.now().toString(36),
           libelle: `Crédit ${nomContenant()}`.trim(),
           montant: num(e3.credit), preteur: e3.preteur || '', note: '',
@@ -9601,8 +6474,6 @@ const ACTIONS = {
   },
 
   'fiche-compte'(btn) {
-    /* Une ligne dont le tiroir d'actions est ouvert se referme au lieu
-       d'ouvrir la fiche : le doigt qui vient de glisser tape souvent là. */
     const swipe = btn.closest?.('.cpt-swipe');
     if (swipe?.classList.contains('ouvert')) {
       swipe.classList.remove('ouvert');
@@ -9613,17 +6484,6 @@ const ACTIONS = {
   },
   'fiche-etab'(btn) { location.hash = '#/etab/' + encodeURIComponent(btn.dataset.id); },
 
-  /* Archiver demande la date de cloture.
-
-     Un compte portait sa date d'ouverture et rien a l'autre bout : « on a une
-     date ouverture mais pas cloture ». La question se pose au moment ou l'on
-     archive, parce que c'est le seul moment ou on la connait — la redemander
-     plus tard supposerait qu'on s'en souvienne, et une fenetre de confirmation
-     qui ne demande rien est une occasion perdue.
-
-     Elle reste facultative : un vieux compte dont on a oublie la date exacte
-     doit pouvoir s'archiver quand meme. Mais elle est proposee au jour, comme
-     la date d'achat d'une ligne de titres, parce que c'est le cas courant. */
   async 'archiver-compte'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
@@ -9640,24 +6500,10 @@ const ACTIONS = {
     });
     if (!v) return;
     c.statut = 'archive';
-    /* Un champ vide efface plutot que d'ecrire une chaine vide, comme partout
-       ailleurs dans cette fenetre de compte. */
     if (v.clotureLe) c.clotureLe = v.clotureLe; else delete c.clotureLe;
     refreshAccounts(); Store.save(); render();
     toast(`${guill(nomCompteV2(c))} ${trad('archivé')}${v.clotureLe ? ` ${trad('au')} ${fmtDate(v.clotureLe)}` : ''}`);
   },
-  /* Restaurer se confirme, et ne vit plus que dans la fiche.
-
-     Le bouton etait sur chaque ligne de la liste des archives, a portee de
-     pouce, sans question — alors qu'on n'archive pas un compte pour le rouvrir
-     le lendemain. « En general on ne restaure pas un compte archive », et
-     l'action, elle, remet un montant dans tous les totaux du patrimoine : c'est
-     le genre de geste qu'on ne veut pas faire en visant autre chose.
-
-     La question dit ce qui change, et nomme la perte : restaurer efface la date
-     de cloture, parce qu'un compte rouvert n'est pas cloture. La garder ferait
-     cohabiter « ouvert » et « ferme le 12 mars », deux etats qui se
-     contredisent, et c'est la date qu'on croirait sur parole. */
   async 'restaurer-compte'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
@@ -9715,9 +6561,6 @@ const ACTIONS = {
   async 'supprimer-compte'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
-    /* Les especes ne se suppriment pas : elles seraient reposees au prochain
-       chargement, vides, et l'historique du compte efface pour rien. Mettre a
-       zero dit la meme chose et garde les mois passes. */
     if (typeCompte(c.type).interne) {
       await askConfirm(trad('Les espèces ne se suppriment pas') + '\n'
         + trad('Ce compte existe pour tout le monde, sans établissement. S’il n’y a '
@@ -9737,12 +6580,6 @@ const ACTIONS = {
     }
     const v = valeurCompte(c);
     const mois = Store.state.monthly.filter(r => r.v && r.v[c.id] != null).length;
-    /* Les crédits du contenant partent avec son dernier compte.
-       Ils restaient : supprimer un appartement laissait son prêt en place,
-       toujours soustrait du patrimoine net, et devenu invisible puisque la
-       liste des comptes saute les établissements vides. Un patrimoine amputé
-       de plusieurs dizaines de milliers d'euros par une ligne qu'aucun écran
-       ne montrait plus. */
     const etab = etabById(c.etabId);
     const dernierDeSonEtab = etab
       && COMPTES().filter(x => x.etabId === etab.id && x.id !== c.id).length === 0;
@@ -9758,7 +6595,6 @@ const ACTIONS = {
       + (dernierDeSonEtab ? `${guill(etab.nom)} ${trad("disparaîtra avec lui : c'était son dernier compte.")}\n` : '')
       + `\n${trad('Réversible avec Ctrl+Z.')}`, { ok: 'Supprimer', danger: true })) return;
     if (credits.length) etab.dettes = [];
-    /* Pierre tombale : les relevés passés portent des colonnes à son nom. */
     if (!Store.state.accounts.some(a => a.id === c.id)) {
       Store.state.accounts.push({ id: c.id, label: nomCompteV2(c), short: c.court || '',
         broker: nomEtabDe(c), type: c.type, group: typeCompte(c.type).groupe, legacy: true });
@@ -9805,19 +6641,6 @@ const ACTIONS = {
     Store.save(); render();
   },
 
-  /* Ajouter et modifier un placement saisi a la main.
-
-     Il n'y avait aucun chemin : une ligne non cotee ne se creait qu'au moment ou
-     l'on creait son compte, et ne se modifiait plus jamais. Un portefeuille de
-     trente prets participatifs demandait donc trente comptes, et une valeur
-     corrigee etait impossible. L'etat vide de la carte disait « Ajoutez-en un »
-     et ne menait nulle part.
-
-     Les trois champs du financement participatif sont la : le taux annonce,
-     l'echeance, et l'etat. Le retard et le defaut sont la realite de ce metier, et
-     l'etat se declare — une date depassee ne veut pas dire « en retard », un
-     virement arrive souvent avec quelques jours de decalage. L'application signale,
-     le detenteur tranche. */
   async 'ajouter-placement'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
@@ -9879,11 +6702,6 @@ const ACTIONS = {
     toast(`${guill(l.libelle)} · ${fmtEUR0(num(v.valeur))}`);
   },
 
-  /* Un loyer cree depuis la fiche du bien : rattache d'office.
-
-     Le rattachement n'est pas un champ de ce formulaire, il est la raison d'etre
-     du bouton. Le proposer ici avec un menu ou l'on pourrait choisir « aucun »
-     redonnerait le geste qu'on vient d'eviter. */
   async 'ajouter-loyer'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
@@ -9903,17 +6721,9 @@ const ACTIONS = {
     toast(`${guill(v.label)} · ${fmtEUR0(num(v.amount))} ${trad('/ mois')}`);
   },
 
-  /* Une charge du bien, meme raisonnement. La periode reste offerte : une taxe
-     fonciere se paie une fois l'an, une copropriete par trimestre, et saisir
-     « 1 200 par an » plutot que « 100 par mois » est ce qu'on lit sur l'avis. */
   async 'ajouter-charge-bien'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
-    /* Les postes d'un bien sont proposes, pas imposes : taxe fonciere,
-       copropriete, travaux, plus l'assurance qui va avec son usage. Un champ
-       vide obligeait a se souvenir de ce qu'un logement coute, et la provision
-       pour travaux est justement celle qu'on oublie. Ceux deja nommes sur un
-       autre bien suivent, sans doublon. */
     const proposes = chargesProposees(c);
     const v = await askForm({
       titre: `Charge de ${nomCompteV2(c)}`,
@@ -9925,8 +6735,6 @@ const ACTIONS = {
           suggestions: [...proposes.map(([l]) => l), ...valeursConnues('posteBien')]
             .filter((l, i, t) => t.findIndex(x => x.toLowerCase() === l.toLowerCase()) === i) },
         { cle: 'amount', label: 'Montant', type: 'nombre', exemple: '0' },
-        /* La periode du premier poste propose : la taxe fonciere ouvre la liste,
-           et c'est elle qu'on saisit en premier sur un bien qui vient d'entrer. */
         { cle: 'period', label: 'Facturé', type: 'liste', options: CHARGE_PERIODES,
           valeur: proposes[0][1] },
         { cle: 'provider', label: 'Organisme', type: 'texte', exemple: 'ex. Trésor public',
@@ -9952,9 +6760,6 @@ const ACTIONS = {
       champs: [
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, exemple: 'ex. Prêt immobilier' },
         { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0' },
-        /* Le capital emprunté ne se déduit pas du restant dû, et c'est lui qui
-           permet de dire ce qui est déjà remboursé. Facultatif : un vieux prêt
-           dont on a oublié le montant initial reste utilisable. */
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
         { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: trad('facultatif') },
@@ -9971,18 +6776,12 @@ const ACTIONS = {
     });
     if (!v) return;
     e.dettes = e.dettes || [];
-    /* Le preteur ne se recopie plus dans l'intitule. Il y etait colle — « Prêt
-       immobilier · Crédit Agricole » — tout en etant garde dans son propre
-       champ : la meme information a deux endroits, dont un que l'edition ne
-       pouvait plus corriger. C'est l'affichage qui les compose. */
     e.dettes.push({ id: 'd' + Date.now(),
       libelle: v.libelle, montant: num(v.montant), initial: num(v.initial) || null,
       mensualite: num(v.mensualite) || null, taux: num(v.taux) || null,
       tauxAssurance: num(v.tauxAssurance) || null,
       preteur: v.preteur || '', note: '', verifieLe: todayISO() });
     Store.save(); render();
-    /* La charge fixe dans le meme geste, si la case est restee cochee et qu'une
-       mensualite a ete saisie. */
     const posee = v.charge && creerChargeDuCredit(e.dettes[e.dettes.length - 1]);
     if (posee) { Store.save(); render(); }
     toast(posee
@@ -9991,17 +6790,6 @@ const ACTIONS = {
       : `${trad('Crédit')} ${guill(v.libelle)} ${trad('ajouté')}`);
   },
 
-  /* Modifier un credit, depuis n'importe ou il s'affiche.
-     Corriger un capital restant du est le geste qu'on refait le plus sur un
-     credit — une fois par an sur un tableau d'amortissement, ou apres un
-     remboursement anticipe. Il demandait d'ouvrir la fiche de l'etablissement,
-     de trouver la bonne carte, puis le bon champ. Une seule fenetre, appelee
-     par la carte de l'accueil comme par la fiche du compte : un champ, plusieurs
-     portes, jamais deux champs.
-
-     Le sous-titre dit a quoi ce credit est attache — l'etablissement, ce qu'il
-     tient, et les autres credits qui y vivent. C'est la question qu'on se pose
-     en voyant « moins 96 000 EUR » sans plus d'explication. */
   async 'editer-credit'(btn) {
     const e = etabById(btn.dataset.etab);
     const i = +btn.dataset.i;
@@ -10009,9 +6797,6 @@ const ACTIONS = {
     if (!d) return;
     const siens = COMPTES().filter(c => c.etabId === e.id && c.statut !== 'archive');
     const autres = (e.dettes || []).length - 1;
-    /* Si une charge fixe rembourse ce credit, elle detient la mensualite : le
-       champ ne s'affiche pas ici. L'offrir quand meme ferait deux endroits pour
-       un montant, et celui-ci serait le perdant — la projection lit la charge. */
     const lien = chargeDuCredit(d.id);
     const v = await askForm({
       titre: d.libelle || 'Crédit',
@@ -10024,11 +6809,6 @@ const ACTIONS = {
       ].filter(Boolean).join(' · '),
       ok: 'Enregistrer',
       champs: [
-        /* La projection en aide, jamais dans le champ. Ecrire d'office le montant
-           calcule serait commode et faux : un remboursement anticipe, une
-           renegociation ou un differe le rendent caduc, et l'application ne peut
-           pas le savoir. Elle propose un chiffre a recopier si rien n'a change,
-           et c'est le detenteur qui tranche. */
         { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', valeur: num(d.montant),
           aide: (() => {
             const pr = projectionCredit(d);
@@ -10051,16 +6831,10 @@ const ACTIONS = {
           valeur: num(d.tauxAssurance) || '', aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', valeur: d.preteur || '',
           exemple: 'ex. Crédit Agricole', suggestions: valeursConnues('preteur') },
-        /* Pas de case quand une charge rembourse deja : il n'y a rien a creer, et
-           la fenetre le dit deja dans son sous-titre. */
         ...(lien ? [] : [{ cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'),
           type: 'case', valeur: true,
           aide: trad('seulement si une mensualité est renseignée : elle entrera dans ton ')
               + 'budget sous ce nom, et suivra le capital restant dû' }]),
-        /* La suppression vit ici, avec la modification : le credit ne s'effaçait
-           que depuis la fiche de l'etablissement qui le porte, un ecran qu'on
-           n'ouvre pas quand on regarde son bien. Meme case que chez les charges
-           fixes, meme phrase. */
         { cle: 'supprimer', label: trad('Supprimer ce crédit'), type: 'case',
           aide: `${trad('Le patrimoine net remontera de')} ${fmtEUR0(num(d.montant))}. ${
             trad('Réversible avec Ctrl+Z.')}` },
@@ -10078,10 +6852,6 @@ const ACTIONS = {
     const avant = num(d.montant);
     d.libelle = v.libelle || d.libelle;
     d.montant = num(v.montant);
-    /* La date de verification, posee ici et nulle part ailleurs : c'est le seul
-       moment ou quelqu'un a regarde ce montant. Elle fait tourner la projection
-       et le rappel — sans elle, l'application ne saurait pas depuis quand ce
-       chiffre a vieilli. */
     d.verifieLe = todayISO();
     d.initial = num(v.initial) || null;
     if (v.mensualite !== undefined) d.mensualite = num(v.mensualite) || null;
@@ -10089,9 +6859,6 @@ const ACTIONS = {
     d.tauxAssurance = num(v.tauxAssurance) || null;
     d.preteur = v.preteur || '';
     Store.save(); render();
-    /* Le sens compte : une dette qui baisse fait monter le patrimoine net
-       d'autant. Le toast le dit, parce que c'est la consequence qu'on cherche en
-       corrigeant ce champ, et qu'elle se lit a l'envers du montant saisi. */
     const baisse = avant - d.montant;
     toast(Math.abs(baisse) > 0.005
       ? `${d.libelle} · ${fmtEUR0(d.montant)} ${trad('restant dû, patrimoine net')} ${
@@ -10127,11 +6894,6 @@ const ACTIONS = {
   'hero-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   /* On change d'adresse, pas d'état : `hashchange` déclenche le rendu, et le
      bouton retour du navigateur ramène au sous-onglet précédent. */
-  /* Taire un rappel pour le mois en cours. Le report porte une cle de mois :
-     il expire de lui-meme au suivant, on n'a pas a penser a le lever. Il
-     eteint la pastille partout a la fois, menu et barre du bas comprises,
-     ainsi que le controle de coherence : un rappel qu'on a choisi de reporter
-     n'a pas a ressortir ailleurs. */
   'taire-rappel'(btn) {
     const genre = btn.dataset.genre;
     const p = genre === 'depenses' ? depensesEnAttente() : currentMonthPending();
@@ -10141,9 +6903,6 @@ const ACTIONS = {
     toast(`${trad('Rappel de')} ${p.label} ${trad('masqué jusqu’au mois prochain')}`);
   },
 
-  /* « Plus tard » : sept jours, pas le mois entier. C'est la sortie de celui
-     qui veut bien saisir, mais pas maintenant — la croix reste pour celui qui
-     ne veut pas du tout. */
   'reporter-rappel'(btn) {
     const genre = btn.dataset.genre;
     const p = genre === 'depenses' ? depensesEnAttente() : currentMonthPending();
@@ -10153,9 +6912,6 @@ const ACTIONS = {
     toast(`${trad('Rappel de')} ${p.label} ${trad('repoussé au')} ${fmtJourMois(quand)}`);
   },
 
-  /* Le tassement d'appui, comme la barre du bas. Il est pose avant la
-     navigation et survit au rendu, parce que la classe est reappliquee sur la
-     barre neuve : sans cela il disparaitrait dans la milliseconde. */
   'sous-onglet'(btn) {
     retourHaptique();
     /* Plus de remise a zero ici : `render()` retient une position par vue, et
@@ -10175,11 +6931,7 @@ const ACTIONS = {
     budgetYear = btn.dataset.year === 'all' ? 'all' : btn.dataset.year;
     render();
   },
-  /* Le dépliant reste ouvert : on vient de changer l'année depuis l'intérieur. */
   'toggle-revenus'() { fenetreRevenus(); },
-  /* La marque « estime » d'une source de revenu. Un bouton-case plutot qu'un
-     data-path : la coche doit rafraichir la fenetre (le ≈ du sous-titre) et
-     la page derriere, ce que l'ecriture au fil de la frappe ne fait pas. */
   'revenu-estime'(el) {
     const r = B().income[+el.dataset.i];
     if (!r) return;
@@ -10189,31 +6941,11 @@ const ACTIONS = {
     render();
   },
   'evo-year'(btn) { evoYear = btn.dataset.year; evoDetailOuvert = true; render(); },
-  /* L'annee du journal des ventes. Elle ne survit pas au rechargement, comme
-     celle du graphique d'evolution : c'est une question du moment, pas un
-     reglage — on revient toujours a l'annee en cours. */
   /* Le journal n'a plus de borne propre : elle est celle de la page, et le menu
      des annees a rejoint les crans de la plage. `sales-year` est parti avec. */
   'open-sale'(btn) { openApercu('vente', btn.dataset.i); },
   'tri-ventes'(btn) { triVentes = btn.dataset.tri; render(); },
 
-  /* Modifier une vente au journal, et la frontiere est celle des consequences.
-
-     Ce qui ne touche a rien d'autre se corrige partout : la date, le nom, la
-     note. Une date fausse deplace la vente d'une periode a l'autre et fait
-     mentir les barres, et c'est le champ qu'on se trompe le plus souvent a
-     saisir.
-
-     Les montants d'une vraie vente, non. Elle a credite un compte et reduit une
-     ligne au moment de la saisie : changer son prix apres coup ferait dire au
-     journal 900 EUR quand 944 sont arrives sur le compte, sans que rien ne le
-     signale. Le chemin exact existe deja, en deux gestes : annuler la vente, qui
-     rend les titres et reprend les especes, puis la ressaisir. La fenetre le dit
-     plutot que de laisser chercher.
-
-     Une vente declaree, elle, n'a rien ecrit d'autre : ses montants sont donc
-     entierement modifiables. C'est la meme asymetrie que son annulation, qui
-     retire une ligne au lieu de defaire un mouvement. */
   async 'edit-sale'(btn) {
     const i = +btn.dataset.i;
     const v = Store.state.sales?.[i];
@@ -10248,8 +6980,6 @@ const ACTIONS = {
     v.name = String(saisi.name || '').trim() || v.name;
     v.note = saisi.note || '';
     if (v.declaree) {
-      /* Le prix de revient se derive, il ne se saisit pas : trois champs pour
-         deux libertes laisseraient produit, revient et plus-value se contredire. */
       v.gross = round2(num(saisi.gross));
       v.realised = round2(num(saisi.realised));
       v.invested = round2(v.gross - v.realised);
@@ -10257,17 +6987,10 @@ const ACTIONS = {
     Store.save(); render();
     toast(trad('Vente modifiée'));
   },
-  /* Modifier un compte existant. Son identifiant ne bouge jamais : les
-     montants déjà saisis, l'historique et les positions restent rattachés. */
-  /* Fiche d'une ligne de titres, ouvrable depuis le tableau, la brique du
-     jour et la performance par ligne. */
   async 'open-position'(btn) {
     const i = +btn.dataset.i;
     const suite = await askPosition(i);
     Store.save(); render();
-    /* La suppression d'abord : elle deplace les index de la liste, et tout ce
-       qui suit travaille sur des index. La confirmation a deja ete donnee dans
-       la fiche, ou la ligne et son montant pouvaient encore etre nommes. */
     if (suite && suite.supprimer != null) {
       const p = Store.state.positions[suite.supprimer];
       if (!p) return;
@@ -10292,7 +7015,6 @@ const ACTIONS = {
       Store.addBackup('avant achat');
       const p = Store.state.positions[a.index];
       const anciennes = num(p.qty), cout = a.qty * a.price;
-      /* PRU pondere : l'ancien lot au prix d'avant, le nouveau au prix paye. */
       p.buyPrice = round4((anciennes * num(p.buyPrice) + cout) / (anciennes + a.qty));
       p.qty = anciennes + a.qty;
       if (a.cashAccount) {
@@ -10308,14 +7030,6 @@ const ACTIONS = {
         + (a.cashAccount ? ` · ${trad('débité de')} ${ACC[a.cashAccount]?.short || 'cash'}` : ''));
     }
   },
-  /* Depuis la brique du haut de Budget : ouvre la saisie du mois courant.
-     La ligne est creee au besoin — en tout debut de mois, le calendrier de
-     l'annee peut ne pas encore la porter. */
-  /* L'objectif de depenses mensuel, regle depuis le montant qui l'affiche.
-
-     Le champ libre est garde tel quel, a l'euro : les paliers de cent ne
-     laissaient pas viser juste avec un petit budget, et quelqu'un qui vit avec
-     640 EUR par mois doit pouvoir ecrire 640. */
   async 'regler-objectif-depenses'() {
     const actuel = num(Store.state.budget.monthlyTarget);
     const r = await askForm({
@@ -10345,8 +7059,6 @@ const ACTIONS = {
     }
     return ACTIONS['edit-expense-month']({ dataset: { i: String(i) } });
   },
-  /* Depuis la relance : ouvre la saisie du mois clos, en creant sa ligne si
-     le calendrier de l'annee ne la porte pas encore. */
   async 'saisir-mois-en-attente'() {
     const att = depensesEnAttente();
     let i = att.index;
@@ -10365,8 +7077,6 @@ const ACTIONS = {
     if (!saisi) return;
     const r = Store.state.budget.expenses[i];
     ecrireDepensesMois(i, saisi);
-    /* Une catégorie vient d'être créée : on revient à la saisie, grille
-       complétée, montants conservés. */
     if (saisi.rouvrir) { render(); return ACTIONS['edit-expense-month'](btn); }
     if (saisi.versTableau) {
       budgetYear = String(r.month).slice(0, 4);   // sinon le mois quitté serait filtré
@@ -10419,9 +7129,6 @@ const ACTIONS = {
     Store.save(); render();
     toast(`${trad('Colonne')} ${guill(nom.trim())} ${trad('ajoutée')}`);
   },
-  /* Retirer ne demande pas confirmation : rien n'est perdu, et le geste inverse
-     est a cote, sur la meme ligne. Une question a chaque fois pour une action
-     reversible apprend surtout a repondre oui sans lire. */
   'retirer-category'(btn) {
     const cat = btn.dataset.cat;
     if (!retirerCategorie(cat)) return;
@@ -10481,17 +7188,7 @@ const ACTIONS = {
     Store.save(); render();
     toast(calendrier ? `${fmtMonth(r.month)} ${trad('vidé')}` : trad('Mois supprimé'));
   },
-  /* Une rentree exceptionnelle : quatre champs et une date.
-
-     Le compte credite n'est pas demande, volontairement. L'argent est deja sur le
-     compte quand on saisit — on note ce qui s'est passe, on ne deplace rien — et
-     demander « ou est-il arrive » ferait croire que l'application va l'y mettre.
-     Le solde se corrige la ou il se lit, dans Comptes ou dans le panneau des
-     liquidites. */
   async 'ajouter-apport'(btn) {
-    /* Le sens vient du bouton, et le montant se saisit toujours positif : demander
-       « moins quinze mille » serait offrir une faute de frappe qui inverse un fait.
-       Le signe est pose ici, une fois, a partir d'une declaration. */
     const sortie = btn?.dataset.sens === 'sortie';
     const v = await askForm({
       titre: sortie ? 'Dépense exceptionnelle' : 'Rentrée exceptionnelle',
@@ -10521,10 +7218,6 @@ const ACTIONS = {
     const i = +btn.dataset.i;
     const a = APPORTS()[i];
     if (!a) return;
-    /* Le sens se propose ici, et nulle part ailleurs : c'est le seul endroit ou
-       l'on peut s'etre trompe de bouton. Le montant reste positif dans le champ,
-       le signe vit dans la liste — un champ qui porterait le signe et une liste
-       qui le declare seraient deux ecritures du meme fait. */
     const etaitSortie = num(a.montant) < 0;
     const v = await askForm({
       titre: a.libelle || (etaitSortie ? 'Dépense exceptionnelle' : 'Rentrée exceptionnelle'),
@@ -10603,9 +7296,6 @@ const ACTIONS = {
   },
   'del-charge': makeDeleter('fixedCharges', 'la charge fixe', c => c.label),
 
-  /*    Editer une charge dans une fenetre : le seul chemin sur telephone, ou le
-   tableau a huit colonnes ne se rend pas. Le tableau reste le chemin du
-   bureau.*/
   async 'edit-charge'(btn) {
     const i = +btn.dataset.i;
     const c = Store.state.budget.fixedCharges[i];
@@ -10613,10 +7303,6 @@ const ACTIONS = {
     const gens = contributors();
     const v = await askForm({
       titre: c.label || 'Charge fixe',
-      /* Le sous-titre donne l'equivalent mensuel calcule, ce que la fenetre
-         disait seulement en principe : « le budget ramene au mois » n'apprend
-         pas combien pese une assurance de 480 EUR au semestre. C'est le chiffre
-         qui entre dans le budget, il doit se lire ici. */
       sous: chargePeriode(c) === 'mois'
         ? 'Le montant se saisit tel qu’il est facturé'
         : `Facturée ${CHARGE_PERIODE_LABEL[chargePeriode(c)]}, soit ${
@@ -10671,10 +7357,6 @@ const ACTIONS = {
         { cle: 'amount', label: trad('Montant mensuel (€)'), type: 'nombre', exemple: '0' },
       ],
     });
-    /* La fenetre de saisie a pris la place de celle des revenus : on y
-       revient dans tous les cas, validation comme annulation, sinon on laisse
-       l'utilisateur devant la page nue apres un geste commence dans une
-       fenetre. */
     if (!v) { rafraichirRevenus(); return; }
     Store.state.budget.income.push({ label: v.label, amount: v.amount });
     Store.save(); render(); rafraichirRevenus();
@@ -10732,8 +7414,6 @@ const ACTIONS = {
     toast(`${guill(r.label)} · ${fmtEUR(revenuMensuel(r))} ${trad('/ mois')}`);
   },
 
-  /* Meme retour que pour l'ajout : la demande de confirmation ferme la
-     fenetre des revenus, on la rouvre une fois la reponse donnee. */
   async 'del-income'(btn) {
     await makeDeleter('income', 'la source de revenu', r => r.label).call(this, btn);
     rafraichirRevenus();
@@ -10744,8 +7424,6 @@ const ACTIONS = {
      mort, et le balayage de verification cherche justement des `data-action`
      qui ne mènent à rien : autant ne pas lui laisser l'inverse a trouver. */
 
-  /* Le tableau est un calendrier : on ouvre une année entière, pas un mois
-     isolé qui laisserait une année à un seul janvier. */
   'add-month'() {
     const rows = Store.state.monthly;
     const derniere = Math.max(...rows.map(r => +String(r.date).slice(0, 4)), new Date().getFullYear());
@@ -10773,8 +7451,6 @@ const ACTIONS = {
       if (r.best && r.best.symbol) {
         p.symbol = r.best.symbol;
         Store.save(); render();
-        /* La fiche est ouverte par-dessus : son champ doit suivre, sinon il
-           affiche encore l'ancien symbole et la prochaine frappe le remet. */
         const champ = document.querySelector(`#modalBody [data-path$=".symbol"]`);
         if (champ) champ.value = r.best.symbol;
         toast(`${p.name} → ${r.best.symbol} (${r.best.exchange})`);
@@ -10797,9 +7473,6 @@ const ACTIONS = {
       toast(trad('Passerelle non détectée : lance « python serve.py »'));
       return;
     }
-    /* La pastille d'etat porte des enfants : on la met en « encours » par
-       sa classe plutot qu'en ecrasant son contenu. Les autres boutons
-       (fiche Donnees) gardent leur libelle texte. */
     const chip = btn && btn.classList.contains('etat-cours');
     const label = btn && !chip ? btn.textContent : null;
     if (btn) { btn.disabled = true; }
@@ -10875,16 +7548,12 @@ const ACTIONS = {
     toast(trad('Positions exportées en Excel'));
   },
   'export-xlsx-all'() {
-    // La feuille Ventes n'a de sens que s'il y a des ventes.
     const feuilles = [
       sheetPositions(), sheetAllocation(), sheetRebalance(), sheetRoles(),
-      /* La composition n'a de sens qu'avec des titres : sans position, les deux
-         roles sont vides et la feuille ne porterait que son en-tete. */
       ...(rebalanceRoles().base ? [sheetRoleComposition()] : []),
       sheetAccounts(), sheetHistory(),
       ...((Store.state.sales || []).length ? [sheetSales()] : []),
       sheetExpenses(),
-      // Pas de feuille vide : le journal n'existe que s'il porte quelque chose.
       ...(apportsTries().length ? [sheetApports()] : []),
       sheetFixedCharges(),
     ];
@@ -10915,25 +7584,15 @@ const ACTIONS = {
     refreshAccounts();
     render(); toast(trad('Données effacées'));
   },
-  /* Photo de la situation actuelle, écrite dans une ligne précise du relevé. */
   async 'snapshot-row'(btn) {
     const i = +btn.dataset.i;
     const row = Store.state.monthly[i];
     if (!row) return;
-    /* « Les montants actuels » n'ont pas de sens sur un mois a venir, et ce
-       bouton-la est le chemin le plus court vers l'erreur : douze lignes se
-       suivent, celles de la fin de l'annee sont vides et appellent le doigt.
-       On refuse en disant pourquoi, plutot que de proposer une confirmation :
-       il n'existe pas de version juste de ce geste. La saisie a la main reste
-       ouverte par la fenetre du mois, qui elle avertit et laisse passer. */
     if (!moisRevolu(row.date)) {
       toast(`${fmtMonth(row.date)} ${trad('n’a pas encore eu lieu')}`);
       return;
     }
     const t = nowTotals();
-    /* Toujours confirmer : meme sur une ligne vide, le geste fige un mois
-       d'historique — et un doigt qui visait la ligne d'a cote ne doit pas
-       ecrire sans prevenir. */
     const vide = rowIsEmpty(row);
     if (!await askConfirm(vide
       ? trad('Enregistrer le relevé de {m} ?').replace('{m}', fmtMonth(row.date)) + '\n\n'
@@ -10949,23 +7608,15 @@ const ACTIONS = {
     const values = {};
     for (const a of ACCOUNTS) { const v = nowValue(a.id); if (v) values[a.id] = round2(v); }
     row.v = values;
-    /* Le capital restant du : c'est ce qui fait monter la part nette d'un bien
-       immobilier mois apres mois. */
     row.dettes = round2(patrimoine().dettes);
     Store.save(); render();
     toast(`${fmtMonth(row.date)} · ${fmtEUR0(t.total)} ${trad('enregistré')}`, porteDeSortie());
   },
 
-  /* Saisir un mois entier dans une fenêtre : le seul chemin sur téléphone,
-     ou le tableau et ses colonnes par compte ne se rendent pas.
-     L'ecriture vit dans la fenetre elle-meme (appliquerReleve) depuis que
-     « Enregistrer » y ecrit sans fermer : appliquer ici une seconde fois
-     ferait deux ecritures pour un geste. */
   async 'edit-month'(btn) {
     await askMonthlySnapshot(+btn.dataset.i);
   },
 
-  /* Crée la ligne du mois en cours si elle manque, puis y va. */
   'go-snapshot'() {
     const p = currentMonthPending();
     if (p.index < 0) {
@@ -10975,29 +7626,18 @@ const ACTIONS = {
     }
     historyYear = p.key.slice(0, 4);      // sinon la ligne visée serait filtrée
     pendingAnchor = 'mois-courant';
-    /*    La decision se prend sur le hash, pas sur un nom de vue. Si l'adresse ne
-   bougera pas, c'est a nous de rendre.*/
     if (location.hash === '#/history') render();
     else location.hash = '#/history';
   },
 };
 
-/* =============================================================
-   RENDU
-   ============================================================= */
 const MOUNTS = {
-  /* Le montage suit le sous-onglet affiché : brancher les graphiques du
-     portefeuille sur une page qui montre la performance chercherait des
-     conteneurs absents. */
   overview: () => sousOngletActif.overview === 'projection' ? mountObjective() : mountOverview(),
   positions: () => sousOngletActif.positions === 'cible' ? mountRebalance() : mountPositions(),
   allocation: mountAllocation,
   /* Les préférences n'ont rien à monter : leurs réglages passent tous par
      `data-path` et `data-action`, câblés une fois pour toute l'application. */
   data: () => { if (sousOngletActif.data !== 'preferences') mountData(); },
-  /* Le montage suit le sous-onglet : brancher les graphiques des depenses sur
-     l'onglet des releves chercherait des conteneurs absents. « Revenus et
-     charges » n'a aucun graphique, donc rien a monter. */
   budget: () => {
     if (sousOngletActif.budget === 'releves') mountHistory();
     else if (sousOngletActif.budget === 'depenses') mountBudget();
@@ -11024,17 +7664,6 @@ function routeParam() {
   return m ? { genre: m[1], id: decodeURIComponent(m[2]) } : null;
 }
 
-/* Un bien qui ne contient qu'un compte n'a pas deux fiches.
-   Le modèle empile un contenant et son contenu : pour une banque c'est juste
-   — une banque héberge un livret et un CTO. Pour un studio, le contenant
-   *est* l'actif. On obtenait donc deux pages pour un seul objet, avec deux
-   totaux différents : 20 000 € net de crédit sur la fiche du bien, 50 000 €
-   bruts sur celle du compte. Impossible de savoir laquelle est « la » page du
-   studio, parce que les deux le sont.
-
-   La fiche du compte porte déjà tout — valeur, prix d'acquisition,
-   plus-value, financement, ce qu'on possède vraiment. Elle absorbe l'autre :
-   les deux adresses y mènent, et il n'y a plus qu'un endroit à connaître. */
 function ficheUnique(id) {
   const e = ETABS().find(x => x.id === id);
   if (!e || contenantDeLEtab(e.id).titre !== CONTENANTS.bien.titre) return null;
@@ -11050,26 +7679,12 @@ function currentView() {
   }
   if (r) return r.genre === 'compte' ? 'ficheCompte' : 'ficheEtab';
   const v = (location.hash.replace('#/', '') || 'overview');
-  /* Ancienne adresse : on ouvre la vue qui l'a absorbée, sur le bon
-     sous-onglet. Le signet continue de mener où il menait. */
   const red = REDIRECTIONS[v];
   if (red) { sousOngletActif[red[1]] = red[2]; return red[0]; }
-  /* L'adresse de base ramène au premier sous-onglet : sans ça, revenir sur
-     « Allocation » depuis le menu rouvrait « Cible » parce que la variable
-     avait gardé le dernier choix. L'URL fait foi, toujours. */
   if (SOUS_ONGLETS[v]) sousOngletActif[v] = SOUS_ONGLETS[v][0][0];
   return VIEWS[v] ? v : 'overview';
 }
 
-/* =============================================================
-   CONFIRMATION
-   Le await askConfirm() du navigateur est fragile : après quelques dialogues,
-   Chrome propose « empêcher cette page d'en créer d'autres », et il
-   renvoie alors « non » en silence — toutes les suppressions échouent
-   sans le moindre message. On garde donc la main.
-   ============================================================= */
-/* Demander un texte court. Même esprit qu'askConfirm : pas de prompt() natif,
-   que Chrome peut désactiver sans prévenir. Renvoie null si on annule. */
 /* Les sources de revenu, dans une fenêtre. Elles vivaient au bas de la carte
    « Où va ce que tu gagnes », dans un dépliant qui redisait le montant déjà porté
    par la barre du haut et terminait la carte par un tableau. C'est la barre
@@ -11083,38 +7698,15 @@ function currentView() {
 function fenetreRevenus() {
   const m = $('#modal');
   const b = Store.state.budget;
-  /* Le total est mensuel meme quand une source est annuelle : chaque ligne
-     passe par auMois(), comme les charges fixes. */
   const total = b.income.reduce((s, r) => s + revenuMensuel(r), 0);
   apercuOuvert = null;
 
   $('#modalTitle').textContent = trad('Revenus');
-  /* Le « ≈ » dit qu'une partie du chiffre est declaree estimee : un revenu
-     variable lisse en moyenne n'est pas un fait, et le sous-titre ne doit pas
-     le vendre comme tel. */
   $('#modalSub').innerHTML = escMontant(
     `${revenuEstime() ? '≈ ' : ''}${fmtEUR0(total)} ${trad('par mois sur')} ${b.income.length} ${b.income.length > 1 ? trad('sources') : trad('source')}`
     + (revenuEstime() ? trad(', dont des montants estimés') : ''));
-  /* La colonne « Bien » n'apparait que s'il y a un bien immobilier a proposer :
-     sans logement locatif, elle serait une colonne vide de plus dans un tableau
-     qui tient a peine sur un telephone. Un loyer rattache a son bien permet a la
-     fiche de ce bien de dire son rendement et son cash-flow — c'est le seul
-     moyen de relier ce qui entre a ce qui le produit. */
   const biens = comptesBiens();
   $('#modalBody').innerHTML = `
-    <!-- Une liste de fiches, et non un tableau.
-
-         Il en fut un, a cinq colonnes, et il ne tenait nulle part : « Part du
-         loyer » se coupait en « Part du » sur PC, et pire sur telephone. Le
-         passer en blocs a regle la largeur et cree le defaut suivant — sans
-         ses en-tetes, « 2800 », « mensuel », « aucun » ne disaient plus rien :
-         « on n'explique pas a quoi correspondent les champs ? ». Un tableau
-         nomme ses colonnes une fois en haut ; des que les lignes se replient,
-         chaque champ doit porter son nom. On emploie donc le motif des
-         fenetres, la paire label + champ, comme partout ailleurs.
-         (Aucun guillemet oblique dans ce commentaire : il vit dans un
-         litteral de gabarit, ou un backtick refermerait la chaine. C'est la
-         dixieme fois que ce piege se referme.) -->
     <div class="rev-liste">${b.income.map((r, i) => `
       <div class="rev-source">
         <div class="rev-tete">
@@ -11163,12 +7755,6 @@ function fenetreRevenus() {
     <div class="row" style="margin-top:12px">
       <button class="btn sm ghost" data-action="add-income">${trad('+ Ajouter une source de revenu')}</button>
     </div>`;
-  /* La paire de la famille « saisie en serie », comme la fenetre des depenses, le
-     releve mensuel, la fiche d'une ligne et les apercus modifiables. Celle-ci
-     etait la derniere a ne porter que « Fermer » : douze champs sous les yeux,
-     tous ecrits a la frappe, et rien qui confirme que c'est bien parti.
-     « Enregistrer » n'ajoute pas l'ecriture — elle a deja eu lieu — il ajoute le
-     temoin, et il reste sur place pour qu'on relise le total. */
   $('#modalFoot').innerHTML =
     `<button class="btn" id="revOk" type="button">${trad('Enregistrer')}</button>
      <button class="btn ghost" id="revClose" type="button">${trad('Fermer')}</button>`;
@@ -11191,7 +7777,6 @@ function fenetreRevenus() {
   $('#modalClose').onclick = fermer;
 }
 
-/* Une seule ligne de texte, bornee comme toutes les autres. */
 function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX) {
   return new Promise(resolve => {
     const m = $('#modal');
@@ -11258,11 +7843,6 @@ function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX)
    drapeau evite la collision avec un champ, dont les cles remplissent le meme
    objet.
    ------------------------------------------------------------ */
-/* Le type libre, demande par les deux formulaires de compte : celui de la
-   fiche et l'assistant d'ajout. Une seule fenetre — deux copies auraient fini
-   par poser deux questions differentes. Rend l'identifiant, existant ou cree,
-   ou null si on renonce : rien n'a alors bouge, creerTypePerso n'ayant pas
-   ete appelee. */
 async function demanderTypePerso() {
   const r = await askForm({
     titre: trad('Nouveau type de compte'),
@@ -11275,12 +7855,6 @@ async function demanderTypePerso() {
          l'absence annule tout doit le dire avant de fermer. */
       { cle: 'nom', label: trad('Nom du nouveau type'), type: 'texte', requis: true,
         exemple: trad('ex. Plan d’épargne logement') },
-      /* La question porte sur le comportement, pas sur une « poche » : ce mot
-         designe partout ailleurs les classes de la repartition, et la liste
-         n'offre que les trois familles de types. Chaque option decrit ce que
-         la famille change, avec des exemples. Le defaut suit l'exemple du
-         champ du nom : un plan d'epargne logement est de l'argent disponible,
-         pas un compte de titres. */
       { cle: 'poche', label: trad('Il se comporte comme'), type: 'liste', valeur: 'cash',
         options: [['cash', trad('De l’argent disponible (livret, compte courant)')],
                   ['bourse', trad('Un compte de titres (PEA, CTO)')],
@@ -11299,8 +7873,6 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
     const m = $('#modal');
     apercuOuvert = null;
     $('#modalTitle').textContent = trad(titre);
-    /* Le meme regime que les apercus : un sous-titre peut porter un montant,
-       donc l'oeil SVG en mode discret. escMontant echappe tout le reste. */
     $('#modalSub').innerHTML = escMontant(sous);
 
     const rendu = c => {
@@ -11360,10 +7932,6 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
        ${encore ? `<button class="btn ghost btn-encore" id="frmEncore" type="button">${esc(trad(encore))}</button>` : ''}`;
     montrerModal(m);
 
-    /* Un champ peut dependre d'un autre : une action ne se loge pas sur un
-       portefeuille de cryptomonnaies. On reconstruit la liste dependante a
-       chaque changement, plutot que de laisser choisir un couple impossible
-       et le refuser ensuite. */
     if (lie) {
       const source = $(`#f_${lie.de}`), cible = $(`#f_${lie.vers}`);
       const majCible = () => {
@@ -11387,10 +7955,6 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       m.onkeydown = null;
       resolve(v);
     };
-    /* Ce que portent les champs a cet instant. Une seule lecture, servie a deux
-       usages : valider pour enregistrer, et comparer pour savoir si quelque
-       chose a bouge. Deux boucles auraient fini par diverger sur un type de
-       champ, et c'est la comparaison qui se serait trompee — en silence. */
     const valeurs = () => {
       const out = {};
       for (const c of champs) {
@@ -11413,8 +7977,6 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
          portent cette case lisent toutes `v.supprimer`, ce nom est donc deja le
          contrat entre elles et `askForm`. La quatrieme l'aurait oublie. */
       const efface = champs.some(c => c.type === 'case' && c.cle === 'supprimer') && out.supprimer;
-      /* Un champ obligatoire vide ne ferme pas la fenetre en silence : on le
-         designe, plutot que de creer une ligne sans nom. */
       const manquant = efface ? null : champs.find(c => c.requis && !String(out[c.cle]).trim());
       if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label} : ${trad('à remplir')}`); return; }
       if (suite) out.__encore = true;
@@ -11454,7 +8016,6 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
   });
 }
 
-/* Choisir une valeur dans une liste. Renvoie null si on annule. */
 function askChoice(titre, message, options, valeur) {
   return new Promise(resolve => {
     const m = $('#modal');
@@ -11498,8 +8059,6 @@ function askChoice(titre, message, options, valeur) {
    « [object HTMLButtonElement] ». Meme piege que `aideTexte`, note ailleurs dans
    ce fichier. */
 function askConfirm(texte, { danger = true, ok = 'Confirmer', refus = 'Annuler' } = {}) {
-  // Même signature d'appel que await askConfirm() : la première ligne devient le titre,
-  // le reste le corps du message.
   /* `ponct()` retire l'espace avant un « ? » en anglais : la question se compose
      d'un morceau traduit et du signe, ecrit dans le gabarit, donc hors de la clef. */
   const [titre, ...suite] = ponct(String(texte)).split('\n');
@@ -11507,8 +8066,6 @@ function askConfirm(texte, { danger = true, ok = 'Confirmer', refus = 'Annuler' 
   return new Promise(resolve => {
     const m = $('#confirm'), oui = $('#confirmYes'), non = $('#confirmNo');
     $('#confirmTitle').textContent = titre;
-    /* escMontant : « Supprimer ce crédit ? 40 000 € restants » porte un
-       montant, qui est un SVG en mode discret. */
     $('#confirmMsg').innerHTML = escMontant(message).replace(/\n/g, '<br>');
     $('#confirmMsg').hidden = !message;
     oui.textContent = trad(ok);
@@ -11534,31 +8091,6 @@ function askConfirm(texte, { danger = true, ok = 'Confirmer', refus = 'Annuler' 
   });
 }
 
-/* Formulaire d'ajout de compte. Résout avec les champs saisis, ou null. */
-/* Vendre une ligne. Le calcul s'affiche en direct pendant la saisie : on voit
-   la plus-value avant de valider, pas après. */
-/* Vendre, et « pour mémoire » comme dernier choix de la même liste.
-
-   Deux boutons vivaient dans l'en-tete du journal : « Vendre », grise faute de
-   ligne a vendre, et « Vente passee ». Deux entrees pour un seul geste — j'ai
-   vendu quelque chose — et l'une des deux souvent inerte, avec une infobulle que
-   personne ne lit au doigt.
-
-   La nature se choisit donc dans le menu qui demande deja quoi vendre : les
-   lignes du portefeuille, puis « une vente passee ». C'est le meme controle
-   parce que c'est la meme question — de quoi parle-t-on — et elle se pose avant
-   les montants, ce qui compte : la nature change ce que les chiffres veulent
-   dire, la deviner apres sept champs remplis les jetterait.
-
-   L'asymetrie justifie ici ce qu'on a refuse ailleurs. « + Rentree » et
-   « + Depense » sont deux sens opposes du meme acte, connus au moment ou l'on
-   appuie : deux boutons, et pas de menu de nature. Une vente passee n'est pas
-   l'oppose d'une vente, c'en est la variante degradee — celle que l'application
-   n'a pas pu calculer et qu'on ne fait que declarer. Le repli se choisit apres
-   avoir cherche sa ligne, pas avant.
-
-   Sans aucune ligne de titres, la fenetre s'ouvre directement sur ce repli au
-   lieu de refuser de s'ouvrir. */
 function askSale(indexInitial) {
   return new Promise(resolve => {
     const m = $('#modal');
@@ -11583,16 +8115,6 @@ function askSale(indexInitial) {
         <div class="field" data-vente="reelle"><label>${trad('Prix de vente unitaire')}</label>
           <input type="number" step="any" id="vePrice" autocomplete="off">
           <span class="hint" id="veDev"></span>
-          <!-- « Si quelqu'un ajoute une vente dans l'app un mois apres, le cours
-               peut avoir change. » Il a change, et rien ne le disait : le prix et
-               le taux se pre-remplissent au cours du jour, la date se recule
-               librement, et la plus-value se calculait alors sur un cours qui n'a
-               jamais ete celui de la vente. Un chiffre faux que rien ne trahit.
-
-               L'avertissement pointe, il ne bloque pas : c'est peut-etre le bon
-               prix, saisi a la main. Il nomme aussi la porte d'a cote, « une vente
-               passee », qui ne demande ni cours ni taux mais les deux montants du
-               releve — donc rien qui puisse vieillir. -->
           <span class="hint" id="veVieux" hidden></span></div>
         <div class="field" data-vente="reelle" id="veFxWrap" hidden><label>${trad('Taux de change à la vente')}</label>
           <input type="number" step="any" id="veFx" autocomplete="off">
@@ -11636,7 +8158,6 @@ function askSale(indexInitial) {
       $('#veOk').textContent = p ? trad('Ajouter au journal') : trad('Enregistrer la vente');
     };
 
-    /* Quand on change de ligne, on repart de ses propres valeurs. */
     const chargerLigne = () => {
       majNature();
       if (passee()) { majApercuVente(); return; }
@@ -11649,7 +8170,6 @@ function askSale(indexInitial) {
       $('#veDev').textContent = devise === 'EUR' ? 'en euros' : `en ${devise}`;
       $('#veFxWrap').hidden = devise === 'EUR';
       fx.value = num(p.fx) || 1;
-      // destination : le cash du même courtier, sinon les autres comptes
       const cibles = cashTargets();
       const defaut = defaultCashTarget(p.account);
       $('#veCash').innerHTML = cibles.map(c =>
@@ -11660,11 +8180,6 @@ function askSale(indexInitial) {
     };
 
     const majApercuVente = () => {
-      /* La vente passee n'a rien a verifier : on ne connait ni quantite ni prix
-         de revient, c'est le detenteur qui donne le resultat. L'apercu se
-         contente donc de le relire, et le bouton ne se bloque que sur un nom
-         manquant — sans nom, la ligne du journal ne dirait pas de quoi elle
-         parle. */
       if (passee()) {
         const nom = $('#vePasNom').value.trim();
         const pnl = num($('#vePasPnl').value);
@@ -11705,9 +8220,6 @@ function askSale(indexInitial) {
     };
 
     sel.onchange = chargerLigne;
-    /* Le cours propose est celui du jour : des que la date recule, il faut le
-       dire. Le controle se refait a chaque frappe sur la date et sur le prix,
-       parce que corriger l'un doit pouvoir eteindre l'avis. */
     const avisCoursDuJour = () => {
       const avis = $('#veVieux');
       if (!avis) return;
@@ -11725,8 +8237,6 @@ function askSale(indexInitial) {
       el.oninput = () => { majApercuVente(); avisCoursDuJour(); };
     $('#veDate').oninput = avisCoursDuJour;
     chargerLigne();
-    /* Le premier champ de la nature choisie, et non toujours la quantite : sans
-       ligne a vendre, le curseur tombait dans un champ cache. */
     if (passee()) focusChamp($('#vePasNom'));
     else { focusChamp(qte); qte.select(); }
 
@@ -11759,10 +8269,6 @@ function askSale(indexInitial) {
   });
 }
 
-/* Fiche complète d'une ligne de titres : tout ce que la ligne du tableau
-   contient, plus ce qu'elle ne montre pas, le compte qui la porte, la
-   performance du jour, la place de cotation. Le nom se modifie ici, ce qui
-   évite d'aller le chercher dans une cellule serrée. */
 function askPosition(index) {
   return new Promise(resolve => {
     const p = Store.state.positions[index];
@@ -11789,18 +8295,6 @@ function askPosition(index) {
         <span>${num(p.qty)} × ${fmtCur(p.price, dev)}${dev !== 'EUR' ? ` · change ${round4(num(p.fx) || 1)}` : ''}</span>
       </div>
 
-      <!-- Les deux seuls champs qu'on modifie souvent, juste sous le montant.
-
-           Ils vivaient au bas de la fiche, apres le nom, le compte, la classe
-           d'actif, la date, la nature et le role : six reglages qu'on pose une
-           fois pour deux qu'on retouche a chaque achat. L'ordre disait le
-           contraire de l'usage.
-
-           Cote a cote, parce que c'est un produit : la quantite fois le prix
-           donne le montant investi, rappele juste dessous. Et ils ne sont plus
-           qu'ici — la liste au-dessous les donnait en lecture, le bas de la
-           fiche en saisie, et deux champs sur le meme chemin se disputaient la
-           frappe. -->
       <div class="modal-champs champs-cote" style="margin:14px 0 4px">
         <div class="field"><label>${trad('Quantité')}</label>
           <input type="number" step="any" data-path="positions.${index}.qty" value="${p.qty ?? ''}"></div>
@@ -11814,56 +8308,9 @@ function askPosition(index) {
         const TYPES = { ETF: trad('Fonds coté (ETF)'), EQUITY: trad('Action'), MUTUALFUND: trad('Fonds'),
                         CRYPTOCURRENCY: 'Crypto', CURRENCY: trad('Devise'), INDEX: trad('Indice') };
         return `
-      <!-- « kv-texte » : cette liste porte de la prose, pas des montants.
-           « HANetf ICAV - Future of Defence UCITS ETF - Accumulating » ne peut
-           pas tenir sur une ligne de 339 px, et l'interdiction de repli que
-           .kv applique a ses valeurs, indispensable pour qu'un montant ne se
-           coupe jamais entre le nombre et sa devise, poussait ici toute la
-           grille 23 px au-dela du bord de la fenetre. -->
-      <!-- Les quatre lignes d'identite sont toujours la, dans cet ordre.
-
-           « Selon la fiche rien n'est dans le meme ordre » : deux fiches cote a
-           cote, Uber et Nvidia. Uber n'a ni ISIN ni nom officiel, donc tout ce
-           qui suit — aujourd'hui, plus-value, cloture, part du portefeuille —
-           remontait de trois crans. On ne peut apprendre ou vit un chiffre que
-           s'il est toujours au meme endroit, et la fiche s'ouvre plusieurs fois
-           par jour.
-
-           Une valeur absente se dit donc « non renseigne », elle ne fait pas
-           disparaitre sa ligne. C'est deja ce que fait le plafond d'un livret,
-           pour la meme raison : savoir qu'on peut le declarer fait partie de ce
-           que la fiche doit dire. Ici, une ligne « ISIN : non renseigne » vaut
-           mieux qu'une ligne absente — c'est elle qui explique pourquoi le cours
-           n'arrive pas tout seul, et le bouton qui la remplit est juste dessous.
-
-           Nom officiel et Emetteur sont la aussi, et pour la meme raison. Ils
-           avaient d'abord ete laisses conditionnels, en fin de bloc, au motif
-           qu'ils sont deduits et n'ont rien a dire quand ils ne different pas du
-           nom : mesure faite, ça laissait deux lignes de battement entre deux
-           fiches, donc tout le bloc des chiffres qui bougeait encore. La moitie
-           d'un correctif ne corrige rien.
-
-           Leur etat vide n'est pas « non renseigne » mais la raison de leur
-           absence : « identique au nom de la ligne » dit que la question est
-           reglee, pas qu'il manque une donnee. C'est la difference entre un trou
-           et une reponse. -->
-      <!-- Six lignes, toujours les memes, dans cet ordre : c'est ce qui permet
-           d'apprendre ou vit un chiffre. -->
       <dl class="kv kv-texte">
         ${ligne(trad('Nature'), p.kind ? esc(TYPES[p.kind] || p.kind)
           : `<span class="muted">${trad('inconnue, le cours ne l’a pas dit')}</span>`)}
-        <!-- « Non renseigne » ne vaut que la ou quelque chose manque vraiment.
-
-             « Je veux eviter des trucs non renseignes, c'est pas pro. » Une
-             cryptomonnaie n'a pas d'ISIN, une ligne saisie a la main non plus :
-             leur afficher un vide a combler designe un defaut qui n'existe pas.
-             Elles disent donc « sans objet ».
-
-             Pour un titre qui devrait en avoir un, le vide reste, et il est
-             utile : c'est lui qui explique pourquoi le cours n'arrive pas seul.
-             L'aide dit ou le trouver, faute de pouvoir le deduire : Yahoo ne
-             publie pas les ISIN, et OpenFIGI ne fait que le chemin inverse.
-             (Pas de tiret cadratin ici, un controle balaye ce bloc.) -->
         ${ligne('ISIN', p.isin
           ? `<span style="font-family:var(--font-nb)">${esc(p.isin)}</span>`
           : (assetClassDe(p) === 'crypto' || p.manual
@@ -11878,13 +8325,6 @@ function askPosition(index) {
           ? `${esc(p.exchange || p.symbol || '')} <span class="muted">${marche.label}</span>`
           : (p.manual ? `<span class="muted">${trad('saisie à la main')}</span>`
                       : `<span class="muted">${trad('non résolue')}</span>`))}
-        <!-- Le nom officiel se lit, il ne s'actionne pas. Un bouton « Utiliser »
-             recopiait ce nom dans le champ du nom de la ligne : le seul bouton de
-             ce bloc, pose au milieu de six valeurs alignees, et pour un geste qui
-             se fait aussi bien en retapant le nom une fois. Le bloc redevient ce
-             qu'il est, six faits sur le titre.
-             (Pas de tiret cadratin ici : un controle balaye ce bloc a la
-             recherche du texte affiche, et ne distingue pas le commentaire.) -->
         ${ligne(trad('Nom officiel'), p.longName
           ? (p.longName === p.name
              ? `<span class="muted">${trad('identique au nom de la ligne')}</span>`
@@ -11896,26 +8336,6 @@ function askPosition(index) {
       </dl>
 
       <dl class="kv" style="margin-top:12px">
-        <!-- Le pourcentage d'abord, en couleur, le montant derriere et neutre.
-
-             Ces deux lignes se lisaient dans deux ordres opposes a deux lignes
-             d'ecart : le jour donnait le pourcentage puis les euros, la
-             plus-value les euros puis le pourcentage. L'oeil devait redemarrer a
-             chaque ligne pour savoir lequel des deux nombres il lisait.
-
-             Et la couleur ne porte plus que sur le pourcentage. Toute la ligne
-             etait verte, montant compris : deux valeurs peintes pour un seul
-             signe, alors que le « + » le dit deja. La colonne se lit maintenant
-             comme une seule serie de pourcentages, avec son montant a cote. -->
-        <!-- Une ligne achetee aujourd'hui ne porte qu'un seul de ces deux
-             chiffres, parce qu'ils sont le meme : tout ce qui lui est arrive est
-             arrive depuis l'achat. Les afficher tous les deux imprimerait deux
-             fois le meme montant a deux lignes d'ecart, et la premiere question
-             serait « pourquoi ne sont-ils pas differents ». -->
-        <!-- Hors seance, la fiche disait « +0,00 % · +0 € », ce qui se lit
-             « le titre n'a pas bouge ». Elle dit maintenant que notre cours
-             date d'avant minuit, et de quand exactement : c'est la seule chose
-             que l'application sache vraiment de la journee. -->
         ${jour && !jour.depuisAchat ? ligne(trad('Aujourd’hui'), jour.horsSeance
             ? `<span class="muted">${trad('hors séance')}</span>`
               + (num(p.quoteTime) ? ` <span class="muted">${trad('cours')} ${esc(fmtCoursQuand(p.quoteTime))}</span>` : '')
@@ -11925,47 +8345,14 @@ function askPosition(index) {
             ? `<span class="sub">${trad('achetée aujourd’hui : c’est aussi ton résultat du jour')}</span>` : ''}`,
             `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
             + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
-        <!-- La ligne « dont le titre » a vecu ici deux jours. Elle disait le
-             mouvement du titre dans sa monnaie, la ou le total portait en plus un
-             change fige. Les deux jambes prenant desormais le taux du jour, le
-             total EST ce mouvement : la repeter dessous ne dirait rien. -->
-        <!-- Ni duree de detention ni rendement annuel ici, et les deux ont ete
-             essayes. Le rendement mentait : un pourcentage etale sur une duree,
-             ni pondere par le temps ni par les montants. La duree ne mentait pas,
-             mais n'apportait pas de quoi payer sa place sur une fiche qui compte
-             quinze lignes.
-
-             La date d'achat reste, et sert toujours : c'est elle qui fait que
-             l'ecart du jour d'une ligne achetee aujourd'hui se compte depuis
-             l'achat et non depuis une cloture de la veille qui ne la concerne
-             pas. Un champ qui pilote un calcul n'a pas besoin de s'afficher.
-             (Pas de backtick ici : ce commentaire vit dans un litteral de
-             gabarit, ou un backtick refermerait la chaine. Troisieme fois dans
-             la journee.) -->
-        <!-- Elle reste affichee sur une ligne achetee aujourd'hui : c'est un
-             fait sur le titre, et c'est meme lui qui explique l'ecart entre ce
-             qu'a fait le titre et ce qu'a fait ton argent. -->
         ${jour && num(jour.prev) ? ligne(trad('Clôture de la veille'), fmtCur(jour.prev, dev)) : ''}
         ${num(p.dayLow) && num(p.dayHigh)
           ? ligne(trad('Séance'), `${fmtCur(p.dayLow, dev)} <span class="muted">${trad('à')}</span> ${fmtCur(p.dayHigh, dev)}`) : ''}
         ${num(p.volume) ? ligne(trad('Volume du jour'), num(p.volume).toLocaleString(locale()) + ' ' + trad('titres')) : ''}
-        <!-- Elle ne disait pas sur quoi elle porte, et la meme ligne s'affiche
-             a 3,12 % ici pour 3,6 % en « Poids » sur l'accueil. Les deux sont
-             justes : ce ne sont pas les memes bases, et ce n'est pas un defaut
-             tant que chacune l'annonce. Celle-ci compte la tresorerie du
-             courtier, comme les cibles ; « Poids » ne compte que ce qui cote,
-             parce qu'il sert a dire si un mouvement du jour pese. -->
         ${ligne(`${trad('Part du portefeuille')}${aide(trad("Sur tes comptes d’investissement, titres et trésorerie qui y attend d’être placée : la même base que tes cibles de répartition. La colonne « Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour une même ligne, et tous les deux justes."))}`,
             fmtPct(stockTotals().balance ? posValue(p) / stockTotals().balance * 100 : 0))}
       </dl>
 
-      <!-- Zone et secteur se lisent, ne se choisissent pas.
-           Ils etaient proposes en menus deroulants : c'etait demander a
-           l'utilisateur un travail que l'application doit faire seule. Ils
-           restent deduits du libelle, faute de source publique donnant la
-           composition d'un fonds, et s'affichent en clair. Le jour ou la
-           passerelle saura interroger la repartition sectorielle d'un ETF,
-           c'est elle qui remplira ce champ, pas un menu. -->
       <dl class="kv" style="margin-top:12px">
         <dt>${trad('Classement')}<span class="sub">${trad('déduit automatiquement')}</span></dt>
         <dd>${esc(trad(ZONES[zoneDe(p)]))} <span class="muted">·</span> ${esc(trad(SECTEURS[secteurDe(p)]))}</dd>
@@ -12009,9 +8396,6 @@ function askPosition(index) {
             ${Object.entries(NATURES).map(([v, l]) =>
               `<option value="${v}" ${p.nature === v ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}
           </select></div>
-        <!-- Le role manquait ici : depuis que le tableau cede la place a une
-             liste sur telephone, la fiche est le seul endroit ou classer une
-             ligne, et il faut donc y trouver les quatre reglages. -->
         <div class="field"><label>${trad('Rôle')}</label>
           <select data-path="positions.${index}.role">
             ${OPTIONS_ROLE.map(([v, l]) => `<option value="${v}" ${v === roleDe(p) ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}
@@ -12019,24 +8403,11 @@ function askPosition(index) {
 
         <div class="field"><label>${trad('Cours')} (${esc(dev)})</label>
           <input type="number" step="any" data-path="positions.${index}.price" value="${p.price ?? ''}"></div>
-        <!-- La valeur calculee ou saisie. Cette bascule n'existait que dans le
-             tableau de quinze colonnes, sous la forme d'une case a cocher
-             « man. » : en cachant ce tableau, elle devenait inatteignable. -->
         <div class="field"><label>${trad('Valeur')}${aide(trad("Par défaut, la valeur d’une ligne est quantité × cours, et le cours se rafraîchit tout seul. « Saisie à la main » sert aux lignes qu’aucune place ne cote : une part de société, un contrat, un actif que tu valorises toi-même. Le cours cesse alors d’être interrogé."))}</label>
           <select data-path="positions.${index}.manual" data-type="bool">
             <option value="false" ${p.manual ? '' : 'selected'}>${trad('Calculée, quantité × cours')}</option>
             <option value="true" ${p.manual ? 'selected' : ''}>${trad('Saisie à la main')}</option>
           </select></div>
-        <!-- Verifier un ISIN, c'est deux questions : est-il bien forme, et
-             designe-t-il le bon titre. La premiere se repond hors ligne, la clé
-             de controle etant calculable ; la seconde demande la passerelle, qui
-             rend le nom et le symbole auxquels le code correspond vraiment. Le
-             bouton fait les deux, dans cet ordre, parce qu'un code mal forme ne
-             vaut pas la peine d'un appel reseau.
-
-             Chercher l'ISIN depuis le nom n'est pas propose : la recherche ne
-             rend que symbole, nom, place et type. Yahoo ne publie pas les ISIN,
-             et un bouton qui promettrait de le trouver mentirait. -->
         <div class="field"><label>ISIN
             <button type="button" class="btn xs ghost" id="posIsinVerif"
                     style="margin-left:8px"
@@ -12048,36 +8419,16 @@ function askPosition(index) {
             <button type="button" class="btn xs ghost" data-action="resolve-row" data-i="${index}"
                     style="margin-left:8px"
                     title="${trad('Remplacer le symbole par celui que désigne l\'ISIN')}">${trad('↻ Depuis l\'ISIN')}</button>` : ''}</label>
-          <!-- Un symbole boursier depasse rarement six caracteres et jamais
-               douze : le declarer borne la saisie, et la largeur du champ
-               s'en deduit sans qu'on ait a l'habiller. -->
           <input data-path="positions.${index}.symbol" value="${esc(p.symbol || '')}"
                  maxlength="12" style="text-transform:uppercase"></div>
       </div>
 
-      <!-- Supprimer sans vendre, en bas de la fiche.
-
-           En bas, à part, et rouge : ce n'est pas un geste qu'on cherche en
-           ouvrant une fiche, et le pied de la fenêtre porte déjà les quatre
-           qu'on y cherche — vendre, acheter, enregistrer, fermer. Un cinquième
-           bouton les aurait tous repliés à 375 px, et celui-là aurait été
-           voisin d'« Enregistrer ».
-
-           La phrase dit ce qui distingue les deux sorties d'une ligne, parce que
-           rien d'autre ne le dit : vendre encaisse et laisse une trace au
-           journal, supprimer efface l'existence de la ligne. Se tromper de
-           bouton coûte une plus-value qui n'apparaîtra jamais nulle part. -->
       <div class="fiche-danger">
         <button type="button" class="btn ghost danger" id="posDelete">${trad('Supprimer cette ligne')}</button>
         <p class="hint">${trad('Elle quitte le portefeuille sans passer par une vente : rien '
           + 'n’est encaissé, et aucune plus-value n’entre au journal. Pour solder en '
           + 'encaissant, c’est « Vendre ».')}</p>
       </div>`;
-    /* « Enregistrer » ne sauvegarde rien de plus : chaque frappe est deja ecrite,
-       et c'est le probleme — rien ne le disait. Le bouton rafraichit la fiche sur
-       place, donc le montant en tete et le total investi suivent la nouvelle
-       quantite, et un message confirme. On reste sur la ligne : verifier sa
-       correction ne doit pas demander de la rouvrir. */
     $('#modalFoot').innerHTML =
       `<button class="btn ghost" id="posSell" type="button">− ${trad('Vendre')}</button>
        <button class="btn ghost" id="posBuy" type="button">+ ${trad('Acheter')}</button>
@@ -12107,9 +8458,6 @@ function askPosition(index) {
       toast(trad('Ligne enregistrée'));
     };
     $('#posSave').onclick = enregistrer;
-    /* Fermer sans enregistrer abandonne : autant le dire, et proposer de garder.
-       Sans cette question, une quantite corrigee puis « Fermer » disparaissait
-       sans un mot — le contraire de ce que la saisie differee doit apporter. */
     const fermerOuDemander = async () => {
       if (propre()) { fermer('ferme'); return; }
       const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
@@ -12122,13 +8470,6 @@ function askPosition(index) {
     $('#modalClose').onclick = () => fermer('ferme');
     $('#posSell').onclick = () => fermer({ vendre: index });
     $('#posBuy').onclick = () => fermer({ acheter: index });
-    /* La confirmation est ici, avant la fermeture, parce que c'est ici qu'on
-       peut encore nommer la ligne et son montant. La suppression, elle, se fait
-       chez l'appelant, apres que la fenetre est partie : c'est lui qui pose la
-       sauvegarde et rafraichit la page, comme pour la vente et l'achat.
-
-       Les champs sales ne se demandent pas. La fenetre proposerait de garder des
-       corrections sur une ligne qu'on vient d'accepter de faire disparaitre. */
     $('#posDelete').onclick = async () => {
       const ok = await askConfirm(`${trad('Supprimer')} ${guill(p.name || trad('cette ligne'))} ?\n`
         + `${num(p.qty)} × ${fmtCur(p.price, dev)}, ${trad('soit')} ${fmtEUR(posValue(p))}.\n\n`
@@ -12139,22 +8480,6 @@ function askPosition(index) {
       fermer({ supprimer: index });
     };
 
-    /* Verification de l'ISIN, en deux temps.
-
-       D'abord la cle de controle, hors ligne : le douzieme caractere se calcule
-       a partir des onze premiers, donc une faute de frappe se repare sans rien
-       deviner et sans reseau. Le champ est corrige sur place, et l'avis le dit —
-       on ne remplace pas une saisie en silence.
-
-       Ensuite la passerelle, qui rend le titre auquel le code correspond
-       vraiment. C'est la seule verification qui compte : un ISIN peut etre
-       parfaitement forme et coller a la mauvaise ligne, et le calcul de cle n'y
-       verrait rien. Le nom rendu s'affiche a cote de celui de la ligne, et c'est
-       l'oeil qui tranche.
-
-       Le symbole se remplit dans la foulee s'il manquait : il est le fruit de
-       cette resolution, et le redemander apres aurait ete un second geste pour
-       une reponse deja obtenue. */
     const avis = $('#posIsinAvis');
     const champIsin = $(`#modalBody [data-path="positions.${index}.isin"]`);
     const dire = (texte, ton) => {
@@ -12211,10 +8536,6 @@ function askPosition(index) {
   });
 }
 
-/* Renforcer une ligne : la quantite s'ajoute, et le prix de revient devient
-   la moyenne ponderee de l'ancien et du nouveau lot — la seule definition
-   du PRU qui laisse la plus-value latente juste apres l'achat. Le montant
-   sort du cash a investir apparie, comme une vente l'y depose. */
 function askBuy(index) {
   return new Promise(async resolve => {
     const p = Store.state.positions[index];
@@ -12244,30 +8565,6 @@ function askBuy(index) {
   });
 }
 
-/* Saisir un mois de dépenses en une fois. Le tableau reste utile pour
-   comparer, mais remplir douze colonnes dans une ligne serrée est pénible :
-   ici chaque catégorie a son champ, et le total se recalcule à chaque frappe. */
-/* Ecrire les depenses d'un mois dans l'etat.
-
-   A un seul endroit, parce que deux gestes y menent desormais : le bouton
-   « Enregistrer » de la fenetre, qui n'en sort plus, et sa fermeture, qui
-   enregistre encore par « Enregistrer et fermer » ou par « Voir les autres
-   mois ». Deux copies de ces quatre lignes auraient fini par ne plus traiter
-   le detail de la meme façon — c'est le champ le plus facile a oublier, il
-   n'apparait que sur les categories qui ont plus d'un terme. */
-/* Le « + » qui écrit un « + », dans un champ de montant.
-
-   L'aide promet « tape-les additionnées, 100+50+70 » et le pavé numérique d'un
-   téléphone n'a pas cette touche : sans ce bouton, la phrase annonce depuis
-   l'écran de saisie un geste qu'on ne peut pas faire.
-
-   Il a déjà été posé puis retiré, parce qu'il faisait deux « + » de sens
-   différents sur la même rangée — l'autre ajoutait un montant détaillé. Ce
-   système-là est parti : celui-ci est le seul « + » de la fenêtre, et l'ambiguïté
-   avec lui.
-
-   Il se place à gauche dans le champ : les montants sont alignés à droite, donc
-   c'est là qu'est la place libre. */
 function champSomme(html) {
   return `<span class="champ-somme">${html}<button type="button" class="somme-plus"
     tabindex="-1" title="${trad('Additionner un autre montant dans ce champ')}"
@@ -12287,8 +8584,6 @@ function insererPlus(champ) {
   if (!/\d$/.test(texte)) { champ.focus(); return; }
   champ.value = `${texte}+`;
   const q = champ.value.length;
-  /* Le curseur au bout, et le champ défilé jusqu'au bout avec lui : sur un champ
-     étroit, le « + » qu'on vient d'écrire pouvait rester hors cadre. */
   const placerCurseur = () => {
     try { champ.setSelectionRange(q, q); } catch (e) {}
     champ.scrollLeft = champ.scrollWidth;
@@ -12304,9 +8599,6 @@ function insererPlus(champ) {
 
 function cablerSommePlus(racine) {
   for (const b of racine.querySelectorAll('.somme-plus')) {
-    /* Le bouton ne prend pas le focus : sans cela le champ le perd, le regagne, et
-       le gestionnaire global le sélectionne en entier. Il garde aussi le pavé
-       numérique ouvert sur téléphone. */
     b.onmousedown = e => e.preventDefault();
     b.onclick = () => insererPlus(b.previousElementSibling);
   }
@@ -12325,11 +8617,6 @@ function askExpenseMonth(index) {
   return new Promise(resolve => {
     const r = Store.state.budget.expenses[index];
     if (!r) { resolve(null); return; }
-    /* Les categories retirees ne sont pas proposees ici, et seulement ici :
-       leurs montants passes restent partout ailleurs. Une categorie retiree qui
-       porte encore un montant sur CE mois-la reste montree — la masquer ferait
-       disparaitre de l'ecran un montant qui compte toujours dans le total du
-       mois, et le total cesserait d'egaler la somme de ses parts. */
     const cats = expenseCategories()
       .filter(c => !categorieRetiree(c) || num(r.v?.[c]));
     const cible = num(Store.state.budget.monthlyTarget);
@@ -12348,14 +8635,6 @@ function askExpenseMonth(index) {
                    value="${r.v?.[c] ?? ''}" placeholder="" autocomplete="off">`)}
           </div>`).join('')}
       </div>
-      <!-- Créer une catégorie sans quitter la saisie : la dépense qui n'entre
-           dans aucune case se présente au moment où l'on remplit, pas en
-           relisant le tableau. Elle rejoint la grille aussitôt, prête à
-           recevoir son montant. -->
-      <!-- L'explication se replie dans un « ? », a cote du geste qu'elle
-           concerne : ce quatre lignes occupait le tiers d'un ecran de telephone
-           pour un texte qu'on lit une fois, juste au-dessus du champ de note
-           qu'il repoussait hors du cadre. -->
       <div class="row" style="margin-top:12px">
         <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
         ${aide(trad('Plusieurs dépenses dans une catégorie : tape-les additionnées, 100+50+70. '
@@ -12366,21 +8645,6 @@ function askExpenseMonth(index) {
         <label>${trad('Note du mois')}</label>
         <input id="depNote" value="${esc(r.note || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
       </div>`;
-    /* « Voir les autres mois » mène au tableau du détail mensuel : la fenêtre
-       ne montre qu'un mois, et comparer est le geste d'après. Elle enregistre
-       en partant — quitter une saisie en cours par une porte de sortie ne
-       doit pas la jeter. */
-    /* « Enregistrer » n'est plus une sortie.
-
-       Le pied porte donc les deux gestes separement, comme la fiche d'une ligne
-       de titres : Enregistrer ecrit et reste, Fermer s'en va — et demande s'il
-       reste des montants non enregistres. « Annuler » est parti avec : devant un
-       bouton qui n'enregistre plus en fermant, il ne designait plus rien de
-       distinct de Fermer. */
-    /* Trois boutons se partagent la largeur a 375 px, soit 107 px chacun :
-       « Voir les autres mois » s'y pliait en trois lignes et faisait gonfler tout
-       le pied, ses voisins avec. Un libelle de pied reste court, c'est le seul
-       endroit de l'application ou la place est comptee d'avance. */
     $('#modalFoot').innerHTML =
       `<button class="btn ghost sm" id="depAutres" type="button">${trad('Autres mois')}</button>
        <span class="spacer"></span>
@@ -12413,14 +8677,8 @@ function askExpenseMonth(index) {
 
     for (const c of champs) {
       c.oninput = () => majTotal();
-      /* Au sortir du champ, « 100+50+70 » devient 220. La somme se tape, elle ne
-         se garde pas : ce qui restait d'elle etait un detail par categorie, et il
-         est parti. Qui veut suivre deux choses separement fait deux categories,
-         c'est ce que les categories sont. */
       c.onchange = () => {
         const s = parseSomme(c.value);
-        /* Une saisie illisible ne vaut pas zero : le champ reprend ce qu'il avait,
-           sans quoi une faute de frappe effacerait un montant. */
         c.value = s ? (s.total || '') : (r.v?.[c.dataset.cat] ?? '');
         majTotal();
       };
@@ -12429,11 +8687,6 @@ function askExpenseMonth(index) {
     majTotal();
     focusChamp(champs[0]);
 
-    /* Créer une catégorie sans perdre la saisie en cours. La catégorie est
-       une colonne du budget, donc un objet partagé par tous les mois : elle
-       s'enregistre pour de bon. Ce qui est déjà tapé part avec, et la fenêtre
-       se rouvre sur la grille complétée — plus sûr que d'injecter une case
-       dans une grille dont tout le câblage est déjà posé. */
     $('#depNouvelleCat').onclick = async () => {
       /* La saisie se relève **avant** d'ouvrir la question par-dessus : les
          deux fenêtres partagent le même corps, et `saisie()` cherchait le
@@ -12442,8 +8695,6 @@ function askExpenseMonth(index) {
       const etat = saisie();
       const nom = await askText('Nouvelle catégorie de dépenses',
         'Elle devient une colonne du tableau, vide sur tous les autres mois.', 'ex. Abonnements');
-      /* Annuler ramène à la saisie, montants intacts : la fenêtre a été
-         recouverte, il faut bien la rendre. */
       if (!nom) { fermer({ ...etat, rouvrir: true }); return; }
       if (!addExpenseCategory(nom)) {
         toast(trad('Cette catégorie existe déjà'));
@@ -12485,9 +8736,6 @@ function askExpenseMonth(index) {
     let depart = JSON.stringify(saisie());
     const sale = () => JSON.stringify(saisie()) !== depart;
 
-    /* Annuler jetait la saisie sans un mot. Sur cette fenetre-la c'est le pire
-       endroit ou le faire : on y remplit douze categories a la suite, et la
-       perte ne se voit qu'au retour sur le tableau. */
     const annulerOuDemander = async () => {
       if (!sale()) { fermer(null); return; }
       const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
@@ -12497,9 +8745,6 @@ function askExpenseMonth(index) {
       fermer(garder ? saisie() : null);
     };
 
-    /* Enregistrer sur place : les montants entrent dans l'etat, la page derriere
-       suit, la fenetre reste ouverte et redevient propre. On reste sur le mois
-       qu'on est en train de remplir — c'est la que le total se verifie. */
     const enregistrer = () => {
       const r2 = ecrireDepensesMois(index, saisie());
       depart = JSON.stringify(saisie());
@@ -12514,22 +8759,6 @@ function askExpenseMonth(index) {
   });
 }
 
-/* Saisir un relevé mensuel en une fois — la fenêtre qui manquait au dernier
-   gros tableau sans version téléphone. Une colonne par compte se lit bien sur
-   un écran large et pas du tout au pouce : ici chaque compte a son champ, et
-   le total se recalcule à la frappe, comparé au mois précédent.
-
-   Les comptes clôturés que la vue masque restent affichés dès qu'ils portent
-   un montant : la fenêtre réécrit la ligne entière, et effacer en aveugle
-   l'historique d'un compte qu'on ne voit même pas serait une perte muette.
-   Les colonnes d'identifiants inconnus — un compte disparu du modèle — ne
-   sont pas montrées mais sont recopiées telles quelles.
-
-   Le bouton de photo remplit les champs sans rien enregistrer : c'est le ⤒
-   du tableau, mais relu avant d'être écrit, donc sans confirmation à donner. */
-/* L'ecriture d'un releve, appelee par « Enregistrer » de la fenetre : elle
-   ecrit et la fenetre reste, comme sa jumelle des depenses. Les dettes du mois
-   viennent du champ : ce qui s'affiche est ce qui s'enregistre. */
 function appliquerReleve(index, saisi) {
   const row = Store.state.monthly[index];
   if (!row) return false;
@@ -12541,14 +8770,6 @@ function appliquerReleve(index, saisi) {
   return true;
 }
 
-/* Un mois du calendrier se vide ; seules les lignes hors calendrier (une clôture
-   au 31/12, par exemple) se suppriment vraiment.
-
-   Deux portes appellent ceci, le ✕ du tableau de correction et le bouton rouge de
-   la fenêtre du mois, et la nuance entre les deux cas ne se redit pas à chaque
-   fois : la question est un fait, elle se règle à un seul endroit. Rend vrai si
-   quelque chose a changé, et ne rafraîchit pas, l'appelant seul sachant s'il a
-   une fenêtre à fermer d'abord. */
 async function viderOuSupprimerMois(index) {
   const r = Store.state.monthly[index];
   if (!r) return false;
@@ -12563,9 +8784,6 @@ async function viderOuSupprimerMois(index) {
   if (calendrier) clearMonthRow(r, 'comment');
   else Store.state.monthly.splice(index, 1);
   Store.save();
-  /* Clef pointée : « Ligne supprimée » dit « Holding deleted » en anglais, une
-     ligne du portefeuille, et ce n'en est pas une. Un homographe se résout par
-     une clef, jamais en changeant celle du voisin. */
   toast(calendrier ? `${fmtMonth(r.date)} ${trad('vidé')}`
                    : trad('releve.ligneSupprimee', 'Ligne supprimée'));
   return true;
@@ -12579,28 +8797,14 @@ function askMonthlySnapshot(index) {
     const vus = new Set(visibles.map(a => a.id));
     const comptes = [...visibles, ...ACCOUNTS.filter(a => !vus.has(a.id) && num(r.v?.[a.id]))];
     const montres = new Set(comptes.map(a => a.id));
-    /* La reference est le dernier mois **renseigne**, pas la ligne du dessus :
-       le calendrier ouvre douze mois d'avance, donc septembre a presque
-       toujours un aout vide au-dessus de lui. On la nomme, sinon « +715 € »
-       ne dirait pas depuis quand. */
     const avant = Store.state.monthly.slice(0, index).filter(x => !rowIsEmpty(x)).pop();
     const precedent = avant ? rowTotal(avant) : 0;
     const photo = nowTotals().total;
-    /* Un mois a venir n'a pas de montants a reprendre : le bouton disparait
-       plutot que d'ecrire aout dans decembre. La saisie reste ouverte — on
-       peut vouloir corriger une ligne creee trop tot — mais elle est
-       annoncee pour ce qu'elle est, et confirmee a l'enregistrement. */
     const revolu = moisRevolu(r.date);
     const m = $('#modal');
     apercuOuvert = null;
 
     $('#modalTitle').textContent = `${trad('Relevé de')} ${fmtMonth(r.date)}`;
-    /* « Valeur des avoirs » plutôt que rien : chaque champ porte ce que le
-       compte valait, crédits non déduits. Sans le dire, on ne savait pas s'il
-       fallait saisir 150 000 € pour un studio ou les 20 000 € qui restent une
-       fois le prêt retiré — et les deux chiffres existent dans l'application,
-       à deux endroits différents. */
-    /* escMontant : le montant du dernier releve est un SVG en mode discret. */
     $('#modalSub').innerHTML = escMontant((avant
       ? `${trad('Dernier relevé,')} ${fmtMonth(avant.date)} : ${fmtEUR0(precedent)}`
       : trad('Aucun relevé avant celui-ci')) + ` · ${trad('valeurs brutes, crédits à part')}`);
@@ -12630,15 +8834,6 @@ function askMonthlySnapshot(index) {
       <div class="dep-grille">
         ${comptes.map(a => `
           <div class="field">
-            <!-- « clôturé » était faux pour une pierre tombale : ce n'est pas
-                 un compte qu'on a fermé, c'est un identifiant que la migration
-                 a retiré du modèle. Le distinguer évite de croire qu'on a
-                 clôturé un compte qu'on utilise encore. -->
-            <!-- L'etablissement sur sa propre ligne, et cette ligne existe
-                 meme vide : accolee au nom, elle passait a la ligne pour les
-                 noms longs et le champ dessous descendait d'un cran par rapport
-                 a son voisin de rangee. Une hauteur de libelle constante aligne
-                 les douze champs quel que soit le nom. -->
             <label title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
               >${esc(a.label)}${a.fantome ? ' <span class="muted">(ancien modèle)</span>'
               : a.legacy ? ' <span class="muted">(clôturé)</span>' : ''}<span
@@ -12647,9 +8842,6 @@ function askMonthlySnapshot(index) {
                    value="${r.v?.[a.id] ?? ''}" placeholder="">
           </div>`).join('')}
       </div>
-      <!-- Le capital restant dû du mois, à côté des avoirs et non mêlé à eux.
-           La photo du jour le note déjà ; sans ce champ, un mois rempli à la
-           main resterait sans dette et sa part nette ne monterait jamais. -->
       <div class="field" style="margin-top:12px">
         <label>${trad('Crédits en cours ce mois-là (€)')}${aide(trad("Le total du capital restant dû à cette date. Il ne se soustrait pas des champs ci-dessus (ceux-ci portent la valeur brute de chaque compte), mais il fait monter la part nette de tes biens, mois après mois, à mesure que tu rembourses."))}</label>
         <input type="number" step="any" inputmode="decimal" id="relDettes"
@@ -12659,15 +8851,6 @@ function askMonthlySnapshot(index) {
         <label>${trad('Commentaire du mois')}</label>
         <input id="relNote" value="${esc(r.comment || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
       </div>
-      <!-- Effacer le mois, en bas, a part et rouge : la meme place que sur la
-           fiche d'une ligne, et pour la meme raison. Ce n'est pas ici qu'on
-           l'ecrit sous le pied de la fenetre, ou un troisieme bouton serait
-           voisin d'« Enregistrer ».
-
-           Il ferme le seul manque du tableau de correction, qui ne se propose
-           plus au doigt : sans lui, un mois saisi par erreur ne s'effacerait
-           plus depuis un telephone. Le libelle suit la nature de la ligne,
-           puisque l'acte n'est pas le meme. -->
       <div class="fiche-danger">
         <button type="button" class="btn ghost danger" id="relVider">${
           isCalendarMonth(r.date) ? trad('Effacer ce relevé')
@@ -12677,14 +8860,6 @@ function askMonthlySnapshot(index) {
             + 'de l’année s’affichent toujours.')
           : trad('Ce n’est pas un mois du calendrier : la ligne disparaît de la liste.')}</p>
       </div>`;
-    /*    Le meme pied que la fenetre jumelle des depenses, et c'est le point. «
-   Certaines cartes il faut enregistrer puis fermer. La regle vaut pour la
-   famille entiere — une fenetre ou l'on saisit en serie : Enregistrer ecrit
-   et reste, Fermer s'en va et demande s'il reste du non-enregistre. Une
-   fenetre qui accomplit un acte (creer, vendre) : le bouton porte le nom de
-   l'acte et ferme. « Annuler » est parti avec, comme chez la jumelle : devant
-   un bouton qui n'enregistre plus en fermant, il ne designait plus rien de
-   distinct de Fermer.*/
     $('#modalFoot').innerHTML =
       `<button class="btn" id="relOk" type="button">${trad('Enregistrer')}</button>
        <button class="btn ghost" id="relFermer" type="button">${trad('Fermer')}</button>`;
@@ -12694,10 +8869,6 @@ function askMonthlySnapshot(index) {
     const majTotal = () => {
       const t = champs.reduce((s, c) => s + num(c.value), 0);
       const d = precedent && t ? t - precedent : 0;
-      /* Le gros chiffre reste le brut — c'est la somme des champs au-dessus,
-         il doit s'y retrouver. Le net s'ajoute en dessous dès qu'un crédit
-         est saisi : c'est lui qu'on retiendra, mais pas au prix d'un total
-         qui ne correspondrait à aucune addition visible. */
       const dettes = num($('#relDettes')?.value);
       $('#relTotal').innerHTML = `
         <span class="dep-somme">${fmtEUR0(t)}</span>
@@ -12706,10 +8877,6 @@ function askMonthlySnapshot(index) {
         ${dettes ? `<span class="dep-ecart muted" style="flex-basis:100%">
           net de crédits : <b>${fmtEUR0(t - dettes)}</b></span>` : ''}`;
     };
-    /* Ce qui a change depuis le dernier enregistrement. C'est lui que Fermer
-       interroge : fermer une saisie propre ne demande rien, fermer une saisie
-       sale propose de la garder — la jumelle des depenses fait pareil, et le
-       releve, lui, jetait tout sans un mot. */
     let sale = false;
     const touche = () => { sale = true; majTotal(); };
     for (const c of champs) c.oninput = touche;
@@ -12724,17 +8891,12 @@ function askMonthlySnapshot(index) {
     if ($('#relPhoto')) $('#relPhoto').focus({ preventScroll: true });
     else focusChamp(champs[0]);
 
-    /* La photo se retient : c'est le seul geste qui remplace douze champs d'un
-       coup, donc le seul qui ait un ecrasement a confirmer. */
     let photoPrise = false;
     if ($('#relPhoto')) $('#relPhoto').onclick = () => {
       for (const c of champs) {
         const v = nowValue(c.dataset.compte);
         c.value = v ? round2(v) : '';
       }
-      /* La photo remplit aussi le champ des credits : ce qui s'affiche est ce
-         qui s'enregistre, et ce champ etait le seul que la photo laissait
-         vide pendant que l'ecriture prenait la dette du jour en douce. */
       const detteJour = round2(patrimoine().dettes);
       $('#relDettes').value = detteJour || '';
       photoPrise = true;
@@ -12747,24 +8909,11 @@ function askMonthlySnapshot(index) {
       masquerModal(m);      $('#modalClose').onclick = null;
       resolve(v);
     };
-    /* Enregistre sans fermer, et rend vrai si l'ecriture a eu lieu : Fermer
-       s'en sert pour « Enregistrer et fermer ». */
     const enregistrer = async () => {
       const v = {};
       for (const [k, val] of Object.entries(r.v || {})) if (!montres.has(k)) v[k] = val;
       for (const c of champs) if (num(c.value)) v[c.dataset.compte] = round2(num(c.value));
 
-      /* Deux gardes avant d'ecrire, et elles se posent ici plutot que chez
-         l'appelant : refuser laisse la saisie a l'ecran, alors qu'une question
-         posee apres la fermeture obligerait a tout retaper.
-
-         Le mois a venir d'abord. La ligne existe parce que le calendrier ouvre
-         douze mois d'avance, pas parce qu'on a vecu ce mois-la.
-
-         L'ecrasement ensuite, et seulement apres une photo : elle remplace les
-         douze champs d'un seul geste, et c'est le seul chemin par lequel un mois
-         deja rempli se perd sans qu'on l'ait voulu. Corriger un champ a la main
-         est delibere, champ par champ, et n'a rien a confirmer. */
       if (!revolu && !await askConfirm(
           trad('Enregistrer un relevé pour {m} ?').replace('{m}', fmtMonth(r.date)) + '\n\n'
         + trad('Ce mois n’a pas encore eu lieu. La ligne comptera comme un relevé '
@@ -12786,10 +8935,6 @@ function askMonthlySnapshot(index) {
       return true;
     };
     $('#relOk').onclick = enregistrer;
-    /* Fermer demande son avis a la saisie, pas a l'utilisateur : propre, elle
-       part sans un mot ; sale, elle propose de garder — le meme dialogue que
-       les apercus et la fenetre des depenses. Avant, « Annuler » jetait douze
-       champs sans une question. */
     const quitter = async () => {
       if (sale) {
         const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
@@ -12801,10 +8946,6 @@ function askMonthlySnapshot(index) {
     };
     $('#relFermer').onclick = quitter;
     $('#modalClose').onclick = quitter;
-    /* La saisie sale ne se demande pas : la question qui vient de recevoir un oui
-       portait deja sur l'effacement de ce mois-la, et proposer ensuite de garder
-       douze champs serait la contredire. C'est le raisonnement de la fiche d'une
-       ligne, au meme endroit. */
     $('#relVider').onclick = async () => {
       if (!await viderOuSupprimerMois(index)) return;
       fermer(null);
@@ -12813,23 +8954,12 @@ function askMonthlySnapshot(index) {
   });
 }
 
-/* =============================================================
-   FENÊTRE D'APERÇU
-   Un clic sur une tuile montre le détail sans quitter la page ;
-   un second clic emmène là où ça se modifie.
-   ============================================================= */
-
 const APERCUS = {
-  /* Détail d'une classe d'actif. Les liquidités se ventilent par usage
-     déclaré ; les autres classes, placement par placement. */
   classe: (classe) => {
     const p = patrimoine();
     const total = p.classes[classe] || 0;
     let lignes;
     if (classe === 'liquidites') {
-      /* Ces montants changent souvent : chaque usage est un menu déroulant
-         qui liste ses comptes, montants modifiables sur place. Les totaux
-         d'usage et le total du panneau suivent la frappe. */
       const groupes = AFFECTATIONS.map(([aff, label]) => {
         const entrees = [];
         Store.state.comptes.forEach((c, ic) => {
@@ -12856,20 +8986,11 @@ const APERCUS = {
            et ne s'anime pas — et surtout il n'offrait aucune prise pour un geste
            collectif, alors que c'est precisement ce qu'on vient faire ici :
            replier les usages pour comparer leurs totaux d'un coup d'oeil. */
-        /* Le geste collectif vit sur la ligne du sous-titre, pas sur une ligne
-           a lui : c'est une commande de lecture, elle n'a pas a pousser le
-           contenu vers le bas dans une fenetre qui defile deja, et cette ligne
-           etait a moitie vide. */
         sousAction: groupes.length > 1
           ? `<button type="button" class="btn sm ghost" data-action="liq-plier-tout"
                      aria-expanded="true">${trad('Tout replier')}</button>`
           : '',
         html: `
-          <!-- Le pli se relit dans l'etat, il n'est plus ecrit « ouvert » en dur :
-               le geste ne basculait qu'une classe CSS, donc le premier rendu
-               suivant — celui d'« Enregistrer » — reconstruisait tout deplie.
-               Les groupes de la page Actifs memorisaient deja le leur ; c'est la
-               meme cle, prefixee, et le meme accesseur. -->
           ${groupes.map(g => `
           <section class="liq-groupe">
             <button type="button" class="liq-sommaire" data-action="liq-plier"
@@ -12891,12 +9012,6 @@ const APERCUS = {
         vue: 'accounts', ancre: '', cta: trad('Ouvrir Actifs'),
       };
     }
-    /* Un bien immobilier ne se resume pas a sa valeur du jour : ce qu'il a
-       coute, ce qu'il a pris, depuis quand on l'a, et surtout ce qui reste du
-       pret. « 150 000 € » sans le credit en face ne dit pas ce qu'on possede.
-       Le pret est porte par l'etablissement qui detient le bien — c'est la que
-       le modele le range — donc on le nomme plutot que de l'attribuer en
-       silence. */
     if (classe === 'immobilier') {
       const biens = [];
       for (const c of comptesOuverts()) {
@@ -12908,12 +9023,6 @@ const APERCUS = {
       }
       biens.sort((a, b) => b.l.valeur - a.l.valeur);
       const creditTotal = biens.reduce((s, b) => s + b.credits, 0);
-      /* Le capital restant dû se modifie ici même, comme les liquidités : il
-         baisse à chaque mensualité, et aller le corriger au fond d'une fiche
-         d'établissement pour un geste mensuel n'a pas de sens.
-         Le grand total ne bouge pas — c'est la valeur du bien — donc c'est la
-         valeur nette qui suit la frappe, sinon la saisie n'aurait l'air
-         d'avoir aucun effet. */
       const netDe = b => num(b.l.valeur) - b.dettes.reduce((s, x) => s + num(x.d.montant), 0);
       const vivants = () => Object.fromEntries(biens.flatMap((b, k) => [
         [`net-${k}`, fmtEUR(netDe(b))],
@@ -12938,8 +9047,6 @@ const APERCUS = {
             </div>
             <dl class="kv">
               ${b.l.part ? `
-                <!-- Le montant en tete est deja la part : sans cette ligne, il
-                     paraitrait simplement faux a qui connait son bien. -->
                 <dt>${trad('Ta part')}</dt>
                   <dd>${fmtPct(b.l.part, 0)} ${trad('de')} ${fmtEUR0(b.l.valeurEntiere)}</dd>` : ''}
               ${gain != null ? `
@@ -12969,10 +9076,6 @@ const APERCUS = {
                     <dd><b data-live="net-${k}">${fmtEUR(b.l.valeur - b.credits)}</b></dd>
                 </dl>
               </div>` : ''}
-            <!-- « Ouvrir la fiche », sans répéter le nom : il est écrit juste
-                 au-dessus. Le bouton portait celui du compte — « Immobilier »,
-                 le libellé du type — ce qui donnait « Ouvrir Immobilier » sous
-                 une carte déjà intitulée Immobilier. -->
             <button class="btn sm ghost" data-action="aller-fiche"
                     data-route="#/compte/${encodeURIComponent(b.c.id)}"
                     aria-label="Ouvrir la fiche de ${esc(b.l.libelle || nomCompteV2(b.c))}"
@@ -12988,13 +9091,7 @@ const APERCUS = {
       for (const c of comptesOuverts()) {
         for (const l of lignesDe(c)) {
           if (l.classe !== classe) continue;
-          /* Une ligne de marché mène à sa propre fiche, pas au compte qui
-             l'héberge : cliquer une ligne pour atterrir sur le compte qui la porte
-             répondait à côté de la question posée. */
           const i = l.marche ? Store.state.positions.indexOf(l.marche) : -1;
-          /* Le meme repli que dans la liste, et un separateur qui ne pend pas :
-             un bien de valeur n'a pas d'etablissement, et la meta se terminait
-             par un point median suivi de rien. */
           const nomL = nomLignePlacement(l, c);
           lignes.push({ label: nomL,
                         meta: sousNom(nomL, nomCompteV2(c), nomEtabDe(c)),
@@ -13005,13 +9102,7 @@ const APERCUS = {
       }
       lignes.sort((a, b) => b.valeur - a.valeur);
     }
-    /* Les titres cotés se gèrent dans Marchés, pas dans Comptes : c'est là
-       qu'on ajoute une ligne, qu'on corrige une quantité, qu'on relance les
-       cours. Le bouton menait à Comptes pour toutes les classes, ce qui était
-       juste pour un bien ou une part non cotée et faux pour un ETF. */
     const surMarche = classe === 'actions' || classe === 'obligations' || classe === 'crypto';
-    /* Le sous-titre dit le compte, la note du total dit la part : les
-       repeter tous les deux ne servait a rien. */
     return {
       titre: CLASSES_ACTIFS[classe] || classe,
       sous: `${lignes.length} placement${lignes.length > 1 ? 's' : ''}`,
@@ -13021,47 +9112,10 @@ const APERCUS = {
     };
   },
 
-  /* Les placements derriere une ligne de cible, appelee depuis sa jauge.
-
-     Le pourcentage annonce sa base, et cette base est celle des cibles — pas le
-     patrimoine brut que la fenetre prend par defaut. Les deux existent, ils ne
-     valent pas la meme chose : 13 558 EUR font 44,8 % de la base des cibles et
-     20,1 % des avoirs. Ouvrir une jauge a 44,8 % pour lire « 20,1 % de vos
-     avoirs » aurait donne trois chiffres pour la meme ligne sur deux ecrans,
-     le defaut que cette application a deja corrige trois fois.
-
-     La fiche n'est pas une carte d'analyse : c'est le chemin le plus court de
-     « Actions core, +1 200 EUR a renforcer » vers la ligne qu'on va renforcer.
-     Chaque intitule ouvre donc la fiche de la position, pas son compte. */
   cible: (cle) => ficheDeBarre(positionsDeCible(cle)),
 
-  /* La barre de la carte « Core et satellites », qui compte un role entier.
-     Meme fenetre, autre ensemble : le filtre est dans store.js et les deux
-     partagent leur code, sinon ils finiraient par se contredire. */
   role: (role) => ficheDeBarre(positionsDeRole(role)),
 
-  /* Le cash se saisit à la main et souvent : il est modifiable ici même. */
-  /* Les liquidites en entier, poche par poche. Deux defauts d'un coup :
-
-     Le titre etait « Argent disponible », un agregat de trois affectations sur
-     quatre qui n'existe plus. La fiche s'appelle desormais comme le montant
-     qu'elle porte, et chaque ligne dit sa poche dans son sous-titre.
-
-     Et son total valait nowByGroup().cash, soit les quatre poches, alors que
-     ses lignes excluaient le cash a investir : 5 126 EUR affiches au-dessus de
-     3 270 EUR de lignes. Un total qui n'egale pas la somme de ses parts, la
-     regle cardinale de ce projet. Les quatre poches sont la maintenant, et le
-     total est la somme des lignes — pas un calcul parallele qui peut deriver. */
-  /* Un argument facultatif restreint la fiche a une seule poche.
-
-     « Cash disponible » et « Epargne de precaution » ouvraient tous deux cette
-     fiche sans argument : on cliquait une ligne de 20 EUR et on obtenait les
-     5 126 EUR de toutes les liquidites. Le total etait juste, la question posee
-     n'etait pas celle a laquelle on repondait — et c'est le meme defaut que
-     partout ailleurs, un intitule qui promet autre chose que ce qu'il compte.
-
-     Sans argument, la fiche garde son role de vue d'ensemble : les quatre
-     poches, chaque ligne disant la sienne. */
   cash: (poche) => {
     const cle = AFFECTATION_LABEL[poche] ? poche : null;
     const lignes = [];
@@ -13070,8 +9124,6 @@ const APERCUS = {
       (c.cash || []).forEach((e, idxCash) => {
         if (cle && e.affectation !== cle) return;
         lignes.push({ label: nomCompteV2(c),
-          /* Dans une fiche dediee a une poche, redire son nom sur chaque ligne
-             ne renseigne personne : le titre le dit deja. */
           meta: [nomEtabDe(c), cle ? '' : AFFECTATION_LABEL[e.affectation]].filter(Boolean).join(' · '),
           valeur: num(e.montant), champ: `comptes.${idxCompte}.cash.${idxCash}.montant` });
       });
@@ -13087,17 +9139,6 @@ const APERCUS = {
     };
   },
 
-  /* La meme fiche de poche, ouverte depuis Objectifs.
-
-     La page Objectifs compte en pourcentage de la base des cibles ; la fiche de
-     poche, en pourcentage des avoirs. Cliquer une barre annoncant 12,0 % pour
-     lire « 6,1 % de vos avoirs » donnait donc deux chiffres pour la meme ligne a
-     un clic d'ecart. Aucun des deux n'etait faux, et c'est ce qui rend ce defaut
-     tenace : il ne se voit pas, il se ressent comme une hesitation.
-
-     Une seule chose change, la base du pourcentage. Le reste est repris tel
-     quel — refaire la fiche aurait donne deux definitions de la meme poche a
-     tenir d'accord, et c'est ainsi que naissent les divergences. */
   cashCible: (poche) => {
     const a = APERCUS.cash(poche);
     const base = rebalanceRows().base;
@@ -13110,12 +9151,6 @@ const APERCUS = {
     const pj = objectiveProjection();
     const an = Store.state.meta.objectiveYear;
     const anCourante = new Date().getFullYear();
-    /* Sans cible, la fenêtre ne calcule rien : il n'y a rien à calculer.
-
-       Elle garde ses deux champs, qui sont la raison de l'ouvrir, et le
-       patrimoine du jour, qui est le point de départ. Le reste attend d'avoir
-       une cible à laquelle se comparer. C'est la règle du projet : un
-       pourcentage n'existe que sur une base positive. */
     const sansCible = !(num(g.obj) > 0);
     return {
       titre: `${trad('Objectif à fin')} ${an}`,
@@ -13130,11 +9165,6 @@ const APERCUS = {
       ],
       champs: [
         { label: `${trad('Montant visé pour fin')} ${an} (€)`, path: 'meta.objective', step: 500 },
-        /* Trente ans d'horizon, pas soixante-quinze. La liste allait jusqu'a
-           2100 : elle faisait defiler des dizaines d'annees que personne ne
-           choisit pour un objectif de patrimoine, et sur telephone il fallait
-           traverser tout ca pour atteindre les seules utiles, les premieres.
-           Un objectif plus lointain se pose en avancant. */
         { label: trad('Objectif à fin…'), path: 'meta.objectiveYear',
           options: Array.from({ length: 31 }, (_, i) => {
             const y = anCourante + i;
@@ -13145,16 +9175,6 @@ const APERCUS = {
     };
   },
 
-  /* Le recu chiffre de la carte de composition, a l'horizon courant : memes
-     libelles, memes parts, et la somme des parts fait le total affiche.
-
-     Le selecteur d'horizon qui vivait ici est parti. Cette fiche est une
-     consultation, et son selecteur ecrivait meta.projHorizon, le reglage de la
-     page entiere : on venait regarder « et a 40 ans ? », on fermait, et la
-     page restait sur 40 ans sans qu'on l'ait decide — c'est arrive pour de
-     vrai. L'horizon se regle dans l'en-tete de la premiere carte, et
-     l'exploration d'un autre horizon a son outil dedie, la ligne libre du
-     tableau « Par horizon », qui compare cote a cote sans rien persister. */
   horizon: () => {
     const s = projectionSettings();
     const p = capitalisation({ years: projHorizon });
@@ -13175,12 +9195,6 @@ const APERCUS = {
                       meta: A_PLAT, valeur: plat }] : []),
         { label: trad('Ce que tu verses'),
           meta: `${fmtEUR0(s.monthly)} × ${projHorizon * 12} ${trad('mois')}`, valeur: verses },
-        /* « Rendement des autres actifs » nommait une poche qui n'existe plus
-           depuis que le non cote et les liquidites ont chacun le leur : ce
-           montant est celui du seul non cote, les liquidites ne produisant
-           rien. Et quand le non cote est a zero, le taux affiche a cote de
-           « Ce que le rendement ajoute » est celui du marche seul — le dire
-           evite de le lire comme un rendement moyen du patrimoine. */
         ...(num(s.rateAutres) ? [
           { label: trad('Rendement des actifs de marché'),
             meta: `${fmtPct(s.rate, 1)} ${trad('par an')}`, valeur: num(j.gainsMarche) },
@@ -13201,7 +9215,6 @@ const APERCUS = {
       label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
       valeur: posValue(p), perf: posPerfPct(p),
     }));
-    // liquidités et levier de la poche bourse, en plus des lignes de titres
     for (const a of accountsWhere(x => x.group === 'bourse' && !x.holdings)) {
       if (nowValue(a.id)) lignes.push({ label: a.label, meta: 'liquidités', valeur: nowValue(a.id) });
     }
@@ -13212,28 +9225,12 @@ const APERCUS = {
     };
   },
 
-  /* --- Allocation ------------------------------------------------------ */
   patrimoineTotal: () => ({
     titre: trad('Patrimoine total'), sous: trad('Toutes poches confondues'),
     total: nowTotals().total,
     lignes: allocationByAsset().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
     vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
   }),
-  /* La base qui capitalise, ouverte par « Ce que tu as deja ». Cette barre
-     affichait 30 000 EUR et ouvrait « Patrimoine total », qui en montrait
-     160 000 : le clic contredisait la ligne cliquee. Ici la somme des lignes
-     fait exactement la barre, et chaque ligne porte le taux qui lui est
-     applique — c'est la reponse a « qu'est-ce qui capitalise, et a combien ? »,
-     posee la ou on se la pose. */
-  /* Les trois poches, et le taux que la projection applique vraiment a chacune.
-
-     La cause est celle que ce projet corrige sans arret : deux listes du meme
-     fait, dont une seule est tenue a jour. Les lignes se derivent donc des
-     poches, et le libelle de chacune est celui de son reglage dans « Tes
-     hypotheses » — trois noms, trois taux, aucun endroit ou l'un puisse
-     contredire l'autre. « Cash a investir » disparait comme ligne : il est dans
-     les liquidites, il subit leur sort, et lui garder une ligne a part laissait
-     croire qu'il en avait un autre. */
   baseProjection: () => {
     const t = nowTotals();
     const s = projectionSettings();
@@ -13253,10 +9250,6 @@ const APERCUS = {
          quatre lignes qui en faisaient 76 551. La somme des parts fait le
          total, ou elle ne dit rien. */
       lignes: [
-        /* Chaque ligne retranche ce qui lui a ete reserve, sinon ces euros
-           figurent deux fois : dans leur poche d'origine et dans « Reserve a un
-           projet ». La somme des lignes doit faire le total, et le total ne
-           compte le reserve qu'une fois. */
         { label: trad('Actifs de marché'), meta: tauxM,
           valeur: num(t.bourse) - num(t.projetParPoche?.bourse) },
         { label: trad('Capital garanti'), meta: tauxG, valeur: q.garanti },
@@ -13270,23 +9263,11 @@ const APERCUS = {
     };
   },
 
-  /* La part que la projection porte a plat : la valeur des biens, moins tout le
-     capital restant du. La brique « Ton immobilier, a plat » ouvrait
-     « Patrimoine total », qui deballe les cinq poches alors qu'elle n'en
-     designe qu'une : on cliquait sur une ligne et on obtenait la page entiere.
-
-     Les lignes sont les vraies parts, un bien par ligne et un pret par ligne en
-     negatif, donc leur somme fait le total affiche. C'est la regle du projet, et
-     ici elle sert a quelque chose de concret : on voit d'ou vient le net. */
   immobilierNet: () => {
     const lignes = [];
     for (const c of (Store.state.comptes || [])) {
       if (c.statut === 'archive') continue;
       for (const l of (c.lignes || [])) {
-        /* Les biens de valeur vivent ici avec l'immobilier : partPlate() les
-           compte ensemble, et cette fiche doit faire son total ligne a ligne.
-           Une montre a 10 000 EUR comptee dans le total sans ligne en face
-           aurait ete exactement le defaut qu'on repare. */
         if (!['immobilier', 'bienValeur'].includes(l.classe || 'immobilier')
             || !num(l.valeur)) continue;
         lignes.push({ label: l.libelle || c.libelle, meta: trad('valeur estimée'),
@@ -13322,7 +9303,6 @@ const APERCUS = {
     vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
   }),
 
-  /* --- Rééquilibrage --------------------------------------------------- */
   /* Les lignes de cibles, tresorerie comprise quand elle est suivie. Cinq
      endroits lisaient `[...r.classes, r.cash]` en supposant `r.cash` toujours
      present : le jour ou la tresorerie a pu se retirer, la page tombait sur un
@@ -13348,7 +9328,6 @@ const APERCUS = {
     };
   },
 
-  /* --- Budget ---------------------------------------------------------- */
   depensesAnnee: () => {
     const an = budgetAnnee();
     const st = expenseYearStats(an);
@@ -13374,21 +9353,6 @@ const APERCUS = {
     };
   },
 
-  /* Tous les postes fixes, avec leur part. La carte de l'onglet n'en montre que
-     les six premiers et renvoyait au tableau du dessous pour le reste : un
-     tableau de neuf colonnes repond mal a « lequel pese le plus », qui se lit
-     d'un regard sur des barres et pas en comparant des nombres ligne a ligne.
-
-     La barre EST le pourcentage : sa largeur vaut la part, pas le rapport au
-     plus gros poste. La carte, elle, met le plus gros a pleine largeur — c'est
-     lisible pour six lignes, mais ici la barre et le nombre seraient cote a
-     cote, et une barre pleine en face de « 77 % » les ferait se contredire.
-     Entre les deux, c'est le nombre qui a raison.
-
-     La base est nommee sous le total, comme partout : ces pourcentages se
-     rapportent au total mensuel des charges fixes, pas aux revenus. Trois ecrans
-     ont deja donne trois parts differentes pour une meme ligne faute de le
-     dire. */
   chargesFixes: () => {
     const postes = (Store.state.budget.fixedCharges || [])
       .map(c => ({ nom: c.label || 'Sans nom', v: chargeMensuelle(c),
@@ -13433,7 +9397,6 @@ const APERCUS = {
     };
   },
 
-  /* --- Performance ----------------------------------------------------- */
   /* Le detail d'une vente.
 
      Ce que trois tuiles disaient pour toute la page — produit encaisse, prix de
@@ -13463,8 +9426,6 @@ const APERCUS = {
       total: num(v.realised),
       totalNote: pct == null ? trad('prix de revient non renseigné')
         : `${fmtSignedPct(pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(v.invested)} ${trad('investis')}`,
-      /* Une vente declaree n'a ni quantite ni prix : ces trois lignes se taisent
-         plutot que d'ecrire des zeros qui se liraient comme une saisie amputee. */
       html: `
         <dl class="kv">
           ${v.declaree ? '' : `
@@ -13488,13 +9449,10 @@ const APERCUS = {
     };
   },
 
-  /* --- Performance ----------------------------------------------------- */
   perfLatente: () => {
     const lat = latentPnl();
     return {
       titre: trad('Plus-value latente'), sous: `${lat.winners} ${trad('lignes en gain sur')} ${lat.count}`,
-      /* Sans prix de revient saisi, il n'y a pas de base : la note se contente
-         alors de nommer ce qui manque, plutot que d'annoncer 0,00 %. */
       total: lat.pnl, totalNote: lat.pct == null
         ? trad('prix de revient non renseigné')
         : `${fmtSignedPct(lat.pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(lat.invested)} ${trad('investis')}`,
@@ -13505,18 +9463,11 @@ const APERCUS = {
       vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
     };
   },
-  /* La plage se passe en argument. La tuile parle depuis le debut, la carte des
-     ventes suit le selecteur : un apercu qui deciderait seul de sa borne
-     mentirait a l'une des deux. Le titre ne bouge pas, la borne va dans le
-     sous-titre, ou elle se lit avec ce qu'elle qualifie. */
   perfRealisee: (range) => {
     const r = range || salesRange;
     const st = salesStats(r);
     return {
       titre: trad('Plus-value encaissée'),
-      /* Sans une seule vente, la borne n'a rien a qualifier : « depuis le debut,
-         aucune vente sur la periode » dit deux fois la meme absence, et la
-         seconde moitie nomme une periode qui est tout le temps. */
       sous: !st.count
         ? (r === 'all' ? trad('aucune vente encore')
                        : `${rangeLabel(r)} · ${trad('aucune vente sur la période')}`)
@@ -13530,10 +9481,6 @@ const APERCUS = {
   },
   perfTotale: () => {
     const lat = latentPnl(), tout = salesStats('all');
-    /* « Depuis le debut » ne datait rien, et le grand chiffre n'avait aucune
-       heure. Chaque part porte donc la date de ce qui la fixe : un cours pour le
-       latent, les ventes elles-memes pour l'encaisse. Aucune des deux n'est
-       devinee — l'une vient de la place, l'autre du journal. */
     const jours = (tout.sales || []).map(v => String(v.date || '')).filter(Boolean).sort();
     const bornes = !jours.length ? ''
       : jours[0] === jours[jours.length - 1] ? fmtDate(jours[0])
@@ -13556,14 +9503,6 @@ const APERCUS = {
     };
   },
 
-  /* --- Budget : les mois par rapport à l'objectif -----------------------
-     Une fiche par tuile, et non plus une liste commune : « Mois sous
-     objectif » et « Mois dépassés » ouvraient le meme melange, ou il fallait
-     retrouver soi-meme les mois de sa couleur — et qui comptait le mois en
-     cours vide comme « sous l'objectif », puisqu'elle refaisait son propre
-     filtre au lieu de prendre celui des tuiles. Les listes viennent
-     d'expenseYearStats : ce que la tuile compte, la fiche le liste, par
-     construction. */
   moisObjectif: (sens) => {
     const an = budgetAnnee();
     const stats = expenseYearStats(an);
@@ -13576,9 +9515,6 @@ const APERCUS = {
         + (stats.moisEnCoursExclu ? ` · ${trad('le mois en cours, incomplet, est écarté')}` : ''),
       total: rows.reduce((s, r) => s + r.total, 0),
       totalNote: `${rows.length} ${trad('mois')}`,
-      /* La note du mois se lit ici. « 2 400 € au-dessus » sans sa raison
-         n'apprend rien : c'est le commentaire saisi dans le détail mensuel qui
-         dit s'il s'agit d'un déménagement ou d'un mois qui a dérapé. */
       lignes: rows.slice().reverse().map(r => ({
         label: r.label,
         meta: [sous ? `${fmtEUR0(cible - r.total)} ${trad('de marge')}`
@@ -13589,17 +9525,6 @@ const APERCUS = {
     };
   },
 
-  /* --- Objectif -------------------------------------------------------- */
-  /*    L'aperçu « pouvoir d'achat » vivait ici. La colonne des euros constants
-   reste dans le tableau « Par horizon », qui porte la même information sans
-   détour.*/
-
-  /* --- un repere de la barre de marches ---------------------------------
-     La fiche d'un indice : sa valeur, sa veille, sa seance — et, quand le
-     repere touche le portefeuille, le pont est fait : l'EUR/USD pese sur les
-     lignes en dollars, l'or sur la poche metaux, le bitcoin sur la poche
-     crypto. Un indice boursier ne pretend rien de personnel : sans lien
-     honnete, pas de ligne inventee. */
   repere: (sym) => {
     const l = REPERES_AFFICHES.find(x => x.symbole === sym);
     if (!l) return null;
@@ -13630,22 +9555,10 @@ const APERCUS = {
 
     return {
       titre: l.nom,
-      /* Le sous-titre disait « ^FCHI » : un identifiant technique, illisible,
-         et qui n'apprend rien a qui vient de cliquer sur « CAC 40 ». Il dit
-         desormais ce que la chose EST — un indice, une matiere premiere, une
-         parite — et garde le symbole en second, pour qui le cherche. */
-      /* Un indice se nomme, il ne s'identifie pas : « ^IXIC » derriere
-         « Indice boursier » n'apprend rien a qui vient de cliquer sur
-         « Nasdaq ». Le symbole reste pour ce qui se cote et s'achete, ou
-         il sert a retrouver la ligne chez un courtier. */
       sous: estIndice ? 'Indice boursier' : l.symbole,
       totalTexte: `${nb(l.prix)}${unite}`,
       totalNote: m ? m.label : '',
       html: `<dl class="kv">
-        <!-- Hors seance, l'ecart affiche serait celui de la veille : la fiche
-             dit alors de quand date le cours, ce que la tuile n'a pas la place
-             d'ecrire. Le delta se tait avec le pourcentage, il porte le meme
-             mensonge en euros. -->
         <dt>${trad('Variation du jour')}</dt>
           <dd class="${l.pct == null ? 'muted' : cls(l.pct)}">${l.pct == null
             ? `${trad('hors séance')}${l.quoteTime ? ` · ${trad('cours')} ${esc(fmtCoursQuand(l.quoteTime))}` : ''}`
@@ -13659,7 +9572,6 @@ const APERCUS = {
     };
   },
 
-  /* --- les quatre tuiles de Marchés ------------------------------------ */
   portefeuille: () => {
     const pnl = portfolioPnl();
     return {
@@ -13728,47 +9640,20 @@ const APERCUS = {
       totalNote: `${trad('à retrancher de')} ${fmtEUR0(patrimoine().brut)} ${trad('d’avoirs')}`,
       lignes: cr.lignes.map(c => ({
         label: c.libelle,
-        /* L'intitule ouvre la fiche complete : taux, mensualite, preteur, capital
-           emprunte. Ce panneau ne porte que le solde ; le reste ne change qu'une
-           fois, et il faut pouvoir y aller sans passer par la page Comptes. */
         ouvre: { action: 'editer-credit', donnees: { etab: c.etabId, i: c.index } },
-        /* La date de solde figure ici comme sur la fiche du bien : le meme fait
-           lu au meme endroit du modele, jamais recalcule a cote. */
         meta: [c.etabNom, c.preteur, c.taux ? `${fmtNombre(c.taux)} % ${trad('l’an')}` : '',
                c.mensualite ? `${fmtEUR0(c.mensualite)} ${trad('par mois')}` : '',
                c.fin ? `${trad('soldé')} ${fmtMoisAn(c.fin.finLe)}` : ''].filter(Boolean).join(' · '),
-        /* Le chemin d'ecriture passe par l'index de l'etablissement et celui de la
-           dette chez lui : c'est le meme couple que la fenetre d'edition, et le
-           tri par montant de la liste ne le decale pas. */
         champ: `etabs.${etabs.findIndex(e => e.id === c.etabId)}.dettes.${c.index}.montant`,
         valeur: c.reste,
       })),
     };
   },
 
-  /* L'ecart du jour, ligne par ligne.
-     La carte du portefeuille vit dans l'onglet « Aujourd'hui » et n'y montrait
-     que des cumuls : la valeur, le prix de revient, la plus-value depuis
-     l'achat. Ce qui a bouge aujourd'hui n'y etait pas, alors que c'est le seul
-     chiffre que cet onglet promet.
-
-     Un titre qui n'a pas cote ne fait pas « 0 EUR de variation » : il ne dit
-     rien, et l'annoncer a plat ferait croire a une seance atone. Deux manques
-     distincts en decoulent, et ils se comptent separement — les lignes sans
-     cloture de reference sortent de la liste, celles dont notre cours date
-     d'avant minuit y restent avec un ecart nul, donc en le declarant. */
   jourTitres: () => {
     const j = dayPerformance();
     return {
       titre: trad('Aujourd’hui'),
-      /* L'heure fait partie du chiffre : un ecart du jour a 11 h et le meme a la
-         cloture ne disent pas la meme chose, et l'un des deux va encore bouger.
-
-         C'est l'heure du MARCHE, pas celle de la requete. La ligne disait
-         « cours de 16:15 » parce qu'on avait interroge la passerelle a 16:15 —
-         alors que les prix recus dataient de la veille 22:00. Une heure fraiche
-         collee a une donnee vieille est pire que pas d'heure du tout : elle
-         certifie ce qu'elle devrait mettre en doute. */
       sous: j.lignes.length
         ? [`${j.hausse} ${trad('en hausse')}`, `${j.baisse} ${trad('en baisse')}`,
            j.sansDonnee ? `${j.sansDonnee} ${trad('sans cours de veille')}` : '',
@@ -13776,8 +9661,6 @@ const APERCUS = {
            j.asOfMarche ? `${trad('cours')} ${fmtCoursQuand(j.asOfMarche)}` : ''].filter(Boolean).join(' · ')
         : trad('pas de clôture de veille en mémoire'),
       total: j.eur,
-      /* Le total ne se commente pas de la meme façon quand rien n'a cote : « sur
-         la cloture precedente » promet une comparaison qui n'a pas eu lieu. */
       totalNote: j.toutHorsSeance
         ? trad('aucune de tes lignes n’a coté depuis minuit')
         : `${fmtSignedPct(j.pct)} ${trad('sur la clôture précédente')}`,
@@ -13792,8 +9675,6 @@ const APERCUS = {
     };
   },
 
-  /* Les montants sont modifiables ici : c'est la question qu'on se pose en
-     ouvrant cette tuile — combien me reste-t-il à placer, et où. */
   cashInvestir: () => ({
     titre: BASES.cashPlacer.nom, sous: trad('Liquidités posées chez tes courtiers'),
     total: stockTotals().cashToInvest,
@@ -13812,20 +9693,6 @@ const APERCUS = {
      120 000 EUR sous un titre qui annonce le non cote. La valeur par compte
      est celle de ses lignes non cotees seulement, et la somme des parts
      refait le total. */
-  /* L'ecart du non cote se lit ici, et nulle part ailleurs.
-
-     Pas dans Marchés › Performance : cette page-la ne suit que ce dont le cours
-     arrive tout seul, elle le dit elle-meme dans son ecran vide, et y ramener le
-     non cote serait le remettre exactement d'ou l'application a mis du temps a le
-     sortir. Pas dans une carte de plus non plus : le panneau existe deja, il
-     s'ouvre depuis l'accueil, et il montrait des valeurs sans jamais dire ce
-     qu'elles avaient coute.
-
-     Aucun total commun avec les titres cotes, jamais. Une plus-value cotee est
-     constatee — un cours l'a fixee — quand celle-ci est declaree par son
-     detenteur. Les additionner rendrait une performance dont une part est une
-     opinion, sans que rien ne le signale. Le sous-titre nomme donc la nature du
-     chiffre, et la note du total sa base. */
   pe: () => {
     const nc = latentNonCote();
     const lignes = nc.lignes.filter(l => l.classe === 'nonCote');
@@ -13835,17 +9702,10 @@ const APERCUS = {
     const vieilles = lignes.filter(l => l.vieille).length;
     return {
       titre: trad('Placements non cotés'),
-      /* La nature avant la liquidite : c'est elle qui explique pourquoi l'ecart
-         ci-dessous n'est pas une performance de marche. Le rappel de revue s'y
-         ajoute plutot que dans un champ que le composant ne rend pas — la cloche
-         le porte deja a un an, ici il ne fait que se voir au bon moment. */
       sous: [trad('valeurs que tu déclares, pas des cours'),
              vieilles ? `${vieilles} ${vieilles > 1 ? trad('à revoir') : trad('à revoir')}`
                       : trad('pas mobilisables à court terme')].join(' · '),
       total: nowByGroup().pe,
-      /* Un pourcentage dit sa base : ici le montant investi, et rien d'autre.
-         Sans prix de revient saisi, il n'y a pas d'ecart a dire — la note se
-         contente alors du total. */
       totalNote: invested > 0
         ? `${fmtEUR0(invested)} ${trad('investis')} · ${trad('écart')} ${fmtSigned(pnl)} (${
             fmtSignedPct(pnl / invested * 100, 1)})`
@@ -13853,9 +9713,6 @@ const APERCUS = {
       lignes: lignes.map(l => ({
         label: l.nom,
         meta: [sousNom(l.nom, nomCompteV2(l.compte), nomEtabDe(l.compte)),
-               /* L'age de la valeur fait partie du chiffre : une estimation d'il
-                  y a trois ans ne vaut pas celle d'hier, et c'est la seule
-                  difference qu'une valeur declaree puisse honnetement montrer. */
                l.estimeLe ? `${trad('estimé')} ${fmtDate(l.estimeLe)}`
                           : trad('jamais estimé')].filter(Boolean).join(' · '),
         valeur: l.value,
@@ -13879,18 +9736,6 @@ const APERCUS = {
 let apercuOuvert = null;
 let apercuArg = null;
 
-/* Appliquer les champs d'un bloc differe : la meme fonction que l'ecriture a la
-   frappe, appelee une fois pour toutes au clic sur « Enregistrer ».
-
-   Elle vit ici, en un seul endroit, parce que deux fenetres s'en servent — la
-   fiche d'une ligne de titres et les panneaux d'apercu — et qu'un second
-   exemplaire finirait par oublier un cas. Le bloc redevient propre : fermer
-   ensuite ne demande plus rien. */
-/* Le libelle du bouton dit ce que le clic va faire, pas l'etat courant.
-
-   Il se recalcule apres chaque geste, celui d'un groupe seul comme celui de
-   tous : replier le dernier groupe ouvert a la main doit retourner le bouton,
-   sinon il proposerait de replier ce qui l'est deja. */
 function majBoutonLiqTout(fenetre) {
   const btn = fenetre && $('[data-action="liq-plier-tout"]', fenetre);
   if (!btn) return;
@@ -13922,19 +9767,12 @@ function openApercu(cle, arg) {
   apercuOuvert = cle;
   apercuArg = arg;
   $('#modalTitle').textContent = a.titre;
-  /*    escMontant, et non textContent : une quarantaine d'apercus composent leur
-   sous-titre avec fmtEUR0(), qui rend l'oeil SVG en mode masque. Meme regime
-   que les tuiles et les notifications : tout est echappe, seul notre fragment
-   traverse. Corriger les producteurs un a un aurait refait le defaut au
-   prochain apercu.*/
   /* `sousAction` : une commande de lecture posee au bout du sous-titre. Elle
      n'est pas echappee — c'est du balisage que le panneau fournit, comme `html`
      juste en dessous — et le sous-titre, lui, l'est toujours. */
   $('#modalSub').innerHTML = escMontant(a.sous) + (a.sousAction || '');
   $('#modalSub').classList.toggle('avec-action', !!a.sousAction);
   $('#modalBody').innerHTML = `
-    <!-- totalTexte : un repere de marche se compte en points ou en dollars,
-         fmtEUR aurait colle un « € » sur le S&P 500. -->
     <div class="modal-total"><b>${a.totalTexte || fmtEUR(a.total)}</b>
       <span>${escMontant(noteApercu(a))}</span></div>
 
@@ -13991,24 +9829,6 @@ function openApercu(cle, arg) {
   }
 }
 
-/* La fenetre d'une barre de la page Objectifs : ses placements, un par ligne.
-
-   Le pourcentage annonce sa base, et cette base est celle des cibles — pas le
-   patrimoine brut que la fenetre prend par defaut. Les deux existent, ils ne
-   valent pas la meme chose : 13 558 EUR font 44,8 % de la base des cibles et
-   20,1 % des avoirs. Ouvrir une barre a 44,8 % pour lire « 20,1 % de vos
-   avoirs » aurait donne deux chiffres pour la meme ligne a un clic d'ecart,
-   le defaut que cette application a deja corrige trois fois.
-
-   La fiche n'est pas une carte d'analyse : c'est le chemin le plus court de
-   « Actions core, +1 200 EUR a renforcer » vers la ligne qu'on va renforcer.
-   Chaque intitule ouvre donc la fiche de la position, pas son compte.
-
-   Ce que chaque ligne dit d'elle-meme depend de ce que le titre dit deja. Une
-   fiche de role melange les classes, donc elle les nomme ; une fiche de classe
-   entiere melange les roles, donc elle les nomme — et c'est ce qui permet de
-   decider si la classe vaut d'etre decoupee. Une fiche de classe et de role
-   n'a plus rien a preciser : tout est dans son titre. */
 function ficheDeBarre(d) {
   if (!d) return null;
   const base = rebalanceRows().base;
@@ -14057,7 +9877,6 @@ function nomLigneApercu(l) {
   return esc(l.label);
 }
 
-/* Rafraîchit les totaux de la fenêtre après une saisie, sans voler le focus. */
 function majApercu() {
   if (!apercuOuvert || $('#modal').hidden) return;
   const a = APERCUS[apercuOuvert]?.(apercuArg);
@@ -14065,19 +9884,12 @@ function majApercu() {
   const total = $('#modalBody .modal-total b');
   if (total) total.innerHTML = fmtEUR(a.total);
   const note = $('#modalBody .modal-total span');
-  /* Les memes canaux que l'ouverture, le meme regime : ce rafraichissement
-     reecrit ce que openApercu a ecrit, et un canal sur deux qui echappe
-     autrement referait apparaitre le SVG a la premiere frappe. */
   if (note) note.innerHTML = escMontant(noteApercu(a));
-  // le titre dépend parfois d'un champ de la fenêtre elle-même (l'année visée)
   $('#modalTitle').textContent = a.titre;
   $('#modalSub').innerHTML = escMontant(a.sous || '');
-  // et les lignes chiffrées, qui bougent avec le même champ
   if (a.live) {
     const L = a.live();
     for (const el of $$('#modalBody [data-live]')) {
-      /* Ces valeurs sont des chaines deja formatees par les apercus, montants
-         compris : meme canal, meme regime que le sous-titre. */
       if (L[el.dataset.live] != null) el.innerHTML = escMontant(L[el.dataset.live]);
     }
   }
@@ -14099,14 +9911,10 @@ function closeApercu() {
   apercuOuvert = null;
 }
 
-/* Ancre demandée par une tuile, consommée au prochain rendu. */
 let pendingAnchor = null;
 
 function focusAnchor() {
   if (!pendingAnchor) return;
-  /* Depuis que les gros tableaux ont une liste de telephone, deux rendus
-     portent la meme ancre et un seul est affiche. Viser le premier du
-     document menait sur le tableau cache : rien ne bougeait a l'ecran. */
   /* `data-anchor` sert a deux choses : dire ou aller, sur le bouton qui
      declenche `goto`, et marquer la destination. Un bouton porte donc la meme
      valeur que sa cible, et il etait trouve en premier : on « defilait » vers
@@ -14140,14 +9948,6 @@ function focusAnchor() {
 function render() {
   const key = currentView();
   const v = VIEWS[key];
-  /* Une vue a sous-onglets peut porter un titre et un sous-titre par onglet :
-     « Allocation » couvre deux sujets, et un libelle unique en decrivait
-     forcement un seul. La cle suit l'onglet actif, et le repli sur la cle de vue
-     garde les autres vues inchangees.
-
-     Le titre a rejoint le sous-titre le jour ou Projection est devenue un onglet
-     de la vue d'ensemble : sans cela, la page de projection s'annoncait
-     « Vue d'ensemble ». */
   const cleOnglet = SOUS_ONGLETS[v.cle] && sousOngletActif[v.cle]
     ? `${v.cle}.${sousOngletActif[v.cle]}` : null;
   const propre = suffixe => {
@@ -14158,13 +9958,7 @@ function render() {
   $('#viewTitle').textContent = titre;
   $('#viewSub').textContent = propre('.sub') || viewSub(v.cle);
   $('#brandView').textContent = titre;              // barre fixe, écran replié
-  /* La vue courante, lisible depuis le CSS. Elle servait a ne pas dessiner la
-     poignee de glissement sur l'accueil ; cette poignee est partie avec le geste,
-     mais l'attribut reste : c'est un point d'accroche a cout nul pour styler une
-     page en particulier, et une vue nommee dans le DOM aide a s'y retrouver. */
   document.body.dataset.vue = key;
-  /* Le bandeau suit le mode a chaque rendu : entrer et sortir ne passe pas par
-     un rechargement de page. */
   const bandeau = $('#bandeauDemo');
   if (bandeau) bandeau.hidden = !modeDemo();
 
@@ -14201,19 +9995,10 @@ function render() {
     }
     document.body.classList.toggle('sous-page', !retour.hidden);
   }
-  /* Chaque entrée vise sa propre vue : la comparaison suffit. Le temps où
-     Données et Préférences partageaient la leur, il fallait départager sur le
-     sous-onglet ouvert, sans quoi les deux s'allumaient ensemble. */
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.view === key));
   majOnglets();
   const host = $('#view');
   const scroll = window.scrollY;
-  /* La cascade d'entree ne joue qu'a l'arrivee sur une vue — changement de
-     page ou de sous-onglet — jamais sur un simple re-rendu. render() tourne a
-     chaque frappe dans un champ : les cartes rejouaient alors leur entree en
-     boucle, et l'application paraissait clignoter precisement quand on s'en
-     servait. La signature suit le sous-onglet actif, pour que passer de
-     Depenses a Releves compose la page comme une arrivee. */
   const signatureVue = cleOnglet || key;
   /* Arriver sur une vue, ou la redessiner : les deux ne veulent pas la meme
      position de defilement, et c'est cette distinction qui manquait.
@@ -14230,13 +10015,6 @@ function render() {
      memoire vit en memoire vive : un rechargement de page la vide, et c'est
      voulu — on rouvre l'application en haut de l'ecran d'accueil. */
   const arrivee = signatureVue !== derniereVueRendue;
-  /* Changer de sous-onglet n'est pas changer de destination : c'est un selecteur
-     segmente, et il ramene en haut. La memoire de position vaut pour les cinq
-     onglets du bas, qui sont des destinations — iOS et Material 3 les traitent
-     ainsi tous les deux — mais deux sous-onglets sont deux contenus de la meme
-     page, de longueurs differentes : rester a 1 500 px dans le second ne designe
-     rien. C'est aussi ce qui avait ete tranche pour la barre du haut, « le
-     changement de menu, oui on doit arriver en haut forcement ». */
   const changeOnglet = arrivee && derniereCleRendue === key;
   if (arrivee) {
     if (derniereVueRendue) positionsVues.set(derniereVueRendue, scroll);
@@ -14282,8 +10060,6 @@ function render() {
         seg.style.removeProperty('--onglet')));
     }
   }
-  /* Le tassement suit le meme chemin que le lavis : pose sur la barre neuve,
-     puis retire quand l'animation a fini. */
   if (tapeSousOnglets) {
     tapeSousOnglets = false;
     const seg = $('.sous-onglets .segmented');
@@ -14291,16 +10067,6 @@ function render() {
       seg.classList.add('tape');
       setTimeout(() => seg.classList.remove('tape'), 400);
     }
-    /* Pas de fondu ajoute ici, et c'est un correctif.
-
-       La lecon est plus generale qu'un reglage de duree : avant d'ajouter une
-       animation, verifier que l'endroit n'en a pas deja une. Deux mouvements
-       superposes ne font pas un mouvement deux fois plus riche, ils font un
-       defaut.
-
-       Ce qui reste a corriger est la barre elle-meme : elle participe a la
-       cascade alors qu'on vient de la toucher. Une commande ne bouge pas quand
-       on l'actionne — c'est ce que dit la classe posee juste apres. */
     const host = $('#view');
     if (host) {
       host.classList.add('barre-immobile');
@@ -14311,49 +10077,21 @@ function render() {
   MOUNTS[key]?.();
   monteAides();
   renderSidebar();
-  /* La marque de fraicheur ne vaut que pour le rendu qu'elle vient de decorer :
-     sans ce vidage, changer d'onglet ferait re-clignoter des cours vieux de dix
-     minutes, et l'animation cesserait de dire « ça a change » pour ne plus dire
-     que « la page s'est redessinee ». */
   coursFraichis = new Set();
-  /* Une ancre demandee passe devant tout : c'est un geste explicite, il commande
-     sur la position retenue. Sinon, l'arrivee restaure celle de la vue ouverte, et
-     un re-rendu ne bouge pas d'un pixel. */
   if (pendingAnchor) focusAnchor();
-  /* Le retour au sommet est un geste, pas une navigation : il commande sur la
-     position retenue, au meme titre qu'une ancre demandee. Sans lui, le logo
-     ramenait sur l'accueil a l'endroit ou on l'avait quitte — « je reviens sur
-     la page mais pas en haut, c'est pas bon ». La memoire par vue, juste pour
-     un changement d'onglet, ne doit pas repondre a la demande inverse. */
   else if (retourHautDemande || changeOnglet) { retourHautDemande = false; window.scrollTo(0, 0); }
   else window.scrollTo(0, arrivee ? (positionsVues.get(signatureVue) || 0) : scroll);
 }
-/* Consomme par le rendu qui suit, et par lui seul : le poser sans naviguer le
-   laisserait vivre jusqu'au prochain re-rendu, qui remonterait alors une page
-   qu'on venait de descendre. Le seul poseur verifie donc qu'il navigue. */
 let retourHautDemande = false;
 /* La vue rendue, sous-onglet exclu — `derniereVueRendue` porte la signature
    complete. Les deux sont necessaires : c'est leur difference qui distingue un
    changement d'onglet du bas d'un changement de sous-onglet. */
 let derniereCleRendue = null;
 let derniereVueRendue = null;
-/* La position de defilement de chaque vue, retenue le temps de la session. */
 const positionsVues = new Map();
-/* Combien de fois on a change d'ecran depuis l'ouverture. Sert au retour des
-   pages sans parent : sans ce compteur, un signet ouvert sur Preferences aurait
-   un chevron qui fait sortir du site. */
 let navsInternes = 0;
-/* Un appui sur un sous-onglet vient d'avoir lieu : le rendu qui suit doit
-   rejouer le tassement sur la barre qu'il vient de recreer. */
 let tapeSousOnglets = false;
 
-/* --- le panneau des notifications ---------------------------------------
-   Il descend de sa cloche et ne couvre que ce qu'il faut. Chaque ligne est un
-   bouton : le titre dit ce qui manque, la ligne mène là où ça se règle.
-
-   Il se remplit à l'ouverture et non à chaque rendu : ce qu'il montre ne bouge
-   pas tant qu'il est ouvert, et un panneau qui se réécrit sous le doigt fait
-   perdre la ligne qu'on visait. */
 const ICONE_NOTIF = { action: '●', error: '⛔', warn: '⚠', info: 'ℹ' };
 
 function rendNotifs() {
@@ -14364,20 +10102,9 @@ function rendNotifs() {
     <div class="notif-tete">
       <b>${trad('À faire')}</b>
       <span>${n.length ? `${n.length} point${n.length > 1 ? 's' : ''}` : 'rien à signaler'}</span>
-      <!--    L'engrenage mene aux reglages : c'est la, devant la liste, qu'on se dit «
-   je ne veux plus de celle-la ».-->
       <button type="button" class="btn icon xs notif-reglages"
               data-action="goto" data-view="notifications" data-anchor=""
               title="${trad('Réglages des notifications')}" aria-label="${trad('Réglages des notifications')}">
-        <!-- Trois points, apres deux engrenages et une cle dessines en grand
-             pour les juger : un cercle a huit rayons detaches fait un soleil, un
-             cercle epais en pointille aussi — ses dents ne touchent pas le
-             moyeu — et la cle etait laide a cette taille.
-
-             Trois points ne pretendent rien dire d'autre que « il y a autre
-             chose ici », et c'est vrai : la ligne mene aux reglages. A quinze
-             pixels, c'est la seule forme qu'on ne peut pas confondre. Pleins,
-             pas cercles : trois anneaux se liraient comme des boutons. -->
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none">
           <circle cx="5.6" cy="12" r="1.75"/>
           <circle cx="12" cy="12" r="1.75"/>
@@ -14392,18 +10119,11 @@ function rendNotifs() {
           <span class="notif-ic" aria-hidden="true">${ICONE_NOTIF[x.level] || '•'}</span>
           <span class="notif-txt"><b>${esc(x.title)}</b><span>${escMontant(x.detail)}</span></span>
         </button>
-        <!-- Deux boutons cote a cote, pas l'un dans l'autre : un <button> ne peut
-             pas en contenir un second. La ligne mene la ou ca se regle, la croix
-             dit « ne me le dis plus ». -->
         <button type="button" class="btn icon xs notif-x" data-action="masquer-notif"
                 data-cle="${esc(x.cle)}" title="${trad('Ne plus signaler')}"
                 aria-label="Ne plus signaler : ${esc(x.title)}">✕</button>
       </div>`).join('')
     : `<p class="notif-vide">${trad('✓ Rien à signaler.')}</p>`}
-    <!-- Le bord libre du panneau, et le geste qui le referme : il descend de sa
-         cloche, il remonte par la. Un chevron seul, pleine largeur, parce que la
-         zone touchee doit etre facile a viser au pouce — et parce que rien
-         d'autre ne disait comment sortir sans viser le vide autour. -->
     <button type="button" class="notif-fermer" data-action="fermer-notifs"
             aria-label="Fermer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6,14.5 12,8.5 18,14.5"/></svg>
@@ -14425,13 +10145,6 @@ function basculeNotifs() {
   $('#btnCloche')?.setAttribute('aria-expanded', String(ouvrir));
 }
 
-/* --- barre d'onglets (téléphone) ---
-   Cinq onglets, cinq destinations. « Plus » a occupé la dernière place : un
-   onglet qui n'allait nulle part, à toucher avant de toucher sa destination.
-   Comptes l'a remplacé, et les réglages s'ouvrent par le logo.
-
-   Aucun onglet ne s'allume donc sur Données, seule vue hors barre : c'est le
-   logo qui en tient lieu, et il porte l'état ouvert du tiroir. */
 function majOnglets() {
   const barre = $('#tabbar');
   if (!barre) return;
@@ -14443,16 +10156,6 @@ function majOnglets() {
     a.classList.toggle('on', !ouvert && a.dataset.view === key);
     a.setAttribute('aria-current', (!ouvert && a.dataset.view === key) ? 'page' : 'false');
   }
-  /* Le tiroir « Plus » montrait les six entrées du menu, dont quatre que la
-     barre du bas porte déjà, à un doigt. Trois en-têtes organisaient donc
-     surtout des doublons, et il fallait lire six lignes pour trouver les deux
-     qui n'étaient nulle part ailleurs.
-
-     La liste des doublons vient de la barre elle-même, jamais recopiée : deux
-     listes à tenir d'accord finissent toujours par diverger, et c'est le défaut
-     qu'on a corrigé trois fois ailleurs. Le masquage se fait en CSS, sous
-     768 px seulement — sur ordinateur, les six vivent dans le menu latéral et
-     le regroupement y mérite sa place. */
   let titre = null, restants = 0;
   const trancher = () => titre && titre.classList.toggle('sans-suite', restants === 0);
   for (const el of $$('#nav > *')) {
@@ -14464,11 +10167,6 @@ function majOnglets() {
   }
   trancher();
 
-  /* Les deux saisies en attente se signalent au meme endroit, depuis que les
-     relevés sont un sous-onglet de Budget. Le releve avertissait sur « Plus »,
-     ou il vivait dans le tiroir : il n'y est plus, et une pastille pointant
-     vers un menu qui ne contient plus rien a saisir enverrait chercher au
-     mauvais endroit. Le titre dit laquelle des deux attend, ou les deux. */
   const dep = depensesEnAttente();
   const rel = currentMonthPending();
   const enAttente = [
@@ -14496,16 +10194,12 @@ function renderSidebar() {
   const t = nowTotals();
   const d = deltas();
 
-  // pastilles rouges tant que le mois en cours n'est pas saisi
   const pastille = (id, p, texte) => {
     const b = $(id);
     if (!b) return;
     b.hidden = !p.missing;
     b.title = p.missing ? `${p.label}, ${texte}` : '';
   };
-  /* Une seule entree de menu, une seule pastille : « Relevés » a quitte le
-     menu pour devenir un sous-onglet de Budget. Elle s'allume pour l'une ou
-     l'autre des deux saisies, et son infobulle dit laquelle. */
   const dep = depensesEnAttente();
   const rel = currentMonthPending();
   pastille('#badgeBudget',
@@ -14513,13 +10207,8 @@ function renderSidebar() {
     [dep.missing ? trad('dépenses pas encore saisies') : '',
      rel.missing ? trad('relevé pas encore enregistré') : ''].filter(Boolean).join(` ${trad('et')} `));
 
-  /* Le patrimoine clignote brièvement quand il bouge : on voit qu'une saisie
-     a porté, sans avoir à chercher où. */
   const netWorth = $('#sbNetWorth');
   const montant = fmtEUR0(t.total);
-  /* La comparaison se fait sur le même terrain que l'écriture, sinon elle
-     oppose du texte à du balisage et déclenche le clignotement à chaque
-     rendu — y compris quand rien n'a bougé. */
   if (netWorth.innerHTML && netWorth.innerHTML !== montant) {
     netWorth.classList.remove('valeur-maj');
     void netWorth.offsetWidth;
@@ -14531,8 +10220,6 @@ function renderSidebar() {
      pavé de balisage au milieu du menu. Rien d'extérieur ne passe ici :
      `fmtEUR0` rend soit un nombre formaté, soit cette icône. */
   netWorth.innerHTML = montant;
-  /* La tête du tiroir porte le même chiffre : deux endroits, une seule
-     source, sinon l'un des deux finit par mentir. */
   const netTiroir = $('#navNetWorth');
   if (netTiroir) netTiroir.innerHTML = montant;
   const el = $('#sbDelta');
@@ -14543,19 +10230,8 @@ function renderSidebar() {
   const dTiroir = $('#navDelta');
   if (dTiroir) { dTiroir.innerHTML = deltaHtml; dTiroir.className = deltaCls; }
 
-  /* Le bouton dit dans quel etat on se trouve, pas ce qu'il va faire :
-     masque actif, il reste allume, sinon on oublie qu'on a cache les
-     montants et on croit l'app en panne. */
   majEtatCours();
 
-  /* Tous les yeux, et non celui du menu seul.
-
-     Il y en a trois maintenant : le pied du menu sur grand ecran, la carte du
-     patrimoine, et la barre du haut sur telephone. Viser un identifiant en
-     laissait deux dans l'etat precedent — celui de la barre du haut n'est pas
-     re-rendu, c'est du balisage statique, donc il serait reste barre alors que
-     les montants sont revenus. La liste se derive de l'action : le quatrieme
-     bouton posee demain suivra sans qu'on y pense. */
   const on = masqueActif();
   document.body.classList.toggle('discret', on);
   for (const oeil of $$('[data-action="toggle-masque"]')) {
@@ -14563,24 +10239,11 @@ function renderSidebar() {
     oeil.title = (on ? trad('Afficher les montants') : trad('Masquer les montants')) + ' ' + trad('(touche h)');
     oeil.setAttribute('aria-label', on ? trad('Afficher les montants') : trad('Masquer les montants'));
   }
-  /* Le patrimoine du menu est lui aussi une bascule : son infobulle doit
-     dire l'etat courant, comme l'oeil. */
   const nw = $('#sbNetWorth');
   if (nw) nw.title = (masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants'))
     + ' ' + trad('(touche h)');
 }
 
-/* -------------------------------------------------------------
-   Fermer une fenêtre en la faisant glisser vers le bas
-
-   Sur téléphone, la croix est en haut à droite — le coin le plus
-   loin du pouce. Le geste attendu d'une feuille qui monte du bas,
-   c'est de la repousser vers le bas.
-
-   Le glissement ne démarre que si le contenu est déjà en haut de
-   sa course : autrement on ne pourrait plus faire défiler une
-   fenêtre longue vers le haut sans la refermer.
-   ------------------------------------------------------------- */
 function monteGlissementFermeture(fenetre) {
   if (!fenetre) return;
   const panneau = fenetre.querySelector('.modal-panel');
@@ -14590,8 +10253,6 @@ function monteGlissementFermeture(fenetre) {
   const SEUIL = 90;          // en deçà, la fenêtre revient en place
 
   const fermable = () => {
-    /* La croix porte déjà la bonne action selon la fenêtre ouverte : on la
-       déclenche plutôt que de dupliquer sa logique de résolution. */
     const croix = fenetre.querySelector('#modalClose, #confirmNo');
     return croix || null;
   };
@@ -14621,49 +10282,15 @@ function monteGlissementFermeture(fenetre) {
 
   const SEUIL_INTENTION = 8;
 
-  /* Le glissement de fermeture ne part QUE de la poignee et de l'en-tete.
-
-     Il partait de n'importe ou dans la fenetre, contenu compris, a la seule
-     condition que le corps soit en haut de son defilement. Deux gestes se
-     disputaient donc la meme surface, et le desaccord s'est solde par trois
-     tentatives ratees : un seuil a huit pixels, puis a vingt-six, puis des
-     durcissements CSS. Rien n'y a fait, et pour une raison de fond — au sommet
-     d'une fiche, un doigt qui descend est ambigu, et aucune valeur de seuil ne
-     leve l'ambiguite. Une fiche longue s'ouvre toujours en haut, donc
-     l'ambiguite etait la regle et non l'exception.
-
-     La poignee existe pour ce geste : elle le prend, seule. Dans le contenu, il
-     n'y a plus qu'une chose possible, defiler, et plus rien a arbitrer. C'est
-     ainsi que se comportent les feuilles du systeme quand leur contenu defile.
-     La croix et « Fermer » restent, evidemment.
-
-     Reste le cas ou le contenu ne defile pas du tout, et c'est le plus courant :
-     « Depenses 2026 » mesure 481 px de contenu dans 481 px de corps. La regle
-     ci-dessus y devenait absurde. Elle disait « dans le contenu, il n'y a plus
-     qu'une chose possible, defiler » — sauf que la, defiler est impossible. Le
-     geste ne faisait donc rien, et partait a la page derriere, qu'on voyait
-     bouger sous la feuille.
-
-     La condition n'est donc plus « le corps est en haut de son defilement »,
-     qui etait ambigue parce qu'une fiche longue s'ouvre toujours en haut, mais
-     « le corps ne peut pas defiler ». La difference est entiere : dans le
-     premier cas deux gestes se disputaient la surface, dans le second un seul
-     existe. */
   const ZONE_GLISSEMENT = '.modal-head';
   const corpsDefile = () => {
     const c = fenetre.querySelector('.modal-body');
     return !!c && c.scrollHeight - c.clientHeight > 2;
   };
-  /* Retenu au depart du geste : le contenu peut changer de hauteur en cours de
-     route — une saisie qui ajoute une ligne — et la regle ne doit pas basculer
-     sous le doigt. */
   let corpsFige = false;
 
   panneau.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) return;
-    /* Le pseudo-element de la poignee n'est pas une cible d'evenement : un
-       appui dessus arrive sur le panneau lui-meme. On accepte donc aussi les
-       touches qui ne tombent dans aucun enfant. */
     const surLaPoignee = e.target === panneau;
     corpsFige = !corpsDefile();
     if (!surLaPoignee && !corpsFige && !e.target.closest(ZONE_GLISSEMENT)) return;
@@ -14696,13 +10323,7 @@ function monteGlissementFermeture(fenetre) {
     const dx = e.touches[0].clientX - departX;
 
     if (axe === null) {
-      /* Sous huit pixels, l'intention n'est pas lisible : on ne bouge rien. Un
-         panneau qui frémit au premier pixel donne l'impression d'un contrôle
-         qui glisse des mains. */
       if (Math.abs(dy) < SEUIL_INTENTION && Math.abs(dx) < SEUIL_INTENTION) return;
-      /* Vers le haut, ou plus latéral que vertical : ce n'est pas une
-         fermeture. On rend la main, définitivement pour ce geste — sans quoi
-         une main qui redescend reprendrait le panneau en cours de route. */
       axe = (dy > 0 && Math.abs(dy) > Math.abs(dx)) ? 'ferme' : 'defile';
       if (axe === 'defile') { depart = null; panneau.style.willChange = ''; return; }
     }
@@ -14766,13 +10387,7 @@ function monteTirerRafraichir() {
     document.body.appendChild(jauge);
   }
 
-  /* 165 px, apres 72 puis 118. Le geste doit couter, parce qu'il part chercher le
-     reseau et reecrit tous les cours — et parce qu'un doigt qui descend au sommet
-     d'une page, c'est aussi ce qu'on fait pour commencer a lire.
-
-     Le seuil se mesure sur la course du **doigt**, pas sur celle de la page :
-     celle-ci est desormais bornee, elle ne pourrait plus l'atteindre. */
-  const SEUIL = 165;           // au-dela, on lache et ca part
+  const SEUIL_RAFRAICHIR = 165;   // au-dela, on lache et ca part
   const INTENTION = 8;         // en deca, l'intention n'est pas lisible
   let depart = null, departX = 0, dy = 0, axe = null, enCours = false;
 
@@ -14810,16 +10425,13 @@ function monteTirerRafraichir() {
   const amorti = d => COURSE_MAX * (1 - Math.exp(-d / COURSE_MAX));
 
   const peindre = () => {
-    const t = Math.min(1, dy / SEUIL);
+    const t = Math.min(1, dy / SEUIL_RAFRAICHIR);
     const y = amorti(dy);
     jauge.style.opacity = String(t);
     jauge.style.transform = `translate(-50%, ${y}px) rotate(${t * 300}deg)`;
-    jauge.classList.toggle('prete', dy >= SEUIL);
+    jauge.classList.toggle('prete', dy >= SEUIL_RAFRAICHIR);
     hote.style.transform = `translateY(${y}px)`;
   };
-  /* Le retour : le disque s'efface, la page remonte. La courbe rend un peu
-     au-dela de sa place avant de s'y poser, sinon la remontee s'arrete net et le
-     geste finit sans reponse. */
   const RESSORT = 'cubic-bezier(.22, 1.28, .42, 1)';
   const reposer = () => {
     jauge.style.transition = 'opacity .2s ease, transform .25s ease';
@@ -14839,20 +10451,10 @@ function monteTirerRafraichir() {
        d'un rendu a l'autre. Les ecouteurs sont donc poses une fois et vivent
        ensuite sous Budget comme sous Marches — c'est ici qu'on decide, pas au
        montage. Le garde du montage ne fait qu'eviter de les empiler. */
-    /* Deux vues, et pas une : Marches parce qu'on y regarde les cours, et la vue
-       d'ensemble parce que c'est la qu'on vient voir son patrimoine, qui bouge
-       avec eux. Ailleurs, rien a rafraichir — un budget ne vient pas du reseau,
-       et le geste y volerait le rebond natif de la page pour rien. */
     if (!VUES_TIRER.has(currentView())) return;
     if (enCours || e.touches.length !== 1) return;
     if (window.scrollY > 0) return;
     if (!$('#modal').hidden || !$('#confirm').hidden) return;
-    /* Ce qui defile lateralement garde son geste, entierement. Le ruban de
-       reperes de Marches se trouve en haut de page, la ou le tirage s'arme :
-       les deux gestes partaient du meme endroit et le tirage gagnait des que le
-       doigt descendait un peu. On ne s'arme donc pas du tout au-dessus d'une
-       zone qui defile en x — mieux vaut renoncer au tirage sur ces quelques
-       centimetres que de rendre le ruban inutilisable. */
     if (e.target.closest('.reperes, .reperes-familles, .table-wrap, [data-defile-x]')) return;
     depart = e.touches[0].clientY; departX = e.touches[0].clientX; dy = 0; axe = null;
     jauge.style.transition = '';
@@ -14864,22 +10466,17 @@ function monteTirerRafraichir() {
     const x = e.touches[0].clientX - departX;
     if (axe === null) {
       if (Math.abs(y) < INTENTION && Math.abs(x) < INTENTION) return;
-      /*         On compare donc les deux axes, comme le fait deja la fermeture des
-         feuilles. Le geste lateral rend la main definitivement — sans quoi une
-         main qui finit par descendre reprendrait le tirage en cours de route. */
       axe = (y > 0 && Math.abs(y) > Math.abs(x)) ? 'tirer' : 'autre';
       if (axe === 'autre') { depart = null; return; }
     }
     dy = Math.max(0, y);
-    /* Le geste est confisque : sans cela le navigateur fait rebondir la page et
-       la jauge glisse sous un contenu qui bouge en meme temps. */
     e.preventDefault();
     peindre();
   }, { passive: false });
 
   const relacher = async () => {
     if (depart === null || axe !== 'tirer') { depart = null; axe = null; return; }
-    const assez = dy >= SEUIL;
+    const assez = dy >= SEUIL_RAFRAICHIR;
     depart = null; axe = null;
     if (!assez) { dy = 0; reposer(); return; }
     dy = 0;
@@ -14888,10 +10485,6 @@ function monteTirerRafraichir() {
     jauge.classList.remove('prete');
     jauge.classList.add('tourne');
     jauge.style.opacity = '1';
-    /* Le contenu reste pousse pendant la requete, a la hauteur du disque : c'est
-       ce qui dit que le travail est en cours. Le laisser remonter aussitot
-       donnerait un geste avale, et le disque tournerait devant une page revenue
-       en place comme s'il ne la concernait plus. */
     jauge.style.transition = 'transform .2s ease';
     jauge.style.transform = 'translate(-50%, 34px)';
     hote.style.transition = 'transform .2s ease';
@@ -14934,7 +10527,6 @@ function monteTirerRafraichir() {
    d'avoir fait ces animations avant de chercher l'haptique, et non apres.
    ------------------------------------------------------------- */
 function retourHaptique() {
-  /* Envelope : un retour tactile absent ne doit jamais casser un appui. */
   try { navigator.vibrate?.(8); } catch (e) {}
 }
 
@@ -15003,8 +10595,6 @@ function monteVideChamp() {
   const placer = () => {
     if (!cible || !cible.isConnected) return cacher();
     const r = cible.getBoundingClientRect();
-    /* Hors de l'ecran, ou dans un tableau qu'on vient de faire defiler
-       lateralement : la croix suivrait un champ que l'on ne voit plus. */
     if (!r.width || r.bottom < 4 || r.top > innerHeight - 4) { btn.hidden = true; return; }
     btn.hidden = false;
     btn.style.left = `${r.right - 23}px`;
@@ -15048,8 +10638,6 @@ function monteVideChamp() {
     suivre();
   });
 
-  /* Le bouton n'est pas dans le champ : le quitter le ferait disparaitre
-     avant le clic. On attend de savoir ou le focus a atterri. */
   document.addEventListener('focusout', e => {
     if (e.target !== cible) return;
     setTimeout(() => { if (document.activeElement !== cible) cacher(); }, 0);
@@ -15095,9 +10683,6 @@ function monteVideChamp() {
    Partent avec lui : la poignee dessinee en tete des pages autres que
    l'accueil, et le calque qui donnait la profondeur pendant le glissement. */
 
-/* =============================================================
-   ÉVÉNEMENTS
-   ============================================================= */
 function bindGlobal() {
   /* Chaque changement d'adresse compte : c'est ce qui permet au retour des pages
      sans parent de savoir s'il y a un « avant » dans l'application. Un signet
@@ -15163,13 +10748,8 @@ function bindGlobal() {
     const SEUIL = 64, PAS = 6;
     const battement = () => Math.round(window.innerHeight / 3);
     let dernier = Math.max(0, window.scrollY);
-    /* Ce qu'on a remonté depuis le dernier changement de sens. C'est la seule
-       mémoire du mécanisme, et elle ne vaut que pour le geste en cours. */
     let remontee = 0;
     const suivre = () => {
-      /* Ni pendant une fenetre, ni pendant que le tiroir est ouvert : dans les deux
-         cas le defilement residuel n'est pas un geste de lecture, et retirer la
-         barre sous un tiroir qu'elle contient le decrocherait de l'ecran. */
       if (modalesOuvertes > 0 || document.body.classList.contains('nav-open')) return;
       const y = Math.max(0, window.scrollY);
       const delta = y - dernier;
@@ -15182,10 +10762,6 @@ function bindGlobal() {
         return;
       }
       if (delta > 0) {
-        /* On descend : la barre part passé le seuil de page, et le battement
-           repart de zéro. C'est ce zéro qui fait la différence entre lire et
-           vouloir revenir : quarante pixels vers le haut suivis de vingt vers le
-           bas ne s'additionnent pas. */
         remontee = 0;
         document.body.classList.toggle('haut-cache', y > SEUIL);
         return;
@@ -15197,9 +10773,6 @@ function bindGlobal() {
       }
     };
     window.addEventListener('scroll', suivre, { passive: true });
-    /* Changer d'écran rend la barre : on arrive en haut d'une page neuve, et une
-       barre restée cachée depuis l'écran précédent se lirait comme une bande
-       manquante. */
     window.addEventListener('hashchange', () => {
       dernier = 0;
       remontee = 0;
@@ -15207,7 +10780,6 @@ function bindGlobal() {
     });
   })();
 
-  // clics sur actions
   document.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -15215,8 +10787,6 @@ function bindGlobal() {
     if (fn) { e.preventDefault(); fn(btn); }
   });
 
-  // Saisie : à la volée dans l'état, re-rendu au blur. Écouté sur tout le
-  // document pour que les champs des fenêtres d'aperçu marchent aussi.
   /* Ecrire a la frappe, sauf dans un bloc qui attend son bouton.
 
      Toute l'application ecrit a chaque frappe : c'est ce qui permet de corriger
@@ -15231,17 +10801,11 @@ function bindGlobal() {
     const bloc = f.closest('[data-differe]');
     if (bloc) { bloc.dataset.differe = 'sale'; return; }
     applyField(f);
-    /* Le seul cas ou l'envoi au cloud se regroupe : taper « 12500 » produit cinq
-       de ces evenements, et une meme cle n'accepte qu'une ecriture par seconde.
-       Partout ailleurs — un bouton, une fenetre validee — l'envoi part tout de
-       suite, parce que le geste est fini. */
     Store.save({ differe: true });
     marquerEcrit(f);
     renderSidebar();
     majApercu();                       // les totaux de la fenêtre suivent
   });
-  // Renommer une catégorie de dépenses : au blur, pour ne pas déplacer les
-  // montants à chaque frappe.
   /* Un routeur pour les listes deroulantes, comme il en existe un pour les clics.
 
      `data-action` route vers ACTIONS depuis un seul ecouteur ; `data-action-change`
@@ -15270,7 +10834,6 @@ function bindGlobal() {
      est fixe, cinq boutons, plus aucun « ⋯ » a ouvrir. Il ne restait qu'un
      `change` a l'ecoute d'un selecteur que plus rien ne produit. */
 
-  /* Les listes d'année et le filtre d'avoirs. */
   document.addEventListener('change', e => {
     const sel = e.target.closest('select.annee[data-action-change]');
     if (!sel) return;
@@ -15278,8 +10841,6 @@ function bindGlobal() {
     if (fn) fn({ dataset: { year: sel.value, type: sel.value } });
   });
 
-  /* Renommer un bien renomme son contenant du même coup : ils ne désignent
-     qu'une chose, ils ne doivent porter qu'un nom. */
   document.addEventListener('change', e => {
     const champ = e.target.closest('[data-action-change="renommer-bien"]');
     if (!champ) return;
@@ -15339,12 +10900,10 @@ function bindGlobal() {
       const again = $(`[data-path="${CSS.escape(path)}"]`);
       if (again && again.focus) again.focus();
     }
-    // une recherche de symbole vient d'être saisie : on identifie la ligne
     const m = path && path.match(/^positions\.(\d+)\.symbol$/);
     if (m) lookupSymbol(+m[1]);
   });
 
-  // Ctrl+Z / ⌘Z : annule la dernière modification, hors champ de saisie
   document.addEventListener('keydown', e => {
     const key = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey;
     if (!key) return;
@@ -15366,9 +10925,6 @@ function bindGlobal() {
      Le geste survit là où il a un sens, dans le détail d'une catégorie de
      dépenses : cette fenêtre porte de vraies lignes de saisie. */
 
-  /* Le patrimoine du menu n'est pas un <button> — c'est un montant qu'on
-     peut toucher. Il faut donc lui rendre a la main ce qu'un bouton donne
-     gratuitement : Entree et Espace l'activent. */
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const el = e.target.closest?.('[role="button"][data-action]');
@@ -15377,9 +10933,6 @@ function bindGlobal() {
     ACTIONS[el.dataset.action]?.(el);
   });
 
-  /* « h » masque les montants. Sans modificateur : Ctrl+H ouvre l'historique
-     du navigateur, et un raccourci qu'on doit chercher ne sert a rien dans
-     le moment ou l'on en a besoin — quelqu'un qui s'approche de l'ecran. */
   document.addEventListener('keydown', e => {
     if (e.key !== 'h' && e.key !== 'H') return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -15433,8 +10986,6 @@ function bindGlobal() {
   };
   const bascule = () => setNav(!document.body.classList.contains('nav-open'));
   burger.addEventListener('click', bascule);
-  /* Le bouton profil est la porte de la feuille. Le logo, lui, redevient un
-     logo : il mène à l'accueil, et rien d'autre. */
   profil?.addEventListener('click', () => { retourHaptique(); fermeNotifs(); bascule(); });
 
   /* L'appui sur le logo se voit aussi au doigt.
@@ -15480,9 +11031,6 @@ function bindGlobal() {
        controle lit ce qui suit `$('.brand')` pour verifier que le `pointerdown`
        existe, et l'en eloigner l'a fait echouer. */
     marque.addEventListener('click', () => {
-      /* On compare l'adresse entiere et non la vue : l'accueil a des
-         sous-onglets, et venir du deuxieme vers le premier est bien une
-         navigation, avec sa position retenue a ignorer. */
       if (location.hash !== marque.getAttribute('href')) { retourHautDemande = true; return; }
       if (window.scrollY > 0) {
         window.scrollTo({ top: 0,
@@ -15491,42 +11039,17 @@ function bindGlobal() {
     });
   }
   backdrop.addEventListener('click', () => setNav(false));
-  /* Un lien ferme la feuille, et un bouton qui navigue aussi : les deux mènent
-     ailleurs, elle n'a plus de raison d'être ouverte. */
   $('#nav').addEventListener('click', e => {
     const porte = e.target.closest('a, [data-action="goto"]');
     if (!porte) return;
     setNav(false);
-    /* Meme regle que la barre du bas et le logo : le menu est une navigation,
-       elle arrive en haut. La memoire de position ne sert que le retour d'une
-       fiche vers sa liste. */
     const href = porte.getAttribute?.('href');
     if (href && href !== location.hash) retourHautDemande = true;
   });
-  /* Retoucher l'onglet où l'on est déjà remonte la page.
-     C'est la convention de toutes les barres d'onglets, et elle manquait :
-     l'adresse ne changeant pas, le clic ne déclenchait rien du tout. Sur une
-     page longue, redescendre à la main pour retrouver le haut est la seule
-     manœuvre que l'application imposait encore.
-
-     L'icône répond d'un petit bond — sans lui, sur une page déjà en haut, le
-     geste n'aurait aucun effet visible et on le croirait perdu. */
   $('#tabbar')?.addEventListener('click', e => {
     const lien = e.target.closest('a');
     if (!lien) return;
     retourHaptique();
-    /* La barre entiere accuse l'appui, d'un tassement d'un pour cent.
-
-       C'est l'animation des barres d'onglets du systeme : la pilule se
-       tasse une fraction de seconde sous le doigt, comme une touche qui
-       s'enfonce. Elle vaut pour tous les onglets, y compris ceux qui changent
-       de page — c'est le seul retour tactile avant que la nouvelle vue arrive,
-       et sans elle un appui sur une page lente ne repond pas.
-
-       Un pour cent parce que la barre est large : sur 355 px, la meme
-       proportion qui passe pour un appui sur un bouton deviendrait une secousse.
-       On retire la classe avant de la reposer, sinon deux appuis rapproches ne
-       rejoueraient pas l'animation. */
     const barre = e.currentTarget;
     barre.classList.remove('tape');
     void barre.offsetWidth;
@@ -15541,18 +11064,6 @@ function bindGlobal() {
        la regle ecrite pour le menu lateral. Le rebond et le retour en haut
        restent pour le seul cas qu'ils visaient — reappuyer sur l'onglet ou l'on
        est deja, ou l'adresse ne bouge pas et ou rien ne se produirait. */
-    /* Un appui sur la barre arrive en haut de la page, toujours.
-
-       La memoire de position par vue avait fini par couvrir ce chemin-la
-       aussi : revenir sur Apercu par la barre rendait la page a 1 500 px,
-       la ou on l'avait laissee la veille. « De nouveau le bug sur mobile
-       quand je retourne sur apercu, ça doit revenir en haut de la page » —
-       et c'est la regle qu'il avait deja donnee pour les onglets : « le
-       changement de menu, oui on doit arriver en haut forcement ».
-
-       Le drapeau se pose sur le GESTE, comme pour le logo : la memoire de
-       position reste entiere pour l'autre chemin, revenir d'une fiche a la
-       liste qu'on parcourait. C'est elle qu'on veut la-bas, et lui seul. */
     if (lien.getAttribute('href') !== location.hash) { retourHautDemande = true; return; }
     e.preventDefault();
     lien.classList.remove('rebond');
@@ -15565,9 +11076,6 @@ function bindGlobal() {
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') setNav(false); });
 
-  /* Le panneau des notifications se ferme comme tous les panneaux flottants :
-     au premier appui ailleurs, et à Échap. Le bouton de la cloche est exclu,
-     sinon il refermerait ce qu'il vient d'ouvrir. */
   document.addEventListener('pointerdown', e => {
     const p = $('#panneauNotifs');
     if (!p || p.hidden) return;
@@ -15582,20 +11090,6 @@ function bindGlobal() {
     if (e.target.closest('[data-action="goto"]')) fermeNotifs();
   });
 
-  /* La feuille se referme en la repoussant vers le bas.
-
-     Elle monte du bas : le meme chemin doit la faire sortir, et c'est le geste
-     de toutes les feuilles du systeme. Sans lui il fallait viser le voile,
-     alors que le pouce est deja pose sur la feuille.
-
-     Elle suit le doigt — une feuille qui attend la fin du geste pour reagir
-     donne l'impression d'avoir rate le mouvement. Vers le haut elle ne bouge
-     presque plus : elle est deja ouverte, rien a gagner. Un lancer vif referme
-     meme a mi-course.
-
-     L'axe du geste est aussi celui du defilement : la feuille ne se laisse
-     repousser que si elle est en haut de son contenu. Sinon le doigt defile,
-     comme dans n'importe quelle liste. */
   (() => {
     const nav = $('#nav');
     if (!nav) return;
@@ -15628,14 +11122,9 @@ function bindGlobal() {
       if (sens === null) {
         if (Math.abs(ex) < 8 && Math.abs(ey) < 8) return;
         sens = Math.abs(ey) > Math.abs(ex) * 1.2 ? 'vertical' : 'lateral';
-        /* Un geste de biais ne doit pas trainer la feuille, et une feuille
-           deroulee doit defiler avant de se refermer. */
         if (sens === 'lateral' || (ey > 0 && !enHaut())) { relacher(); y0 = null; return; }
       }
       const t = performance.now();
-      /* Un intervalle plancher : deux evenements separes d'une fraction de
-         milliseconde donneraient une vitesse absurde, et une simple secousse
-         du pouce refermerait la feuille. */
       const dt = Math.max(8, t - dernierT);
       vitesse = vitesse * 0.7 + ((e.touches[0].clientY - dernierY) / dt) * 0.3;
       dernierY = e.touches[0].clientY; dernierT = t;
@@ -15650,15 +11139,11 @@ function bindGlobal() {
       const ferme = dy > hauteur * 0.3 || (vitesse > 0.6 && dy > 70);
       y0 = null; sens = null;
       if (!ferme) {
-        /* Retour en place : la meme courbe que partout ailleurs. */
         nav.style.transition = 'transform .28s cubic-bezier(.16,1,.3,1)';
         nav.style.transform = '';
         setTimeout(() => { nav.style.transition = ''; nav.style.willChange = ''; }, 300);
         return;
       }
-      /* On laisse la transition du CSS finir la sortie, en repartant de la
-         position reelle du doigt : la fermeture prolonge le geste au lieu de
-         sauter a son debut. */
       nav.style.transition = 'transform .2s cubic-bezier(.3,0,.2,1)';
       nav.style.transform = 'translate3d(0, ' + hauteur + 'px, 0)';
       setNav(false);
@@ -15668,7 +11153,6 @@ function bindGlobal() {
     nav.addEventListener('touchcancel', fin);
   })();
 
-  // --- fenêtre d'aperçu ---
   $('#modalClose').addEventListener('click', closeApercu);
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeApercu(); });
   document.addEventListener('keydown', e => {
@@ -15681,7 +11165,6 @@ function bindGlobal() {
     applyTheme(currentTheme() === 'dark' ? 'light' : 'dark', true);
   });
 
-  /* Langue et thème depuis la vue Préférences. */
   document.addEventListener('change', e => {
     const lang = e.target.closest('[data-action-change="set-lang"]');
     if (lang) { setLang(lang.value); location.reload(); return; }
@@ -15723,9 +11206,6 @@ function applyTheme(nom, recharger = false) {
   if (recharger) location.reload();
 }
 
-/* Saisie d'un symbole : on identifie la ligne (nom, devise, cours) sans
-   attendre. L'ISIN n'est pas récupérable dans ce sens — aucune source
-   gratuite ne fait symbole → ISIN de façon fiable. */
 async function lookupSymbol(i) {
   const p = Store.state.positions[i];
   if (!p) return;
@@ -15743,7 +11223,6 @@ async function lookupSymbol(i) {
     }
     p.symbol = q.symbol || sym;
     if (q.currency) p.currency = q.currency;
-    // on ne remplace jamais un nom que tu as choisi
     if (!p.name || p.name === 'Nouvelle ligne') p.name = q.name || p.symbol;
     Store.save();
     await Quotes.refresh();          // cours et taux de change cohérents
@@ -15755,8 +11234,6 @@ async function lookupSymbol(i) {
 }
 
 function showFileModeBanner() {
-  // En file://, certains navigateurs refusent l'accès au stockage : ce bandeau
-  // ne doit surtout pas être ce qui casse le démarrage.
   try { if (sessionStorage.getItem('wd:fileBannerSeen')) return; } catch (e) {}
   const el = document.createElement('div');
   el.className = 'file-banner';
@@ -15778,13 +11255,9 @@ function applyField(f) {
   const path = f.dataset.path;
   if (f.type === 'checkbox') { setPath(path, f.checked); return; }
   if (f.type === 'number') { setPath(path, f.value === '' ? '' : Number(f.value)); return; }
-  // une liste peut porter un nombre ou un booléen : sans ça on enregistrerait
-  // la chaîne, et « false » serait vrai
   if (f.dataset.type === 'num') { setPath(path, Number(f.value)); return; }
   if (f.dataset.type === 'bool') { setPath(path, f.value === 'true'); return; }
 
-  // L'ISIN fait autorité : s'il change, le symbole dérivé devient caduc et
-  // sera re-résolu à la prochaine actualisation des cours.
   const m = path.match(/^positions\.(\d+)\.isin$/);
   if (m) {
     const p = Store.state.positions[+m[1]];
@@ -15797,12 +11270,7 @@ function applyField(f) {
   setPath(path, f.value);
 }
 
-/* =============================================================
-   DÉMARRAGE
-   ============================================================= */
 (async function init() {
-  /* Sombre par défaut : c'est le mode dans lequel on lit des chiffres de
-     marché, et le thème clair reste à un clic dans Préférences. */
   try {
     document.documentElement.dataset.theme =
       localStorage.getItem('wealth-dashboard:theme') || 'dark';
@@ -15813,12 +11281,6 @@ function applyField(f) {
   bindGlobal();
   render();
 
-  /* L'écran de lancement s'efface une fois la première image dessinée, pas
-     après un délai : il couvre le vrai temps de démarrage — lecture du
-     stockage, migration, rendu — et rien de plus. Sur une machine rapide il
-     ne fait que passer, ce qui est exactement ce qu'on veut.
-     Deux trames pour laisser le navigateur peindre : sans elles, l'écran
-     part avant que la page soit à l'image, et on voit un fond nu. */
   const lancement = $('#lancement');
   if (lancement) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -15827,29 +11289,18 @@ function applyField(f) {
     }));
   }
 
-  // Service worker : uniquement en http(s). En file:// il n'est pas autorisé,
-  // et le mode local fonctionne déjà sans réseau.
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('/sw.js').catch(e => console.warn('SW non enregistré', e));
   }
 
-  // Ouvert en double-cliquant index.html : le stockage est propre à l'origine
-  // « file:// », donc distinct de celui du mode serveur. Deux jeux de données
-  // qui divergent en silence, c'est le piège à éviter.
   if (location.protocol === 'file:') showFileModeBanner();
 
-  // Synchro cloud (Cloudflare KV) : prioritaire quand elle est disponible.
   CloudSync.setOnChange(() => { if (currentView() === 'data') render(); });
-  /* Un refus d'ecriture se dit la ou l'on se trouve. La cloche le garde ensuite
-     tant qu'il dure — c'est le seul etat de l'application ou fermer fait perdre
-     quelque chose. */
   CloudSync.setOnConflit(() => {
     toast(trad('Modification gardée ici : une autre version existe en ligne'));
     render();
   });
   try {
-    /* Pas de lecture en demonstration : elle remplacerait la demo par les
-       vraies donnees a chaque chargement. Une demo ne parle a personne. */
     const cloud = modeDemo() ? { available: false } : await CloudSync.init();
     if (cloud.adopted) {
       /* Cet appareil était simplement en retard, sans modification locale :
@@ -15869,8 +11320,6 @@ function applyField(f) {
       render();
       toast(trad('Données à jour depuis le cloud'));
     } else if (cloud.newer) {
-      /* Vrai conflit : cet appareil porte des modifications jamais envoyées
-         et le cloud a bougé de son côté. Là seulement, on demande. */
       const ok = await askConfirm(
         trad('Deux versions différentes de tes données') + '\n\n'
         + trad("Cet appareil a des modifications qui n'ont jamais été envoyées, et une "
@@ -15928,15 +11377,10 @@ function applyField(f) {
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) CloudSync.flushOnUnload();
       });
-      /* Le reseau revient : ce qui n'a pas pu partir repart. Un reessai arme
-         couvre le serveur qui tousse, celui-ci couvre le tunnel et le mode
-         avion — les deux cas ou insister n'aurait servi a rien. */
       window.addEventListener('online', () => CloudSync.push());
     }
   } catch (e) { console.warn('Synchro cloud indisponible', e); }
 
-
-  // La passerelle de cours est optionnelle : on la sonde sans bloquer l'affichage.
   const online = await Quotes.health();
   majEtatCours();
   if (!online) { if (currentView() === 'positions') render(); return; }
@@ -15948,11 +11392,6 @@ function applyField(f) {
   }
   render();
 
-  /* Les cours ne se rafraichissaient qu'au chargement : un onglet laisse
-     ouvert la journee affichait ceux du matin, sans rien qui le dise. On
-     repasse toutes les cinq minutes, mais seulement quand ca sert — onglet
-     visible et au moins une place ouverte. Marches fermes, le cours ne
-     bouge pas : interroger Yahoo n'apprendrait rien. */
   const placeOuverte = () => Store.state.positions.some(p => {
     const s = marketStatus(p);
     return s && (s.cle === 'open' || s.cle === 'pre' || s.cle === 'post');
@@ -15969,10 +11408,7 @@ function applyField(f) {
   }
 
   setInterval(rafraichirSiUtile, 5 * 60 * 1000);
-  // Revenir sur l'onglet apres une heure ailleurs doit montrer le cours du moment.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) rafraichirSiUtile(); });
 
-  // L'anciennete affichee vieillit toute seule : « il y a 3 min » doit
-  // devenir « il y a 4 min » sans qu'on ait a recharger la page.
   setInterval(() => majEtatCours(), 60 * 1000);
 })();

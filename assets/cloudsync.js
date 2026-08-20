@@ -1,26 +1,8 @@
-/* =============================================================
-   CLOUDSYNC — synchronisation via /api/state (Cloudflare KV).
-   Actif uniquement quand l'app est servie par Cloudflare Pages
-   avec un espace KV lié. En local, tout ceci reste inerte.
-
-   Le plan gratuit KV autorise 1 000 écritures par jour : on
-   temporise largement et on n'écrit que si l'état a changé.
-   ============================================================= */
 
 const CloudSync = (() => {
 
-  /* Deux secondes et demie, et non huit.
-     Huit secondes regroupent bien les modifications, mais elles ouvrent une
-     fenetre ou tout se perd : on corrige un montant, on verrouille l'ecran, et
-     le telephone gele l'onglet avant que le minuteur n'ait tire. Le regroupement
-     tient encore a 2,5 s — une saisie au clavier ne produit qu'un envoi — et la
-     fenetre de perte est trois fois plus courte. */
   const WRITE_DELAY = 2500;
 
-  /* Horodatage du dernier état qu'on sait aligné avec le cloud. Il survit au
-     rechargement : sans lui, on ne pourrait pas distinguer « cet appareil a
-     des modifications non envoyées » de « cet appareil est simplement en
-     retard », et il faudrait poser la question à chaque fois. */
   const SYNCED_KEY = 'wealth-dashboard:synced-at';
   const lastSyncedAt = () => { try { return localStorage.getItem(SYNCED_KEY); } catch (e) { return null; } };
   const markSynced = at => { try { localStorage.setItem(SYNCED_KEY, at || ''); } catch (e) {} };
@@ -42,8 +24,6 @@ const CloudSync = (() => {
      version qui n'est plus en place, et se fait refuser sans raison. */
   const noterVersionLue = at => markSynced(at);
 
-  /* On réutilise la réponse déjà obtenue par Quotes : une seule requête
-     /api/health par chargement de page, pas deux. */
   async function probe() {
     const d = await Quotes.healthData();
     available = !!d && d.storage === 'kv';
@@ -71,8 +51,6 @@ const CloudSync = (() => {
      puisque `push()` relit `Store.state` a chaque tour. */
   let enVol = null;
   let aRejouer = false;
-  /* Quinze secondes : assez pour laisser passer une coupure de tunnel ou un
-     serveur qui tousse, assez peu pour que la modification ne dorme pas. */
   const RETRY_DELAY = 15000;
   let reessaiArme = false;
 
@@ -120,10 +98,6 @@ const CloudSync = (() => {
         const d = await r.json();
         status.conflict = d;                 // une version plus récente existe en ligne
         status.error = null;
-        /* Un refus se voyait sur la seule page Donnees, ou personne ne va apres
-           avoir saisi un montant. Il se dit maintenant la ou l'on se trouve, et
-           la cloche le garde tant qu'il dure : une modification qui n'est pas
-           partie doit se savoir tout de suite, pas au prochain passage. */
         onConflit(d);
         return { conflict: d };
       }
@@ -164,11 +138,6 @@ const CloudSync = (() => {
     timer = setTimeout(push, WRITE_DELAY);
   }
 
-  /* Au démarrage. On ne demande un arbitrage que s'il y a réellement quelque
-     chose à perdre : cet appareil doit porter des modifications jamais
-     envoyées ET le cloud avoir bougé de son côté. Être simplement en retard
-     n'est pas un conflit — c'est le cas normal quand on ouvre l'app sur un
-     deuxième appareil, et poser la question à chaque fois serait pénible. */
   async function init() {
     if (!(await probe())) return { available: false };
     let remote = null;
@@ -181,7 +150,6 @@ const CloudSync = (() => {
     const localAt = Store.state?.meta?.savedAt;
 
     if (remoteAt && (!localAt || remoteAt > localAt)) {
-      // Le local est-il resté tel qu'on l'avait synchronisé ?
       const intact = localAt && localAt === lastSyncedAt();
       if (intact) {
         lastPayload = JSON.stringify(remote);
@@ -240,10 +208,6 @@ const CloudSync = (() => {
     if (payload === lastPayload) return;
     clearTimeout(timer);
     try {
-      /* La version lue voyage aussi dans le beacon, et c'est ici qu'elle compte le
-         plus : un onglet ouvert depuis des heures qu'on ferme envoie tout son etat
-         d'un coup, sans pouvoir rien verifier avant de partir. Le serveur, lui,
-         verifie. */
       const vu = lastSyncedAt();
       navigator.sendBeacon('/api/state' + (vu ? `?base=${encodeURIComponent(vu)}` : ''),
         new Blob([payload], { type: 'application/json' }));

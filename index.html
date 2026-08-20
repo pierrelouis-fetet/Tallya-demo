@@ -7,9 +7,6 @@
      dans la feuille de style. Un pincement volontaire, lui, se defait en
      pincant : l'interdire est l'anti-motif que Safari refuse depuis iOS 10. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Safari iOS prend un montant pour un numero de telephone et l'enveloppe
-     dans un lien appelable. Sur une app qui n'affiche que des montants, la
-     moitie de l'ecran virait au bleu. -->
 <meta name="format-detection" content="telephone=no,date=no,address=no">
 <title>Tallya</title>
 <!-- La description que Google affiche sous le lien. `og:description` ne lui
@@ -18,10 +15,6 @@
      une application rendue en JavaScript, il ne trouve presque rien. -->
 <meta name="description" content="Tallya, a personal wealth dashboard by Pierre-Louis FETET: accounts, markets, allocation, budget and projection. Zero dependencies, no build step, 600+ tests.">
 <meta name="author" content="Pierre-Louis FETET">
-<!-- Les donnees structurees, pour qu'un moteur rattache l'application a une
-     personne plutot que de deviner. C'est ce qui fait la difference entre un nom
-     present dans un texte et un nom reconnu comme l'auteur : le premier se noie
-     dans la page, le second devient une propriete de l'entite. -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -40,28 +33,21 @@
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
 }
 </script>
-<!-- Les cartes de partage (LinkedIn, Slack, X) se construisent sur ces
-     balises ; sans elles, certains validateurs refusent meme le lien. Les
-     adresses sont absolues et pointent la demonstration : c'est le seul
-     deploiement public, celui qu'on partage. -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Tallya, a personal wealth dashboard">
 <meta property="og:description" content="Accounts, markets, allocation, budget, projection. Zero dependencies, no build step, ~500 tests. Live demo with fictional data.">
 <meta property="og:url" content="https://tallya-demo.pages.dev/">
 <meta property="og:image" content="https://tallya-demo.pages.dev/docs/desktop-overview.png">
 <meta name="twitter:card" content="summary_large_image">
-<!-- « Sur l'écran d'accueil » : l'app s'ouvre en plein écran, sans barre d'adresse -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tallya">
-<!-- La couleur que le systeme peint autour de la page : barre d'etat, zone
-     sous l'encoche. Elle suit la palette de l'application. -->
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f9fb">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1116">
 <meta name="theme-color" content="#0e1116">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2026-08-28f-demo">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2026-08-28g-demo">
 <!-- Prechargement de la police des titres : sans lui, le navigateur ne la
      decouvre qu'apres analyse de styles.css et le nom bascule sous les yeux.
      `crossorigin` est obligatoire meme en meme origine — une police se
@@ -69,17 +55,14 @@
      doit coincider a l'octet pres avec l'url() de l'@font-face, sinon le
      fichier est telecharge deux fois. -->
 <link rel="preload" href="assets/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="assets/styles.css?v=2026-08-28f-demo">
-<link rel="icon" href="/icon-192.png?v=2026-08-28f-demo" type="image/png">
+<link rel="stylesheet" href="assets/styles.css?v=2026-08-28g-demo">
+<link rel="icon" href="/icon-192.png?v=2026-08-28g-demo" type="image/png">
 </head>
 <body>
 
-<!-- Ecran de lancement : il couvre le temps reel du demarrage et s'efface des
-     que l'application a fini. Il est dans le HTML et non cree en JavaScript —
-     il doit exister avant que le moindre script s'execute. -->
 <div class="lancement" id="lancement" aria-hidden="true">
   <div class="lancement-marque">
-    <img src="/icon-192.png?v=2026-08-28f-demo" alt="" width="72" height="72">
+    <img src="/icon-192.png?v=2026-08-28g-demo" alt="" width="72" height="72">
     <span>Tallya</span>
 
     <em class="lancement-slogan"><span data-i18n="Suivre. Arbitrer.">Suivre. Arbitrer.</span> <b data-i18n="Projeter.">Projeter.</b></em>
@@ -95,7 +78,7 @@
   </button>
 
   <a class="brand" href="#/overview" title="Retour à la vue d'ensemble">
-    <img class="brand-mark" src="/icon-192.png?v=2026-08-28f-demo" alt="" width="34" height="34">
+    <img class="brand-mark" src="/icon-192.png?v=2026-08-28g-demo" alt="" width="34" height="34">
     <div class="brand-text">
       <strong>Tallya</strong>
       
@@ -134,7 +117,7 @@
   <nav class="nav" id="nav">
     
     <div class="nav-tete">
-      <img class="brand-mark" src="/icon-192.png?v=2026-08-28f-demo" alt="" width="38" height="38">
+      <img class="brand-mark" src="/icon-192.png?v=2026-08-28g-demo" alt="" width="38" height="38">
       <div class="nav-tete-txt">
         <span class="sb-label" data-i18n="nav.networth">Patrimoine net</span>
         <strong id="navNetWorth" class="val-masquable" role="button" tabindex="0"
@@ -248,14 +231,14 @@
 
 <div class="toast" id="toast" hidden></div>
 
-<script src="assets/i18n.js?v=2026-08-28f-demo"></script>
-<script src="assets/seed-budget.js?v=2026-08-28f-demo"></script>
-<script src="assets/seed.js?v=2026-08-28f-demo"></script>
-<script src="assets/store.js?v=2026-08-28f-demo"></script>
-<script src="assets/charts.js?v=2026-08-28f-demo"></script>
-<script src="assets/xlsx.js?v=2026-08-28f-demo"></script>
-<script src="assets/quotes.js?v=2026-08-28f-demo"></script>
-<script src="assets/cloudsync.js?v=2026-08-28f-demo"></script>
-<script src="assets/app.js?v=2026-08-28f-demo"></script>
+<script src="assets/i18n.js?v=2026-08-28g-demo"></script>
+<script src="assets/seed-budget.js?v=2026-08-28g-demo"></script>
+<script src="assets/seed.js?v=2026-08-28g-demo"></script>
+<script src="assets/store.js?v=2026-08-28g-demo"></script>
+<script src="assets/charts.js?v=2026-08-28g-demo"></script>
+<script src="assets/xlsx.js?v=2026-08-28g-demo"></script>
+<script src="assets/quotes.js?v=2026-08-28g-demo"></script>
+<script src="assets/cloudsync.js?v=2026-08-28g-demo"></script>
+<script src="assets/app.js?v=2026-08-28g-demo"></script>
 </body>
 </html>
