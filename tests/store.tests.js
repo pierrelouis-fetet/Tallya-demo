@@ -2271,7 +2271,12 @@ suite('Pièges de source', () => {
        passe en second. */
     eq(onglets.allocation[0][0], 'reel', 'Patrimoine ouvre Allocation');
     eq(onglets.allocation.length, 1, 'et Allocation n’a plus que lui');
-    eq(onglets.positions[2][2], 'rebalance', 'Cible a sa propre adresse, dans Marchés');
+    /* Cible est passee en deuxieme position le jour ou Performance a quitte la
+       barre. L'indice suit la table plutot qu'un rang fige : c'est la derniere
+       entree qu'on veut, et elle porte sa propre adresse. */
+    const cible = onglets.positions[onglets.positions.length - 1];
+    eq(cible[2], 'rebalance', 'Cible a sa propre adresse, dans Marchés');
+    eq(onglets.positions.length, 2, 'Marchés porte deux onglets depuis que Performance est partie');
     eq(redirections.patrimoine[2], 'reel', 'l’ancienne adresse mène toujours à Patrimoine');
     eq(redirections.rebalance[0], 'positions', 'et l’ancienne adresse de Cible mène à Marchés');
     eq(redirections.rebalance[2], 'cible', 'sur son onglet');
@@ -8660,24 +8665,6 @@ suite('Une page ne liste pas trois fois les mêmes positions', () => {
      qui a bougé aujourd'hui, et ce que je détiens. La plus-value se lit sur la
      page dont c'est le sujet. */
 
-  test('le graphique de plus-value latente n’existe qu’à un endroit', () => {
-    const src = lireSource('assets/app.js');
-    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    /* La signature d'un tel graphique, c'est la donnée qu'il trace : une
-       plus-value latente par position. Compter les appels a `rankedBars` ne
-       dirait rien — il en existe d'autres, sur l'allocation, qui n'ont aucun
-       doublon. */
-    const jeux = src.replace(/\/\*[\s\S]*?\*\//g, '').match(/value: posPerfEur\(p\)/g) || [];
-    eq(jeux.length, 1,
-      `${jeux.length} classements de plus-value latente par ligne : le même `
-      + 'graphique vivait sur Marchés et sur Performance');
-    vrai(!/id="chartPerf"/.test(src),
-      'le conteneur de la copie doit partir avec elle');
-    vrai(!/\$\('#chartPerf'\)/.test(src),
-      'et son montage aussi : une fonction qui remplit un conteneur absent est '
-      + 'la moitié qu’on oublie en retirant un affichage');
-  });
-
   test('la carte du jour vient avant le reste', () => {
     /* « Bonne idée ou pas, positionner la carte ajd en premier dans positions ?
        C'est ça qui nous intéresse. » Oui : c'est la question qu'on se pose en
@@ -8693,18 +8680,6 @@ suite('Une page ne liste pas trois fois les mêmes positions', () => {
     vrai(repart < titres, 'et le tableau des lignes ferme la page');
   });
 
-  test('un clic sur une barre ouvre la bonne ligne', () => {
-    /* La copie restée sur Performance retrouvait la position par son nom, et
-       deux titres homonymes sur deux comptes ouvraient donc la même fiche. Le
-       défaut avait été corrigé sur l'autre exemplaire seulement — c'est ce que
-       coûte une copie. */
-    const src = lireSource('assets/app.js');
-    vrai(!/findIndex\(p => p\.name === it\.label\)/.test(src),
-      'une barre ne doit pas retrouver sa position par son nom : deux homonymes '
-      + 'ouvriraient la même fiche');
-    vrai(/onPick: it => ACTIONS\['open-position'\]\(\{ dataset: \{ i: String\(it\.index\) \} \}\)/.test(src),
-      'l’indice doit voyager avec la barre');
-  });
 });
 
 /* ------------------------------------------------------------------
@@ -12703,10 +12678,15 @@ suite('L’écart du non coté se dit, sans se mêler aux cours', () => {
        ecran vide le dit : y ramener le non cote le remettrait d'ou l'application
        a mis du temps a le sortir. Et aucun total ne mele les deux natures. */
     const src = lireSource('assets/app.js');
-    const perf = src.slice(src.indexOf('function viewPerformance'),
-                           src.indexOf('function viewPerformance') + 6000);
-    vrai(!/latentNonCote/.test(perf),
-      'la page Performance ne parle pas du non coté');
+    /* La regle a survecu a la page qui la portait : Performance a ete retiree, et
+       c'est Positions qui est maintenant la page des marches. Le controle suit le
+       sujet plutot que le nom — y ramener le non cote le remettrait d'ou
+       l'application a mis du temps a le sortir. */
+    const marches = src.slice(src.indexOf('function viewPositions('),
+                              src.indexOf('function mountPositions('));
+    vrai(marches.length > 1000, 'la page des marchés doit se relire depuis sa source');
+    vrai(!/latentNonCote/.test(marches),
+      'la page des marchés ne parle pas du non coté');
     /* Il se lit dans son propre apercu, celui qui s'ouvre depuis l'accueil. */
     const pe = src.slice(src.indexOf('  pe: () => {'), src.indexOf('  investi: () =>'));
     vrai(/latentNonCote\(\)/.test(pe), 'l’aperçu du non coté porte l’écart');
@@ -13185,7 +13165,54 @@ suite('Un montant n’a qu’un porteur', () => {
 /* ------------------------------------------------------------------
    Performance ne dit que ce qu'elle peut prouver
    ------------------------------------------------------------------ */
-suite('Performance ne dit que ce qu’elle peut prouver', () => {
+suite('Une plus-value en devise dit d’où elle vient', () => {
+
+  test('les deux parts composent le total, elles ne s’additionnent pas', () => {
+    /* Le courtier mesure en dollars — le titre seul — et cette application en
+       euros, change compris, parce que c'est en euros que le patrimoine se lit.
+       Les deux chiffres etaient justes ; ce qui manquait etait la phrase qui dit
+       lequel on regarde. La fiche annoncait « Prix de revient (USD) 590 » puis
+       « -10,82 % » juste dessous, et la lecture naturelle est « -10,82 % par
+       rapport a 590 $ ». */
+    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 538.97, fx: 0.8581, fxBuy: 0.879 };
+    const parts = posPerfParts(p);
+    vrai(parts, 'une ligne en devise doit se décomposer');
+    pres(parts.titre, -8.65, 'le titre seul, ce que le courtier annonce');
+    pres(parts.change, -2.38, 'et la devise qui a baissé depuis l’achat');
+
+    /* La regle qui compte : les deux parts se COMPOSENT. Un titre a -8,65 % dans
+       une devise qui perd 2,38 % ne fait pas -11,03 %. La fonction rend donc deux
+       facteurs et non deux ecarts en euros, qu'on serait tente de sommer — et la
+       fiche ecrit « dont », jamais un signe plus. */
+    const compose = ((1 + parts.titre / 100) * (1 + parts.change / 100) - 1) * 100;
+    pres(compose, posPerfPct(p), 'la composition doit redonner le total affiché');
+    vrai(Math.abs((parts.titre + parts.change) - posPerfPct(p)) > 0.15,
+      'et leur somme ne le redonne pas : si elle y arrivait, ce test ne prouverait '
+      + 'plus que la composition est le bon modèle');
+  });
+
+  test('une ligne en euros n’a rien à décomposer', () => {
+    /* Une part de change a 0,00 % se lirait comme une information — « le change
+       ne t'a rien coute » — alors qu'il n'y a pas de change du tout. */
+    eq(posPerfParts({ currency: 'EUR', qty: 1, buyPrice: 10, price: 12, fx: 1 }), null,
+      'pas de décomposition sur une ligne en euros');
+    eq(posPerfParts({ currency: 'USD', qty: 1, buyPrice: 10, price: 12, fx: 1, manual: true }), null,
+      'ni sur une valeur saisie à la main, dont le cours n’est pas le sujet');
+  });
+
+  test('la fiche l’affiche, et sans promettre une somme', () => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("trad('Plus / moins-value')");
+    vrai(i > 0, 'la ligne de plus-value doit être trouvable');
+    const bloc = src.slice(i, i + 1600);
+    vrai(/posPerfParts/.test(bloc),
+      'la fiche doit appeler la décomposition, là où le total se lit');
+    vrai(/dont le titre/.test(bloc) && /dont le change/.test(bloc),
+      '« dont » et non un signe plus : les deux parts se composent');
+  });
+});
+
+suite('La plus-value ne dit que ce qu’elle peut prouver', () => {
 
   test('un écart ne se calcule pas entre deux périmètres', () => {
     /* La courbe de plus-value latente retranchait un prix de revient de
@@ -13265,60 +13292,6 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
       'un nom de plus, pas un calcul de plus');
   });
 
-  test('les deux plus-values, et leur somme seulement s’il y a de quoi sommer', () => {
-    /* Elles etaient quatre pour trois chiffres : le total valait la somme de ses
-       deux voisines, et la quatrieme comptait les lignes gagnantes en ouvrant
-       l'apercu de la premiere. Pire, la tuile du realise suivait la plage
-       choisie pendant que le total prenait tout : deux bornes de temps cote a
-       cote, sur une rangee qui pretend s'additionner.
-
-       Le total n'apparait qu'a la premiere vente : sans vente il repete la
-       latente mot pour mot, et c'est l'etat de presque tout le monde. */
-    const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function viewPerformance'),
-                           src.indexOf('function mountPerformance'));
-    vrai(bloc, 'la vue doit être trouvable');
-    vrai(/class="grid \$\{surTout && tout\.count \? 'g-3' : 'g-2'\} g-tuiles"/.test(bloc),
-      'la rangée compte ses tuiles, elle ne laisse pas un trou');
-    /* La rangee suit la plage : l'encaisse la prend, la latente ne peut pas —
-       elle mesure ce qu'on detient aujourd'hui — et le total n'a de sens que la
-       ou les deux parts couvrent la meme periode. */
-    vrai(/const surTout = salesRange === 'all';/.test(src),
-      '« Tout » est la seule plage où la somme se tient');
-    vrai(/\$\{surTout && tout\.count \? `[\s\S]{0,200}?data-apercu="perfTotale"/.test(bloc),
-      'le total ne s’affiche donc que là, jamais sur une plage plus courte');
-    vrai(/const total = lat\.pnl \+ tout\.realised;/.test(bloc),
-      'et il reste la somme de ses deux parts, prises sur tout');
-    vrai(/data-apercu="perfRealisee" data-arg="\$\{esc\(salesRange\)\}"/.test(bloc),
-      'la tuile du réalisé suit le sélecteur, et son aperçu reçoit la même plage');
-    vrai(/trad\('Plus-value encaissée'\)\}\$\{surTout \? '' : ` · \$\{esc\(libellePlage\)\}`\}/.test(bloc),
-      'la période est dans le libellé, pas dans la meta : sous 768 px la meta est '
-      + 'invisible, et un montant sans base y serait muet sur sa période');
-    /* Un zero signe annonce un gain nul ; une absence de ligne ou de vente n'est
-       pas un gain nul. Les deux tuiles suivent la meme regle. */
-    for (const [v, champ] of [['lat', 'pnl'], ['st', 'realised']]) {
-      vrai(new RegExp(`\\$\\{\\s*${v}\\.count \\? fmtSigned\\(${v}\\.${champ}\\) : fmtEUR0\\(0\\)\\}`).test(bloc),
-        `la tuile « ${v} » dit son zéro sans signe quand elle n’a rien à compter`);
-    }
-    vrai(!/Lignes en gain/.test(src), 'la quatrième tuile est partie du fichier');
-    vrai(/perfLatente/.test(bloc) && (bloc.match(/data-apercu="perfLatente"/g) || []).length === 1,
-      'et deux tuiles ne partagent plus une seule porte');
-  });
-
-  test('une page de plus-values sans ligne ni vente dit ce qui la remplirait', () => {
-    /* Trois tuiles a zero, deux graphiques vides et un journal vide : le mur de
-       zeros que les trois autres pages ont deja quitte. */
-    const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function viewPerformance'),
-                           src.indexOf('function mountPerformance'));
-    vrai(/if \(!lat\.count && !tout\.count\) return/.test(bloc),
-      'la garde porte sur ce qui existe : une ligne détenue, ou une vente au journal');
-    vrai(/Une plus-value se mesure sur des lignes que tu détiens/.test(bloc),
-      'et la phrase dit de quoi une plus-value est faite');
-    vrai(/data-action="sous-onglet" data-route="positions"/.test(bloc),
-      'la porte mène à l’onglet voisin, qui explique déjà où poser un titre');
-  });
-
   test('un chiffre de marché dit de quand il date', () => {
     /* La plus-value latente vaut ce que les cours disent, et Performance
        n'affichait aucune heure : « +978 € » sans une date, et « depuis le
@@ -13332,12 +13305,11 @@ suite('Performance ne dit que ce qu’elle peut prouver', () => {
        sur l'identifiant, qui doit rester unique dans la page rendue. */
     eq((src.match(/id="btnQuotes"/g) || []).length, 1,
       'un seul btnQuotes déclaré, sinon deux nœuds partagent un identifiant');
-    eq((src.match(/barreEtatCours\(\)/g) || []).length, 3,
-      'une définition et deux appels : Positions et Performance');
-    const bloc = src.slice(src.indexOf('function viewPerformance'),
-                           src.indexOf('function mountPerformance'));
-    vrai(/\$\{lat\.count \? barreEtatCours\(\) : ''\}/.test(bloc),
-      'et rien à dater pour qui n’a que des ventes, dont chaque ligne porte sa date');
+    /* Deux appels avant, un seul depuis que Performance est partie : la barre
+       n'est plus appelee que par Positions. Le compte reste verifie plutot
+       qu'efface — c'est lui qui interdit un second exemplaire du bouton. */
+    eq((src.match(/barreEtatCours\(\)/g) || []).length, 2,
+      'une définition et un appel : Positions');
 
     /* Le panneau du total date chacune de ses deux parts, par ce qui la fixe. */
     const totale = src.slice(src.indexOf('perfTotale: ()'), src.indexOf('perfTotale: ()') + 1400);
@@ -13905,20 +13877,6 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
       "trad('Par catégorie')",
       'data-anchor="detail-mensuel"');
     vrai(croissant(l), `l’ordre attendu est répartition, graphique, catégories, détail : ${l.join(' < ')}`);
-  });
-
-  test('Performance : ce qu’on détient, puis ce qu’on a vendu', () => {
-    /* Les deux cartes des ventes encadraient celle du portefeuille detenu, et
-       l'etat vide de la troisieme l'avouait : « le journal, plus haut, porte le
-       bouton pour en saisir une ». Une carte qui donne l'itineraire vers sa
-       voisine est mal placee. */
-    const src = lireSource('assets/app.js');
-    const vue = src.slice(src.indexOf('function viewPerformance('), src.indexOf('function viewObjective('));
-    const l = positions(vue,
-      "trad('Latente, ligne par ligne')",
-      '${salesCard()}',
-      "trad('Réalisée')");
-    vrai(croissant(l), `l’ordre attendu est latente, journal, réalisée : ${l.join(' < ')}`);
   });
 
   test('Données : le diagnostic ensemble, la destruction en dernier', () => {

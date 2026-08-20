@@ -357,8 +357,7 @@ const VIEWS = {
     : viewBudget()) },
   positions:  { cle: 'positions',   render: () =>
     barreSousOnglets('positions') + (
-      sousOngletActif.positions === 'performance' ? viewPerformance()
-      : sousOngletActif.positions === 'cible' ? viewRebalance()
+      sousOngletActif.positions === 'cible' ? viewRebalance()
       : viewPositions()) },
   allocation: { cle: 'allocation',  render: () =>
     barreSousOnglets('allocation') + viewAllocation() },
@@ -386,7 +385,11 @@ const REDIRECTIONS = {
      avant que Patrimoine ait sa propre adresse tomberait sur Objectifs sans
      explication. */
   patrimoine:  ['allocation', 'allocation', 'reel'],
-  performance: ['positions',  'positions',  'performance'],
+  /* `#/performance` a survecu a sa page. Un signet dessus menait a une plus-value
+     latente et a un journal de ventes ; le journal est desormais dans Positions,
+     donc c'est la qu'on renvoie. Une adresse qui a existe ne doit pas rendre une
+     page vide. */
+  performance: ['positions',  'positions',  'portefeuille'],
   /* `settings` n'est plus une redirection : Preferences est une vue a part
      entiere, avec son entree de menu. Elle n'a plus rien a rediriger. */
   /* Les relevés rejoignent Budget en sous-onglet : c'était la seconde entrée
@@ -448,8 +451,26 @@ const SOUS_ONGLETS = {
      « Positions » couvre une action, un ETF, une obligation et un bitcoin sans
      en privilegier aucun, c'est le mot des courtiers, et c'est deja l'adresse
      de la vue : le libelle dit enfin ce que dit la route. */
-  positions:  [['portefeuille', 'Positions', 'positions'], ['performance', 'Performance', 'performance'],
-               ['cible', 'Cible', 'rebalance']],
+  /* Performance a quitte la barre.
+
+     La page repondait a une bonne question par des chiffres dont la base se
+     discutait : une plus-value latente en pourcentage, un « resultat » qui
+     melangeait du latent et de l'encaisse, et un ecart annonce sans dire s'il
+     comptait le change. C'est ce dernier qui a mis le doigt dessus — « je pense
+     que la perf par rapport au PRU est fausse, je n'ai pas la meme perf sur
+     son courtier ». Elle ne l'etait pas : elle etait juste en euros quand le courtier
+     compte en dollars, et rien a l'ecran ne le disait.
+
+     Ce qui est garde a change de place, pas de nature : la plus-value par ligne
+     etait deja dans Positions, et le journal des ventes l'y rejoint. Ce qui est
+     retire est ce que Positions disait deja — la table « Latente, ligne par
+     ligne » listait les memes lignes, sous le meme calcul.
+
+     Rien n'est mis de cote « au cas ou » : du code que rien n'affiche est un
+     defaut ici, et ce projet traque deja les actions sans bouton. Le commit qui
+     retire cette vue EST l'archive, et il se retrouve en cherchant
+     « Performance » dans le journal. */
+  positions:  [['portefeuille', 'Positions', 'positions'], ['cible', 'Cible', 'rebalance']],
   /* Allocation n'a plus qu'un onglet, et plus de barre : `barreSousOnglets`
      s'efface sous deux choix.
 
@@ -1661,241 +1682,6 @@ function viewNotifs() {
 }
 
 /* ------------------------------------------------------------
-   Performance — la plus-value, latente puis encaissée
-   ------------------------------------------------------------ */
-function viewPerformance() {
-  const lat = latentPnl();
-  const st = salesStats(salesRange);
-  const tout = salesStats('all');
-  const total = lat.pnl + tout.realised;
-  /* La plage se nomme ici, dans les tuiles et les en-tetes des graphiques ; le
-     contrôle qui la change vit sur la carte du journal, et lui seul. */
-  const libellePlage = rangeLabel(salesRange);
-  /* « Tout » est la seule plage ou la latente et l'encaisse couvrent la meme
-     periode, donc la seule ou leur somme se tient. */
-  const surTout = salesRange === 'all';
-
-  /* Une page de plus-values pour quelqu'un qui ne detient rien et n'a rien
-     vendu : des tuiles a zero, deux graphiques vides et un journal vide. La page
-     voisine explique deja ou vivent les titres cotes et comment en poser un ;
-     celle-ci dit de quoi une plus-value est faite, et y renvoie. */
-  if (!lat.count && !tout.count) return `
-  <div class="card">
-    <p class="empty" style="margin:0 0 12px">${trad('Une plus-value se mesure sur des lignes que tu détiens : '
-      + 'la latente vient de leur prix de revient, l’encaissée du journal de tes ventes. '
-      + 'Pose une première ligne et cette page se remplit toute seule.')}</p>
-    <button type="button" class="btn" data-action="sous-onglet" data-route="positions">${trad('Aller à Positions')}</button>
-  </div>`;
-
-  return `
-  <!-- La plus-value latente vaut ce que les cours disent : la page porte donc
-       leur anciennete, en haut, avant les chiffres qu'elle date. Elle ne la
-       portait pas, et le grand chiffre s'affichait sans une heure. Rien a dater
-       en revanche pour qui n'a que des ventes au journal, dont chaque ligne
-       porte sa propre date. -->
-  ${lat.count ? barreEtatCours() : ''}
-
-  <!-- La rangee suit la plage, et chaque tuile dit sur quoi elle porte.
-
-       L'encaissee suit le selecteur : c'est la demande, et elle a un sens, une
-       vente ayant une date. La latente ne peut pas suivre, et ce n'est pas un
-       oubli : elle mesure ce que valent les lignes qu'on detient aujourd'hui
-       contre ce qu'elles ont coute. Il n'existe pas de « plus-value latente sur un
-       an » sans une histoire des prix de revient mois par mois, qui n'est pas
-       tenable ici. Elle reste donc au present, et son libelle ne promet rien
-       d'autre.
-
-       D'ou la borne dans le libelle et non dans la meta. La raison a change sans
-       que la decision bouge : la meta etait masquee sous 768 px, elle s'affiche
-       depuis qu'un chiffre doit dire sa base sur telephone comme ailleurs. Mais
-       une borne de temps n'est pas une precision sur le chiffre, c'est une part de
-       son nom : « PLUS-VALUE ENCAISSEE » qui vaudrait un an sans le dire serait
-       faux des le libelle, pas seulement incomplet.
-
-       Et le total n'apparait que sur « Tout ». Ailleurs il additionnerait une
-       latente d'aujourd'hui a un encaisse d'un an : deux bornes dans une seule
-       somme, exactement ce qu'une rangee ne doit pas faire. Sur « Tout » les deux
-       parts couvrent la meme periode, et la somme se verifie a l'oeil. -->
-  <div class="grid ${surTout && tout.count ? 'g-3' : 'g-2'} g-tuiles">
-    <button type="button" class="tile tile-link" style="--tile-color:${
-      !lat.count ? 'var(--series-2)' : lat.pnl >= 0 ? 'var(--good)' : 'var(--critical)'}"
-            data-action="apercu" data-apercu="perfLatente">
-      <span class="t-label">${trad('Plus-value latente')}</span>
-      <!-- Meme regle que la tuile voisine : qui a tout vendu ne detient plus rien,
-           et « +0 € » annoncerait un gain nul au lieu d'une absence de ligne. -->
-      <span class="t-value ${lat.count ? cls(lat.pnl) : ''}">${
-        lat.count ? fmtSigned(lat.pnl) : fmtEUR0(0)}</span>
-      <!-- Le pourcentage se tait sans prix de revient : sa base serait nulle. -->
-      <span class="t-meta">${lat.pct == null ? '' : `<span class="tag">${fmtSignedPct(lat.pct)}</span>`}${
-        lat.count ? trad('pas encore vendue') : trad('aucune ligne détenue')}</span>
-      <span class="t-go">⋯</span>
-    </button>
-    <button type="button" class="tile tile-link" style="--tile-color:${
-      !st.count ? 'var(--series-2)' : st.realised >= 0 ? 'var(--good)' : 'var(--critical)'}"
-            data-action="apercu" data-apercu="perfRealisee" data-arg="${esc(salesRange)}">
-      <span class="t-label">${trad('Plus-value encaissée')}${surTout ? '' : ` · ${esc(libellePlage)}`}</span>
-      <!-- Sans une seule vente sur la periode, « +0 € » annonce un gain nul la ou
-           il n'y a rien eu : le zero se dit sans signe, et la meta dit pourquoi. -->
-      <span class="t-value ${st.count ? cls(st.realised) : ''}">${
-        st.count ? fmtSigned(st.realised) : fmtEUR0(0)}</span>
-      <span class="t-meta">${st.count
-        ? `${st.pct == null ? '' : `<span class="tag">${fmtSignedPct(st.pct)}</span>`}${
-            st.wins}/${st.count} ${st.count > 1 ? trad('ventes gagnantes') : trad('vente gagnante')}`
-        : tout.count ? trad('aucune vente sur cette période.') : trad('aucune vente encore')}</span>
-      <span class="t-go">⋯</span>
-    </button>
-    ${surTout && tout.count ? `
-    <button type="button" class="tile tile-link" style="--tile-color:${total >= 0 ? 'var(--good)' : 'var(--critical)'}"
-            data-action="apercu" data-apercu="perfTotale">
-      <span class="t-label">${trad('Résultat de tes positions')}</span>
-      <span class="t-value ${cls(total)}">${fmtSigned(total)}</span>
-      <span class="t-meta">${trad('latente et encaissée, depuis le début')}</span>
-      <span class="t-go">⋯</span>
-    </button>` : ''}
-  </div>
-
-  <!-- Latente, journal, realisee : ce qu'on detient, puis ce qu'on a vendu, puis
-       le detail des ventes.
-
-       Le journal ouvrait la page et separait les deux cartes des ventes par celle
-       du portefeuille detenu. L'etat vide de la troisieme l'avouait : « le journal,
-       plus haut, porte le bouton pour en saisir une ». Une carte qui doit donner
-       l'itineraire vers sa voisine est mal placee.
-
-       La grille qui enveloppait les deux dernieres portait une classe qui n'existe
-       pas dans la feuille, g-1-2 : elle ne rendait donc qu'une colonne, et les
-       cartes s'empilaient deja. Elle disparait sans rien changer au rendu, et les
-       trois cartes deviennent trois voisines que la vue espace comme les autres.
-       (Aucun backtick dans ce commentaire : il vit dans un litteral de gabarit,
-       et fermerait la chaine.) -->
-  <div class="card">
-    <div class="card-head"><h2>${trad('Latente, ligne par ligne')}</h2>
-      <span class="hint">${lat.count} ${lat.count > 1 ? trad('lignes') : trad('ligne')}</span></div>
-    <div class="chart" id="perfLatente"></div>
-    <dl class="kv" style="margin-top:12px">
-      <dt>${trad('Valeur du portefeuille')}</dt><dd>${fmtEUR(lat.value)}</dd>
-      <dt>${trad('Prix de revient')}</dt><dd>${fmtEUR(lat.invested)}</dd>
-      <dt>${trad('Écart')}</dt><dd class="${cls(lat.pnl)}"><b>${fmtSigned(lat.pnl)}</b></dd>
-      <!-- « Rendement annuel » vivait ici, et il est parti.
-
-           Le chiffre n'etait alors ni pondere par le temps, ni par les
-           montants : selon qu'on a renforce en hausse ou en baisse, il
-           surestime ou sous-estime, et on ne sait meme pas dans quel sens. Un
-           lecteur qui sait dans quel sens un chiffre se trompe peut s'en
-           servir ; celui-la, non.
-
-           Une case « alimentee regulierement » a ete envisagee puis ecartee :
-           elle aurait demande du travail pour que l'application cesse de
-           mentir, et sur ce portefeuille elle aurait eteint le chiffre sur les
-           lignes qui portent l'essentiel de la valeur. Un indicateur qui ne
-           couvre plus 20 % du portefeuille est une decoration.
-
-           Ce qui reste dit vrai : l'ecart en euros et en pourcentage, qui ne
-           depend pas de la façon dont la ligne s'est constituee. Et la fiche
-           de chaque ligne annonce depuis combien de temps elle est detenue —
-           la duree comme un fait, pas comme un taux. -->
-    </dl>
-    <!-- Trois lignes de prose vivaient ici, sous la colonne de chiffres, pour
-         reserver l'ecart du jour : « ces lignes n'ont pas de date d'achat, leur
-         ecart du jour suppose que tu les detenais hier soir ».
-
-         Elles sont parties, et rien n'est perdu. La reserve etait juste, mais
-         posee sur la mauvaise carte : celle-ci montre la plus-value latente,
-         qui ne depend d'aucune date. L'ecart du jour s'affiche ailleurs, et sa
-         colonne « Var. » porte deja la meme reserve dans son aide, a l'endroit
-         exact ou le chiffre concerne se lit. Une reserve se dit une fois, la ou
-         elle porte. -->
-  </div>
-
-  <!-- Le journal avant les graphiques, et non en pied de page.
-
-       C'est la carte qu'on vient lire : elle porte des faits datés et nommés,
-       quand les deux graphiques en dessous en donnent la forme. Elle porte aussi
-       la borne de temps de toute la page, qui se trouve donc au-dessus de ce
-       qu'elle commande — un contrôle range en bas d'ecran agirait sur des
-       graphiques qu'on ne voit plus. -->
-  ${salesCard()}
-
-  <div class="card">
-    <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
-         « vente par vente » au-dessus de barres trimestrielles annoncerait la
-         mauvaise lecture. -->
-    <!-- Pas de selecteur de plage ici : le journal, juste au-dessus, porte
-         celui de la page. Deux exemplaires du meme contrôle a deux cents pixels
-         d'ecart se lisent comme deux reglages, et l'un des deux passe pour
-         inerte. Il est en haut parce que c'est la que la borne se choisit, et
-         ces graphiques la suivent. -->
-    <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
-      ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>
-      <span class="hint">${esc(libellePlage)}</span></div>
-    ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
-      <p class="empty">${tout.count
-        ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
-        : trad('Aucune vente enregistrée. Le journal, plus haut, porte le bouton pour en saisir une.')}</p>`}
-  </div>
-
-  ${st.count ? `
-  <div class="card">
-    <div class="card-head"><h2>${trad('Cumul des plus-values encaissées')}</h2>
-      <span class="hint">${esc(libellePlage)} · ${st.count} vente${st.count > 1 ? 's' : ''}, dans l'ordre</span></div>
-    <div class="chart" id="perfCumul"></div>
-  </div>` : ''}`;
-}
-
-function mountPerformance() {
-  /* Le pli du journal se retient sans passer par `render()` : le rappeler ici
-     rendrait la page a chaque ouverture, donc detruirait le `<details>` qu'on
-     vient d'ouvrir, donc annulerait le geste. */
-  const pli = $('#pliVentes');
-  if (pli) pli.ontoggle = () => { journalDeroule = pli.open; };
-
-  /* L'indice voyage avec la barre. Il se retrouvait par le nom, `findIndex(p =>
-     p.name === it.label)`, et deux titres homonymes sur deux comptes ouvraient
-     donc la meme fiche — le defaut deja corrige sur le jumeau de ce graphique
-     dans Marches, et reste ici parce que la correction n'avait vise qu'une des
-     deux copies. Le jumeau est parti, celle-ci est la seule, et elle est juste. */
-  const items = Store.state.positions
-    .map((p, index) => ({ index, label: p.name, value: posPerfEur(p), pct: posPerfPct(p) }))
-    .sort((a, b) => b.value - a.value);
-  Charts.rankedBars($('#perfLatente'), { items, keepZero: true, color: Charts.cssv('--good'),
-    onPick: it => ACTIONS['open-position']({ dataset: { i: String(it.index) } }) });
-
-  /* Une barre par vente tant qu'il y en a peu, une barre par periode ensuite.
-
-     Le seuil ne porte pas sur le nombre de ventes mais sur le pas de la plage :
-     `pasDesVentes()` rend « mois » pour un an, « trimestre » pour cinq, « annee »
-     pour tout. Une vue d'un an garde donc ses ventes nommees, ce qui est le cas
-     ou l'on veut savoir laquelle ; au-dela, on cherche un rythme, et le nom de
-     chaque titre n'y aide plus.
-
-     La moyenne suit le meme decoupage : moyenne par vente sur la vue nommee,
-     moyenne par periode sur les autres. Une moyenne qui ne se rapporte pas a ce
-     que la barre represente est le genre de chiffre qui se recopie ailleurs et
-     devient faux. */
-  const stV = salesStats(salesRange);
-  const ventes = stV.sales;
-  if (ventes.length) {
-    const parVente = ventesSeNomment(salesRange, ventes.length);
-    const items = parVente
-      ? ventes.slice().reverse().map(v => ({ label: v.name, value: num(v.realised) }))
-      : ventesParPeriode(ventes, pasDesVentes(salesRange))
-          .map(p => ({ label: p.label, value: p.value }));
-    Charts.deltaBars($('#perfVentes'), {
-      height: 260, items,
-      average: items.length ? stV.realised / items.length : 0,
-    });
-  }
-
-  const cumul = salesCumulative(salesRange);
-  if (cumul.length) {
-    Charts.deltaBars($('#perfCumul'), {
-      height: 240,
-      items: cumul.map(c => ({ label: c.label, value: c.cumulative })),
-    });
-  }
-}
-
-/* ------------------------------------------------------------
    Objectif, la cible de l'année, puis la trajectoire longue
    ------------------------------------------------------------ */
 /* Ce qu'une ligne de projection dit quand aucun rendement ne lui est appliqué.
@@ -2941,6 +2727,13 @@ function optionsCompte(comptes, choisi) {
 
 function viewPositions() {
   const pnl = portfolioPnl();
+  /* Les trois valeurs des cartes de ventes, en bas de page. Elles vivaient dans
+     l'ancienne vue Performance ; le journal et ses deux graphiques ayant
+     demenage ici, leur base les suit. `salesRange` est la borne de temps que le
+     journal affiche et regle lui-meme. */
+  const st = salesStats(salesRange);
+  const tout = salesStats('all');
+  const libellePlage = rangeLabel(salesRange);
   const stockBase = stockTotals().balance;
   const brokerAccounts = ACCOUNTS.filter(a => a.holdings);
 
@@ -3436,7 +3229,49 @@ function viewPositions() {
        sur un telephone. Le pointille les revele partout desormais. Restait la
        redondance, qui n'avait plus d'excuse. -->
 
-  <!-- Le renvoi vers le journal des ventes a quitte cette page. -->`;
+  <!-- Le journal des ventes revient sur cette page, et cette fois c'est lui et
+       non un renvoi vers lui.
+
+       Un renvoi avait vecu ici, puis il est parti : il envoyait vers une page
+       qui portait le meme sujet, et deux portes valent moins qu'une. Ce
+       raisonnement etait juste ; c'est sa conclusion qui a change le jour ou la
+       page d'arrivee a disparu.
+
+       Il est ici parce que c'est le meme sujet a deux temps : ce qu'on detient,
+       ce qu'on a vendu. Une vente est d'ailleurs la partie solide de l'ancienne
+       page Performance — un fait date et nomme, pas un pourcentage dont la base
+       se discute — et c'est elle qu'on vient chercher en mai.
+
+       La fonction salesCard porte son propre depliant et sa propre borne de
+       temps : rien a rebrancher ici, sinon les deux lignes de montage du pli.
+       (Pas de backtick dans ce commentaire : il vit dans un litteral de gabarit,
+       ou un backtick refermerait la chaine. C'est arrive en l'ecrivant.) -->
+  ${salesCard()}
+
+  <div class="card">
+    <!-- L'intitule dit ce qu'une barre represente, et il change avec elle :
+         « vente par vente » au-dessus de barres trimestrielles annoncerait la
+         mauvaise lecture. -->
+    <!-- Pas de selecteur de plage ici : le journal, juste au-dessus, porte
+         celui de la page. Deux exemplaires du meme contrôle a deux cents pixels
+         d'ecart se lisent comme deux reglages, et l'un des deux passe pour
+         inerte. Il est en haut parce que c'est la que la borne se choisit, et
+         ces graphiques la suivent. -->
+    <div class="card-head"><h2>${trad('Réalisée')}, ${st.count && !ventesSeNomment(salesRange, st.count)
+      ? `${trad('par')} ${pasDesVentes(salesRange)}` : trad('vente par vente')}</h2>
+      <span class="hint">${esc(libellePlage)}</span></div>
+    ${st.count ? `<div class="chart" id="perfVentes"></div>` : `
+      <p class="empty">${tout.count
+        ? `${trad('Aucune vente sur cette période.')} ${tout.count} ${trad('au total : élargis la plage.')}`
+        : trad('Aucune vente enregistrée. Le journal, plus haut, porte le bouton pour en saisir une.')}</p>`}
+  </div>
+
+  ${st.count ? `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Cumul des plus-values encaissées')}</h2>
+      <span class="hint">${esc(libellePlage)} · ${st.count} vente${st.count > 1 ? 's' : ''}, dans l'ordre</span></div>
+    <div class="chart" id="perfCumul"></div>
+  </div>` : ''}`;
 }
 
 /* Journal des ventes : la performance encaissée, celle que le tableau des
@@ -3777,6 +3612,34 @@ let ouvrirRechercheApresRendu = false;
 let compteVisePourAjout = null;
 
 function mountPositions() {
+  /* Le depliant du journal des ventes retient son etat, comme il le faisait sur
+     l'ancienne page Performance : c'est le meme composant, deplace, pas
+     reecrit. */
+  const pli = $('#pliVentes');
+  if (pli) pli.ontoggle = () => { journalDeroule = pli.open; };
+
+  const stV = salesStats(salesRange);
+  const ventes = stV.sales;
+  if (ventes.length) {
+    const parVente = ventesSeNomment(salesRange, ventes.length);
+    const items = parVente
+      ? ventes.slice().reverse().map(v => ({ label: v.name, value: num(v.realised) }))
+      : ventesParPeriode(ventes, pasDesVentes(salesRange))
+          .map(p => ({ label: p.label, value: p.value }));
+    Charts.deltaBars($('#perfVentes'), {
+      height: 260, items,
+      average: items.length ? stV.realised / items.length : 0,
+    });
+  }
+
+  const cumul = salesCumulative(salesRange);
+  if (cumul.length) {
+    Charts.deltaBars($('#perfCumul'), {
+      height: 240,
+      items: cumul.map(c => ({ label: c.label, value: c.cumulative })),
+    });
+  }
+
   /*    Le montage de « Performance par ligne » est parti avec sa carte : c'était
    le même graphique que celui de Performance.*/
   /* La recherche se monte meme sans aucune ligne, et c'est le correctif : l'etat
@@ -11129,8 +10992,7 @@ const MOUNTS = {
      portefeuille sur une page qui montre la performance chercherait des
      conteneurs absents. */
   overview: () => sousOngletActif.overview === 'projection' ? mountObjective() : mountOverview(),
-  positions: () => sousOngletActif.positions === 'performance' ? mountPerformance()
-    : sousOngletActif.positions === 'cible' ? mountRebalance() : mountPositions(),
+  positions: () => sousOngletActif.positions === 'cible' ? mountRebalance() : mountPositions(),
   allocation: mountAllocation,
   /* Les préférences n'ont rien à monter : leurs réglages passent tous par
      `data-path` et `data-action`, câblés une fois pour toute l'application. */
@@ -12035,6 +11897,21 @@ function askPosition(index) {
             ? `<span class="sub">${trad('achetée aujourd’hui : c’est aussi ton résultat du jour')}</span>` : ''}`,
             `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
             + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
+        <!-- Sur une ligne en devise, le total ne se lit pas sans ses deux
+             causes. Le courtier annonce le titre seul, dans sa monnaie ; cette
+             application compte en euros, change compris. Les deux ont raison, et
+             sans cette ligne on croit l'un des deux faux.
+
+             Les deux parts se composent et ne s'additionnent pas : le mot
+             « dont » le dit assez, un signe plus aurait promis une somme. -->
+        ${(() => {
+          const parts = posPerfParts(p);
+          if (!parts) return '';
+          return ligne(`<span class="muted">${trad('dont le titre')}, ${esc(p.currency)}</span>`,
+                   `<span class="muted">${fmtSignedPct(parts.titre, 2)}</span>`)
+               + ligne(`<span class="muted">${trad('dont le change')}</span>`,
+                   `<span class="muted">${fmtSignedPct(parts.change, 2)}</span>`);
+        })()}
         ${(() => {
           /* La duree de detention, comme un fait — et non comme un taux.
 
@@ -13603,7 +13480,7 @@ const APERCUS = {
           <button class="btn ghost sm" data-action="del-sale" data-i="${idx}">${
             v.declaree ? trad('Retirer du journal') : trad('Annuler cette vente')}</button>
         </div>`,
-      vue: 'performance', ancre: 'ventes', cta: trad('Rester ici'),
+      vue: 'positions', ancre: 'ventes', cta: trad('Rester ici'),
     };
   },
 
@@ -13644,7 +13521,7 @@ const APERCUS = {
           ].join(' · '),
       total: st.realised, totalNote: `${fmtEUR0(st.gross)} ${trad('encaissés')}`,
       lignes: st.sales.map(v => ({ label: v.name, meta: fmtDate(v.date), valeur: v.realised })),
-      vue: 'performance', ancre: 'ventes', cta: trad('Voir le journal'),
+      vue: 'positions', ancre: 'ventes', cta: trad('Voir le journal'),
     };
   },
   perfTotale: () => {
@@ -13671,7 +13548,7 @@ const APERCUS = {
                 .filter(Boolean).join(' · '),
           valeur: tout.realised },
       ],
-      vue: 'performance', ancre: '', cta: trad('Rester ici'),
+      vue: 'positions', ancre: '', cta: trad('Rester ici'),
     };
   },
 
@@ -13817,7 +13694,7 @@ const APERCUS = {
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
         .sort((a, b) => b.valeur - a.valeur),
-      vue: 'performance', ancre: '', cta: trad('Voir la performance'),
+      vue: 'positions', ancre: '', cta: trad('Voir tes lignes'),
     };
   },
 

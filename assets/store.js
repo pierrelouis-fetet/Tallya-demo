@@ -2154,6 +2154,39 @@ function posPerfPct(p) {
 }
 function posPerfEur(p) { return posValue(p) - posInvested(p); }
 
+/* --- d'ou vient la plus-value d'une ligne en devise ----------------------
+   « Je pense que la perf par rapport au PRU est fausse, je n'ai pas la meme
+   perf sur son courtier. Par exemple ici je pense que c'est plutot -8 %, pas -10 %. »
+
+   Les deux chiffres etaient justes. Sur une ligne en dollars, le courtier
+   mesure en dollars — le titre seul — et cette application mesure en euros,
+   change compris, parce que c'est en euros que le patrimoine se lit. Sur la
+   ligne en question : -8,65 % pour le titre, -2,38 % pour un dollar qui a
+   baisse depuis l'achat, et 0,9135 x 0,9762 = -10,82 % au total.
+
+   Ce qui manquait n'etait donc pas un calcul mais une phrase : la fiche
+   annoncait « Prix de revient (USD) 590 » puis « -10,82 % » juste en dessous,
+   et la lecture naturelle est « -10,82 % par rapport a 590 $ ». Rien n'y
+   apprenait que le change etait dedans.
+
+   Les deux parts se composent, elles ne s'additionnent pas : un titre a -8,65 %
+   dans une devise qui perd 2,38 % ne fait pas -11,03 %. C'est pourquoi la
+   fonction rend les deux facteurs et non deux ecarts en euros, qu'on serait
+   tente de sommer.
+
+   Rend `null` sur une ligne en euros : il n'y a rien a decomposer, et une part
+   de change a 0 % se lirait comme une information. */
+function posPerfParts(p) {
+  if ((p.currency || 'EUR') === 'EUR' || p.manual) return null;
+  const achat = num(p.buyPrice), cours = num(p.price);
+  const fxA = tauxAchat(p), fxJ = num(p.fx) || 1;
+  if (!achat || !cours || !fxA || !fxJ) return null;
+  return {
+    titre: (cours / achat - 1) * 100,
+    change: (fxJ / fxA - 1) * 100,
+  };
+}
+
 /* --- performance du jour -----------------------------------------------
    Écart entre le cours actuel et la clôture de la veille. Le taux de change
    du jour sert aux deux bornes : on isole ainsi le mouvement du titre, sans

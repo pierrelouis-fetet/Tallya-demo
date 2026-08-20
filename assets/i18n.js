@@ -146,6 +146,8 @@ const I18N = {
     'Cryptomonnaies': 'Cryptocurrencies',
     'Non coté': 'Private assets',
     'Immobilier': 'Property',
+    'dont le titre': 'the security alone',
+    'dont le change': 'the currency',
     'Bien immobilier': 'Physical property',
     'Biens de valeur': 'Valuables',
     'Placements non cotés': 'Private investments',
