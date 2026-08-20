@@ -1761,8 +1761,11 @@ const Store = {
          compter des dollars comme des euros. Remis a vide, il sera figé au premier
          taux connu ; d'ici la, `tauxAchat()` prend le taux courant. Idempotent :
          rejouer la migration sur un etat deja repare ne change rien. */
-      if (p.fxBuy === undefined) p.fxBuy = num(p.fx) || null;
-      if ((p.currency || 'EUR') !== 'EUR' && num(p.fxBuy) === 1) p.fxBuy = null;
+      /* `fxBuy` ne sert plus a convertir : les deux jambes prennent le taux du
+         jour. Le champ part des positions — il portait le taux du premier
+         rafraichissement, pas celui d'un achat — mais reste sur les ventes
+         enregistrees, ou il est un fait date de la transaction. */
+      if (p.fxBuy !== undefined) delete p.fxBuy;
     }
 
     this.migrerModele(s);
@@ -2116,25 +2119,41 @@ const Store = {
 function posValue(p) {
   return p.manual ? num(p.value) : num(p.qty) * num(p.price) * num(p.fx || 1);
 }
-/* Le taux auquel convertir le prix de revient d'une ligne.
+/* Le taux auquel convertir le prix de revient d'une ligne : celui du jour, pour
+   les deux jambes.
 
-   Il se fige au jour de l'achat (`fxBuy`) : sans ça, le montant investi bougerait
-   a chaque variation de l'EUR/USD, et la plus-value latente d'une ligne qu'on n'a
-   pas touchee changerait toute seule.
+   Il s'est fige au jour de l'achat pendant longtemps, par `fxBuy`, et le
+   raisonnement se tenait : sans ca, le montant investi bougerait a chaque
+   variation de l'EUR/USD, et la plus-value d'une ligne qu'on n'a pas touchee
+   changerait toute seule.
 
-   D'ou la garde : sur une ligne dont la devise n'est pas l'euro, un `fxBuy` absent
-   ou egal a 1 n'est pas retenu, et c'est le taux courant qui sert. Approximation
-   assumee — elle vaut la variation du change depuis l'achat, quelques pour cent,
-   la ou le 1 valait quinze. La migration remet ces `fxBuy` a vide et la
-   recuperation des cours les fige au premier taux connu.
+   Ce qui a fait tomber ce raisonnement tient en une phrase du proprietaire :
+   « Meta, j'en ai achete 3 en mai et 1 en juillet, comment tu calcules le taux
+   de change ? » Il n'y a pas UN taux d'achat pour cette ligne. Il n'y en a jamais
+   eu, et la plupart des lignes se construisent ainsi, en plusieurs fois. Un
+   `fxBuy` unique n'etait donc pas une approximation : c'etait un chiffre
+   arbitraire presente comme une date.
 
-   Une ligne en euros vaut 1 sans discussion : c'est sa devise qui le dit, pas un
-   champ qu'il faudrait tenir a jour. */
+   Pire, il ne se figeait meme pas a un achat : `quotes.js` le posait au PREMIER
+   RAFRAICHISSEMENT des cours de la ligne. Deux titres achetes a des mois d'ecart
+   portaient le meme taux, celui du jour ou l'application les a vus pour la
+   premiere fois. L'ecart de change affiche mesurait le temps ecoule depuis
+   l'installation de l'app, pas une detention.
+
+   Les deux jambes au taux du jour, donc — la convention du courtier. La
+   plus-value en euros devient « ce que cette ligne a gagne ou perdu, exprime en
+   euros d'aujourd'hui », et elle coincide avec ce que le courtier affiche. Le patrimoine
+   ne bouge pas d'un centime : il a toujours ete calcule au taux du jour.
+
+   Ce qu'on perd est reel et assume : l'application ne dit plus combien d'euros
+   sont reellement sortis du compte. Elle ne le savait pas — elle le devinait.
+   Le dire vraiment demanderait un taux par achat, donc un carnet de lots, et ce
+   n'est pas ce projet.
+
+   Une ligne en euros vaut 1 sans discussion : c'est sa devise qui le dit. */
 function tauxAchat(p) {
   if ((p.currency || 'EUR') === 'EUR') return 1;
-  const courant = num(p.fx) || 1;
-  const fige = num(p.fxBuy);
-  return (!fige || fige === 1) ? courant : fige;
+  return num(p.fx) || 1;
 }
 function posInvested(p) {
   if (p.manual) return num(p.invested);
@@ -2154,36 +2173,6 @@ function posPerfPct(p) {
 }
 function posPerfEur(p) { return posValue(p) - posInvested(p); }
 
-/* --- la part de la plus-value qui ne doit rien au change -----------------
-   « Je pense que la perf par rapport au PRU est fausse, je n'ai pas la meme perf
-   chez son courtier, plutot -7 que -9. » Les deux chiffres etaient justes : le courtier
-   convertit ses deux jambes au taux du jour, donc son pourcentage est le
-   mouvement du titre dans sa propre monnaie ; cette application gele le taux de
-   l'achat, donc le sien porte aussi le change. Rien n'y disait lequel on lisait.
-
-   Ce que rend cette fonction, c'est le mouvement du titre seul, et il ne demande
-   AUCUN taux : (cours - revient) / revient. Le prix de revient se saisit une fois
-   a la creation de la ligne et ne se retouche jamais. Il n'y a donc rien a tenir.
-
-   La part du change a existe ici pendant une journee, puis elle est partie :
-   « c'est l'enfer de gerer le taux de change ». Elle avait besoin de `fxBuy`, et
-   `fxBuy` est fige au premier cours connu de la ligne — pas au jour de l'achat,
-   qu'aucun champ n'enregistre. Deux lignes achetees des mois d'ecart portaient le
-   meme taux. Un calcul exact sur une entree fausse rend un chiffre faux presente
-   avec assurance, et c'est pire que de ne rien montrer.
-
-   Le total, lui, reste en euros, change compris : c'est ce qui est sorti du compte,
-   et c'est le seul chiffre qui s'additionne avec le reste du patrimoine. L'ecart
-   entre les deux se voit a l'oeil, sans que l'application pretende le chiffrer.
-
-   Rend `null` sur une ligne en euros : il n'y a qu'un seul chiffre, et le repeter
-   sous le total ne dirait rien. */
-function posPerfTitre(p) {
-  if ((p.currency || 'EUR') === 'EUR' || p.manual) return null;
-  const achat = num(p.buyPrice), cours = num(p.price);
-  if (!achat || !cours) return null;
-  return (cours / achat - 1) * 100;
-}
 
 /* --- performance du jour -----------------------------------------------
    Écart entre le cours actuel et la clôture de la veille. Le taux de change

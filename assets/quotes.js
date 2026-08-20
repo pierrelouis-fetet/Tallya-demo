@@ -142,12 +142,7 @@ const Quotes = (() => {
       pos.fx = (pos.currency && pos.currency !== 'EUR')
         ? (fx[pos.currency] ?? num(pos.fx) ?? 1)
         : 1;
-      /* Le taux d'achat se fige ici, au premier taux connu, et jamais ensuite.
-         Une ligne creee avant que sa devise soit choisie n'a pas de taux d'achat :
-         `tauxAchat()` lui prete alors le taux courant, ce qui ferait bouger son
-         prix de revient a chaque variation de l'euro. Ce n'est vrai qu'une fois. */
-      if (pos.currency && pos.currency !== 'EUR' && !num(pos.fxBuy)) pos.fxBuy = pos.fx;
-
+      
       changes.push({
         name: pos.name, symbol: q.symbol || sym, quoteName: q.name || '',
         from: before.price, to: q.price, currency: pos.currency,

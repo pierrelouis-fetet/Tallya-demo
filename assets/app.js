@@ -11927,21 +11927,10 @@ function askPosition(index) {
             ? `<span class="sub">${trad('achetée aujourd’hui : c’est aussi ton résultat du jour')}</span>` : ''}`,
             `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
             + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
-        <!-- Sur une ligne en devise, le total ne se lit pas seul : le courtier
-             en annonce un autre, et sans cette ligne on croit l'un des deux faux.
-             Celle-ci porte le mouvement du titre dans sa monnaie, exactement ce
-             que le courtier affiche, et elle ne demande aucun taux de change.
-
-             La part du change a vecu ici une journee. Elle avait besoin du taux
-             du jour de l'achat, que rien n'enregistre : deux lignes achetees a
-             des mois d'ecart portaient le meme. Le total reste en euros, change
-             compris, parce que c'est ce qui est sorti du compte. -->
-        ${(() => {
-          const titre = posPerfTitre(p);
-          if (titre == null) return '';
-          return ligne(`<span class="muted">${trad('dont le titre')}, ${esc(p.currency)}</span>`,
-                   `<span class="muted">${fmtSignedPct(titre, 2)}</span>`);
-        })()}
+        <!-- La ligne « dont le titre » a vecu ici deux jours. Elle disait le
+             mouvement du titre dans sa monnaie, la ou le total portait en plus un
+             change fige. Les deux jambes prenant desormais le taux du jour, le
+             total EST ce mouvement : la repeter dessous ne dirait rien. -->
         ${(() => {
           /* La duree de detention, comme un fait — et non comme un taux.
 

@@ -3829,20 +3829,23 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
   });
 
   test('sur une ligne en devise, le taux d’achat est du jour lui aussi', () => {
-    /* Ailleurs les deux bornes prennent le taux du jour, faute de connaitre celui
-       d'hier — c'est ce qui isole le mouvement du titre de celui de la monnaie.
-       Ici la borne basse est un achat d'aujourd'hui : son taux est connu, il est
-       du jour, et le change fait donc partie de ce qui s'est passe aujourd'hui.
-       Sans cela, la fiche afficherait deux montants voisins et differents pour un
-       seul et meme fait, a deux lignes d'ecart. */
+    /* Sur une ligne achetee aujourd'hui, l'ecart du jour EST la plus-value
+       latente : la borne basse est l'achat, pas la cloture de la veille. La fiche
+       afficherait sinon deux montants voisins et differents pour un seul et meme
+       fait, a deux lignes d'ecart.
+
+       Le taux ne complique plus rien : les deux bornes prennent celui du jour
+       depuis que `fxBuy` a quitte les positions — « Meta, j'en ai achete 3 en mai
+       et 1 en juillet, comment tu calcules le taux de change ? ». L'invariant, lui,
+       n'a pas bouge, et c'est lui que ce test garde. */
     auJour('2026-08-05', () => {
       avecCours('2026-08-05', 49, 55);
       const p = Store.state.positions[0];
       Object.assign(p, { currency: 'USD', qty: 20, buyPrice: 50,
-                         fx: 0.90, fxBuy: 0.95, dateAchat: '2026-08-05' });
+                         fx: 0.90, dateAchat: '2026-08-05' });
       const d = posDayChange(p);
-      pres(d.eur, 20 * 49 * 0.90 - 20 * 50 * 0.95, 'valeur du jour moins somme réellement sortie');
-      pres(d.eur, posValue(p) - posInvested(p), 'ce qui est la plus-value latente, change compris');
+      pres(d.eur, 20 * (49 - 50) * 0.90, 'valeur du jour moins prix de revient, au même taux');
+      pres(d.eur, posValue(p) - posInvested(p), 'ce qui est la plus-value latente');
     });
   });
 
@@ -7163,37 +7166,48 @@ suite('Une plus-value se calcule dans une seule monnaie', () => {
     pres(posPerfEur(euro), 100, 'et sa plus-value est celle des cours');
   });
 
-  test('un taux d’achat réel est respecté, lui', () => {
-    /* La garde ne doit pas manger un vrai taux : sinon le prix de revient
-       suivrait l'euro/dollar du jour et la plus-value d'une ligne qu'on n'a pas
-       touchée changerait toute seule. */
-    const p = ligne({ fxBuy: 0.879, fx: 0.8662 });
-    pres(posInvested(p), 10 * 68.59 * 0.879,
-      'le taux du jour de l’achat sert, pas celui d’aujourd’hui');
+  test('un taux d’achat enregistré est ignoré, et c’est voulu', () => {
+    /* Ce test disait l'inverse, et il avait tort pour une raison qu'aucune
+       assertion ne pouvait voir : « Meta, j'en ai achete 3 en mai et 1 en
+       juillet, comment tu calcules le taux de change ? »
+
+       Il n'y a pas UN taux d'achat pour une ligne construite en plusieurs fois,
+       et la plupart le sont. Le `fxBuy` unique n'etait donc pas une
+       approximation, c'etait un chiffre arbitraire presente comme une date. Pire,
+       `quotes.js` le posait au PREMIER RAFRAICHISSEMENT des cours : deux titres
+       achetes a des mois d'ecart portaient le meme taux, celui du jour ou
+       l'application les avait vus pour la premiere fois. L'ecart de change
+       affiche mesurait le temps depuis l'installation de l'app.
+
+       Les deux jambes prennent donc le taux du jour, comme le fait le courtier.
+       Ce qu'on perd est assume : l'application ne dit plus combien d'euros sont
+       reellement sortis du compte. Elle ne le savait pas, elle le devinait. */
+    const avecTaux = ligne({ fxBuy: 0.879, fx: 0.8662 });
+    const sansTaux = ligne({ fx: 0.8662 });
+    pres(posInvested(avecTaux), posInvested(sansTaux),
+      'un fxBuy enregistré ne doit plus changer le prix de revient');
+    pres(posInvested(avecTaux), 10 * 68.59 * 0.8662,
+      'les deux jambes prennent le taux du jour');
+
+    /* La consequence qui interesse le lecteur : le pourcentage devient celui du
+       titre dans sa monnaie, donc celui que le courtier affiche. */
+    pres(posPerfPct(avecTaux), (69 / 68.59 - 1) * 100,
+      'la plus-value en pourcentage est celle du titre, comme chez le courtier');
   });
 
-  test('la migration vide un taux d’achat qui vaut 1 en devise', () => {
-    const etat = {
-      positions: [
-        { id: 'a', currency: 'USD', fx: 0.8662, fxBuy: 1 },
-        { id: 'b', currency: 'USD', fx: 0.8662, fxBuy: 0.879 },
-        { id: 'c', currency: 'EUR', fx: 1, fxBuy: 1 },
-      ],
-    };
-    const migrer = s => {
-      for (const p of s.positions) {
-        if (p.fxBuy === undefined) p.fxBuy = num(p.fx) || null;
-        if ((p.currency || 'EUR') !== 'EUR' && num(p.fxBuy) === 1) p.fxBuy = null;
-      }
-    };
-    migrer(etat);
-    eq(etat.positions[0].fxBuy, null, 'le 1 en devise part');
-    eq(etat.positions[1].fxBuy, 0.879, 'un vrai taux reste');
-    eq(etat.positions[2].fxBuy, 1, 'le 1 d’une ligne en euros est légitime');
-    /* Idempotence : la rejouer ne change rien. */
-    const avant = JSON.stringify(etat);
-    migrer(etat);
-    eq(JSON.stringify(etat), avant, 'jouée deux fois, elle donne le même état');
+  test('la migration retire le taux d’achat des positions', () => {
+    /* Le champ ne sert plus a convertir, et le garder inviterait a s'en resservir.
+       Il reste sur les ventes enregistrees, ou il est un fait date de la
+       transaction : le taux auquel cette vente-la s'est faite. */
+    Fixture.poser();
+    Store.state.positions[0].currency = 'USD';
+    Store.state.positions[0].fxBuy = 0.879;
+    Store.migrate();
+    vrai(!('fxBuy' in Store.state.positions[0]),
+      'une position ne porte plus de taux d’achat');
+    const store = lireSource('assets/store.js');
+    vrai(/fxBuy: tauxAchat\(p\)/.test(store),
+      'mais une vente enregistrée garde le taux du jour où elle s’est faite');
   });
 
   test('la source dit la même règle que ces contrôles', () => {
@@ -13211,57 +13225,44 @@ suite('Une vente datee dans le passe ne prend pas le cours du jour', () => {
 });
 
 suite('Une plus-value en devise dit ce que le courtier dit', () => {
+  test('le total coïncide avec le mouvement du titre', () => {
+    /* Deux lignes ont vecu sous le total pendant deux jours : « dont le titre » et
+       « dont le change ». Elles expliquaient un ecart avec le courtier — lui
+       convertit ses deux jambes au taux du jour, l'application gelait le taux de
+       l'achat.
 
-  test('la part du titre ne demande aucun taux de change', () => {
-    /* Le courtier convertit ses deux jambes au taux du jour, donc son
-       pourcentage est le mouvement du titre dans sa propre monnaie ; cette
-       application gele le taux de l'achat, donc le sien porte aussi le change.
-       Rien ne disait lequel on lisait.
+       Les deux jambes prenant desormais le meme taux, il n'y a plus d'ecart a
+       expliquer : le total EST le mouvement du titre. Les repeter dessous ne
+       dirait rien, et `posPerfTitre` a disparu avec elles.
 
-       Ce que rend cette fonction est exactement ce que le courtier affiche, et il
-       ne demande AUCUN taux : le prix de revient se saisit une fois a la creation
-       et ne se retouche jamais. */
-    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 546.03, fx: 0.8554, fxBuy: 0.879 };
-    pres(posPerfTitre(p), -7.45, 'le titre seul, ce que le courtier annonce');
+       Les chiffres sont ceux de la capture qui a ouvert le sujet. */
+    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 546.03, fx: 0.8554 };
+    pres(posPerfPct(p), (546.03 / 590 - 1) * 100,
+      'le pourcentage est celui du titre dans sa monnaie');
+    pres(posPerfPct(p), -7.4525, 'soit ce que le courtier annonce');
 
-    /* La preuve que le taux n'entre pas dans ce calcul : on le change du tout au
-       tout, le chiffre ne bouge pas d'un centieme. */
-    const autre = Object.assign({}, p, { fx: 0.5, fxBuy: 1.4 });
-    pres(posPerfTitre(autre), posPerfTitre(p),
-      'aucun taux ne doit entrer dans la part du titre');
+    /* Et il ne bouge pas avec le taux : les deux jambes se compensent. */
+    const autreTaux = Object.assign({}, p, { fx: 0.5 });
+    pres(posPerfPct(autreTaux), posPerfPct(p),
+      'un changement de taux ne déplace pas le pourcentage');
+
+    /* Le montant en euros, lui, suit le taux du jour — et c'est assume : il dit
+       ce que cette ligne a gagne ou perdu en euros d'aujourd'hui. */
+    vrai(Math.abs(posPerfEur(autreTaux) - posPerfEur(p)) > 1,
+      'le montant en euros, lui, suit le taux du jour');
   });
 
-  test('le total reste en euros, change compris', () => {
-    /* Et il DOIT le rester : c'est ce qui est sorti du compte, et le seul chiffre
-       qui s'additionne avec le reste du patrimoine. Convertir le prix de revient
-       au taux du jour, comme le courtier, ferait bouger le montant investi chaque
-       jour sur une ligne qu'on n'a pas touchee — ce que le commentaire de
-       `tauxAchat` interdit depuis longtemps. */
-    const p = { currency: 'USD', qty: 4, buyPrice: 590, price: 546.03, fx: 0.8554, fxBuy: 0.879 };
-    pres(posInvested(p), 2074.44, 'le prix de revient est celui du jour de l’achat');
-    pres(posPerfPct(p), -9.937, 'le total porte le change');
-    vrai(Math.abs(posPerfPct(p) - posPerfTitre(p)) > 2,
-      'le total et la part du titre doivent rester distincts : s’ils se '
-      + 'confondaient, le total aurait cessé de compter le change');
-  });
-
-  test('rien a decomposer sur une ligne en euros', () => {
-    eq(posPerfTitre({ currency: 'EUR', qty: 1, buyPrice: 10, price: 12, fx: 1 }), null,
-      'pas de part du titre sur une ligne en euros');
-    eq(posPerfTitre({ currency: 'USD', qty: 1, buyPrice: 10, price: 12, fx: 1, manual: true }), null,
-      'ni sur une valeur saisie a la main, dont le cours n’est pas le sujet');
-  });
-
-  test('la part du change n’existe plus, et c’est voulu', () => {
-    /* Elle a vecu une journee. Elle avait besoin du taux du jour de l'achat, que
-       rien n'enregistre : `fxBuy` se fige au premier cours connu de la ligne, si
-       bien que deux lignes achetees a des mois d'ecart portaient le meme taux. */
+  test('aucune décomposition ne subsiste sous le total', () => {
+    /* Le controle porte sur l'appel a `trad`, pas sur les mots : un commentaire
+       qui raconte pourquoi ces lignes sont parties contient forcement leur nom, et
+       la premiere redaction de ce test tombait sur son propre commentaire. Ce
+       qu'on interdit, c'est qu'elles s'AFFICHENT. */
     const src = lireSource('assets/app.js');
-    vrai(!/dont le change/.test(src),
-      'la part du change ne doit pas revenir sans que sa source le permette');
+    vrai(!/trad\('dont le titre'\)/.test(src) && !/trad\('dont le change'\)/.test(src),
+      'les deux lignes ne doivent plus s’afficher : le total les dit toutes les deux');
     const store = lireSource('assets/store.js');
-    vrai(!/posPerfParts/.test(store) && /function posPerfTitre/.test(store),
-      'une seule fonction, et elle ne rend que ce qu’elle peut prouver');
+    vrai(!/posPerfTitre|posPerfParts/.test(store),
+      'et leurs fonctions avec elles');
   });
 });
 
