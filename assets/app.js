@@ -3070,7 +3070,7 @@ function viewHistory() {
        un ecran de defilement, alors qu'il porte le seul geste qu'on vient
        faire ici. Un rappel qu'on decouvre apres avoir lu la page arrive trop
        tard.
-       Il se tait aussi. « J'attends une rentree d'argent, ne me le demande pas
+       Il se tait aussi : attendre une rentree d'argent est une raison suffisante,
        maintenant » est une raison legitime, et les deux sorties sont les memes
        que sur les autres bandeaux : `sortiesRappel` les rend une seule fois.
        Ce bouton disait « Plus tard » en taisant le mois entier, quand celui de
@@ -3184,7 +3184,7 @@ function viewHistory() {
     : !liste.length ? `
     <p class="small muted" style="margin:0">Aucune ligne en ${esc(String(annee))}.
       Le journal en compte ${tout.length} au total : change l’année en tête de page.</p>`
-    /* La liste est repliee, et c'est une decision : « je ne veux pas voir une
+    /* La liste est repliee, et c'est une decision : personne ne veut d'une
        liste d'une annee tout le temps, peut-etre un bouton voir liste, sinon
        rien ». Un journal ne se vide jamais — il doit rester lisible aussi
        longtemps que le graphique peut remonter jusqu'a lui, sinon le rythme
@@ -7484,7 +7484,7 @@ const ACTIONS = {
          affiche. `changes` porte deja le `from` et le `to` de chaque ligne : la
          donnee existait, elle etait jetee. Un rafraichissement qui ne change
          rien n'allume donc rien — c'est ce qui separe « ce chiffre est frais »
-         de « j'ai appuye sur un bouton ». */
+         d'un appui sur un bouton. */
       coursFraichis = new Set(changes
         .filter(c => !c.error && Math.abs(num(c.to) - num(c.from)) > 1e-9)
         .map(c => c.symbol));
@@ -9625,7 +9625,7 @@ const APERCUS = {
      chiffre qui vieillit. Un seul champ, deux portes, comme partout ailleurs.
 
      Et l'enregistrement pose la date de verification sur chaque credit : appuyer
-     sur « Enregistrer » ici, c'est precisement dire « je les ai regardes », ce qui
+     sur « Enregistrer » ici, c'est precisement affirmer les avoir regardes, ce qui
      remet le rappel des trois mois a zero. Voir `apercu-enregistrer`. */
   credits: () => {
     const cr = creditsEnCours();

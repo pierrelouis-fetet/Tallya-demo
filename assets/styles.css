@@ -1657,7 +1657,7 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
    espace, et cette espace est secable. Dans la colonne « Poids », large de 50 px
    au telephone, le navigateur coupait donc la : l'intitule sur une ligne, la
    fleche en dessous, et la cellule passait de 15 a 28 px de haut — mesure a
-   375 px. « Ma fleche de poids se met en dessous, c'est pas pratique. »
+   375 px : la fleche tombait sous son intitule, ou elle ne designe plus rien.
 
    Une fleche separee de son intitule ne dit plus de quoi elle parle : elle
    flotte sous une colonne et pourrait aussi bien designer la voisine. Les deux

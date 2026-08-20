@@ -227,7 +227,7 @@ const TYPES_COMPTE = [
   /* Un bien de valeur ne se tient nulle part : il est chez soi.
 
      `sansEtab` comme les especes — il fallait sinon inventer un etablissement
-     appele « Ma montre », et se demander pourquoi l'application reclame une
+     appele d'apres l'objet lui-meme, et se demander pourquoi l'application reclame une
      banque pour un objet pose sur une etagere. Mais pas `interne` : les especes
      existent une fois pour tout le monde, la ou l'on ajoute autant de biens
      qu'on en possede. Il se choisit donc dans la liste des types.
