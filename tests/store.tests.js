@@ -13179,6 +13179,134 @@ suite('Un montant n’a qu’un porteur', () => {
 /* ------------------------------------------------------------------
    Performance ne dit que ce qu'elle peut prouver
    ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Une identite Access se prouve, elle ne se declare pas
+   ------------------------------------------------------------------ */
+suite('Une identité Access se prouve, elle ne se déclare pas', () => {
+
+  /* Ce controle EXECUTE la validation au lieu de lire sa source, et c'est la
+     seule façon de prouver qu'une signature est verifiee : un test qui cherche
+     « crypto.subtle.verify » dans le fichier passerait aussi sur un appel dont
+     le resultat est ignore.
+
+     Le bloc est extrait de `_worker.js` et evalue avec un `fetch` bouchonne qui
+     rend les clefs publiques d'une paire generee ici. Le jeton est donc signe
+     pour de bon, et chaque falsification doit etre refusee. */
+  const DOMAINE = 'exemple.cloudflareaccess.com';
+  const AUD = 'aud-de-test-0123456789abcdef';
+
+  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64urlTexte = s => b64url(new TextEncoder().encode(s));
+
+  /* Le bloc de validation, tel qu'il vit dans le Worker. */
+  const chargerValidateur = (source, clefsPubliques) => {
+    const d = source.indexOf('const CLEFS_TTL_MS');
+    const f = source.indexOf('\n}', source.indexOf('async function accessEmail')) + 2;
+    vrai(d > 0 && f > d, 'le bloc de validation doit être trouvable dans _worker.js');
+    const faussetFetch = async () => ({ ok: true, json: async () => ({ keys: clefsPubliques }) });
+    return new Function('fetch', 'atob', 'crypto', 'TextDecoder', 'TextEncoder',
+      `${source.slice(d, f)}\nreturn accessEmail;`)(
+        faussetFetch, atob, crypto, TextDecoder, TextEncoder);
+  };
+
+  const paire = async () => crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+
+  const signer = async (priv, entete, charge) => {
+    const corps = `${b64urlTexte(JSON.stringify(entete))}.${b64urlTexte(JSON.stringify(charge))}`;
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', priv,
+      new TextEncoder().encode(corps));
+    return `${corps}.${b64url(sig)}`;
+  };
+
+  const chargeSaine = () => ({
+    aud: [AUD], iss: `https://${DOMAINE}`, email: 'proprietaire@exemple.fr',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+
+  const monter = async () => {
+    const { privateKey, publicKey } = await paire();
+    const jwk = await crypto.subtle.exportKey('jwk', publicKey);
+    const src = lireSource('_worker.js');
+    vrai(src, '_worker.js doit être lisible pour ce contrôle');
+    const valider = chargerValidateur(src, [{ ...jwk, kid: 'k1', alg: 'RS256' }]);
+    const env = { ACCESS_TEAM_DOMAIN: DOMAINE, ACCESS_AUD: AUD };
+    const appeler = jeton => valider(
+      { headers: { get: n => (n === 'Cf-Access-Jwt-Assertion' ? jeton : null) } }, env);
+    return { privateKey, valider, env, appeler };
+  };
+
+  test('un jeton correctement signé donne son adresse', async () => {
+    const { privateKey, appeler } = await monter();
+    const jeton = await signer(privateKey, { alg: 'RS256', kid: 'k1' }, chargeSaine());
+    eq(await appeler(jeton), 'proprietaire@exemple.fr',
+      'un jeton valide doit rendre l’adresse de sa charge');
+  });
+
+  test('une signature qui ne colle pas est refusée', async () => {
+    const { privateKey, appeler } = await monter();
+    const jeton = await signer(privateKey, { alg: 'RS256', kid: 'k1' }, chargeSaine());
+    /* Un caractere de la charge change : la signature ne couvre plus le corps.
+       C'est le defaut d'origine — la presence de l'en-tete valait identite, donc
+       n'importe quelle charge passait. */
+    const [h, , s] = jeton.split('.');
+    const truquee = b64urlTexte(JSON.stringify({ ...chargeSaine(), email: 'voleur@ailleurs.fr' }));
+    eq(await appeler(`${h}.${truquee}.${s}`), null,
+      'une charge modifiée après signature doit être refusée');
+  });
+
+  test('les autres refus, un par un', async () => {
+    const { privateKey, appeler } = await monter();
+    const cas = [
+      ['une audience étrangère', { alg: 'RS256', kid: 'k1' }, { ...chargeSaine(), aud: ['une-autre-app'] }],
+      ['un émetteur étranger', { alg: 'RS256', kid: 'k1' }, { ...chargeSaine(), iss: 'https://ailleurs.example' }],
+      ['un jeton expiré', { alg: 'RS256', kid: 'k1' }, { ...chargeSaine(), exp: Math.floor(Date.now() / 1000) - 10 }],
+      ['une clef inconnue', { alg: 'RS256', kid: 'k-inconnue' }, chargeSaine()],
+      ['sans adresse dans la charge', { alg: 'RS256', kid: 'k1' }, { ...chargeSaine(), email: '' }],
+    ];
+    for (const [quoi, entete, charge] of cas) {
+      const jeton = await signer(privateKey, entete, charge);
+      eq(await appeler(jeton), null, `${quoi} doit être refusé`);
+    }
+    /* `alg: none` est l'attaque classique : la signature est vide et le
+       verificateur naif l'accepte. La garde porte sur l'algorithme annonce. */
+    const sansAlgo = `${b64urlTexte(JSON.stringify({ alg: 'none', kid: 'k1' }))}.`
+      + `${b64urlTexte(JSON.stringify(chargeSaine()))}.`;
+    eq(await appeler(sansAlgo), null, '« alg: none » doit être refusé');
+    eq(await appeler('pas-un-jeton'), null, 'une chaîne quelconque doit être refusée');
+    eq(await appeler(null), null, 'aucun jeton, aucune identité');
+  });
+
+  test('sans réglage Access, aucune identité — et le mot de passe reprend la main', async () => {
+    /* La regle qui empeche de se fermer la porte : sans les deux variables, il n'y
+       a pas d'identite Access, donc pas d'autorisation par ce chemin. Ce n'est pas
+       un verrou, c'est un retour au mot de passe, qui existe deja. */
+    const { privateKey, valider } = await monter();
+    const jeton = await signer(privateKey, { alg: 'RS256', kid: 'k1' }, chargeSaine());
+    const req = { headers: { get: n => (n === 'Cf-Access-Jwt-Assertion' ? jeton : null) } };
+    eq(await valider(req, {}), null, 'sans domaine ni audience, aucune identité');
+    eq(await valider(req, { ACCESS_TEAM_DOMAIN: DOMAINE }), null, 'l’audience manque');
+    eq(await valider(req, { ACCESS_AUD: AUD }), null, 'le domaine manque');
+  });
+
+  test('la clé KV ne vient plus d’un en-tête', () => {
+    /* Le lien qui rendait le defaut exploitable : le meme en-tete valait
+       autorisation ET choisissait la cle. Envoyer le nom de quelqu'un d'autre
+       donnait son etat. La cle se derive desormais d'une adresse validee, passee
+       en argument. */
+    const src = lireSource('_worker.js');
+    vrai(/const keyFor = email =>/.test(src),
+      'keyFor prend une adresse, pas une requête');
+    vrai(!/keyFor\(request\)/.test(src),
+      'aucun appel ne doit encore lui passer la requête');
+    const brut = (src.match(/headers\.get\('Cf-Access-Authenticated-User-Email'\)/g) || []).length;
+    eq(brut, 0,
+      'plus aucune lecture brute de l’en-tête d’identité : elle ne prouve rien');
+  });
+});
+
 suite('Une vente datee dans le passe ne prend pas le cours du jour', () => {
 
   test('la fenetre avertit quand la date recule', () => {

@@ -56,13 +56,18 @@ const Tests = (() => {
     if (!a) throw new Error(`${message}\n  aucune exception levée`);
   }
 
-  function run() {
+  /* `await` sur chaque cas, et le lanceur devient asynchrone. Sans lui, un test
+     asynchrone etait compte vert avant de s'executer et sa promesse rejetee
+     partait dans le vide : le harnais affirmait le contraire de ce qu'il
+     mesurait. Un `await` sur une valeur qui n'est pas une promesse ne coute
+     rien, donc les cas synchrones ne changent pas de comportement. */
+  async function run() {
     const resultats = [];
     let ok = 0, ko = 0;
     for (const s of suites) {
       const cas = [];
       for (const c of s.cas) {
-        try { c.fn(); cas.push({ nom: c.nom, ok: true }); ok++; }
+        try { await c.fn(); cas.push({ nom: c.nom, ok: true }); ok++; }
         catch (e) { cas.push({ nom: c.nom, ok: false, erreur: e.message || String(e) }); ko++; }
       }
       resultats.push({ nom: s.nom, cas });

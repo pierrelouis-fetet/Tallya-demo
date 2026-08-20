@@ -159,6 +159,23 @@ bug de l'application ne peut rien laisser fuir.
 5. Méthode de connexion : **One-time PIN** suffit (code envoyé par email).
 6. Enregistre.
 
+7. **Deux variables a poser, et cette etape n'est pas optionnelle.** Sur la page
+   de l'application Access, copie l'**Application Audience (AUD) Tag**. Puis dans
+   le projet Pages, *Settings* → *Variables and Secrets* :
+
+   | Nom | Valeur |
+   |---|---|
+   | `ACCESS_TEAM_DOMAIN` | `ton-equipe.cloudflareaccess.com` |
+   | `ACCESS_AUD` | le tag AUD copie juste avant |
+
+   Le Worker verifie la signature du jeton Access contre les clefs publiques de
+   l'equipe : il a besoin de savoir quelle equipe et quelle application. Sans ces
+   deux valeurs, aucune identite Access n'est reconnue et le mot de passe reprend
+   la main — on ne peut pas se fermer la porte avec ce reglage.
+
+   Sans cette verification, la simple presence d'un en-tete `Cf-Access-*` valait
+   identite, et ce meme en-tete choisissait la cle de stockage.
+
 Recharge maintenant l'adresse : Cloudflare demande ton email, envoie un code,
 et ne laisse passer que toi.
 

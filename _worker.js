@@ -355,12 +355,14 @@ async function resolveIsin(code, prefer = '') {
 const MAX_BYTES = 2 * 1024 * 1024;
 
 /* Une clé par compte Access : si tu partages un jour, chacun a son état. */
-const keyFor = request =>
-  `state:${request.headers.get('Cf-Access-Authenticated-User-Email') || 'default'}`;
+/* L'adresse arrive validee, en argument, et non lue de l'en-tete ici : c'est ce
+   qui empeche de choisir la cle de quelqu'un d'autre en envoyant son nom. Sans
+   identite prouvee, tout le monde partage state:default. */
+const keyFor = email => `state:${email || 'default'}`;
 
-async function handleState(request, env) {
+async function handleState(request, env, email) {
   if (!env.WEALTH) return json({ error: 'stockage non configuré' }, 501);
-  const key = keyFor(request);
+  const key = keyFor(email);
 
   if (request.method === 'GET') {
     const raw = await env.WEALTH.get(key);
@@ -479,9 +481,88 @@ async function handleState(request, env) {
    les deux chemins, et ce commentaire pour l'avertir. */
 const DEMO_PUBLIQUE = true;
 
-function accessEmail(request) {
-  return request.headers.get('Cf-Access-Authenticated-User-Email')
-      || (request.headers.get('Cf-Access-Jwt-Assertion') ? 'authentifié' : null);
+/* L'identite Access se prouve, elle ne se declare pas.
+
+   Ce qui vivait ici : la PRESENCE de l'en-tete Cf-Access-Authenticated-User-Email
+   valait authentification, et la meme valeur choisissait la cle KV. Deux
+   consequences pour qui atteint ce Worker sans passer par Access — un domaine
+   *.pages.dev oublie, un deploiement de previsualisation, une regle retiree :
+   envoyer l'en-tete suffisait a etre autorise, et a choisir de QUI on lit l'etat.
+   Cloudflare le dit dans sa documentation : un Worker doit valider le jeton, la
+   presence de l'en-tete n'empeche pas l'usurpation.
+
+   Le jeton se valide donc pour de bon : signature RS256 contre les clefs
+   publiques de l'equipe, aud egal a l'identifiant de l'application, iss egal au
+   domaine de l'equipe, et non expire.
+
+   Deux variables a poser cote Cloudflare, et leur absence n'ouvre rien : sans
+   elles, il n'y a pas d'identite Access, donc le mot de passe reprend la main.
+
+   Les clefs sont mises en cache dans l'isolat : un aller-retour par isolat et par
+   heure, pas un par requete. */
+
+const CLEFS_TTL_MS = 60 * 60 * 1000;
+let clefsCache = { url: null, a: 0, clefs: null };
+
+async function clefsAccess(domaine) {
+  const url = `https://${domaine.replace(/^https?:\/\//, '').replace(/\/+$/, '')}/cdn-cgi/access/certs`;
+  const maintenant = Date.now();
+  if (clefsCache.clefs && clefsCache.url === url && maintenant - clefsCache.a < CLEFS_TTL_MS)
+    return clefsCache.clefs;
+  const r = await fetch(url, { cf: { cacheTtl: 3600 } });
+  if (!r.ok) return null;
+  const { keys } = await r.json();
+  if (!Array.isArray(keys)) return null;
+  clefsCache = { url, a: maintenant, clefs: keys };
+  return keys;
+}
+
+const deB64url = s => {
+  const p = s.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(p + '='.repeat((4 - p.length % 4) % 4));
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+};
+
+/* Rend l'adresse prouvee par le jeton, ou null. Jamais une chaine de
+   consolation : « authentifie » etait une identite sans nom qui passait le
+   garde-fou et tombait sur la cle state:default. */
+async function accessEmail(request, env) {
+  const jeton = request.headers.get('Cf-Access-Jwt-Assertion');
+  const domaine = env.ACCESS_TEAM_DOMAIN, aud = env.ACCESS_AUD;
+  if (!jeton || !domaine || !aud) return null;
+
+  const parts = jeton.split('.');
+  if (parts.length !== 3) return null;
+  let entete, charge;
+  try {
+    entete = JSON.parse(new TextDecoder().decode(deB64url(parts[0])));
+    charge = JSON.parse(new TextDecoder().decode(deB64url(parts[1])));
+  } catch { return null; }
+  if (entete.alg !== 'RS256') return null;          // pas de none, pas de HS256
+
+  const clefs = await clefsAccess(domaine);
+  const jwk = clefs?.find(k => k.kid === entete.kid);
+  if (!jwk) return null;
+
+  let ok = false;
+  try {
+    const clef = await crypto.subtle.importKey('jwk',
+      { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', clef, deB64url(parts[2]),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+  } catch { return null; }
+  if (!ok) return null;
+
+  const auds = Array.isArray(charge.aud) ? charge.aud : [charge.aud];
+  if (!auds.includes(aud)) return null;
+  const attendu = `https://${domaine.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
+  if (charge.iss !== attendu) return null;
+  const s = Math.floor(Date.now() / 1000);
+  if (!charge.exp || charge.exp <= s) return null;
+  if (charge.nbf && charge.nbf > s + 60) return null;
+
+  return typeof charge.email === 'string' && charge.email ? charge.email : null;
 }
 
 /* ---------------- mot de passe intégré ----------------
@@ -642,12 +723,15 @@ export default {
     const PUBLIC = ['/icon-192.png', '/apple-touch-icon.png'];
 
     // --- garde-fou : rien d'autre ne sort sans authentification ---
+    /* L'identite est calculee une fois : elle sert au garde-fou ET a la cle KV,
+       et deux calculs separes finiraient par ne plus dire la meme chose. */
+    const email = await accessEmail(request, env);
     const authorised = PUBLIC.includes(path)
       // Ouverte par le code, pas par un réglage d'hébergeur : voir DEMO_PUBLIQUE.
       // Un mot de passe défini reprend la main et referme le site.
       || (DEMO_PUBLIQUE && !pwd)
       || env.ALLOW_PUBLIC === '1'
-      || !!accessEmail(request)
+      || !!email
       || (pwd && await tokenIsValid(cookieValue(request, 'wd_session'), pwd));
 
     if (!authorised) {
@@ -670,7 +754,10 @@ export default {
           service: 'wealth-dashboard',
           host: 'cloudflare',
           storage: env.WEALTH ? 'kv' : 'none',
-          user: request.headers.get('Cf-Access-Authenticated-User-Email') || null,
+          /* L'identite validee, jamais l'en-tete brut : cette route renvoyait
+             le nom que la requete se donnait, donc n'importe lequel. Un
+             diagnostic qui confirme ce qu'on lui souffle ne diagnostique rien. */
+          user: email || null,
         });
       }
 
@@ -699,7 +786,7 @@ export default {
         return json({ results: out });
       }
 
-      if (path === '/api/state') return handleState(request, env);
+      if (path === '/api/state') return handleState(request, env, email);
 
       return json({ error: 'route inconnue' }, 404);
     } catch (e) {
