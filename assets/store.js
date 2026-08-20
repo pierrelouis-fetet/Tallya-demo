@@ -2127,11 +2127,9 @@ function posValue(p) {
    variation de l'EUR/USD, et la plus-value d'une ligne qu'on n'a pas touchee
    changerait toute seule.
 
-   Ce qui a fait tomber ce raisonnement tient en une phrase du proprietaire :
-   « Meta, j'en ai achete 3 en mai et 1 en juillet, comment tu calcules le taux
-   de change ? » Il n'y a pas UN taux d'achat pour cette ligne. Il n'y en a jamais
-   eu, et la plupart des lignes se construisent ainsi, en plusieurs fois. Un
-   `fxBuy` unique n'etait donc pas une approximation : c'etait un chiffre
+   Ce qui le fait tomber : une ligne se construit souvent en plusieurs achats, a
+   des dates et donc a des taux differents. Il n'y a pas UN taux d'achat a geler,
+   et un `fxBuy` unique n'est donc pas une approximation mais un chiffre
    arbitraire presente comme une date.
 
    Pire, il ne se figeait meme pas a un achat : `quotes.js` le posait au PREMIER
@@ -6009,10 +6007,9 @@ function healthChecks() {
    aurait éteint le chiffre là où il portait la valeur.
 
    Ce qui reste dit vrai : l'écart en euros et en pourcentage, qui ne dépend pas
-   de la façon dont la ligne s'est constituée. La durée de détention l'a remplacé
-   sur la fiche, comme un fait plutôt que comme un taux — puis elle est partie
-   aussi : « on s'en fout ». Ne pas intéresser n'est pas mentir, mais ça coûte la
-   même place.
+   de la façon dont la ligne s'est constituée. Une durée de détention l'a
+   remplacé sur la fiche, comme un fait plutôt que comme un taux, puis elle est
+   partie aussi : elle n'apportait pas de quoi payer sa place.
 
    `dateAchat` reste, et sert toujours : c'est elle qui empêche l'écart du jour
    de compter une baisse d'avant l'achat. Un champ qui pilote un calcul n'a pas

@@ -456,10 +456,10 @@ const SOUS_ONGLETS = {
      La page repondait a une bonne question par des chiffres dont la base se
      discutait : une plus-value latente en pourcentage, un « resultat » qui
      melangeait du latent et de l'encaisse, et un ecart annonce sans dire s'il
-     comptait le change. C'est ce dernier qui a mis le doigt dessus — « je pense
-     que la perf par rapport au PRU est fausse, je n'ai pas la meme perf sur
-     son courtier ». Elle ne l'etait pas : elle etait juste en euros quand le courtier
-     compte en dollars, et rien a l'ecran ne le disait.
+     comptait le change. Ce dernier point etait le plus couteux : un courtier
+     convertit ses deux jambes au taux du jour et annonce donc le mouvement du
+     titre, la ou cette application comptait en euros a un taux gele. Deux
+     chiffres justes, aucun moyen de savoir lequel on lisait.
 
      Ce qui est garde a change de place, pas de nature : la plus-value par ligne
      etait deja dans Positions, et le journal des ventes l'y rejoint. Ce qui est
@@ -467,9 +467,7 @@ const SOUS_ONGLETS = {
      ligne » listait les memes lignes, sous le meme calcul.
 
      Rien n'est mis de cote « au cas ou » : du code que rien n'affiche est un
-     defaut ici, et ce projet traque deja les actions sans bouton. Le commit qui
-     retire cette vue EST l'archive, et il se retrouve en cherchant
-     « Performance » dans le journal. */
+     defaut ici. Le commit qui retire cette vue EST l'archive. */
   positions:  [['portefeuille', 'Positions', 'positions'], ['cible', 'Cible', 'rebalance']],
   /* Allocation n'a plus qu'un onglet, et plus de barre : `barreSousOnglets`
      s'efface sous deux choix.
@@ -11931,13 +11929,11 @@ function askPosition(index) {
              mouvement du titre dans sa monnaie, la ou le total portait en plus un
              change fige. Les deux jambes prenant desormais le taux du jour, le
              total EST ce mouvement : la repeter dessous ne dirait rien. -->
-        <!-- « Detenue depuis » a vecu ici, et elle est partie : « on s'en fout ».
-
-             Elle avait ete posee en remplacement d'un « rendement annuel » qui
-             mentait — un pourcentage etale sur une duree, ni pondere par le temps
-             ni par les montants. La duree seule ne mentait pas ; elle
-             n'interessait personne, ce qui n'est pas la meme faute mais coute la
-             meme place.
+        <!-- Ni duree de detention ni rendement annuel ici, et les deux ont ete
+             essayes. Le rendement mentait : un pourcentage etale sur une duree,
+             ni pondere par le temps ni par les montants. La duree ne mentait pas,
+             mais n'apportait pas de quoi payer sa place sur une fiche qui compte
+             quinze lignes.
 
              La date d'achat reste, et sert toujours : c'est elle qui fait que
              l'ecart du jour d'une ligne achetee aujourd'hui se compte depuis
