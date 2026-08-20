@@ -11931,32 +11931,21 @@ function askPosition(index) {
              mouvement du titre dans sa monnaie, la ou le total portait en plus un
              change fige. Les deux jambes prenant desormais le taux du jour, le
              total EST ce mouvement : la repeter dessous ne dirait rien. -->
-        ${(() => {
-          /* La duree de detention, comme un fait — et non comme un taux.
+        <!-- « Detenue depuis » a vecu ici, et elle est partie : « on s'en fout ».
 
-             « Par an » vivait ici : la plus-value etalee sur la duree depuis
-             l'achat, parce que « +36 % » ne dit rien sans elle, excellent sur un
-             an et mediocre sur cinq. Le besoin etait juste, le calcul non : une
-             ligne alimentee progressivement n'a pas de duree unique, et
-             annualiser un resultat produit en partie le mois dernier ne repond
-             a aucune question. Voir la note de la carte « Latente » dans
-             Performance.
+             Elle avait ete posee en remplacement d'un « rendement annuel » qui
+             mentait — un pourcentage etale sur une duree, ni pondere par le temps
+             ni par les montants. La duree seule ne mentait pas ; elle
+             n'interessait personne, ce qui n'est pas la meme faute mais coute la
+             meme place.
 
-             La duree seule dit ce qui manquait au pourcentage, sans rien
-             affirmer que les donnees ne portent pas : « +13,8 % » et « detenue
-             depuis 8 mois » cote a cote se lisent tres bien, et restent vrais
-             quelle que soit la façon dont la ligne s'est constituee.
-
-             « Depuis le premier achat » et non « depuis l'achat » : sur une
-             ligne renforcee, la date marque le debut, pas la totalite. */
-          const debut = String(p.dateAchat || '').trim();
-          if (!debut) return '';
-          const jours = (Date.now() - Date.parse(debut + 'T12:00:00')) / 86400000;
-          if (!Number.isFinite(jours) || jours < 0) return '';
-          return ligne(`${trad('Détenue depuis')}<span class="sub">${trad('ton premier achat sur cette ligne')}</span>`,
-            `<span class="muted">${jours < 31 ? `${Math.round(jours)} ${Math.round(jours) > 1 ? trad('jours') : trad('jour')}`
-              : esc(fmtDuree(jours / 365.25))}</span>`);
-        })()}
+             La date d'achat reste, et sert toujours : c'est elle qui fait que
+             l'ecart du jour d'une ligne achetee aujourd'hui se compte depuis
+             l'achat et non depuis une cloture de la veille qui ne la concerne
+             pas. Un champ qui pilote un calcul n'a pas besoin de s'afficher.
+             (Pas de backtick ici : ce commentaire vit dans un litteral de
+             gabarit, ou un backtick refermerait la chaine. Troisieme fois dans
+             la journee.) -->
         <!-- Elle reste affichee sur une ligne achetee aujourd'hui : c'est un
              fait sur le titre, et c'est meme lui qui explique l'ecart entre ce
              qu'a fait le titre et ce qu'a fait ton argent. -->

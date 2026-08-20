@@ -6009,16 +6009,22 @@ function healthChecks() {
    aurait éteint le chiffre là où il portait la valeur.
 
    Ce qui reste dit vrai : l'écart en euros et en pourcentage, qui ne dépend pas
-   de la façon dont la ligne s'est constituée. La fiche annonce la durée de
-   détention comme un fait — c'était l'information qui manquait au pourcentage,
-   et elle n'a pas besoin d'être transformée en taux pour la donner.
+   de la façon dont la ligne s'est constituée. La durée de détention l'a remplacé
+   sur la fiche, comme un fait plutôt que comme un taux — puis elle est partie
+   aussi : « on s'en fout ». Ne pas intéresser n'est pas mentir, mais ça coûte la
+   même place.
 
    `dateAchat` reste, et sert toujours : c'est elle qui empêche l'écart du jour
-   de compter une baisse d'avant l'achat. */
+   de compter une baisse d'avant l'achat. Un champ qui pilote un calcul n'a pas
+   besoin de s'afficher. */
 
-/* « 2 ans et 3 mois », pas « 2,25 ans ». Une seule implementation pour les deux
-   entrees : les annees decimales d'une detention et les mois entiers d'une
-   echeance de credit tombent sur la meme phrase. */
+/* « 2 ans et 3 mois », pas « 2,25 ans ».
+
+   L'implementation servait deux entrees : les annees decimales d'une detention et
+   les mois entiers d'une echeance de credit. La premiere est partie avec la ligne
+   « Detenue depuis », donc l'enveloppe en annees aussi — un raccourci sans
+   appelant est du code que rien n'affiche. Il se retrouve dans le commit qui le
+   retire, si une duree en annees redevient utile. */
 function fmtDureeMois(mois) {
   const n = Math.max(0, Math.round(mois));
   const a = Math.floor(n / 12), m = n % 12;
@@ -6027,7 +6033,6 @@ function fmtDureeMois(mois) {
   const lesAns = `${a} ${a > 1 ? trad('ans') : trad('an')}`;
   return m ? `${lesAns} ${trad('et')} ${lesMois}` : lesAns;
 }
-const fmtDuree = annees => fmtDureeMois(annees * 12);
 
 /* Le meme calcul que `latentPnl()`, au mot pres : valeur des positions, prix de
    revient, ecart, pourcentage. Deux exemplaires d'une meme somme finissent par

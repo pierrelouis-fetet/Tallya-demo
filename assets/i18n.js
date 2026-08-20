@@ -1507,8 +1507,6 @@ const I18N = {
     "se déduit du nom d’un fonds": "derived from a fund’s name",
     "Plus / moins-value": "Gain / loss",
     "achetée aujourd’hui : c’est aussi ton résultat du jour": "bought today: it is also your result for the day",
-    "Détenue depuis": "Held since",
-    "ton premier achat sur cette ligne": "your first purchase on this holding",
     "jour": "day",
     "jours": "days",
     "Clôture de la veille": "Previous close",
