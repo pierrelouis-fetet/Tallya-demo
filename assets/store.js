@@ -2334,6 +2334,70 @@ function allocationByAccount({ financier = false } = {}) {
     .sort((a, b) => b.value - a.value);
 }
 
+/* Le troisieme axe de la meme somme : apres « ce que c'est » et « ou c'est
+   pose », en combien de temps ça sort.
+
+   Le calcul existait deja, `poches().mobilisable`, mais il ne se lisait que par
+   l'autonomie financiere, qui en tire un nombre de mois. Un nombre de mois
+   repond a une autre question et ecrase la composition : savoir qu'un tiers du
+   patrimoine met des mois a se vendre ne se disait nulle part.
+
+   Deux precautions, et la seconde a failli manquer.
+
+   L'ordre est celui de la table, du plus liquide au moins, et non le
+   decroissant des deux autres cartes : ici le rang porte du sens, et trier par
+   montant melangerait un palier de trois jours avec un palier de trois mois
+   selon les hasards du patrimoine.
+
+   Et les cinq paliers y sont, `habite` et `bloque` compris. L'autonomie les
+   exclut de son cumul, a dessein — l'un n'arrive pas avant son terme, l'autre
+   demande un demenagement — mais cette regle appartient a l'autonomie. Ici ils
+   font partie des avoirs : les retirer donnerait une carte dont le total ne
+   vaut pas la base annoncee par ses voisines. */
+function allocationParDisponibilite({ financier = false } = {}) {
+  const base = financier ? totalFinancier() : patrimoine().brut;
+  const m = poches({ financier }).mobilisable;
+  return Object.entries(MOBILISABLE_LABEL)
+    .map(([cle, label]) => ({ cle, label: trad(label), value: num(m[cle]) }))
+    .filter(x => Math.abs(x.value) > 0.005)
+    .map(x => ({ ...x, pct: base ? x.value / base * 100 : 0 }));
+}
+
+/* Ce que le classement par poids montre sans jamais le dire.
+
+   La carte range les lignes de la plus grosse a la plus petite, et s'arrete la.
+   Le fait qui en decoule — une seule ligne pese un tiers de tout — demande de
+   lire l'axe, de retenir un pourcentage et de le rapporter au total. Il se dit
+   en une phrase.
+
+   C'est un fait, jamais un avis : aucun seuil, aucune couleur, aucune alerte.
+   Un rappel qui se declenche a chaque ouverture cesse d'etre lu, et « trop
+   concentre » depend d'un projet que l'application ne connait pas.
+
+   La liste est celle que la carte affiche, `allocationByAsset`, et non une
+   somme refaite ici : une seconde addition du meme fait finit par diverger de
+   la premiere.
+
+   Deux gardes. Une seule ligne fait 100 % par construction, l'annoncer
+   n'apprend rien. Et les trois premieres ne se disent qu'a partir de quatre :
+   a trois, elles sont le patrimoine entier. */
+function concentration({ financier = false } = {}) {
+  const base = financier ? totalFinancier() : nowTotals().brut;
+  if (!(base > 0.005)) return null;
+  const lignes = allocationByAsset({ credits: false, financier })
+    .filter(l => l.value > 0.005);
+  if (lignes.length < 2) return null;
+  const tete = lignes[0];
+  const trois = lignes.slice(0, 3).reduce((s, l) => s + l.value, 0);
+  return {
+    n: lignes.length,
+    premiere: { label: tete.label, value: tete.value, pct: tete.value / base * 100 },
+    top3: lignes.length > 3
+      ? { value: trois, pct: trois / base * 100 }
+      : null,
+  };
+}
+
 function stockTotals() {
   const somme = f => Store.state.positions.filter(f).reduce((s, p) => s + posValue(p), 0);
   const est = ac => p => assetClassDe(p) === ac;

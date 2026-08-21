@@ -915,7 +915,14 @@ const I18N = {
     "Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout.": "A search by name gives the name, symbol, currency and price, but not the ISIN: no free source recovers it from a symbol. Starting from the ISIN is the only path that fills everything.",
     "Ici,": "Here,",
     "non coté compris": "private assets included",
-    "l’immobilier est écarté": "property is set aside",
+    "Par disponibilité": "By availability",
+    "Quand cet argent peut redevenir disponible.": "When this money can become available again.",
+    "pèse": "is",
+    "tes trois premières lignes": "your top three holdings",
+    "Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Le logement que tu habites et ce qui est bloqué jusqu’à une échéance figurent ici parce qu’ils font partie de tes avoirs, mais l’autonomie financière de l’accueil les écarte de son cumul : elle compte ce sur quoi tu peux vivre, pas ce que tu possèdes.": "The delay comes from the holding’s asset class and from the account that holds it, never from a guess about your plans. The home you live in and anything locked until a maturity date appear here because they are part of your holdings, but the runway on the overview leaves them out of its total: it counts what you can live on, not what you own.",
+    "Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Tes murs et tes objets de valeur sont écartés de cette vue, et c’est ce qui fait disparaître le palier du logement que tu habites.": "The delay comes from the holding’s asset class and from the account that holds it, never from a guess about your plans. Your property and valuables are excluded from this view, which is what makes the tier for the home you live in disappear.",
+    " :": ":",
+    "immobilier et biens de valeur écartés": "property and valuables excluded",
     "Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.": "One base on this page: “Financial wealth”, everything you own except your property and valuables. Unlisted assets stay: you choose whether to put more in, whereas you do not sell three square metres of living room. Every card shares this base, so their percentages compare with each other. Your loans are not subtracted from it: the loan finances the asset, which is already set aside.",
     "dont": "of which",
     "à investir": "to invest",
@@ -1864,6 +1871,12 @@ function t(cle, repli) {
    `t()` reste pour les clefs pointees (`nav.*`, `view.*`), et un test refuse
    desormais qu'on lui passe autre chose. */
 const trad = (phrase, repli) => t(phrase, repli !== undefined ? repli : phrase);
+const deuxPoints = () => trad(' :');
+/* Un seul argument, et c'est le point. `trad(phrase, repli)` rend le REPLI en
+   francais et la traduction de la CLEF en anglais : passer ':' en repli ecrasait
+   donc precisement le cas francais, et « tout est compte: 30 274 EUR » perdait son
+   espace. Sans repli, la clef sert des deux cotes — ' :' en francais, sa
+   traduction ':' en anglais. Trouve a l'ecran, pas par un test. */
 
 const FR = {
   'nav.group.tracking': 'Pilotage',

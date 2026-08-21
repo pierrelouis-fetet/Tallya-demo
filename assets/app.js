@@ -649,7 +649,7 @@ function viewOverview() {
       if (!parts.length) return '';
       return `
       <div class="hero-barre" role="img"
-           aria-label="${trad('Répartition')} : ${parts.map(x => `${trad(x.label)} ${fmtPct(x.pct, 0)}`).join(', ')}">
+           aria-label="${trad('Répartition')}${deuxPoints()} ${parts.map(x => `${trad(x.label)} ${fmtPct(x.pct, 0)}`).join(', ')}">
         ${parts.map(x => `<i style="width:${x.pct.toFixed(2)}%;background:${x.couleur}"></i>`).join('')}
       </div>`;
     })()}
@@ -2631,6 +2631,27 @@ function pochesPatrimoine({ financier = false } = {}) {
 const teinterParRang = items =>
   items.map((x, i) => ({ ...x, couleur: x.couleur || x.color || `var(--series-${(i % 8) + 1})` }));
 
+/* Ce que le classement par poids montre sans le dire : une ligne pese un tiers
+   de tout, et il fallait lire l'axe pour s'en apercevoir.
+
+   La phrase se pose sous les barres, la ou le classement se lit, et pas en tete
+   de carte : c'est une lecture du graphique, pas un chiffre de plus.
+
+   En `hint` gris, jamais en couleur et jamais en rouge. Le rouge dit ce qui est
+   faux, et une concentration ne l'est pas — elle depend d'un projet que
+   l'application ne connait pas. `concentration()` se tait deja quand il n'y a
+   rien a dire ; ici on ne fait que rendre. */
+function phraseConcentration() {
+  const c = concentration({ financier: allocFinancier });
+  if (!c) return '';
+  const base = baseAlloc().de;
+  const tete = `<b>${esc(c.premiere.label)}</b> ${trad('pèse')} `
+    + `${fmtPct(c.premiere.pct, 1)} ${base}`;
+  const trois = c.top3
+    ? ` · ${trad('tes trois premières lignes')} ${fmtPct(c.top3.pct, 1)}` : '';
+  return `<p class="hint" style="margin:8px 0 0">${tete}${trois}</p>`;
+}
+
 function viewAllocation() {
   const t = nowTotals();
   if (!(patrimoine().brut > 0.005)) {
@@ -2642,6 +2663,7 @@ function viewAllocation() {
   const byAsset = allocationByAsset({ credits: false, financier: allocFinancier });
   const byAcct = allocationByAccount({ financier: allocFinancier });
   const byType = teinterParRang(byAccountType({ financier: allocFinancier }));
+  const dispo = teinterParRang(allocationParDisponibilite({ financier: allocFinancier }));
 
   const tbl = (items, totalLabel, total) => `
     <table>
@@ -2680,7 +2702,7 @@ function viewAllocation() {
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
-      ? trad('l’immobilier est écarté') : trad('tout est compté')}</b> :
+      ? trad('immobilier et biens de valeur écartés') : trad('tout est compté')}</b>${deuxPoints()}
     ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
       ? trad("Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.")
       : trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
@@ -2714,7 +2736,8 @@ function viewAllocation() {
     ${tbl(poches, baseAlloc().nom,
            valeurBaseAlloc())}
     <h3 class="sous-titre-carte">${trad('Ligne par ligne')}</h3>
-    <div class="chart" id="aAsset"></div>
+    <div class="chart" id="aAsset"></div>    <div class="chart" id="aAsset"></div>
+    ${phraseConcentration()}
     ${t.dettes && !allocFinancier ? `<dl class="kv" style="margin-top:8px">
       <dt>${trad('Crédits en cours')}${aide(trad("Ils ne figurent pas dans les parts ci-dessus : une répartition dit où est ton argent, et un crédit n’est pas un endroit. Il se retire du total, ici, pour donner le patrimoine net."))}</dt>
         <dd class="dette">−${fmtEUR(t.dettes)}</dd>
@@ -2730,6 +2753,16 @@ function viewAllocation() {
     ${tbl(byType, baseAlloc().nom, byType.reduce((s, i) => s + i.value, 0))}
     <h3 class="sous-titre-carte">${trad('Par compte')}</h3>
     <div class="chart" id="aAcct"></div>
+  </div>
+
+  <div class="card" data-anchor="disponibilite">
+    <div class="card-head"><h2>${trad('Par disponibilité')}</h2>
+      <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
+    <p class="hint" style="margin:0 0 12px">${trad('Quand cet argent peut redevenir disponible.')}${aide(allocFinancier
+      ? trad("Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Tes murs et tes objets de valeur sont écartés de cette vue, et c’est ce qui fait disparaître le palier du logement que tu habites.")
+      : trad("Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Le logement que tu habites et ce qui est bloqué jusqu’à une échéance figurent ici parce qu’ils font partie de tes avoirs, mais l’autonomie financière de l’accueil les écarte de son cumul : elle compte ce sur quoi tu peux vivre, pas ce que tu possèdes."))}</p>
+    <div class="chart" id="aDispo"></div>
+    ${tbl(dispo, baseAlloc().nom, dispo.reduce((s, i) => s + i.value, 0))}
   </div>
 
 `;
@@ -2748,6 +2781,12 @@ function mountAllocation() {
     height: 200, centerLabel: baseAlloc().nom,
     centerValue: bt.reduce((s, i) => s + i.value, 0),
     items: bt.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
+  });
+  const bd = teinterParRang(allocationParDisponibilite({ financier: allocFinancier }));
+  Charts.donut($('#aDispo'), {
+    height: 200, centerLabel: baseAlloc().nom,
+    centerValue: bd.reduce((s, i) => s + i.value, 0),
+    items: bd.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
 }
 
@@ -2952,7 +2991,7 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
     ${per.horsAtteinte.length ? `<div class="note" style="margin:0 0 12px;
          background:color-mix(in oklab, var(--warning) 12%, var(--surface-1));
          border-color:color-mix(in oklab, var(--warning) 40%, transparent)">⚠ <span>
-      <b>${per.horsAtteinte.map(h => esc(h.label)).join(' et ')} :
+      <b>${per.horsAtteinte.map(h => esc(h.label)).join(' et ')}${deuxPoints()}
       cible impossible à atteindre ici.</b>
       Tu en détiens ${per.horsAtteinte.map(h => fmtEUR0(h.montant)).join(' et ')},
       mais sur un compte hors de cette base. La jauge restera à zéro
@@ -3071,7 +3110,7 @@ function viewHistory() {
                 title="${aVenir
                   ? `${esc(fmtMonth(r.date))} ${trad('n’a pas encore eu lieu')}`
                   : attendSaPhoto
-                  ? `${trad('Enregistrer le relevé de')} ${esc(fmtMonth(r.date))} : ${trad('reprend tous les montants actuels')}`
+                  ? `${trad('Enregistrer le relevé de')} ${esc(fmtMonth(r.date))}${deuxPoints()} ${trad('reprend tous les montants actuels')}`
                   : trad('Reprendre tous les montants actuels dans cette ligne')}">⤒</button>
       </td>
       <td class="name sticky-col"><input type="date" data-path="monthly.${i}.date" value="${r.date}" style="min-width:130px"></td>
@@ -4953,7 +4992,7 @@ function viewBudget(section = 'depenses') {
         </div>
         <p class="small muted" style="margin:12px 0 0">${postes.length > montre.length
           ? `${trad('et')} ${postes.length - montre.length} ${postes.length - montre.length > 1
-              ? trad('autres postes') : trad('autre poste')} : ${trad('voir les.minuscule', 'voir les')} ${postes.length}${trad(', avec leur part ›')}`
+              ? trad('autres postes') : trad('autre poste')}${deuxPoints()} ${trad('voir les.minuscule', 'voir les')} ${postes.length}${trad(', avec leur part ›')}`
           : trad('Voir la part de chaque poste ›')}</p>
       </button>`;
     })()}
@@ -5854,7 +5893,7 @@ const ACTIONS = {
       ...(Store.state.meta.notifsReglages || {}), [cle]: actif };
     Store.save(); render();
     retourHaptique();
-    toast(`${actif ? trad('Activé') : trad('Éteint')} : ${
+    toast(`${actif ? trad('Activé') : trad('Éteint')}${deuxPoints()} ${
       (FAMILLES_NOTIF.find(f => f[0] === cle) || [, cle])[1].toLowerCase()}`);
   },
   'aller-fiche'(btn) { closeApercu(); location.hash = btn.dataset.route; },
@@ -7870,7 +7909,7 @@ function askText(titre, message, exemple = '', valeur = '', max = NOM_LIGNE_MAX)
        un champ `requis` d'`askForm` — c'est « Annuler » qui sert a renoncer. */
     const valider = () => {
       const v = champ.value.trim();
-      if (!v) { champ.focus(); toast(`${titre} : ${trad('à remplir')}`); return; }
+      if (!v) { champ.focus(); toast(`${titre}${deuxPoints()} ${trad('à remplir')}`); return; }
       fermer(v);
     };
     champ.onkeydown = e => {
@@ -8038,7 +8077,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
          contrat entre elles et `askForm`. La quatrieme l'aurait oublie. */
       const efface = champs.some(c => c.type === 'case' && c.cle === 'supprimer') && out.supprimer;
       const manquant = efface ? null : champs.find(c => c.requis && !String(out[c.cle]).trim());
-      if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label} : ${trad('à remplir')}`); return; }
+      if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label}${deuxPoints()} ${trad('à remplir')}`); return; }
       if (suite) out.__encore = true;
       fermer(out);
     };
@@ -8866,7 +8905,7 @@ function askMonthlySnapshot(index) {
 
     $('#modalTitle').textContent = `${trad('Relevé de')} ${fmtMonth(r.date)}`;
     $('#modalSub').innerHTML = escMontant((avant
-      ? `${trad('Dernier relevé,')} ${fmtMonth(avant.date)} : ${fmtEUR0(precedent)}`
+      ? `${trad('Dernier relevé,')} ${fmtMonth(avant.date)}${deuxPoints()} ${fmtEUR0(precedent)}`
       : trad('Aucun relevé avant celui-ci')) + ` · ${trad('valeurs brutes, crédits à part')}`);
     $('#modalBody').innerHTML = `
       <div class="dep-total" id="relTotal"></div>

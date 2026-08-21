@@ -4731,6 +4731,62 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
     }
   });
 
+  test('la concentration se dit sur la liste qu’on regarde', () => {
+    /* La phrase se pose sous les barres du classement par poids : elle doit donc
+       compter la meme liste, `allocationByAsset`, et non une somme refaite a
+       cote. Deux additions du meme fait finissent par diverger, et celle-ci
+       serait invisible — les deux nombres restant plausibles. */
+    Fixture.poser();
+    const c = concentration();
+    vrai(c, 'la fixture doit produire une concentration');
+    const lignes = allocationByAsset({ credits: false }).filter(l => l.value > 0.005);
+    eq(c.premiere.label, lignes[0].label,
+      'la ligne citée est la première du classement affiché');
+    pres(c.premiere.pct, lignes[0].value / nowTotals().brut * 100,
+      'et son pourcentage est pris sur « Tes avoirs », la base de la page');
+    pres(c.top3.value, lignes.slice(0, 3).reduce((s, l) => s + l.value, 0),
+      'les trois premières sont les trois premières de cette même liste');
+  });
+
+  test('la concentration se tait quand elle n’apprend rien', () => {
+    /* Deux gardes, et chacune evite une phrase vraie mais vide. Une seule ligne
+       pese 100 % par construction : le dire est du bruit. Et a trois lignes, les
+       « trois premieres » sont le patrimoine entier. */
+    Fixture.poser(e => {
+      e.comptes = [e.comptes[0]];
+      e.comptes[0].cash = [];
+      e.comptes[0].lignes = [{ id: 'l_seule', classe: 'actions', libelle: 'Une seule',
+                               valeur: 5000, prixDeRevient: 5000, quantite: 1,
+                               dateAcquisition: '' }];
+      e.positions = [];
+    });
+    eq(concentration(), null, 'une ligne unique ne se commente pas');
+
+    Fixture.poser(e => {
+      e.comptes = [e.comptes[0]];
+      e.comptes[0].cash = [];
+      e.comptes[0].lignes = ['a', 'b', 'c'].map((n, i) => ({
+        id: 'l_' + n, classe: 'actions', libelle: 'Ligne ' + n,
+        valeur: 1000 * (i + 1), prixDeRevient: 1000, quantite: 1, dateAcquisition: '' }));
+      e.positions = [];
+    });
+    const c3 = concentration();
+    vrai(c3, 'trois lignes se commentent encore, pour la plus grosse');
+    eq(c3.top3, null, 'mais « les trois premières » y valent 100 % : la phrase se tait');
+  });
+
+  test('« Par disponibilité » somme les avoirs, comme ses deux voisines', () => {
+    /* Le troisieme axe de la page. Ses parts doivent faire la meme base que les
+       deux autres cartes, sans quoi la page reprendrait les trois denominateurs
+       dont elle s'est debarrassee le 13 aout. */
+    Fixture.poser();
+    const d = allocationParDisponibilite();
+    vrai(d.length, 'la fixture doit produire au moins un palier');
+    pres(d.reduce((s, x) => s + x.value, 0), nowTotals().brut,
+      'la somme des paliers fait « Tes avoirs »');
+    pres(d.reduce((s, x) => s + x.pct, 0), 100, 'les parts font 100 %');
+  });
+
   test('les deux lectures de la carte partagent leur base', () => {
     /* Par enveloppe et par compte sont deux granularites d'un seul total : deux
        bases differentes en feraient deux cartes qui se contredisent sous un
@@ -13527,6 +13583,67 @@ suite('La répartition suit le commutateur, et ses parts font le total', () => {
   });
 });
 
+
+suite('Le deux-points se traduit comme le reste', () => {
+
+  /* Le francais met une espace avant le deux-points, l'anglais n'en met pas.
+     La phrase « Ici, tout est compte : 30 274 EUR » etait juste en francais et
+     fautive en anglais, ou le gabarit produisait « everything is counted :
+     EUR 354,551 ».
+
+     Le premier correctif a casse le francais : `trad(phrase, repli)` rend le
+     REPLI en francais et la traduction de la CLEF en anglais, donc passer ':'
+     en repli ecrasait exactement le cas qui etait deja juste. Vu a l'ecran, pas
+     par un test — d'ou celui-ci, qui tient les deux cotes a la fois. */
+  test('le français garde son espace, l’anglais n’en met pas', () => {
+    enLangue('fr', () => eq(deuxPoints(), ' :',
+      'le deux-points français prend une espace insécable avant lui'));
+    enLangue('en', () => eq(deuxPoints(), ':',
+      'l’anglais n’en prend aucune'));
+  });
+
+  test('la page Allocation ne l’écrit plus dans son gabarit', () => {
+    /* Ce controle a d'abord balaye tout le fichier, et il a rendu huit
+       resultats dont cinq faux : un ternaire JavaScript s'ecrit aussi « } : »,
+       et un deux-points a l'interieur d'une chaine deja traduite est correct
+       puisque sa traduction le gere. Distinguer les trois demanderait de
+       tokeniser le fichier.
+
+       Il se resserre donc sur la page Allocation, dont je peux lire le gabarit
+       en entier. Un controle qui prouve peu et le dit vaut mieux qu'un controle
+       large qu'il faut entourer d'exceptions — les exceptions finissent par
+       couvrir le defaut qu'on cherchait.
+
+       Les separateurs des autres pages ont ete convertis a la main, et trois
+       endroits gardent de la prose francaise ecrite hors de trad() : c'est un
+       autre defaut, plus ancien, et il ne se corrige pas ici. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewAllocation()'),
+                          src.indexOf('function mountAllocation'));
+    const fautifs = [...vue.matchAll(/(?:<\/(?:b|span|dt|i)>|\}) : /g)];
+    eq(fautifs.length, 0,
+      fautifs.length + ' séparateur(s) écrit(s) dans le gabarit d’Allocation '
+      + 'au lieu de passer par deuxPoints()');
+  });
+
+  test('la phrase du préambule nomme toutes les classes écartées', () => {
+    /* L'enumeration est ecrite a la main — « immobilier et biens de valeur » —
+       parce que la fabriquer depuis les libelles demanderait de les mettre en
+       minuscules, ce qui ne se fait pas de la meme facon dans toutes les
+       langues, et parce que ces libelles ne sont pas tous traduits.
+
+       Elle est donc epinglee ici : le jour ou la liste des classes ecartees
+       change, ce controle tombe et force a relire la phrase. C'est ce qui
+       manquait — elle disait « l'immobilier est ecarte » alors que les objets
+       de valeur sortaient aussi, et rien ne le signalait. */
+    eq(CLASSES_HORS_FINANCIER.join(','), 'immobilier,bienValeur',
+      'la liste des classes écartées a changé : la phrase du préambule doit '
+      + 'être relue, elle les énumère à la main');
+    const src = lireSource('assets/app.js');
+    vrai(/immobilier et biens de valeur écartés/.test(src),
+      'le préambule doit nommer les deux classes, pas seulement l’immobilier');
+  });
+});
 
 suite('La vue financière retire les murs, et le total reste la somme de ses parts', () => {
 
