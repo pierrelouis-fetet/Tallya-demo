@@ -15148,6 +15148,22 @@ suite('La vitrine dit vrai, et se laisse trouver', () => {
       'les pages de connexion et de verrouillage doivent utiliser ces en-têtes');
   });
 
+  test('la preuve de propriété du site ne disparaît pas', () => {
+    /* Les trois liens GitHub vers la demonstration portent rel="nofollow" :
+       README, image cliquable et encart About, GitHub les marque tous. Rien ne
+       conduit donc un moteur jusqu'a la page, et ouvrir robots.txt ne suffisait
+       pas — le site etait autorise et inconnu. La declaration dans Search
+       Console est le seul chemin qui ne depende d'aucun lien externe, et cette
+       balise est ce qui la tient.
+
+       La retirer ne casse rien de visible : le site continue de fonctionner,
+       Search Console cesse simplement de rendre compte de l'indexation. C'est
+       exactement le genre de chose qui se perd sans un controle. */
+    const html = lireSource('index.html');
+    vrai(/name="google-site-verification"\s+content="[\w-]{20,}"/.test(html),
+      'la balise de validation Google doit rester dans la page d’accueil');
+  });
+
   test('les deux descriptions annoncent le même nombre de tests, et il est vrai', () => {
     /* Deux compteurs pour un seul fait, dans le meme fichier : « 600+ tests »
        sous le lien Google et « ~500 tests » sur les reseaux sociaux. Les deux
