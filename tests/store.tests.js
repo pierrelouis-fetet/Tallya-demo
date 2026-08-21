@@ -15111,6 +15111,64 @@ suite('L’interface tient ses seuils', () => {
   });
 });
 
+suite('La vitrine dit vrai, et se laisse trouver', () => {
+
+  /* Ce depot-ci est la demonstration publique : elle doit se trouver. Le
+     `robots.txt` portait `Disallow: /`, herite de l'instance privee, donc la
+     page que le README annonce comme « Live demo » et que le profil GitHub
+     pointe etait invisible pour les moteurs. Un lien qu'on distribue et qu'aucun
+     moteur ne connait est un lien qui n'existe qu'une fois.
+
+     Ce controle vit dans ce depot et pas dans l'autre, et c'est voulu :
+     l'instance privee garde `Disallow: /`. Rien dans l'arbre ne distingue les
+     deux depots, donc le test ne peut pas se deriver — il se declare. */
+  test('la démonstration se laisse indexer', () => {
+    const robots = lireSource('robots.txt');
+    vrai(robots !== null, 'robots.txt doit se lire');
+    const regles = robots.split('\n')
+      .map(l => l.replace(/#.*/, '').trim())
+      .filter(Boolean);
+    const interdits = regles.filter(l => /^Disallow:\s*\/\s*$/i.test(l));
+    eq(interdits.length, 0,
+      'robots.txt interdit la racine : la démonstration publique redevient '
+      + 'introuvable, et le lien du README ne mène plus nulle part pour un moteur');
+    vrai(regles.some(l => /^Allow:\s*\//i.test(l)),
+      'robots.txt doit autoriser explicitement la racine');
+  });
+
+  test('la page de connexion reste, elle, hors des moteurs', () => {
+    /* Ouvrir robots.txt ne doit pas ouvrir la page de connexion. Elle porte son
+       propre en-tete, qui prime sur ce fichier : c'est ce qui rend le geste
+       precedent sans danger, et c'est donc ce qu'il faut garder. */
+    const worker = lireSource('_worker.js');
+    vrai(/X-Robots-Tag['"]?\s*:\s*['"]noindex/.test(worker),
+      'les réponses HTML du worker doivent porter noindex');
+    const pages = [...worker.matchAll(/headers: htmlHeaders/g)];
+    vrai(pages.length >= 2,
+      'les pages de connexion et de verrouillage doivent utiliser ces en-têtes');
+  });
+
+  test('les deux descriptions annoncent le même nombre de tests, et il est vrai', () => {
+    /* Deux compteurs pour un seul fait, dans le meme fichier : « 600+ tests »
+       sous le lien Google et « ~500 tests » sur les reseaux sociaux. Les deux
+       etaient faux, et surtout ils se contredisaient — un lecteur qui voit les
+       deux extraits n'a aucune raison de croire le troisieme chiffre.
+
+       Sans etape de construction, la valeur se recopie forcement dans une balise
+       meta. Ce qui se corrige, c'est qu'elle soit UNIQUE et tenue : le controle
+       exige que les deux disent la meme chose, et que ce plancher soit vrai. */
+    const html = lireSource('index.html');
+    const dits = [...html.matchAll(/([\d~+]+)\s+tests\./g)].map(m => m[1]);
+    vrai(dits.length >= 2, 'la page annonce un nombre de tests dans ses deux descriptions');
+    eq(new Set(dits).size, 1,
+      'les descriptions annoncent ' + dits.join(' et ') + ' : deux chiffres pour un seul fait');
+    const plancher = Number(dits[0].replace(/[^\d]/g, ''));
+    const reels = (lireSource('tests/store.tests.js').match(/^  test\(/gm) || []).length;
+    vrai(plancher <= reels,
+      `la page annonce ${dits[0]} tests, le fichier en déclare ${reels}`);
+  });
+});
+
 suite('Le README ne promet que ce qui est mesurable', () => {
 
   /* Le README se vante que « beaucoup de tests lisent la source elle-meme »,

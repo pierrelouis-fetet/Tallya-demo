@@ -1,2 +1,8 @@
+# The demo is meant to be found: it is the first page anyone arriving from
+# GitHub looks at, and it holds nothing but fictional data.
+#
+# The private instance keeps `Disallow: /`, and the login page carries its own
+# `X-Robots-Tag: noindex, nofollow` from the worker. That header outranks this
+# file, so opening this one changes nothing for the pages that must stay out.
 User-agent: *
-Disallow: /
+Allow: /
