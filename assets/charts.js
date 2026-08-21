@@ -485,7 +485,21 @@ const Charts = (() => {
             ${it.average != null ? `<div class="tt-row">${trad('Par mois')}<b>${fmtEUR(it.average)}</b></div>` : ''}
             <div class="tt-row">${trad('Part')}<b>${fmtPct(it.pct ?? 0)}</b></div>`;
           tip.style.left = Math.max(4, W - tip.offsetWidth - 8) + 'px';
-          tip.style.top = (+node.dataset.i * rowH - 6) + 'px';
+          /* Le haut suit la ligne survolee, et c'est la seule infobulle des
+             graphiques dans ce cas : les autres s'epinglent en tete, donc rien
+             ne pouvait les faire sortir. Celle-ci n'avait aucune borne basse, et
+             sur les dernieres lignes elle depassait sa carte — les deux
+             dernieres valeurs, le montant et la part, tombaient hors du cadre.
+             Elle est posee en absolu dans le conteneur du graphique, donc c'est
+             la hauteur de ce conteneur qui la retient.
+
+             Et cette hauteur se MESURE : `H` est celle du viewBox, or le SVG est
+             mis a l'echelle de la largeur disponible. Sur un telephone les deux
+             differaient de dix pixels, et borner sur `H` laissait deborder
+             d'autant. */
+          const dispo = el.clientHeight || H;
+          tip.style.top = Math.max(0,
+            Math.min(dispo - tip.offsetHeight, +node.dataset.i * rowH - 6)) + 'px';
         };
         node.addEventListener('mouseenter', montrer);
         node.addEventListener('mouseleave', () => { tip.hidden = true; });

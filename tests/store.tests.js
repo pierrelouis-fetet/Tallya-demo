@@ -15288,6 +15288,57 @@ suite('Le README ne promet que ce qui est mesurable', () => {
   });
 });
 
+suite('Une infobulle de graphique reste dans sa carte', () => {
+
+  /* Le defaut, signale sur une capture de telephone : en bas des listes
+     d'Allocation, l'infobulle debordait de sa carte et ses deux dernieres
+     lignes — le montant et la part, c'est-a-dire tout ce qu'elle a a dire —
+     tombaient hors du cadre.
+
+     La cause : `rankedBars` est la seule infobulle des graphiques dont le haut
+     suit la ligne survolee. Les autres s'epinglent en tete, a 8, 6, 4 ou 2
+     pixels, donc rien ne peut les faire sortir. Celle-la valait
+     `index * rowH - 6`, sans borne basse. Elle est posee en absolu dans le
+     conteneur du graphique : c'est la hauteur de ce conteneur qui doit la
+     retenir.
+
+     Le controle porte sur la regle et non sur cette ligne : tout haut CALCULE
+     doit etre borne. Un haut constant n'en a pas besoin, et l'exiger ferait un
+     test qu'on contourne. */
+  test('tout haut calculé est borné par la hauteur du conteneur', () => {
+    const src = lireSource('assets/charts.js');
+    vrai(src, 'charts.js doit se lire');
+    const poses = [...src.matchAll(/tip\.style\.top\s*=\s*([^;]+);/g)].map(m => m[1].trim());
+    vrai(poses.length >= 4, 'les graphiques doivent poser le haut de leurs infobulles');
+
+    const fautifs = poses.filter(expr => {
+      /* Un haut constant : une chaine de pixels, rien de calcule. Le signe moins
+         compte comme constante — une courbe epingle son infobulle six pixels
+         au-dessus de son cadre, volontairement, et exiger une borne la aurait
+         fait corriger le test au lieu du code. */
+      if (/^'-?\d+px'$/.test(expr)) return false;
+      return !/Math\.min/.test(expr);
+    });
+    eq(fautifs.length, 0,
+      'infobulle(s) dont le haut se calcule sans borne basse : « '
+      + fautifs.join(' » « ') + ' » — elle sortira de sa carte en bas de liste');
+  });
+
+  test('la borne se mesure sur le conteneur, pas sur un nombre écrit', () => {
+    /* Une borne posee en dur — « pas plus bas que 300 px » — redeviendrait
+       fausse a la premiere liste plus longue. Elle doit lire la hauteur que le
+       graphique s'est donnee. */
+    const src = lireSource('assets/charts.js');
+    const bornes = [...src.matchAll(/tip\.style\.top\s*=[\s\S]{0,40}?Math\.min\(([^,]+),/g)]
+      .map(m => m[1].trim());
+    vrai(bornes.length >= 1, 'au moins une infobulle doit être bornée');
+    for (const b of bornes) {
+      vrai(/H|clientHeight|offsetHeight|r\.height/.test(b),
+        `la borne « ${b} » n’est pas une hauteur mesurée`);
+    }
+  });
+});
+
 suite('Une classe d’actif porte un seul nom', () => {
 
   /* Le defaut, vu sur une capture de telephone et pas par un test : le meme
