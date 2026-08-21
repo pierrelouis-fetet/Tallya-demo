@@ -27,7 +27,12 @@ const SEED_BUDGET = {
 
   contributors: [{ id: 'coloc', name: 'Flatmate' }],
   fixedCharges: [
-    { label: 'Rent (bills included)', amount: 900.00, shares: { coloc: 450.00 }, provider: 'Landlord' },
+    /* Le loyer a cede la place a la mensualite : celui qui possede son
+       logement n'en paie pas deux. La colocataire participe, pour la meme
+       part qu'avant. `creditId` relie la charge au pret, et c'est la charge
+       qui detient le montant — le credit le lit a travers elle. */
+    { label: 'Mortgage', amount: 894.44, shares: { coloc: 450.00 },
+      provider: 'Mortgage lender', creditId: 'd_pretAppart' },
     { label: 'Electricity and gas',        amount: 110.00, shares: { coloc: 55.00 },  provider: 'Energy supplier' },
     { label: 'Home insurance',      amount: 18.00,  shares: { coloc: 9.00 },   provider: 'Insurer' },
     { label: 'Internet',                  amount: 32.00,  shares: { coloc: 16.00 },  provider: 'Telecom operator' },

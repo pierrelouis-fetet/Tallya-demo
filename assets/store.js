@@ -889,14 +889,37 @@ const CLASSE_COULEURS = new Proxy({}, {
     ? couleurClasse(k) : undefined,
   has: (_, k) => typeof k === 'string' && (CLASSES_ALIAS[k] || k) in TEINTE_CLASSE,
 });
-function repartitionClasses() {
+/* `net` : les credits se retranchent de la classe qu'ils financent, et la base
+   devient le patrimoine net.
+
+   Le commutateur Net / Brut gouvernait le grand chiffre et la courbe, pas cette
+   carte. On lisait donc, sur un seul ecran, un patrimoine net annonce en tete et
+   une repartition qui totalisait le brut juste dessous : les parties ne faisaient
+   pas le tout, ce que ce projet s'interdit partout ailleurs.
+
+   Les dettes vont a l'immobilier, comme dans la projection : c'est `partPlate()`
+   qui pose cette regle — immobilier plus biens moins dettes — et deux calculs qui
+   repondent a la meme question doivent donner le meme chiffre. Une dette sans
+   bien pour la porter rend donc cette classe negative, et la carte le montre
+   plutot que de la masquer : le filtre garde ce qui n'est pas nul, dans les deux
+   sens.
+
+   Allocation ne change pas : elle n'a pas de commutateur et declare une base
+   unique. Deux pages, deux bases, chacune nommee — c'est le motif autorise ici,
+   celui qu'un total muet violait. */
+function repartitionClasses({ net = false } = {}) {
   const p = patrimoine();
+  const dettes = net ? num(p.dettes) : 0;
+  const base = num(p.brut) - dettes;
+  const porteuse = ['immobilier', 'bienValeur'].find(c => Math.abs(num(p.classes[c])) > 0.005)
+    || (dettes ? 'immobilier' : null);
   return Object.entries(CLASSES_ACTIFS)
-    .map(([classe, label]) => ({ classe, label,
-      couleur: CLASSE_COULEURS[classe],
-      value: p.classes[classe] || 0,
-      pct: p.brut ? (p.classes[classe] || 0) / p.brut * 100 : 0 }))
-    .filter(x => x.value > 0.005);
+    .map(([classe, label]) => {
+      const value = (p.classes[classe] || 0) - (classe === porteuse ? dettes : 0);
+      return { classe, label, couleur: CLASSE_COULEURS[classe], value,
+               pct: base ? value / base * 100 : 0 };
+    })
+    .filter(x => Math.abs(x.value) > 0.005);
 }
 
 function refreshAccounts() {
@@ -1456,8 +1479,20 @@ const Store = {
          bout de trois mois. Sans date de depart, elle le reclamait des la
          premiere ouverture — une demonstration accueillait son visiteur par un
          reproche. Le jour de la migration EST le jour ou l'on a lu ce montant. */
+      /* Le taux, l'assurance et le capital emprunte suivent quand le compte les
+         declare. Sans eux, un pret migre n'avait aucun taux : la projection ne
+         pouvait pas rejouer son amortissement, et la cloche ne pouvait pas
+         proposer un capital restant du a jour — les deux mecanismes existaient
+         et ne servaient a rien sur la seule dette du jeu de demonstration.
+
+         Copies un a un et non par etalement : une dette ne doit pas heriter des
+         champs d'affichage d'un compte (`group`, `short`, `broker`), qui n'ont
+         aucun sens sur elle et que rien ne lirait. */
       if (du > 0) etabDe(a.broker).dettes.push({ id: 'd_' + a.id, libelle: a.label,
-        montant: du, note: '', verifieLe: todayISO() });
+        montant: du, note: '', verifieLe: todayISO(),
+        ...(num(a.taux) ? { taux: num(a.taux) } : {}),
+        ...(num(a.tauxAssurance) ? { tauxAssurance: num(a.tauxAssurance) } : {}),
+        ...(num(a.initial) ? { initial: num(a.initial) } : {}) });
       s.now[a.id] = 0;
     }
 
@@ -2174,27 +2209,47 @@ const libelleAlloc = p => {
 function allocationByAsset({ credits = true } = {}) {
   const map = new Map();
   const teintes = new Map();
-  const add = (label, v, couleur) => {
+  const poches = new Map();
+  const lignes = new Map();
+  const add = (label, v, couleur, poche) => {
     map.set(label, (map.get(label) || 0) + v);
     if (couleur && !teintes.has(label)) teintes.set(label, couleur);
+    lignes.set(label, (lignes.get(label) || 0) + 1);
+    if (poche) {
+      const vue = poches.get(label);
+      poches.set(label, vue === undefined || vue === poche ? poche : null);
+    }
   };
 
   for (const p of Store.state.positions) {
-    add(libelleAlloc(p), posValue(p), couleurClasse(assetClassDe(p)));
+    const ac = assetClassDe(p);
+    add(libelleAlloc(p), posValue(p), couleurClasse(ac), pocheDeClasse(ac));
   }
   for (const poche of pochesLiquidites()) {
-    if (poche.value) add(poche.nom, poche.value, CLASSE_COULEURS.liquidites);
+    if (poche.value) add(poche.nom, poche.value, CLASSE_COULEURS.liquidites, 'liquidites');
   }
   for (const c of comptesOuverts()) {
     for (const l of (c.lignes || [])) {
-      add(c.alloc || l.libelle, num(l.valeur), CLASSE_COULEURS[l.classe] || CLASSE_COULEURS.nonCote);
+      add(c.alloc || l.libelle, num(l.valeur),
+          CLASSE_COULEURS[l.classe] || CLASSE_COULEURS.nonCote,
+          pocheDeClasse(l.classe || 'nonCote'));
     }
   }
   if (credits && dettesTotal()) add(trad('Crédits en cours'), -dettesTotal(), 'var(--critical)');
 
   const total = credits ? nowTotals().total : nowTotals().brut;
+  const sousTitre = label => {
+    const poche = poches.get(label);
+    const n = lignes.get(label) || 0;
+    const bouts = [];
+    if (poche && CLASSES_ACTIFS[poche]) bouts.push(CLASSES_ACTIFS[poche]);
+    else if (poche === null) bouts.push(trad('plusieurs classes'));
+    if (n > 1) bouts.push(`${n} ${trad('lignes')}`);
+    return bouts.join(' · ');
+  };
   return [...map.entries()]
     .map(([label, value]) => ({ label, value, couleur: teintes.get(label),
+                                sous: sousTitre(label),
                                 pct: total ? value / total * 100 : 0 }))
     .sort((a, b) => b.value - a.value);
 }
@@ -3061,11 +3116,75 @@ function currentExpenseMonth() {
   return last ? { ...last, isCurrent: false } : null;
 }
 
+function capitalRembourseParMois() {
+  return ETABS().reduce((total, e) => total + (e.dettes || []).reduce((s, d) => {
+    const taux = num(d.taux) / 100 / 12;
+    const mens = mensualiteCredit(d);
+    if (!taux || !mens) return s;
+    const assurance = num(d.tauxAssurance)
+      ? (num(d.initial) || num(d.montant)) * num(d.tauxAssurance) / 100 / 12 : 0;
+    const interets = num(d.montant) * taux;
+    return s + Math.max(0, mens - assurance - interets);
+  }, 0), 0);
+}
+
+/* Ce qu'il reste a payer, deduit et jamais saisi.
+
+   Un tableau d'amortissement de banque tient en quatre grandeurs : capital
+   emprunte, taux, nombre d'echeances, mensualite. Trois suffisent, la quatrieme
+   s'en deduit. L'application declare le capital restant du, le taux et la
+   mensualite — la duree se deduisait donc deja, sans etre affichee nulle part.
+   Le commentaire de la fiche l'annoncait pourtant : « le taux sert a lire le
+   contrat : date de fin, interets restants, part de capital ».
+
+   Quatre champs saisissables pour trois faits seraient une faute : le jour ou ils
+   se contredisent, aucun n'a raison. La duree se lit donc, elle ne s'ecrit pas.
+
+   Rend `null` quand la mensualite ne couvre pas les interets : la dette ne
+   s'eteint jamais, et annoncer une date de fin serait mentir. C'est le cas d'un
+   levier de courtier, qui grossit tout seul. */
+function resteAPayer(d) {
+  const reste = num(d.montant);
+  const taux = num(d.taux) / 100 / 12;
+  const mens = mensualiteCredit(d);
+  if (!reste || !taux || !mens) return null;
+  const assurance = num(d.tauxAssurance)
+    ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
+  const capitalEtInterets = mens - assurance;
+  const interetsDuMois = reste * taux;
+  if (capitalEtInterets <= interetsDuMois) return null;
+  /* Deux nombres, et ils ne servent pas a la meme chose.
+
+     `exact` est fractionnaire : la derniere echeance est toujours plus petite que
+     les autres. C'est lui qui donne l'argent — multiplier la mensualite entiere
+     par un nombre arrondi au superieur ajoutait une echeance jamais payee, soit
+     834 EUR d'interets inventes sur un pret de 157 000. Trouve par le controle
+     qui rejoue l'amortissement mois par mois.
+
+     `n` est entier, arrondi au superieur, parce qu'on compte des echeances : la
+     derniere existe meme reduite, et l'arrondir vers le bas ferait finir le pret
+     un mois trop tot. */
+  const exact = -Math.log(1 - reste * taux / capitalEtInterets) / Math.log(1 + taux);
+  const n = Math.ceil(exact);
+  const fin = new Date();
+  fin.setMonth(fin.getMonth() + n);
+  return {
+    mois: n,
+    fin: `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`,
+    interets: Math.max(0, capitalEtInterets * exact - reste),
+    assurance: assurance * exact,
+    capitalDuMois: capitalEtInterets - interetsDuMois,
+    interetsDuMois,
+    assuranceDuMois: assurance,
+  };
+}
+
 function savingsReconciliation() {
   const f = budgetFrame();
   const stats = expenseYearStats(todayISO().slice(0, 4));
   const spend = stats.average || f.target;
-  const theoretical = f.income - f.fixed - spend;
+  const capital = capitalRembourseParMois();
+  const theoretical = f.income - f.fixed - spend + capital;
 
   const rythme = paceRecent();
   const monthsSpan = rythme.count;
@@ -3073,6 +3192,7 @@ function savingsReconciliation() {
 
   return {
     income: f.income, fixed: f.fixed, spend,
+    capitalRembourse: capital,
     theoretical,
     theoreticalRate: f.income ? theoretical / f.income * 100 : 0,
     targetSaving: f.investTarget,

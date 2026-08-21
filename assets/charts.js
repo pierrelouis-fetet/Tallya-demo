@@ -478,7 +478,7 @@ const Charts = (() => {
         const montrer = () => {
           const it = items[+node.dataset.i];
           tip.hidden = false;
-          const sous = [it.etab, it.type].filter(Boolean).join(' · ');
+          const sous = it.sous || [it.etab, it.type].filter(Boolean).join(' · ');
           tip.innerHTML = `<div class="tt-head">${esc(it.label)}</div>
             ${sous ? `<div class="tt-sous">${esc(sous)}</div>` : ''}
             <div class="tt-row">${esc(opts.valueLabel || trad('Montant'))}<b>${fmtEUR(it.value)}</b></div>

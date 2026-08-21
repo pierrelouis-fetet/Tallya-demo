@@ -645,7 +645,7 @@ function viewOverview() {
       ${deltaBlock(trad('depuis le début'), d.all)}
     </div>
     ${(() => {
-      const parts = repartitionClasses();
+      const parts = repartitionClasses({ net: evoNet });
       if (!parts.length) return '';
       return `
       <div class="hero-barre" role="img"
@@ -656,7 +656,7 @@ function viewOverview() {
   </div>
 
   <div class="card repart">
-    ${repartitionClasses().map(x => `
+    ${repartitionClasses({ net: evoNet }).map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="classe" data-arg="${esc(x.classe)}"
               title="${trad('Voir le détail de')} ${esc(trad(x.label))}">
@@ -673,15 +673,21 @@ function viewOverview() {
       if (!p.dettes) return '';
       const cr = creditsEnCours();
       return `
-      <p class="perimetre repart-base">${mentionBase(BASES.avoirs, p.brut)}${aide(
-        `Ces parts portent sur ce que tu possèdes, avant crédits. Ton patrimoine net, `
-        + `en haut de page, vaut ${fmtEUR0(p.net)} : la différence est le capital qu’il te `
-        + `reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte `
-        + `d’autant, même si la valeur de tes biens ne bouge pas.`)}</p>
+      <p class="perimetre repart-base">${mentionBase(
+        evoNet ? BASES.net : BASES.avoirs, evoNet ? p.net : p.brut)}${aide(evoNet
+        ? `Ces parts portent sur ton patrimoine net : le capital qu’il te reste à `
+          + `rembourser, ${fmtEUR0(p.dettes)}, est retiré de l’immobilier, qui est ce `
+          + `que tes crédits financent. Chaque mensualité le réduit, donc cette part `
+          + `monte d’autant, même si la valeur de tes biens ne bouge pas. Bascule sur `
+          + `« Brut » pour voir la valeur de tes biens avant crédits.`
+        : `Ces parts portent sur ce que tu possèdes, avant crédits. Ton patrimoine net, `
+          + `en haut de page, vaut ${fmtEUR0(p.net)} : la différence est le capital qu’il te `
+          + `reste à rembourser. Bascule sur « Net » pour voir la même répartition, `
+          + `crédits déduits.`)}</p>
       <button type="button" class="repart-credits" data-action="apercu" data-apercu="credits"
               title="${trad('Voir et mettre à jour tes crédits')}">
-        <span>${trad('Crédits en cours')}</span>
-        <b class="dette">−${fmtEUR(cr.reste)}</b>
+        <span>${evoNet ? trad('Crédits déjà déduits') : trad('Crédits en cours')}</span>
+        <b class="dette">${evoNet ? '' : '−'}${fmtEUR(cr.reste)}</b>
         <span class="ml-chev" aria-hidden="true">›</span>
       </button>`;
     })()}
@@ -3967,7 +3973,31 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Mensualité (€)')}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.mensualite" value="${num(d.mensualite) || ''}"></div>`}
-          <div class="field"><label>Taux annuel (%)${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
+          ${(() => {
+            const r = resteAPayer(d);
+            if (!r) return '';
+            const ans = Math.floor(r.mois / 12), mois = r.mois % 12;
+            const duree = [ans ? `${ans} ${ans > 1 ? trad('ans') : trad('an')}` : '',
+                           mois ? `${mois} ${trad('mois.pl', 'mois')}` : '']
+                          .filter(Boolean).join(' ' + trad('et') + ' ');
+            return `
+            <dl class="kv" style="margin-top:4px">
+              <dt>${trad('Il te reste')}</dt>
+                <dd>${esc(duree)} <span class="muted">· ${r.mois} ${trad('échéances')}</span></dd>
+              <dt>${trad('Dernière échéance')}</dt>
+                <dd>${esc(fmtMoisAn(r.fin))}</dd>
+              <dt>${trad('Intérêts restants')}${aide(trad('Ce que le crédit te coûtera encore, hors assurance, si tu le mènes à son terme sans remboursement anticipé.'))}</dt>
+                <dd>${fmtEUR0(r.interets)}</dd>
+              ${r.assurance > 0.5 ? `
+              <dt>${trad('Assurance restante')}</dt>
+                <dd>${fmtEUR0(r.assurance)}</dd>` : ''}
+              <dt>${trad('Ta mensualité, ce mois-ci')}${aide(trad('La part de capital monte chaque mois, celle des intérêts baisse : c’est le même montant qui se répartit autrement.'))}</dt>
+                <dd><span class="muted">${trad('capital')}</span> ${fmtEUR(r.capitalDuMois)}
+                  <span class="muted">· ${trad('intérêts')}</span> ${fmtEUR(r.interetsDuMois)}${
+                  r.assuranceDuMois > 0.5 ? ` <span class="muted">· ${trad('assurance')}</span> ${fmtEUR(r.assuranceDuMois)}` : ''}</dd>
+            </dl>`;
+          })()}
+          <div class="field"><label>${trad('Taux annuel (%)')}${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.taux" value="${num(d.taux) || ''}"></div>
           <div class="field"><label>Organisme</label>

@@ -2222,9 +2222,17 @@ suite('Pièges de source', () => {
     eq((source.match(/monterEvolution\(\)/g) || []).length, 3,
       'sa définition et ses deux appelants, l’Aperçu et le Budget');
     /* La barre du hero et la liste en dessous descendent de la même source :
-       une seule liste, donc les couleurs et les parts ne peuvent pas différer. */
-    eq((source.match(/repartitionClasses\(\)/g) || []).length, 2,
+       une seule liste, donc les couleurs et les parts ne peuvent pas différer.
+
+       Et depuis que cette répartition suit le commutateur Net / Brut, elles
+       doivent le suivre ENSEMBLE : un appel qui oublierait l'argument ferait
+       diverger la barre de la liste qu'elle résume, sur le même écran et au même
+       instant. Le contrôle porte donc sur l'appel complet, argument compris. */
+    eq((source.match(/repartitionClasses\(/g) || []).length, 2,
       'la barre et la liste appellent la même répartition, et rien d’autre');
+    eq((source.match(/repartitionClasses\(\{ net: evoNet \}\)/g) || []).length, 2,
+      'et toutes deux dans le même mode : sans l’argument, l’une compterait le '
+      + 'brut pendant que l’autre compte le net');
   });
 
   test('aucun sous-onglet ne partage sa route avec sa vue, sauf le premier', () => {
@@ -13411,6 +13419,194 @@ suite('Une plus-value en devise dit ce que le courtier dit', () => {
       'et leurs fonctions avec elles');
   });
 });
+
+suite('La répartition suit le commutateur, et ses parts font le total', () => {
+
+  test('en net, la somme des classes fait le patrimoine net', () => {
+    /* C'est la regle cardinale du projet, prise en flagrant delit sur l'accueil :
+       le commutateur Net / Brut gouvernait le grand chiffre et la courbe, pas la
+       carte de repartition. On lisait donc un patrimoine net en tete et une
+       repartition qui totalisait le brut juste dessous.
+
+       Les dettes vont a l'immobilier, comme dans la projection : `partPlate()`
+       pose la meme regle, et deux calculs qui repondent a la meme question
+       doivent donner le meme chiffre. */
+    Fixture.poser();
+    const etab = Store.state.etabs[0];
+    etab.dettes = [{ id: 'd1', libelle: 'Prêt', montant: 40000, note: '' }];
+    /* Un bien pour porter la dette : sans lui la classe immobiliere n'existe pas,
+       et c'est l'autre cas, teste juste apres. */
+    const compte = Store.state.comptes[0];
+    compte.lignes = [...(compte.lignes || []),
+                     { classe: 'immobilier', libelle: 'Appartement', valeur: 120000 }];
+    refreshAccounts();
+
+    const p = patrimoine();
+    const net = repartitionClasses({ net: true });
+    const somme = net.reduce((s, x) => s + x.value, 0);
+    pres(somme, p.net, 'la somme des classes doit faire le patrimoine net');
+    pres(net.reduce((s, x) => s + x.pct, 0), 100, 'et les parts doivent faire 100 %');
+
+    /* La classe qui porte la dette est bien celle de l'immobilier, et elle seule. */
+    const immo = net.find(x => x.classe === 'immobilier');
+    const brut = repartitionClasses();
+    const immoBrut = brut.find(x => x.classe === 'immobilier');
+    /* Sur le total des dettes, et non sur celle qu'on vient d'ajouter : la
+       fixture en porte deja une, et supposer le contraire faisait echouer ce
+       controle pour une raison qui n'etait pas son sujet. */
+    pres(immo.value, immoBrut.value - p.dettes,
+      'la dette se retranche de l’immobilier, pour son montant total');
+    for (const x of net) {
+      if (x.classe === 'immobilier') continue;
+      const jumelle = brut.find(b => b.classe === x.classe);
+      pres(x.value, jumelle.value, `« ${x.label} » ne doit pas bouger : la dette ne la finance pas`);
+    }
+  });
+
+  test('en brut, la somme des classes fait les avoirs', () => {
+    /* L'autre moitie de l'invariant : le mode par defaut ne doit rien retrancher.
+       Sans ce controle, mettre la dette partout passerait le premier test. */
+    Fixture.poser();
+    Store.state.etabs[0].dettes = [{ id: 'd1', libelle: 'Prêt', montant: 40000, note: '' }];
+    refreshAccounts();
+    const p = patrimoine();
+    const brut = repartitionClasses();
+    pres(brut.reduce((s, x) => s + x.value, 0), p.brut,
+      'la somme des classes doit faire les avoirs, crédits non déduits');
+  });
+
+  test('une dette sans bien rend sa classe négative, et se voit', () => {
+    /* Un credit a la consommation, ou une marge de courtier, sans immobilier pour
+       l'absorber. La projection accepte deja une part plate negative ; la carte
+       doit la montrer plutot que de la masquer, sinon la somme cesse de faire le
+       total sans que rien ne le dise. Le filtre garde donc ce qui n'est pas nul,
+       dans les deux sens. */
+    Fixture.poser();
+    Store.state.comptes.forEach(c => {
+      c.lignes = (c.lignes || []).filter(l => l.classe !== 'immobilier');
+    });
+    Store.state.etabs[0].dettes = [{ id: 'd1', libelle: 'Crédit conso', montant: 5000, note: '' }];
+    refreshAccounts();
+    const net = repartitionClasses({ net: true });
+    const immo = net.find(x => x.classe === 'immobilier');
+    vrai(immo, 'la classe qui porte la dette doit apparaître même sans bien');
+    vrai(immo.value < 0, `elle vaut ${immo.value} : une dette sans bien est négative`);
+    pres(net.reduce((s, x) => s + x.value, 0), patrimoine().net,
+      'et la somme fait toujours le patrimoine net');
+  });
+
+  test('la vue passe le même mode à ses deux lectures', () => {
+    /* La barre du hero resume la liste qui la suit. Un appel qui oublierait
+       l'argument ferait diverger les deux sur le meme ecran et au meme instant. */
+    const src = lireSource('assets/app.js');
+    eq((src.match(/repartitionClasses\(/g) || []).length, 2,
+      'deux lectures, pas trois');
+    eq((src.match(/repartitionClasses\(\{ net: evoNet \}\)/g) || []).length, 2,
+      'et toutes deux dans le même mode');
+    /* La mention de base suit aussi : elle annoncait « tes avoirs » dans les deux
+       modes, donc en net elle nommait une base que les parts ne totalisaient plus.
+       Une mention qui ne bouge pas quand le calcul bouge rassure a tort. */
+    vrai(/evoNet \? BASES\.net : BASES\.avoirs/.test(src),
+      'la mention de base doit suivre le commutateur');
+  });
+});
+
+
+suite('Un crédit dit ce qu’il reste à payer', () => {
+
+  /* La formule fermee se verifie contre un amortissement mois par mois, calcule
+     ici. C'est un controle plus fort qu'un tableau de banque recopie : il ne
+     depend d'aucun chiffre venu d'ailleurs, il se rejoue sur n'importe quel
+     credit, et il tombe si la formule derive d'un seul centime.
+
+     La formule a par ailleurs ete confrontee a un vrai tableau d'amortissement
+     bancaire — 228 echeances, capital, interets et assurance — et elle le
+     reproduit au centime, premiere echeance comprise. Les chiffres de ce tableau
+     ne sont pas ici : ce sont les termes du pret de quelqu'un. */
+  const parMois = (capital, tauxAn, mens, assurance) => {
+    const i = tauxAn / 100 / 12;
+    let reste = capital, interets = 0, n = 0;
+    while (reste > 0.005 && n < 10000) {
+      const int = reste * i;
+      interets += int;
+      reste -= (mens - assurance) - int;
+      n++;
+    }
+    return { mois: n, interets, assurance: assurance * n };
+  };
+
+  test('la durée restante se déduit, et elle est juste', () => {
+    const d = { montant: 157362, taux: 1.45, tauxAssurance: 0.34, initial: 210000,
+                mensualite: 894.44 };
+    const r = resteAPayer(d);
+    vrai(r, 'un crédit qui porte capital, taux et mensualité doit se projeter');
+    const brut = parMois(157362, 1.45, 894.44, 210000 * 0.0034 / 12);
+    /* Un mois d'ecart est tolere et pas davantage : la formule arrondit la
+       derniere echeance au superieur, la boucle s'arrete quand le solde passe
+       sous le centime. */
+    vrai(Math.abs(r.mois - brut.mois) <= 1,
+      `la formule donne ${r.mois} échéances, l’amortissement ${brut.mois}`);
+    /* Les interets, eux, doivent coincider a l'euro. */
+    vrai(Math.abs(r.interets - brut.interets) < 1,
+      `intérêts : ${r.interets.toFixed(2)} contre ${brut.interets.toFixed(2)}`);
+  });
+
+  test('la mensualité se répartit, et la somme des parts la refait', () => {
+    /* La regle cardinale, appliquee a une echeance : capital plus interets plus
+       assurance font la mensualite, sinon l'un des trois est faux. */
+    const d = { montant: 157362, taux: 1.45, tauxAssurance: 0.34, initial: 210000,
+                mensualite: 894.44 };
+    const r = resteAPayer(d);
+    pres(r.capitalDuMois + r.interetsDuMois + r.assuranceDuMois, 894.44,
+      'les trois parts de l’échéance doivent refaire la mensualité');
+    vrai(r.capitalDuMois > r.interetsDuMois,
+      'à 1,45 %, la part de capital dépasse largement celle des intérêts');
+  });
+
+  test('une mensualité qui ne couvre pas les intérêts ne promet aucune fin', () => {
+    /* Le levier d'un courtier : il grossit tout seul, et annoncer une date de fin
+       serait mentir. C'est le meme piege que la projection connait deja. */
+    eq(resteAPayer({ montant: 100000, taux: 6, mensualite: 400 }), null,
+      'à 6 %, 500 € d’intérêts mensuels : 400 € ne remboursent rien');
+    eq(resteAPayer({ montant: 100000, taux: 6 }), null, 'ni sans mensualité');
+    eq(resteAPayer({ montant: 100000, mensualite: 900 }), null,
+      'ni sans taux : on ne devine pas la part d’intérêts');
+  });
+
+  test('rembourser un prêt compte comme de l’épargne', () => {
+    /* L'epargne theorique retranchait la mensualite entiere, puis l'ecart avec la
+       croissance reelle etait presente comme « ce qui ne vient pas de ton
+       budget ». Il en venait, et par le chemin le plus direct. */
+    Fixture.poser();
+    const avant = savingsReconciliation();
+    const e = Store.state.etabs[0];
+    e.dettes = [{ id: 'dTest', libelle: 'Prêt', montant: 150000, taux: 1.45,
+                  tauxAssurance: 0.34, initial: 200000, mensualite: 800 }];
+    refreshAccounts();
+    const apres = savingsReconciliation();
+    const capital = capitalRembourseParMois();
+    vrai(capital > 0, 'le capital remboursé doit être compté');
+    /* La part de capital, et elle seule : les interets et l'assurance sortent
+       pour de bon. */
+    const assurance = 200000 * 0.0034 / 12;
+    pres(capital, 800 - assurance - 150000 * 0.0145 / 12,
+      'le capital est la mensualité moins l’assurance et les intérêts');
+    pres(apres.theoretical - avant.theoretical, capital - (avant.fixed - apres.fixed),
+      'l’épargne théorique monte de cette part, et de rien d’autre');
+  });
+
+  test('un levier de courtier ne produit aucune épargne', () => {
+    /* Une mensualite plus petite que les interets ne rembourse rien : compter une
+       part de capital negative gonflerait l'epargne d'un montant imaginaire. */
+    Fixture.poser();
+    Store.state.etabs[0].dettes = [{ id: 'dLev', libelle: 'Levier', montant: 100000,
+                                     taux: 6, mensualite: 400 }];
+    refreshAccounts();
+    eq(capitalRembourseParMois(), 0,
+      'aucune épargne : cette dette grossit au lieu de se rembourser');
+  });
+});
+
 
 suite('La plus-value ne dit que ce qu’elle peut prouver', () => {
 
