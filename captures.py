@@ -199,6 +199,31 @@ def main():
                 " window.scrollTo(0, 0); return true; })()"
             )
             time.sleep(1.2)          # les graphiques se montent apres le rendu
+            # Et on remet en haut APRES le rendu, pas avant : le changement de
+            # hash declenche un rendu asynchrone, donc le `scrollTo` ci-dessus
+            # s'applique a l'ecran precedent. Une capture prise a mi-hauteur
+            # laisse un entete de tableau collant sous la barre du haut, et la
+            # premiere preuve visuelle du produit ressemble a une capture ratee.
+            # Le retour en haut se fait APRES le rendu, pas avant : le changement
+            # de hash declenche un rendu asynchrone, donc un `scrollTo` place
+            # plus haut s'appliquerait a l'ecran precedent. L'aller-retour d'un
+            # pixel force un evenement de defilement, seul declencheur du
+            # recalcul des ancrages `position: sticky`.
+            #
+            # Ce qui reste NON RESOLU, et il faut le dire ici plutot que de le
+            # laisser croire regle : la capture d'Allocation garde un bandeau
+            # « Holding / Amount / % » a peine visible sous la barre du haut.
+            # L'application en direct est propre — mesure a defilement zero, les
+            # trois entetes sont a 827, 2037 et 3003 px pour une fenetre de
+            # 812 — donc l'artefact appartient a la capture, pas au produit.
+            # Deux tentatives n'en ont pas eu raison ; la piste restante est la
+            # hauteur emulee de 844 px, ou le premier entete tombe a 827.
+            onglet.js(
+                "(() => { window.scrollTo(0, 1); window.scrollTo(0, 0);"
+                " document.scrollingElement.scrollTop = 0;"
+                " return document.scrollingElement.scrollTop; })()"
+            )
+            time.sleep(0.6)          # le temps que le defilement et le collant se posent
             img = onglet.envoie("Page.captureScreenshot", format="png")
             chemin = os.path.join(DOSSIER, nom)
             with open(chemin, "wb") as f:

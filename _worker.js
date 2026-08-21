@@ -534,10 +534,23 @@ export default {
     const path = url.pathname;
 
     const pwd = env.DASHBOARD_PASSWORD;
+    /* Les protections de `_headers` ne s'appliquent qu'aux fichiers servis par
+       Pages. Une reponse que ce worker construit lui-meme ne les herite pas :
+       la page de connexion partait donc sans anti-cadrage, sans `nosniff` et
+       sans politique de referent — la seule page du site ou l'on tape un mot de
+       passe, et la moins protegee des trois.
+
+       Elles sont recopiees ici, faute de pouvoir les lire depuis `_headers` a
+       l'execution, et un test exige que les deux listes disent la meme chose. */
     const htmlHeaders = {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
       'X-Robots-Tag': 'noindex, nofollow',
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy':
+        'geolocation=(), camera=(), microphone=(), interest-cohort=()',
     };
 
     if (path === '/api/login' && request.method === 'POST') {

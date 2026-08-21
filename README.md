@@ -4,6 +4,7 @@
 how much do I have, where does it sit, and where is it going?</p>
 
 <p align="center">
+  <a href="https://github.com/pierrelouis-fetet/Tallya-demo/actions/workflows/tests.yml"><img src="https://github.com/pierrelouis-fetet/Tallya-demo/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
   <img src="https://img.shields.io/badge/build_step-none-brightgreen" alt="No build step">
@@ -59,6 +60,15 @@ principal, gets projected and asked about, never silently overwritten.
 Several hundred test cases, no test framework: the whole harness is
 [79 lines](tests/harness.js). Open `/tests.html`, the browser tab title gives
 the verdict.
+
+They also run on every push, and the badge above is that result. The runner
+drives a real Chrome and reads the same tab title a human would: what runs in CI
+is what runs on a laptop, with no second code path to keep in step. One command
+locally, too, if you would rather not open a tab:
+
+```bash
+python executer-tests.py
+```
 
 Three habits make these tests worth more than their count:
 

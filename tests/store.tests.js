@@ -46,6 +46,18 @@ function auJour(iso, faire) {
    qu'on deplace ici est la vraie, celle du detenteur — un echec au milieu
    laisserait son application en anglais. Le masque suit la meme regle : un
    montant masque rend un oeil barre, sur lequel aucun format ne se lit. */
+/* La langue dans laquelle l'application s'ouvre, lue dans `i18n.js`.
+
+   C'est la seule divergence entre les deux depots — la demonstration ouvre en
+   anglais, l'instance privee en francais — et plusieurs controles en dependent.
+   La recopier dans chacun d'eux aurait fait deux tests a editer pour un depot,
+   et un test faux pour l'autre. */
+function langueParDefaut() {
+  const m = lireSource('assets/i18n.js').match(/getItem\(LANG_KEY\) \|\| '(\w+)'/);
+  vrai(m, 'la langue par défaut doit se lire dans i18n.js');
+  return m[1];
+}
+
 function enLangue(code, faire) {
   const lang0 = currentLang();
   const masque0 = masqueActif();
@@ -10214,22 +10226,17 @@ suite('Le balisage et le dictionnaire disent le même mot', () => {
        Signale par le propriétaire le 7 aout 2026 : « j'ai toujours Comptes sur le
        web ». */
     const html = lireSource('index.html');
-    const js = lireSource('assets/i18n.js');
-    vrai(html && js, 'index.html et i18n.js doivent être lisibles');
+    vrai(html, 'index.html doit être lisible');
 
-    /* Le dictionnaire francais : entre `const FR` et l'accolade qui le ferme.
-       On ne prend pas tout le fichier, l'anglais porte les memes clefs. */
-    const debutFr = js.search(/^const FR = \{/m);
-    vrai(debutFr >= 0, 'le dictionnaire français doit être trouvable');
-    const fr = js.slice(debutFr, js.indexOf('\n};', debutFr));
-    /* Les deux styles de guillemets : « Vue d'ensemble » porte une apostrophe et
-       se declare donc entre guillemets doubles. N'en lire qu'un faisait passer
-       cette entree pour absente, et le test echouait sur une entree saine. */
-    const dico = new Map();
-    for (const m of fr.matchAll(/^\s*'([\w.]+)':\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,/gm)) {
-      dico.set(m[1], (m[2] ?? m[3]).replace(/\\'/g, "'").replace(/\\\\/g, '\\'));
-    }
-    vrai(dico.size > 20, 'le dictionnaire doit porter ses entrées');
+    /* La reference n'est plus le dictionnaire francais lu a la regex, mais
+       `t()` lui-meme, dans la langue ou l'application s'ouvre : c'est
+       exactement ce que `translateStatic()` ecrira dans l'element. Comparer au
+       resolveur plutot qu'a une copie de sa table supprime vingt lignes
+       d'analyse fragile — et rend le controle juste dans les deux depots, dont
+       l'un ouvre en anglais.
+
+       Le contrat de repli est inchange : une clef pointee (`nav.*`) se resout
+       par la table, une clef-phrase EST son propre texte francais. */
 
     /* Chaque libelle statique du balisage, avec sa clef. Le texte peut porter
        des elements freres — le badge « ✎ » de Budget vit hors du span — donc on
@@ -10242,29 +10249,47 @@ suite('Le balisage et le dictionnaire disent le même mot', () => {
     vrai(paires.length > 8, 'index.html doit porter ses libellés balisés');
 
     const fautes = [];
-    for (const [, cle, texte] of paires) {
-      /* Une clef pointee a la forme segment.segment, sans point final :
-         « Projeter. » finit par un point, c'est une phrase. */
-      const attendu = dico.get(cle) ?? (/^[a-z]\w*(\.\w+)+$/i.test(cle) ? undefined : cle);
-      if (attendu === undefined) { fautes.push(`${cle} : absente du dictionnaire`); continue; }
-      const dit = texte.trim();
-      if (dit && dit !== attendu) fautes.push(`${cle} : « ${dit} » dans le balisage, « ${attendu} » au dictionnaire`);
-    }
+    enLangue(langueParDefaut(), () => {
+      for (const [, cle, texte] of paires) {
+        const attendu = t(cle);
+        /* Une clef pointee que rien ne resout se rend elle-meme : c'est le
+           signe qu'elle manque au dictionnaire. Une clef-phrase, elle, se rend
+           legitimement elle-meme en francais. */
+        const pointee = /^[a-z]\w*(\.\w+)+$/i.test(cle);
+        if (pointee && attendu === cle) {
+          fautes.push(`${cle} : absente du dictionnaire`);
+          continue;
+        }
+        const dit = texte.trim();
+        if (dit && dit !== attendu) {
+          fautes.push(`${cle} : « ${dit} » dans le balisage, « ${attendu} » attendu`);
+        }
+      }
+    });
     eq(fautes.join(' | '), '',
       'le mot affiché vient du dictionnaire : un balisage qui dit autre chose est '
       + 'une correction qui ne se verra jamais');
   });
 
   test('l’onglet s’appelle Actifs dans les trois endroits qui le nomment', () => {
-    /* Le balisage du menu, celui de la barre d'onglets, et le dictionnaire. */
+    /* Le balisage du menu, celui de la barre d'onglets, et les deux
+       dictionnaires. Le mot attendu dans le balisage est celui de la langue par
+       defaut, pas le francais : ce depot peut s'ouvrir en anglais. */
     const html = lireSource('index.html');
     const js = lireSource('assets/i18n.js');
-    vrai(/data-i18n="nav\.accounts"[^>]*>Actifs</.test(html),
-      'le menu de gauche');
-    vrai(/<span data-i18n="nav\.accounts">Actifs<\/span>/.test(html), 'la barre d’onglets du téléphone, désormais balisée pour la traduction');
+    let attendu;
+    enLangue(langueParDefaut(), () => { attendu = t('nav.accounts'); });
+
+    const marques = [...html.matchAll(/data-i18n="nav\.accounts"[^>]*>([^<]*)</g)]
+      .map(m => m[1].trim());
+    eq(marques.length, 2,
+      'cet onglet se nomme au menu de gauche et dans la barre du téléphone');
+    for (const dit of marques) {
+      eq(dit, attendu, `le balisage dit « ${dit} », l’application écrira « ${attendu} »`);
+    }
     vrai(/'nav\.accounts': 'Actifs',/.test(js), 'le dictionnaire français');
     vrai(/'nav\.accounts': 'Assets',/.test(js), 'et l’anglais suit');
-    vrai(!/data-i18n="nav\.accounts"[^>]*>Comptes</.test(html),
+    vrai(!marques.includes('Comptes'),
       'plus aucun « Comptes » dans le balisage de cet onglet');
   });
 });
@@ -15271,19 +15296,28 @@ suite('Le manifeste parle la langue de l’application', () => {
 
   const manifeste = () => JSON.parse(lireSource('manifest.webmanifest'));
 
-  /* La langue par defaut se lit dans i18n.js, elle ne se recopie pas ici : les
-     deux depots divergent sur ce seul point, et le test doit valoir pour les
-     deux sans etre edite. */
-  const langueParDefaut = () => {
-    const src = lireSource('assets/i18n.js');
-    const m = src.match(/getItem\(LANG_KEY\) \|\| '(\w+)'/);
-    vrai(m, 'la langue par défaut doit se lire dans i18n.js');
-    return m[1];
-  };
-
   test('sa langue est celle que l’application ouvre', () => {
     eq(manifeste().lang, langueParDefaut(),
       'le manifeste déclare une autre langue que celle du premier chargement');
+  });
+
+  test('le HTML livré déclare la même langue que le manifeste', () => {
+    /* C'est le seul de ces reglages qu'un robot lit sans executer une ligne de
+       JavaScript. `translateStatic()` corrige bien l'attribut, mais apres le
+       chargement : avant ca, la demonstration se presentait en francais a tout
+       ce qui ne rend pas le script — les moteurs qui n'executent rien, et un
+       lecteur d'ecran pendant le premier instant.
+
+       Le manifeste et la balise html sont donc tenus par le meme controle et la
+       meme source, la langue par defaut lue dans i18n.js. Deux declarations de
+       langue qui se contredisent, c'est exactement le defaut que ce projet
+       traque partout ailleurs. */
+    const html = lireSource('index.html');
+    const m = html.match(/<html lang="([\w-]+)"/);
+    vrai(m, 'la balise html doit déclarer une langue');
+    eq(m[1], langueParDefaut(),
+      `le HTML déclare « ${m && m[1]} » alors que l’application ouvre en `
+      + `« ${langueParDefaut()} »`);
   });
 
   test('sa description commence par la devise de l’application', () => {
@@ -15312,6 +15346,50 @@ suite('Le manifeste parle la langue de l’application', () => {
       .map(x => x[1]);
     eq(fautifs.length, 0,
       'vouvoiement dans le manifeste : ' + fautifs.join(', '));
+  });
+});
+
+suite('Les réponses du worker sont aussi protégées que les fichiers', () => {
+
+  /* `_headers` protege ce que Cloudflare Pages sert : anti-cadrage, `nosniff`,
+     politique de referent, permissions. Une reponse que `_worker.js` construit
+     lui-meme n'herite de rien de tout ca — et la page de connexion, seule page
+     du site ou l'on tape un mot de passe, etait donc la moins protegee des
+     trois.
+
+     Le controle ne recopie pas la liste : il la LIT dans `_headers`, le fichier
+     qui la possede. Ajouter une protection la-bas la rend exigible ici sans
+     toucher a ce test. */
+  test('chaque protection de _headers vaut aussi pour le worker', () => {
+    const entetes = lireSource('_headers');
+    const worker = lireSource('_worker.js');
+    vrai(entetes && worker, '_headers et _worker.js doivent se lire');
+
+    /* Le bloc `/*` de `_headers` : celui qui vaut pour tout le site. Il s'arrete
+       a la premiere ligne vide ou au chemin suivant. */
+    const lignes = entetes.split('\n');
+    const debut = lignes.findIndex(l => l.trim() === '/*');
+    vrai(debut >= 0, '_headers doit porter un bloc /* pour tout le site');
+    const globales = [];
+    for (let i = debut + 1; i < lignes.length; i++) {
+      const l = lignes[i];
+      if (!l.trim() || !/^\s/.test(l)) break;
+      const m = l.match(/^\s*([\w-]+)\s*:/);
+      if (m) globales.push(m[1]);
+    }
+    vrai(globales.length >= 3, 'le bloc global doit porter plusieurs en-têtes');
+
+    const manquants = globales.filter(h => !worker.includes(`'${h}'`));
+    eq(manquants.length, 0,
+      'le worker construit ses réponses HTML sans ' + manquants.join(', ')
+      + ' : la page de connexion serait moins protégée que le reste du site');
+  });
+
+  test('la page de connexion reste hors des moteurs', () => {
+    /* Ajouter des en-tetes ne doit pas faire perdre celui qui etait deja la. */
+    const worker = lireSource('_worker.js');
+    vrai(/X-Robots-Tag['"]?\s*:\s*['"]noindex/.test(worker),
+      'les réponses HTML du worker doivent rester en noindex');
   });
 });
 

@@ -1,0 +1,44 @@
+# The suite runs on every push, and the badge in the README is its result.
+#
+# Why this exists: the README claims every displayed figure is guarded by a test.
+# Until now that claim rested on the author opening a browser tab and reading its
+# title. A promise of reliability that depends on someone remembering to check is
+# not a promise, and a reader had no way to tell the difference.
+#
+# There is no test framework and no build step, which is the point: the runner
+# drives a real Chrome over the DevTools protocol, loads the same `tests.html` a
+# human would open, and reads the same verdict from the tab title. What runs here
+# is what runs on a laptop.
+#
+# One dependency, and only for the runner: `websocket-client` speaks CDP. The
+# application itself still has none.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the CDP client
+        run: pip install --disable-pip-version-check websocket-client
+
+      - name: Run the suite in a real browser
+        run: python executer-tests.py
