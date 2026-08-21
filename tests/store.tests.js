@@ -9924,7 +9924,15 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
     /* Le meme mot que le type de compte, au singulier : « Biens de valeur » en
        en-tete au-dessus de « Bien de valeur » en ligne se lisait comme deux
        choses differentes. */
-    eq(CLASSES_ACTIFS.bienValeur, typeCompte('bienValeur').label,
+    /* On compare les CLEFS, pas les formes affichees. La classe porte son
+       libelle deja traduit au chargement, un type de compte le fait traduire au
+       rendu : comparer les deux rendus depend de la langue courante, et la suite
+       en change pour d'autres controles. La regle, elle, ne depend d'aucune
+       langue — les deux nomment le meme mot francais. */
+    const cleClasse = (lireSource('assets/store.js')
+      .match(/bienValeur:\s*trad\('([^']+)'\)/) || [])[1];
+    vrai(cleClasse, 'la classe doit nommer son libellé par une clef');
+    eq(cleClasse, typeCompte('bienValeur').label,
       'la classe et le type portent exactement le même mot');
     vrai(TEINTE_CLASSE.bienValeur != null, 'elle a une teinte à elle');
     const t = typeCompte('bienValeur');
@@ -15277,6 +15285,77 @@ suite('Le README ne promet que ce qui est mesurable', () => {
     for (const img of new Set(images)) {
       vrai(lireSource(img) !== null, `${img} est référencée par le README et absente`);
     }
+  });
+});
+
+suite('Une classe d’actif porte un seul nom', () => {
+
+  /* Le defaut, vu sur une capture de telephone et pas par un test : le meme
+     argent s'appelait « Private assets » dans le tableau des classes et
+     « Private investments » dans l'infobulle et sur l'accueil. Deux mots justes
+     qui designent la meme chose, et aucun controle ne pouvait le voir — parce
+     que rien ne relie deux libelles ecrits a la main.
+
+     La cause etait la recopie : sept poches declaraient leur nom a cote de
+     `CLASSES_ACTIFS` qui les nomme deja, et deux avaient derive. Les poches le
+     derivent maintenant ; ce qui suit garde le rattachement, faute duquel une
+     poche nouvelle porterait `undefined`. */
+
+  test('chaque poche du graphique se rattache à une classe', () => {
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('const POCHE_CLASSE'),
+                           src.indexOf('function seriesUtiles'));
+    vrai(bloc, 'la table de rattachement doit être trouvable');
+    const rattachees = [...bloc.matchAll(/(\w+):\s*'(\w+)'/g)].map(m => [m[1], m[2]]);
+    const poches = [...bloc.matchAll(/\{ key: '(\w+)'/g)].map(m => m[1]);
+    vrai(poches.length >= 5, 'le graphique doit porter ses poches');
+
+    const table = new Map(rattachees);
+    for (const poche of poches) {
+      const classe = table.get(poche);
+      vrai(classe, `la poche « ${poche} » ne se rattache à aucune classe`);
+      vrai(CLASSES_ACTIFS[classe] !== undefined,
+        `la poche « ${poche} » pointe « ${classe} », absente de CLASSES_ACTIFS`);
+    }
+  });
+
+  test('aucune poche ne réécrit le nom de sa classe', () => {
+    /* Le controle porte sur la cause. Un libelle ecrit dans la liste des poches
+       est une seconde source pour un nom qui en a deja une, et c'est la
+       neuvieme recopie — pas les huit premieres — qui divergera. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('const SERIES_PATRIMOINE'),
+                           src.indexOf('function seriesUtiles'));
+    eq((bloc.match(/\{ key: '\w+',\s*label:/g) || []).length, 0,
+      'une poche déclare son libellé au lieu de le dériver de sa classe');
+    vrai(/\.map\(s => \(\{ \.\.\.s, label: trad\(CLASSES_ACTIFS\[POCHE_CLASSE/.test(bloc),
+      'les libellés doivent se dériver de CLASSES_ACTIFS');
+  });
+
+  test('chaque nom de classe passe par la traduction', () => {
+    /* `bienValeur` portait une chaine nue : la classe s'affichait en francais
+       dans une application anglaise. Latent tant que personne ne declare
+       d'objet de valeur, ce qui est la pire forme du defaut — il attend. */
+    const src = lireSource('assets/store.js');
+    const bloc = src.slice(src.indexOf('const CLASSES_ACTIFS'),
+                           src.indexOf('};', src.indexOf('const CLASSES_ACTIFS')));
+    const nues = [...bloc.matchAll(/^\s*(\w+):\s*'([^']+)'/gm)].map(m => m[1]);
+    eq(nues.length, 0,
+      'classe(s) dont le nom ne passe pas par trad() : ' + nues.join(', '));
+  });
+
+  test('l’export tableur écrit dans la langue de l’application', () => {
+    /* Une cellule de tableur est du texte affiche. `POCKET` etait un objet de
+       chaines francaises nues, donc l'export anglais sortait « Quotidien ». */
+    const src = lireSource('assets/app.js');
+    /* Borne par le contenu, jamais par un compte de caracteres : une fenetre
+       de 400 signes atteignait le code suivant et y trouvait une chaine sans
+       rapport. */
+    const d = src.indexOf('const POCKET');
+    const bloc = src.slice(d, src.indexOf('});', d) + 3);
+    vrai(/trad\(/.test(bloc), 'les noms de poche de l’export doivent être traduits');
+    eq((bloc.match(/:\s*'[A-ZÀ-Ý][^']*'/g) || []).length, 0,
+      'une chaîne française nue subsiste dans les libellés de l’export');
   });
 });
 

@@ -110,9 +110,9 @@ const CLASSES_ACTIFS = {
   obligations: trad('Obligations'),
   garanti:     trad('Capital garanti'),
   crypto:      trad('Cryptomonnaies'),
-  nonCote:     trad('Placements non cotés'),
+  nonCote:     trad('Non coté'),
   immobilier:  trad('Immobilier'),
-  bienValeur:  'Bien de valeur',
+  bienValeur:  trad('Bien de valeur'),
 };
 
 const MOBILISABLE_LABEL = {

@@ -430,15 +430,34 @@ function barreSousOnglets(vue) {
   </div>`;
 }
 
+/* Le nom d'une poche est celui de sa classe, et il se derive.
+
+   Sept poches declaraient leur libelle a la main, a cote de `CLASSES_ACTIFS`
+   qui les nomme deja. Deux avaient divergé : la poche `pe` disait « Non coté »
+   quand sa classe dit « Placements non cotés », et la poche `biens` disait
+   « Biens de valeur » au pluriel quand sa classe le dit au singulier.
+
+   En anglais, ça donnait le meme argent sous deux noms sur deux cartes du meme
+   ecran : « Private assets » dans le tableau des classes, « Private
+   investments » dans l'infobulle et sur l'accueil. Signale sur une capture de
+   telephone, pas par un test — parce qu'aucun test ne peut voir qu'un mot juste
+   et un autre mot juste designent la meme chose.
+
+   Une liste se derive, elle ne se recopie pas. La table ci-dessous ne dit plus
+   que le rattachement, et un controle exige qu'elle couvre chaque poche. */
+const POCHE_CLASSE = {
+  cash: 'liquidites', bourse: 'actions', crypto: 'crypto', pe: 'nonCote',
+  immo: 'immobilier', biens: 'bienValeur', garanti: 'garanti',
+};
 const SERIES_PATRIMOINE = () => [
-  { key: 'cash',   label: trad('Liquidités'),       color: S1() },
-  { key: 'bourse', label: trad('Actifs de marché'), color: S2() },
-  { key: 'crypto', label: trad('Cryptomonnaies'),   color: S5() },
-  { key: 'pe',     label: trad('Non coté'),         color: S3() },
-  { key: 'immo',   label: trad('Immobilier'),       color: S4() },
-  { key: 'biens',  label: trad('Biens de valeur'),  color: Charts.cssv('--series-9') },
-  { key: 'garanti', label: trad('Capital garanti'), color: Charts.cssv('--series-8') },
-];
+  { key: 'cash',   color: S1() },
+  { key: 'bourse', color: S2() },
+  { key: 'crypto', color: S5() },
+  { key: 'pe',     color: S3() },
+  { key: 'immo',   color: S4() },
+  { key: 'biens',  color: Charts.cssv('--series-9') },
+  { key: 'garanti', color: Charts.cssv('--series-8') },
+].map(s => ({ ...s, label: trad(CLASSES_ACTIFS[POCHE_CLASSE[s.key]]) }));
 function seriesUtiles(points) {
   return SERIES_PATRIMOINE().filter(s => s.key === 'cash'
     || points.some(p => Math.abs(Number(p[s.key]) || 0) > 0.005));
@@ -5357,7 +5376,15 @@ function download(filename, content, type = 'application/json') {
 }
 const stamp = () => new Date().toISOString().slice(0, 10);
 
-const POCKET = { cash: 'Quotidien', bourse: 'Bourse', pe: 'Non coté' };
+/* Une cellule de tableur est du texte affiche : sans `trad()`, l'export d'une
+   application en anglais sortait « Quotidien » et « Non cote ». La fonction
+   plutot qu'un objet constant, parce que la langue peut changer entre deux
+   exports dans la meme session. */
+const POCKET = () => ({
+  cash: trad(CLASSES_ACTIFS.liquidites),
+  bourse: trad(CLASSES_ACTIFS.actions),
+  pe: trad(CLASSES_ACTIFS.nonCote),
+});
 
 function sheetPositions() {
   const base = stockTotals().balance;
@@ -5479,7 +5506,7 @@ function sheetAccounts() {
       const invested = a.holdings
         ? holdingsOf(a.id).reduce((s, p) => s + posInvested(p), 0) + cash
         : (i.deposit != null ? i.deposit - (i.withdrawal || 0) : null);
-      return [a.label, a.broker, POCKET[a.group], i.opened || '',
+      return [a.label, a.broker, POCKET()[a.group], i.opened || '',
         i.liquidity === 'illiquid' ? 'Illiquide' : 'Liquide',
         i.deposit ?? null, round2(value),
         invested == null ? null : round2(invested),
@@ -9800,7 +9827,7 @@ const APERCUS = {
     const pnl = value - invested;
     const vieilles = lignes.filter(l => l.vieille).length;
     return {
-      titre: trad('Placements non cotés'),
+      titre: trad(CLASSES_ACTIFS.nonCote),
       sous: [trad('valeurs que tu déclares, pas des cours'),
              vieilles ? `${vieilles} ${vieilles > 1 ? trad('à revoir') : trad('à revoir')}`
                       : trad('pas mobilisables à court terme')].join(' · '),
