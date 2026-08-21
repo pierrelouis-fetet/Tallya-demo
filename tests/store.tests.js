@@ -15288,6 +15288,45 @@ suite('Le README ne promet que ce qui est mesurable', () => {
   });
 });
 
+suite('La graine de la démonstration parle une seule langue', () => {
+
+  /* « Mortgage, c'est francais ? » Non — et la question a decouvert l'inverse de
+     ce qu'elle visait.
+
+     Les donnees d'un detenteur ne se traduisent jamais : ses noms de comptes
+     restent les siens dans les deux langues, et c'est la regle. La graine de
+     cette demonstration n'est pas un detenteur : c'est le jeu d'exemples qui
+     porte la demonstration, et la demonstration est anglaise — son README, ses
+     captures, son manifeste, sa langue au premier chargement.
+
+     Or elle melangeait les deux. Un visiteur anglophone lisait « Foncieres
+     europeennes » et « Ancien fonds en euros » a cote de « Brokerage cash », et
+     douze chaines etaient dans ce cas. Une demonstration a moitie traduite dit
+     d'elle-meme que la traduction n'est pas tenue.
+
+     Ce controle vit dans ce depot seul : la graine de l'instance privee porte de
+     vraies donnees, en francais, et n'a rien a faire en anglais. */
+  test('aucun libellé de la graine ne porte d’accent', () => {
+    const fautifs = [];
+    for (const f of ['assets/seed.js', 'assets/seed-budget.js']) {
+      const src = lireSource(f);
+      vrai(src, f + ' doit se lire');
+      /* Les valeurs de champs affiches, pas les commentaires : ceux-la
+         s'ecrivent en francais et le resteront. */
+      const champs = [...src.matchAll(
+        /(?:label|nom|libelle|short|alloc|broker|name|note|vehicles|categorie)\s*:\s*'([^'\n]{2,60})'/g)]
+        .map(m => m[1]);
+      vrai(champs.length > 30, `${f} doit porter ses libellés`);
+      for (const v of champs) {
+        if (/[\u00c0-\u00ff\u0152\u0153]/.test(v)) fautifs.push(`${f} : ${v}`);
+      }
+    }
+    eq(fautifs.length, 0,
+      'libellé(s) français dans la graine d’une démonstration anglaise : '
+      + fautifs.join(' | '));
+  });
+});
+
 suite('Une valeur n’affame pas les libellés de sa grille', () => {
 
   /* Le defaut, signale sur une capture de telephone : dans la carte
