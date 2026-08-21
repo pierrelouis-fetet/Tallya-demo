@@ -683,7 +683,13 @@ function mobilisabilite(classe, typeId) {
   return 'differe';
 }
 
-function poches() {
+/* `financier` : la meme boucle, sans les murs ni les objets.
+   Le filtre porte sur la LIGNE et non sur le compte, parce que les paliers de
+   disponibilite se construisent ligne par ligne : une SCPI logee dans une
+   assurance-vie sort, le fonds actions du meme contrat reste. C'est aussi ce
+   qui fait disparaitre le palier « le logement que tu habites » tout seul, sans
+   qu'une seule ligne le nomme ici. */
+function poches({ financier = false } = {}) {
   const p = { courant: 0, precaution: 0, projet: 0, investir: 0,
               classes: Object.fromEntries(Object.keys(CLASSES_ACTIFS).map(k => [k, 0])),
               /* Derive de la table des paliers : en ecrire la liste ici a la
@@ -699,6 +705,7 @@ function poches() {
       p.mobilisable[mobilisabilite('liquidites', c.type)] += m;
     }
     for (const l of lignesDe(c)) {
+      if (financier && horsFinancier(l.classe)) continue;
       p.classes[l.classe] = (p.classes[l.classe] || 0) + l.valeur;
       p.mobilisable[mobiliteLigne(l, c)] += l.valeur;
     }
@@ -936,6 +943,16 @@ function totalFinancier() {
   return Object.keys(CLASSES_ACTIFS)
     .filter(c => !horsFinancier(c))
     .reduce((s, c) => s + num(p.classes[c]), 0);
+}
+
+/* Ce que la vue financiere retire, en un nombre. `totalFinancier()` dit ce qui
+   reste ; celui-ci dit ce qui part. Les deux existent parce que « place » ne se
+   filtre pas par classe : il vaut le brut moins le cash, et sa version
+   financiere est donc une soustraction, pas un filtre. Un test exige que les
+   deux se recomposent. */
+function horsFinancierTotal() {
+  const p = patrimoine();
+  return CLASSES_HORS_FINANCIER.reduce((s, c) => s + num(p.classes[c]), 0);
 }
 
 function repartitionClasses({ net = false, financier = false } = {}) {

@@ -57,6 +57,22 @@ function enLangue(code, faire) {
 /* ------------------------------------------------------------------
    1. Les totaux ne mentent pas
    ------------------------------------------------------------------ */
+/* Le corps d'une fonction, de sa declaration a son accolade de fin en colonne
+   zero.
+
+   Deux controles de la page Allocation lisaient une fenetre de taille fixe,
+   2000 et 1400 caracteres. Ajouter six lignes de commentaire a pousse le
+   troisieme anneau hors de la fenetre : le controle a cesse de le voir et a
+   continue de passer sur ce qui restait. Un test qui rapetisse en silence est
+   pire qu'un test absent, parce qu'il rassure. Une borne comptee en caracteres
+   n'est pas une borne. */
+function corpsDe(src, nom) {
+  const d = src.indexOf('function ' + nom);
+  if (d < 0) return '';
+  const f = src.indexOf('\n}\n', d);
+  return src.slice(d, f < 0 ? undefined : f + 3);
+}
+
 suite('Les totaux égalent la somme de leurs parts', () => {
 
   test('un premier lancement rend un état complet, pas une coquille', () => {
@@ -13512,6 +13528,98 @@ suite('La répartition suit le commutateur, et ses parts font le total', () => {
 });
 
 
+suite('La vue financière retire les murs, et le total reste la somme de ses parts', () => {
+
+  /* Le fixture porte un studio a 120 000 sur un brut de 138 250 : la base
+     financiere vaut donc 18 250, verifiable de tete. Ces tests ne lisent aucune
+     source, ils additionnent — c'est le seul controle qui aurait attrape le
+     defaut du centre de l'anneau si le centre avait ete une fonction du modele
+     plutot qu'une chaine de la vue. */
+  const somme = xs => xs.reduce((s, x) => s + num(x.value), 0);
+
+  test('ce qui reste et ce qui part recomposent le brut', () => {
+    Fixture.poser();
+    pres(horsFinancierTotal(), 120000, 'le studio du fixture, et lui seul');
+    pres(totalFinancier(), 18250, 'le brut moins le studio');
+    pres(totalFinancier() + horsFinancierTotal(), patrimoine().brut,
+      'les deux moities doivent refaire le brut, sinon un euro se perd entre les vues');
+  });
+
+  test('chaque source de la page totalise la base financière', () => {
+    Fixture.poser();
+    const base = totalFinancier();
+    pres(somme(repartitionClasses({ financier: true })), base, 'par classe d’actif');
+    pres(somme(allocationByAsset({ credits: false, financier: true })), base, 'ligne par ligne');
+    pres(somme(allocationByAccount({ financier: true })), base, 'par compte');
+    pres(somme(byAccountType({ financier: true })), base, 'par enveloppe');
+    /* Absente de la demonstration : la carte des delais n'y a jamais ete portee. */
+    if (typeof allocationParDisponibilite === 'function') {
+      pres(somme(allocationParDisponibilite({ financier: true })), base, 'par disponibilité');
+    }
+  });
+
+  test('« Placé » perd les murs, et le cash le complète jusqu’à la base', () => {
+    /* « Place » vaut le brut moins le cash : il ne se filtre pas par classe, il
+       se retranche. Sans ca, cette seule ligne valait 131 750 sur une base de
+       18 250 et sa barre sortait de la carte. */
+    Fixture.poser();
+    const t = nowTotals();
+    const place = t.invested - horsFinancierTotal();
+    pres(place, 11750, 'le place moins le studio');
+    pres(place + (t.brut - t.invested), totalFinancier(),
+      'le placé et le cash doivent refaire la base financière, à l’euro près');
+  });
+
+  test('aucune part ne dépasse sa base ni ne passe sous zéro', () => {
+    /* Le defaut se voit a l'ecran avant de se lire : une barre qui sort de la
+       carte, un pourcentage a 723 %. */
+    Fixture.poser();
+    const base = totalFinancier();
+    for (const liste of [repartitionClasses({ financier: true }),
+                         byAccountType({ financier: true }),
+                         allocationByAccount({ financier: true })]) {
+      for (const x of liste) {
+        vrai(num(x.value) >= -0.005 && num(x.value) <= base + 0.005,
+          `« ${x.label} » vaut ${num(x.value).toFixed(2)} sur une base de ${base.toFixed(2)}`);
+        if (x.pct !== undefined) {
+          vrai(num(x.pct) <= 100.005, `« ${x.label} » annonce ${num(x.pct).toFixed(1)} %`);
+        }
+      }
+    }
+  });
+
+  test('sans le commutateur, rien ne change', () => {
+    /* Le filtre est un ajout, pas un remplacement : la vue par defaut doit
+       rendre exactement ce qu'elle rendait. */
+    Fixture.poser();
+    pres(somme(repartitionClasses()), patrimoine().brut, 'les classes en vue complète');
+    pres(poches().classes.immobilier, 120000, 'poches() porte encore les murs par défaut');
+    pres(poches({ financier: true }).classes.immobilier, 0, 'et les écarte sur demande');
+    /* Le studio du fixture n'est pas declare residence principale : son palier
+       depend donc du type de compte, et l'ecrire ici creerait une deuxieme
+       source de verite. La somme des paliers, elle, doit valoir le brut — puis
+       la base financiere. C'est le meme controle, sans le pari. */
+    const paliers = o => Object.values(o).reduce((s, v) => s + num(v), 0);
+    pres(paliers(poches().mobilisable), patrimoine().brut,
+      'les paliers de disponibilité doivent refaire le brut');
+    pres(paliers(poches({ financier: true }).mobilisable), totalFinancier(),
+      'et la base financière une fois les murs écartés');
+  });
+
+  test('le commutateur ne s’offre que s’il retire quelque chose', () => {
+    Fixture.poser();
+    vrai(horsFinancierExiste(), 'le fixture porte un studio, donc le choix existe');
+    /* Le meme patrimoine sans mur : les deux vues donneraient la meme page, et
+       proposer le choix serait proposer rien. */
+    for (const c of Store.state.comptes) {
+      if (c.type === 'immo') c.lignes = [];
+    }
+    refreshAccounts();
+    eq(horsFinancierExiste(), false,
+      'sans mur ni objet de valeur, le commutateur doit se taire');
+  });
+});
+
 suite('Un crédit dit ce qu’il reste à payer', () => {
 
   /* La formule fermee se verifie contre un amortissement mois par mois, calcule
@@ -14964,19 +15072,71 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
        toutes les mentions suivent le meme commutateur, aucune ne reste en arriere.
        Une mention qui ne bouge pas quand le calcul bouge rassure a tort, et c'est
        exactement ce qui s'etait produit sur l'accueil. */
+    /* Le montage ET la phrase de concentration : celle-ci vit dans sa propre
+       fonction, donc hors de la vue, et son appel a la source y echappait. */
+    const montage = corpsDe(src, 'mountAllocation')
+      + corpsDe(src, 'phraseConcentration');
     const mentions = [...vue.matchAll(/mentionBase\(([^,]+),/g)].map(m => m[1].trim());
     vrai(mentions.length > 0, 'la page doit annoncer au moins une base');
-    const suivent = mentions.filter(m => /allocFinancier \? BASES\.financier : BASES\.avoirs/.test(m));
+    const suivent = mentions.filter(m => /baseAlloc\(\)/.test(m));
     eq(suivent.length, mentions.length,
       `${mentions.length - suivent.length} mention(s) de base ne suivent pas le `
       + 'commutateur : elles nommeraient une base que les parts ne totalisent plus');
 
+    /* Et aucune base ecrite en dur ne subsiste sur cette page.
+       C'est le controle qui manquait : le ternaire se recopiait a huit endroits,
+       le huitieme a ete oublie, et le centre de l'anneau annonçait 354,6 k EUR
+       « Tes avoirs » au milieu de parts qui totalisaient 66 551. Interdire la
+       recopie vaut mieux que verifier chaque copie, parce que la neuvieme
+       n'existe pas encore. */
+    /* La definition de la base ne peut pas se reduire a elle-meme.
+
+       Un remplacement global a deja transforme `const baseAlloc = () =>
+       (allocFinancier ? ...)` en `const baseAlloc = () => baseAlloc()`. Le
+       fichier restait valide, la suite entiere passait, et la page se
+       terminait sur un depassement de pile a l'ouverture. Le harnais ne rend
+       jamais la vue : rien d'executable ne pouvait l'attraper, et c'est
+       pourquoi le controle est ici, sur le texte. La meme faute avait touche
+       la definition de `pochesPatrimoine` la veille. */
+    const def = src.slice(src.indexOf('const baseAlloc ='), src.indexOf('const baseAlloc =') + 200);
+    vrai(/BASES\.financier/.test(def) && /BASES\.avoirs/.test(def),
+      'la définition de baseAlloc doit nommer les deux bases : ' + def.slice(0, 70));
+    vrai(!/baseAlloc\(\)/.test(def.slice(def.indexOf('=>'))),
+      'la définition de baseAlloc s’appelle elle-même : la page dépasse la pile');
+
+    /* Le commutateur fait suivre les cartes, il n'en cache aucune.
+
+       J'avais retire la carte des delais en vue financiere plutot que de la
+       faire suivre, au motif que ses paliers agregeaient des classes. Ils se
+       construisent ligne par ligne : le filtre etait exact et tenait en une
+       ligne. Cacher une carte pour eviter de la faire suivre repond a la
+       difficulte par le retrait, et laisse l'utilisateur devant une page qui
+       perd un graphique quand il change de lunette. */
+    vrai(!/allocFinancier \? '' :/.test(vue),
+      'aucune carte ne doit disparaître quand le commutateur change : elles suivent');
+
+    const region = vue + montage;
+    eq((region.match(/BASES\.avoirs/g) || []).length, 0,
+      'la page nomme sa base par baseAlloc(), jamais par BASES.avoirs en dur');
+    eq((montage.match(/centerLabel: trad\(/g) || []).length, 0,
+      'le centre d’un anneau nomme la base de la page, jamais une chaîne écrite là');
+
+    /* Le centre de chaque anneau nomme la base ET vaut la somme de ses parts. */
+    for (const centre of [...montage.matchAll(/centerLabel: ([^,]+),/g)]) {
+      vrai(/baseAlloc\(\)\.nom/.test(centre[1]),
+        `un anneau annonce « ${centre[1].trim()} » au centre au lieu de sa base`);
+    }
+
     /* Et les sources de la page le suivent aussi, sinon deux cartes du meme ecran
-       compteraient l'une avec les murs et l'autre sans. */
-    const montage = src.slice(src.indexOf('function mountAllocation'),
-                              src.indexOf('function mountAllocation') + 2000);
+       compteraient l'une avec les murs et l'autre sans.
+
+       Les deux dernieres n'existent pas dans les deux depots : la carte des
+       delais et la phrase de concentration n'ont jamais ete portees sur la
+       demonstration. Une source absente n'est pas un manquement, une source
+       presente qui oublie le commutateur en est un. */
     for (const f of ['pochesPatrimoine', 'allocationByAsset', 'allocationByAccount',
-                     'byAccountType']) {
+                     'byAccountType', 'allocationParDisponibilite', 'concentration']) {
+      if (!src.includes(f + '(')) continue;
       const appels = [...(vue + montage).matchAll(new RegExp(f + '\\(([^)]*)\\)', 'g'))]
         .filter(m => !/function/.test(m[0]));
       vrai(appels.length > 0, `${f} doit être appelé par la page`);

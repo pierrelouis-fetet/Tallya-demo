@@ -915,6 +915,8 @@ const I18N = {
     "Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout.": "A search by name gives the name, symbol, currency and price, but not the ISIN: no free source recovers it from a symbol. Starting from the ISIN is the only path that fills everything.",
     "Ici,": "Here,",
     "non coté compris": "private assets included",
+    "l’immobilier est écarté": "property is set aside",
+    "Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.": "One base on this page: “Financial wealth”, everything you own except your property and valuables. Unlisted assets stay: you choose whether to put more in, whereas you do not sell three square metres of living room. Every card shares this base, so their percentages compare with each other. Your loans are not subtracted from it: the loan finances the asset, which is already set aside.",
     "dont": "of which",
     "à investir": "to invest",
     "Tous les comptes": "All accounts",

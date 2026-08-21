@@ -2662,22 +2662,28 @@ function viewAllocation() {
   const teintesPoche = { courant: 'var(--series-1)', precaution: 'var(--series-7)',
                          projet: 'var(--series-5)', investir: 'var(--series-4)' };
   const disponibilite = [
-    { label: BASES.place.nom, value: t.invested, couleur: 'var(--series-2)', apercu: 'investiTotal' },
+    { label: BASES.place.nom,
+      value: allocFinancier ? t.invested - horsFinancierTotal() : t.invested,
+      couleur: 'var(--series-2)', apercu: 'investiTotal' },
     ...pochesLiquidites().map(p => ({
       label: p.nom, value: p.value, couleur: teintesPoche[p.cle] || 'var(--series-1)',
       apercu: p.cle === 'investir' ? 'cashInvestir' : 'cash',
       arg: p.cle === 'investir' ? '' : p.cle,
     })),
   ].filter(x => Math.abs(num(x.value)) > 0.005)
-   .map(x => ({ ...x, pct: t.brut ? num(x.value) / t.brut * 100 : 0 }));
+   .map(x => ({ ...x, pct: valeurBaseAlloc()
+                  ? num(x.value) / valeurBaseAlloc() * 100 : 0 }));
 
   return `
   ${horsFinancierExiste() ? barreCommutateur([
     ['tout', 'Tout'], ['financier', 'Financier'],
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
-  <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${trad('tout est compté')}</b> :
-    ${fmtEUR0(t.brut)}, <span class="sans-veuve">${trad('non coté compris')}${aide(trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
+  <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
+      ? trad('l’immobilier est écarté') : trad('tout est compté')}</b> :
+    ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
+      ? trad("Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.")
+      : trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
 
   <div class="card repart">
     ${disponibilite.map(x => `
@@ -2693,9 +2699,9 @@ function viewAllocation() {
         <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
       </button>`).join('')}
     <dl class="kv repart-pied">
-      <dt>${BASES.avoirs.nom}<span class="sub">${trad('la base des pourcentages ci-dessus')}</span></dt>
-        <dd>${fmtEUR(t.brut)}</dd>
-      ${t.dettes ? `<dt>${trad('Crédits en cours')}${aide(trad("Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas."))}</dt>
+      <dt>${baseAlloc().nom}<span class="sub">${trad('la base des pourcentages ci-dessus')}</span></dt>
+        <dd>${fmtEUR(valeurBaseAlloc())}</dd>
+      ${t.dettes && !allocFinancier ? `<dt>${trad('Crédits en cours')}${aide(trad("Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas."))}</dt>
         <dd class="dette">−${fmtEUR(t.dettes)}</dd>
         <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>` : ''}
     </dl>
@@ -2703,13 +2709,13 @@ function viewAllocation() {
 
   <div class="card" data-anchor="actifs">
     <div class="card-head"><h2>${trad('Par classe d’actif')}</h2>
-      <span class="hint">${mentionBase(allocFinancier ? BASES.financier : BASES.avoirs, allocFinancier ? totalFinancier() : t.brut)}</span></div>
+      <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
     <div class="chart" id="aMacro"></div>
-    ${tbl(poches, (allocFinancier ? BASES.financier : BASES.avoirs).nom,
-           allocFinancier ? totalFinancier() : t.brut)}
+    ${tbl(poches, baseAlloc().nom,
+           valeurBaseAlloc())}
     <h3 class="sous-titre-carte">${trad('Ligne par ligne')}</h3>
     <div class="chart" id="aAsset"></div>
-    ${t.dettes ? `<dl class="kv" style="margin-top:8px">
+    ${t.dettes && !allocFinancier ? `<dl class="kv" style="margin-top:8px">
       <dt>${trad('Crédits en cours')}${aide(trad("Ils ne figurent pas dans les parts ci-dessus : une répartition dit où est ton argent, et un crédit n’est pas un endroit. Il se retire du total, ici, pour donner le patrimoine net."))}</dt>
         <dd class="dette">−${fmtEUR(t.dettes)}</dd>
       <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>
@@ -2718,10 +2724,10 @@ function viewAllocation() {
 
   <div class="card">
     <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2>
-      <span class="hint">${mentionBase(allocFinancier ? BASES.financier : BASES.avoirs, allocFinancier ? totalFinancier() : t.brut)}</span></div>
+      <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
     <h3 class="sous-titre-carte">${trad('Par enveloppe')}</h3>
     <div class="chart" id="aType"></div>
-    ${tbl(byType, (allocFinancier ? BASES.financier : BASES.avoirs).nom, byType.reduce((s, i) => s + i.value, 0))}
+    ${tbl(byType, baseAlloc().nom, byType.reduce((s, i) => s + i.value, 0))}
     <h3 class="sous-titre-carte">${trad('Par compte')}</h3>
     <div class="chart" id="aAcct"></div>
   </div>
@@ -2734,12 +2740,12 @@ function mountAllocation() {
   Charts.rankedBars($('#aAcct'), { items: allocationByAccount({ financier: allocFinancier }) });
   const t = nowTotals();
   Charts.donut($('#aMacro'), {
-    height: 200, centerLabel: trad('Tes avoirs'), centerValue: t.brut,
+    height: 200, centerLabel: baseAlloc().nom, centerValue: valeurBaseAlloc(),
     items: pochesPatrimoine({ financier: allocFinancier }).map(p => ({ label: p.label, value: p.value, color: p.color })),
   });
   const bt = teinterParRang(byAccountType({ financier: allocFinancier }));
   Charts.donut($('#aType'), {
-    height: 200, centerLabel: trad('Bourse'),
+    height: 200, centerLabel: baseAlloc().nom,
     centerValue: bt.reduce((s, i) => s + i.value, 0),
     items: bt.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
@@ -3261,6 +3267,20 @@ function mountHistory() {
 
 let compteVue = 'banque';            // banque | type
 let allocFinancier = false;
+
+/* La base de cette page, en un seul endroit.
+
+   Elle se recopiait a sept endroits sous la forme d'un ternaire, et le huitieme
+   a ete oublie : le centre de l'anneau annonçait 354,6 k EUR « Tes avoirs » au
+   milieu de parts qui totalisaient 66 551. Un total qui n'egale pas la somme de
+   ses parts, sur la carte meme, et le pire des defauts de cette base de code
+   puisqu'il rassure. Le preambule et la carte des usages avaient le meme.
+
+   Une base qui se derive a huit endroits finit par en oublier un. Elle se
+   nomme donc ici, et un test interdit desormais `BASES.avoirs` ailleurs dans
+   cette page. */
+const baseAlloc = () => (allocFinancier ? BASES.financier : BASES.avoirs);
+const valeurBaseAlloc = () => (allocFinancier ? totalFinancier() : nowTotals().brut);
 let compteRecherche = '';
 /* L'etat vit dans `meta`, pas dans une variable qui le recopie : le `Set`
    etait construit au chargement du script, donc avant que le store soit lu —
