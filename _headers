@@ -5,7 +5,7 @@
   Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()
 
 # Les fichiers d'assets portent un numero de version dans leur URL
-# (`?v=2026-08-21x-demo`) : une adresse qui change est une adresse que le navigateur
+# (`?v=...`) : une adresse qui change est une adresse que le navigateur
 # n'a jamais vue, donc il retelecharge. Tant que le numero ne bouge pas,
 # l'adresse ne bouge pas non plus, et le fichier peut etre garde un an. C'est
 # `immutable` qui le dit : ne meme pas revalider.

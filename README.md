@@ -57,7 +57,7 @@ principal, gets projected and asked about, never silently overwritten.
 ## Tested against the defects that actually happened
 
 Several hundred test cases, no test framework: the whole harness is
-[74 lines](tests/harness.js). Open `/tests.html`, the browser tab title gives
+[79 lines](tests/harness.js). Open `/tests.html`, the browser tab title gives
 the verdict.
 
 Three habits make these tests worth more than their count:
@@ -81,7 +81,7 @@ assets/
   quotes.js        market quotes client
   cloudsync.js     cross-device sync
 _worker.js         gateway and access control (Cloudflare)
-tests/             74-line harness, synthetic fixture, the suites
+tests/             79-line harness, synthetic fixture, the suites
 ```
 
 State lives in the browser (`localStorage`) and syncs through Cloudflare KV.
@@ -132,20 +132,22 @@ stay explainable, the trade is worth it.
 
 | | |
 |---|---|
-| **Net worth** | Accounts, institutions, loans, gross and net, four liquidity tiers |
+| **Net worth** | Accounts, institutions, loans, gross and net, five liquidity tiers |
 | **Markets** | Live quotes through a Yahoo gateway, day moves, unrealized gains |
-| **Allocation** | By asset, by class, by account type, with targets and a rebalancing plan |
+| **Allocation** | By asset, by class, by account type, by availability, with targets and a rebalancing plan. One switch drops property and valuables, because a flat at 81% of the total flattens everything else |
 | **Budget** | Income, fixed charges that can be split, spending by category and month |
 | **Projection** | Compound growth to a chosen horizon, in nominal and constant euros |
+| **Loans** | Monthly payment, rate and insurance declared once: the remaining term, the interest still to pay and the capital each instalment repays are all derived from them |
 | **Statements** | One monthly snapshot, entered in a single dialog, feeding every curve |
+| **Two languages** | French and English, switched without a reload of your data. Every displayed string is translated in the same commit that adds it |
 | **Export** | Real `.xlsx` workbooks, money and dates typed as such, written without a library, plus a JSON backup that restores everything |
 
 ## By the numbers
 
 | | |
 |---|---|
-| Lines of application JavaScript | 25,000+ |
-| Test cases | 700+, in 130+ suites |
+| Lines of application JavaScript | 20,000+ |
+| Test cases | 740+, in 145+ suites |
 | Runtime dependencies | 0 |
 | Build steps | 0 |
 | Pages | 1 |

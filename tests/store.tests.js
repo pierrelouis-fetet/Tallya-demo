@@ -15111,6 +15111,136 @@ suite('L’interface tient ses seuils', () => {
   });
 });
 
+suite('Le README ne promet que ce qui est mesurable', () => {
+
+  /* Le README se vante que « beaucoup de tests lisent la source elle-meme »,
+     et deriver la regle du fichier plutot que d'en recopier la valeur. Ses
+     propres chiffres ne le faisaient pas : il annonçait un harnais de 74 lignes
+     quand il en fait 79, quatre paliers de liquidite quand il y en a cinq, et
+     25 000 lignes de JavaScript alors que ce depot les publie sans leurs
+     commentaires — un lecteur qui compte en trouve vingt mille.
+
+     Un chiffre invérifiable dans un README qui prétend que les chiffres se
+     vérifient est le pire des deux mondes. Ils se contrôlent donc ici. */
+
+  const readme = () => lireSource('README.md');
+
+  test('le nombre de lignes du harnais est celui du fichier', () => {
+    const md = readme();
+    vrai(md !== null, 'README.md doit se lire');
+    /* Le saut de ligne final ne fait pas une ligne de plus : GitHub, que le
+       lecteur regarde, en affiche 79 pour un fichier qui se termine par un
+       retour. Compter sans l'enlever donnait 80 et accusait le README. */
+    const vraies = lireSource('tests/harness.js')
+      .replace(/\n$/, '').split('\n').length;
+    const dits = [...md.matchAll(/(\d+)[- ]lines?\]?\(?tests\/harness\.js|(\d+)-line harness/g)]
+      .map(m => Number(m[1] || m[2]));
+    vrai(dits.length >= 2,
+      'le README annonce la taille du harnais à deux endroits, les deux doivent être trouvés');
+    for (const d of dits) {
+      eq(d, vraies, `le README annonce ${d} lignes de harnais, le fichier en a ${vraies}`);
+    }
+  });
+
+  test('le nombre de paliers de liquidité est celui de la table', () => {
+    const md = readme();
+    const mots = { four: 4, five: 5, six: 6, seven: 7, three: 3 };
+    const m = md.match(/(\w+) liquidity tiers/);
+    vrai(m, 'le README doit annoncer un nombre de paliers');
+    eq(mots[m[1]], Object.keys(MOBILISABLE_LABEL).length,
+      `le README annonce « ${m[1]} » paliers, la table en porte `
+      + Object.keys(MOBILISABLE_LABEL).length);
+  });
+
+  test('les compteurs de tests ne dépassent pas la réalité', () => {
+    /* « 740+ » doit rester vrai : un plancher qu'on annonce ne peut pas passer
+       au-dessus de ce qui existe. Le controle laisse la marge vers le haut, il
+       ne ferme que le sens ou le README exagererait. */
+    const md = readme();
+    const src = lireSource('tests/store.tests.js');
+    const suites = (src.match(/^suite\(/gm) || []).length;
+    const cas = (src.match(/^  test\(/gm) || []).length;
+    const m = md.match(/\| Test cases \| ([\d,]+)\+, in (\d+)\+ suites \|/);
+    vrai(m, 'le tableau des chiffres doit annoncer les tests et les suites');
+    const casDits = Number(m[1].replace(/,/g, ''));
+    vrai(casDits <= cas,
+      `le README annonce ${casDits}+ cas, le fichier en déclare ${cas}`);
+    vrai(Number(m[2]) <= suites,
+      `le README annonce ${m[2]}+ suites, le fichier en déclare ${suites}`);
+  });
+
+  test('chaque image du README existe', () => {
+    /* Une capture renommee laisse un cadre vide sur la page d'accueil du depot,
+       et personne ne le voit depuis un editeur. */
+    const md = readme();
+    const images = [...md.matchAll(/(?:src="|\]\()(docs\/[\w.-]+\.png)/g)].map(m => m[1]);
+    vrai(images.length >= 4, 'le README montre au moins quatre captures');
+    for (const img of new Set(images)) {
+      vrai(lireSource(img) !== null, `${img} est référencée par le README et absente`);
+    }
+  });
+});
+
+suite('Le manifeste parle la langue de l’application', () => {
+
+  /* Le manifeste porte du texte AFFICHE : le telephone le montre dans sa
+     fenetre d'installation et dans le tiroir d'applications. Il echappait
+     pourtant a tous les controles de langue, qui ne lisent que les trois
+     fichiers JavaScript — et il en portait deux fautes a la fois.
+
+     Il vouvoyait, « Votre patrimoine, au complet », alors qu'un test refuse
+     depuis longtemps le moindre « votre » dans le texte affiche. Et il
+     declarait `lang: "fr"` avec des raccourcis francais sur une demonstration
+     qui s'ouvre en anglais, dont le README et les captures sont anglais.
+
+     Un fichier qui n'est pas du code n'est pas pour autant hors des regles. */
+
+  const manifeste = () => JSON.parse(lireSource('manifest.webmanifest'));
+
+  /* La langue par defaut se lit dans i18n.js, elle ne se recopie pas ici : les
+     deux depots divergent sur ce seul point, et le test doit valoir pour les
+     deux sans etre edite. */
+  const langueParDefaut = () => {
+    const src = lireSource('assets/i18n.js');
+    const m = src.match(/getItem\(LANG_KEY\) \|\| '(\w+)'/);
+    vrai(m, 'la langue par défaut doit se lire dans i18n.js');
+    return m[1];
+  };
+
+  test('sa langue est celle que l’application ouvre', () => {
+    eq(manifeste().lang, langueParDefaut(),
+      'le manifeste déclare une autre langue que celle du premier chargement');
+  });
+
+  test('sa description commence par la devise de l’application', () => {
+    /* La devise vit dans i18n.js, en deux morceaux que l'en-tete assemble. La
+       recopier dans le manifeste en fait une deuxieme source ; ce controle rend
+       la copie verifiable, faute de pouvoir l'eviter — un manifeste ne peut pas
+       appeler trad(). */
+    /* `enLangue` ne rend pas la valeur de son bloc : elle restaure la langue
+       dans un `finally` et retourne undefined. La devise se recueille donc
+       dans une variable. */
+    let attendu;
+    enLangue(langueParDefaut(), () => {
+      attendu = trad('Suivre. Arbitrer.') + ' ' + trad('Projeter.');
+    });
+    vrai(manifeste().description.startsWith(attendu),
+      `la description devrait commencer par « ${attendu} », elle dit `
+      + `« ${manifeste().description.slice(0, 40)} »`);
+  });
+
+  test('en français, il tutoie comme tout le reste', () => {
+    const m = manifeste();
+    if (m.lang !== 'fr') return;
+    const textes = [m.name, m.short_name, m.description]
+      .concat((m.shortcuts || []).map(s => s.name)).join(' ');
+    const fautifs = [...textes.matchAll(/\b(vous|vos|votre|Vous|Vos|Votre)\b/g)]
+      .map(x => x[1]);
+    eq(fautifs.length, 0,
+      'vouvoiement dans le manifeste : ' + fautifs.join(', '));
+  });
+});
+
 suite('La licence ne ment pas', () => {
   test('le fichier LICENSE porte la licence que le README annonce', () => {
     /* La regle se derive du README : c'est lui qui annonce la licence au
