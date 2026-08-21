@@ -14953,19 +14953,43 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
     const vue = src.slice(debut, src.indexOf('function mountAllocation', debut));
     vrai(vue.length > 500, 'la vue doit se relire depuis sa source');
 
-    const bases = [...vue.matchAll(/mentionBase\(BASES\.([a-zA-Z]+)/g)].map(m => m[1]);
-    vrai(bases.length > 0, 'la page doit annoncer au moins une base');
-    const distinctes = [...new Set(bases)];
-    eq(distinctes.length, 1,
-      `la page emploie ${distinctes.length} bases (${distinctes.join(', ')}) alors que `
-      + 'son infobulle en annonce une seule : remettre le texte d’accord avec les cartes');
-    eq(distinctes[0], 'avoirs', 'et c’est « Tes avoirs » que le texte nomme');
+    /* Une base par mode, et jamais deux dans le meme mode. La page n'en annonçait
+       qu'une jusqu'a ce qu'un commutateur arrive : un appartement pesant 81 % du
+       brut ecrasait tout, quatre classes sur six tombaient sous 2 %, et la page
+       cessait de montrer ce qu'on pilote.
 
-    const tete = vue.slice(vue.indexOf('perimetre-tete'), vue.indexOf('perimetre-tete') + 900);
-    vrai(/Une seule base sur cette page/.test(tete),
-      'l’infobulle de tête doit annoncer une base unique');
-    vrai(!/Trois bases|Ce qui est placé » écarte/.test(tete),
-      'l’ancien texte à trois bases décrit une page qui n’existe plus');
+       Un commutateur n'est pas le defaut que ce controle traquait. Ce qui etait
+       fautif, c'etaient deux bases muettes cote a cote sur un meme ecran ; ici
+       l'une remplace l'autre, sur un geste, et se nomme. La regle devient donc :
+       toutes les mentions suivent le meme commutateur, aucune ne reste en arriere.
+       Une mention qui ne bouge pas quand le calcul bouge rassure a tort, et c'est
+       exactement ce qui s'etait produit sur l'accueil. */
+    const mentions = [...vue.matchAll(/mentionBase\(([^,]+),/g)].map(m => m[1].trim());
+    vrai(mentions.length > 0, 'la page doit annoncer au moins une base');
+    const suivent = mentions.filter(m => /allocFinancier \? BASES\.financier : BASES\.avoirs/.test(m));
+    eq(suivent.length, mentions.length,
+      `${mentions.length - suivent.length} mention(s) de base ne suivent pas le `
+      + 'commutateur : elles nommeraient une base que les parts ne totalisent plus');
+
+    /* Et les sources de la page le suivent aussi, sinon deux cartes du meme ecran
+       compteraient l'une avec les murs et l'autre sans. */
+    const montage = src.slice(src.indexOf('function mountAllocation'),
+                              src.indexOf('function mountAllocation') + 2000);
+    for (const f of ['pochesPatrimoine', 'allocationByAsset', 'allocationByAccount',
+                     'byAccountType']) {
+      const appels = [...(vue + montage).matchAll(new RegExp(f + '\\(([^)]*)\\)', 'g'))]
+        .filter(m => !/function/.test(m[0]));
+      vrai(appels.length > 0, `${f} doit être appelé par la page`);
+      for (const a of appels) {
+        vrai(/financier: allocFinancier/.test(a[1]),
+          `${f} est appelé sans le commutateur : « ${a[0].slice(0, 60)} »`);
+      }
+    }
+
+    /* Le commutateur ne s'affiche que s'il retire quelque chose : sans mur ni
+       objet de valeur, ses deux boutons donnent la meme page. */
+    vrai(/horsFinancierExiste\(\) \? barreCommutateur/.test(vue),
+      'le commutateur se tait quand il n’y a rien à retirer');
   });
 });
 

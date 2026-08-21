@@ -83,6 +83,7 @@ const AFFECTATION_LABEL = Object.fromEntries(AFFECTATIONS);
 const BASES = {
   avoirs:      { nom: trad('Tes avoirs'),         de: trad('de tes avoirs') },          // brut
   net:         { nom: trad('Patrimoine net'),     de: trad('de ton patrimoine net') },   // brut - dettes
+  financier:   { nom: trad('Patrimoine financier'), de: trad('de ton patrimoine financier') },
   place:       { nom: trad('Placé'),              de: trad('de ce qui est placé') },    // nowTotals().invested
   placeBourse: { nom: trad('Placé en bourse'),    de: trad('de ce qui est placé en bourse') },
   baseCibles:  { nom: trad('Base de tes cibles'), de: trad('de la base de tes cibles') },
@@ -907,10 +908,40 @@ const CLASSE_COULEURS = new Proxy({}, {
    Allocation ne change pas : elle n'a pas de commutateur et declare une base
    unique. Deux pages, deux bases, chacune nommee — c'est le motif autorise ici,
    celui qu'un total muet violait. */
-function repartitionClasses({ net = false } = {}) {
+const CLASSES_HORS_FINANCIER = ['immobilier', 'bienValeur'];
+const horsFinancier = classe => CLASSES_HORS_FINANCIER.includes(classe);
+
+/* Les memes exclusions dans l'autre vocabulaire. Cette base de code en porte deux
+   — les classes fines et les poches du graphique — et c'est deja le cas de
+   `POCHE_DE_CLASSE`. Deriver l'une de l'autre demanderait une table de
+   correspondance de plus ; les ecrire toutes deux et verifier qu'elles designent
+   le meme argent coute moins et se prouve. Un test somme les deux cotes. */
+const SERIES_HORS_FINANCIER = ['immo', 'biens'];
+const serieHorsFinancier = cle => SERIES_HORS_FINANCIER.includes(cle);
+
+function valeurFinanciere(compte) {
+  const dehors = lignesDe(compte)
+    .filter(l => horsFinancier(l.classe))
+    .reduce((s, l) => s + num(l.valeur), 0);
+  return valeurCompte(compte) - dehors;
+}
+
+function horsFinancierExiste() {
   const p = patrimoine();
-  const dettes = net ? num(p.dettes) : 0;
-  const base = num(p.brut) - dettes;
+  return CLASSES_HORS_FINANCIER.some(c => Math.abs(num(p.classes[c])) > 0.005);
+}
+
+function totalFinancier() {
+  const p = patrimoine();
+  return Object.keys(CLASSES_ACTIFS)
+    .filter(c => !horsFinancier(c))
+    .reduce((s, c) => s + num(p.classes[c]), 0);
+}
+
+function repartitionClasses({ net = false, financier = false } = {}) {
+  const p = patrimoine();
+  const dettes = net && !financier ? num(p.dettes) : 0;
+  const base = financier ? totalFinancier() : num(p.brut) - dettes;
   const porteuse = ['immobilier', 'bienValeur'].find(c => Math.abs(num(p.classes[c])) > 0.005)
     || (dettes ? 'immobilier' : null);
   return Object.entries(CLASSES_ACTIFS)
@@ -919,7 +950,8 @@ function repartitionClasses({ net = false } = {}) {
       return { classe, label, couleur: CLASSE_COULEURS[classe], value,
                pct: base ? value / base * 100 : 0 };
     })
-    .filter(x => Math.abs(x.value) > 0.005);
+    .filter(x => Math.abs(x.value) > 0.005)
+    .filter(x => !financier || !horsFinancier(x.classe));
 }
 
 function refreshAccounts() {
@@ -2206,7 +2238,7 @@ const libelleAlloc = p => {
    affichent le meme montant sous deux noms tant qu'aucun credit n'existe.
    La base suit le drapeau au lieu d'etre choisie par l'appelant : c'est le seul
    moyen que la somme des parts fasse toujours le total annonce. */
-function allocationByAsset({ credits = true } = {}) {
+function allocationByAsset({ credits = true, financier = false } = {}) {
   const map = new Map();
   const teintes = new Map();
   const poches = new Map();
@@ -2237,7 +2269,8 @@ function allocationByAsset({ credits = true } = {}) {
   }
   if (credits && dettesTotal()) add(trad('Crédits en cours'), -dettesTotal(), 'var(--critical)');
 
-  const total = credits ? nowTotals().total : nowTotals().brut;
+  const total = financier ? totalFinancier()
+    : credits ? nowTotals().total : nowTotals().brut;
   const sousTitre = label => {
     const poche = poches.get(label);
     const n = lignes.get(label) || 0;
@@ -2248,6 +2281,7 @@ function allocationByAsset({ credits = true } = {}) {
     return bouts.join(' · ');
   };
   return [...map.entries()]
+    .filter(([label]) => !financier || !horsFinancier(poches.get(label)))
     .map(([label, value]) => ({ label, value, couleur: teintes.get(label),
                                 sous: sousTitre(label),
                                 pct: total ? value / total * 100 : 0 }))
@@ -2265,15 +2299,16 @@ function allocationByAsset({ credits = true } = {}) {
    La base suit : `invested` valait le brut moins le cash, donc y ajouter le cash
    aurait fait des parts qui depassent cent pour cent. C'est `valeurCompte()` qui
    somme desormais, cash compris, et le total est le brut. */
-function allocationByAccount() {
-  const base = nowTotals().brut;
+function allocationByAccount({ financier = false } = {}) {
+  const base = financier ? totalFinancier() : nowTotals().brut;
   return comptesOuverts()
     .map(c => {
       const lignes = lignesDe(c);
       const parClasse = new Map([['liquidites', cashCompte(c)]]);
       for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
       const dominante = [...parClasse.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      return { label: nomCompteV2(c), value: valeurCompte(c),
+      return { label: nomCompteV2(c),
+               value: financier ? valeurFinanciere(c) : valeurCompte(c),
                etab: nomEtabDe(c), type: trad(typeCompte(c.type).label),
                couleur: CLASSE_COULEURS[dominante] || CLASSE_COULEURS.nonCote };
     })
@@ -2740,12 +2775,12 @@ const couleurClasse = ac =>
 /* Meme base et meme perimetre que `allocationByAccount()`, un cran au-dessus :
    les deux graphiques de la carte sont deux granularites d'un seul total, et
    deux bases differentes en auraient fait deux cartes qui se contredisent. */
-function byAccountType() {
-  const base = nowTotals().brut;
+function byAccountType({ financier = false } = {}) {
+  const base = financier ? totalFinancier() : nowTotals().brut;
   const parType = new Map();
   for (const c of comptesOuverts()) {
     if (c.type === 'levier') continue;
-    const v = valeurCompte(c);
+    const v = financier ? valeurFinanciere(c) : valeurCompte(c);
     if (!v) continue;
     parType.set(c.type, (parType.get(c.type) || 0) + v);
   }

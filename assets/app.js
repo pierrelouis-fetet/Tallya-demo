@@ -2613,15 +2613,19 @@ function mountSymbolSearch() {
    oubliaient donc la crypto et l'immobilier depuis que `gAff` leur a donné
    leur propre poche. Le tableau totalisait 29 985 € de lignes sous un total
    de 179 985 € : 150 000 € d'immobilier manquaient à l'appel. */
-function pochesPatrimoine() {
+/* `financier` : sans les murs ni les objets. La regle et les deux listes de
+   poches exclues vivent dans `store.js`, une seule fois. */
+function pochesPatrimoine({ financier = false } = {}) {
   const t = nowTotals();
   const attente = num(patrimoine().investir);
+  const base = financier ? totalFinancier() : num(t.brut);
   return SERIES_PATRIMOINE()
     .filter(s => Math.abs(num(t[s.key])) > 0.005)
+    .filter(s => !financier || !serieHorsFinancier(s.key))
     .map(s => ({ key: s.key, label: s.label, color: s.color,
                  note: s.key === 'cash' && attente > 0.005
                    ? `${trad('dont')} ${fmtEUR0(attente)} ${trad('à investir')}` : '',
-                 value: num(t[s.key]), pct: t.brut ? num(t[s.key]) / t.brut * 100 : 0 }));
+                 value: num(t[s.key]), pct: base ? num(t[s.key]) / base * 100 : 0 }));
 }
 
 const teinterParRang = items =>
@@ -2634,10 +2638,10 @@ function viewAllocation() {
       + 'd’actifs, chez quels intermédiaires. Elle attend donc que tu déclares au moins un '
       + 'compte ou un placement.');
   }
-  const poches = pochesPatrimoine();
-  const byAsset = allocationByAsset({ credits: false });
-  const byAcct = allocationByAccount();
-  const byType = teinterParRang(byAccountType());
+  const poches = pochesPatrimoine({ financier: allocFinancier });
+  const byAsset = allocationByAsset({ credits: false, financier: allocFinancier });
+  const byAcct = allocationByAccount({ financier: allocFinancier });
+  const byType = teinterParRang(byAccountType({ financier: allocFinancier }));
 
   const tbl = (items, totalLabel, total) => `
     <table>
@@ -2668,6 +2672,9 @@ function viewAllocation() {
    .map(x => ({ ...x, pct: t.brut ? num(x.value) / t.brut * 100 : 0 }));
 
   return `
+  ${horsFinancierExiste() ? barreCommutateur([
+    ['tout', 'Tout'], ['financier', 'Financier'],
+  ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${trad('tout est compté')}</b> :
     ${fmtEUR0(t.brut)}, <span class="sans-veuve">${trad('non coté compris')}${aide(trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
@@ -2696,9 +2703,10 @@ function viewAllocation() {
 
   <div class="card" data-anchor="actifs">
     <div class="card-head"><h2>${trad('Par classe d’actif')}</h2>
-      <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
+      <span class="hint">${mentionBase(allocFinancier ? BASES.financier : BASES.avoirs, allocFinancier ? totalFinancier() : t.brut)}</span></div>
     <div class="chart" id="aMacro"></div>
-    ${tbl(poches, BASES.avoirs.nom, t.brut)}
+    ${tbl(poches, (allocFinancier ? BASES.financier : BASES.avoirs).nom,
+           allocFinancier ? totalFinancier() : t.brut)}
     <h3 class="sous-titre-carte">${trad('Ligne par ligne')}</h3>
     <div class="chart" id="aAsset"></div>
     ${t.dettes ? `<dl class="kv" style="margin-top:8px">
@@ -2710,10 +2718,10 @@ function viewAllocation() {
 
   <div class="card">
     <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2>
-      <span class="hint">${mentionBase(BASES.avoirs, t.brut)}</span></div>
+      <span class="hint">${mentionBase(allocFinancier ? BASES.financier : BASES.avoirs, allocFinancier ? totalFinancier() : t.brut)}</span></div>
     <h3 class="sous-titre-carte">${trad('Par enveloppe')}</h3>
     <div class="chart" id="aType"></div>
-    ${tbl(byType, BASES.avoirs.nom, byType.reduce((s, i) => s + i.value, 0))}
+    ${tbl(byType, (allocFinancier ? BASES.financier : BASES.avoirs).nom, byType.reduce((s, i) => s + i.value, 0))}
     <h3 class="sous-titre-carte">${trad('Par compte')}</h3>
     <div class="chart" id="aAcct"></div>
   </div>
@@ -2722,14 +2730,14 @@ function viewAllocation() {
 }
 
 function mountAllocation() {
-  Charts.rankedBars($('#aAsset'), { items: allocationByAsset({ credits: false }) });
-  Charts.rankedBars($('#aAcct'), { items: allocationByAccount() });
+  Charts.rankedBars($('#aAsset'), { items: allocationByAsset({ credits: false, financier: allocFinancier }) });
+  Charts.rankedBars($('#aAcct'), { items: allocationByAccount({ financier: allocFinancier }) });
   const t = nowTotals();
   Charts.donut($('#aMacro'), {
     height: 200, centerLabel: trad('Tes avoirs'), centerValue: t.brut,
-    items: pochesPatrimoine().map(p => ({ label: p.label, value: p.value, color: p.color })),
+    items: pochesPatrimoine({ financier: allocFinancier }).map(p => ({ label: p.label, value: p.value, color: p.color })),
   });
-  const bt = teinterParRang(byAccountType());
+  const bt = teinterParRang(byAccountType({ financier: allocFinancier }));
   Charts.donut($('#aType'), {
     height: 200, centerLabel: trad('Bourse'),
     centerValue: bt.reduce((s, i) => s + i.value, 0),
@@ -3252,6 +3260,7 @@ function mountHistory() {
 }
 
 let compteVue = 'banque';            // banque | type
+let allocFinancier = false;
 let compteRecherche = '';
 /* L'etat vit dans `meta`, pas dans une variable qui le recopie : le `Set`
    etait construit au chargement du script, donc avant que le store soit lu —
@@ -6921,6 +6930,7 @@ const ACTIONS = {
   /* Les deux controles — le grand chiffre et la courbe — commandent le meme
      reglage : `hero-base` est un alias historique de `evo-base`. */
   'evo-base'(btn) { evoNet = !!btn.dataset.net; render(); },
+  'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
   'hero-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   /* On change d'adresse, pas d'état : `hashchange` déclenche le rendu, et le
      bouton retour du navigateur ramène au sous-onglet précédent. */
