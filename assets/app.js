@@ -258,16 +258,16 @@ function getPath(path) {
 
 const VIEWS = {
   overview:   { cle: 'overview', render: () => barreSousOnglets('overview') + (
-    sousOngletActif.overview === 'projection' ? viewObjective() : viewOverview()) },
+    sousOngletActif.overview === 'historique' ? viewHistory()
+    : sousOngletActif.overview === 'projection' ? viewObjective()
+    : viewOverview()) },
   /* Budget porte trois sous-onglets, sur le meme motif que Marches et
      Allocation : une seule vue, qui choisit quoi rendre. Les routes
      `history` et `budget-cadre` sont des redirections, elles n'ont pas
      d'entree ici. Le titre suit l'onglet, sinon « Relevés mensuels »
      s'annoncerait « Budget ». */
   budget:     { cle: 'budget',      render: () => barreSousOnglets('budget') + (
-    sousOngletActif.budget === 'releves' ? viewHistory()
-    : sousOngletActif.budget === 'cadre' ? viewBudgetCadre()
-    : viewBudget()) },
+    sousOngletActif.budget === 'cadre' ? viewBudgetCadre() : viewBudget()) },
   positions:  { cle: 'positions',   render: () =>
     barreSousOnglets('positions') + (
       sousOngletActif.positions === 'cible' ? viewRebalance()
@@ -300,7 +300,7 @@ const REDIRECTIONS = {
   performance: ['positions',  'positions',  'portefeuille'],
   /* `settings` n'est plus une redirection : Preferences est une vue a part
      entiere, avec son entree de menu. Elle n'a plus rien a rediriger. */
-  history:       ['budget', 'budget', 'releves'],
+  history:       ['overview', 'overview', 'historique'],
   'budget-cadre': ['budget', 'budget', 'cadre'],
 };
 
@@ -335,7 +335,9 @@ const viewSub   = k => t('view.' + k + '.sub');
    dans une variable se perd au premier F5 — c'est ce qui distingue un
    sous-onglet d'un simple bouton. */
 const SOUS_ONGLETS = {
-  overview:   [['aujourdhui', 'Aujourd’hui', 'overview'], ['projection', 'Projection', 'objective']],
+  overview:   [['aujourdhui', 'Aujourd’hui', 'overview'],
+               ['historique', 'Historique', 'history'],
+               ['projection', 'Projection', 'objective']],
   positions:  [['portefeuille', 'Positions', 'positions'], ['cible', 'Cible', 'rebalance']],
   /* Allocation n'a plus qu'un onglet, et plus de barre : `barreSousOnglets`
      s'efface sous deux choix.
@@ -369,10 +371,19 @@ const SOUS_ONGLETS = {
   /* « Depenses » en premier : l'entree du menu s'appelle Budget, et c'est la
      qu'on arrive en la touchant. `currentView()` remet toujours l'adresse de
      base sur le premier onglet de cette liste, c'est donc l'ordre qui decide
-     de l'atterrissage. Les releves gardent la pastille ambre, ils se voient
-     sans etre au premier plan. */
+     de l'atterrissage. La saisie devant, le reglage derriere — c'est deja ce
+     que fait le menu de l'application, ou Donnees et Preferences sont en queue.
+
+     « Charges fixes » et non « Charges » : dans la langue courante les deux
+     mots disent la meme chose, de l'argent qui sort. C'est « fixes » qui porte
+     l'opposition avec « Depenses », ce qui se repete contre ce qui varie.
+
+     Cette barre en a porte trois, dont « Relevés ». La contrainte de largeur
+     s'est donc relachee : a deux onglets ils font 168 px au lieu de 112, et
+     « Charges fixes », mesure a 78 px de texte, y tient meme avec une pastille.
+     L'invariant reste malgre tout — voir PASTILLE_SOUS_ONGLET — parce qu'il ne
+     coute rien et qu'un troisieme onglet peut revenir. */
   budget:     [['depenses', 'Dépenses', 'budget'],
-               ['releves', 'Relevés', 'history'],
                ['cadre', 'Charges fixes', 'budget-cadre']],
 };
 /* L'onglet ouvert au depart, derive de la table et non recopie a cote.
@@ -389,7 +400,7 @@ const sousOngletActif = Object.fromEntries(
   Object.entries(SOUS_ONGLETS).map(([vue, onglets]) => [vue, onglets[0][0]]));
 
 const PASTILLE_SOUS_ONGLET = {
-  releves:  () => currentMonthPending().missing,
+  historique: () => currentMonthPending().missing,
   depenses: () => depensesEnAttente().missing,
 };
 
@@ -10295,10 +10306,6 @@ function majOnglets() {
 
   const dep = depensesEnAttente();
   const rel = currentMonthPending();
-  const enAttente = [
-    dep.missing ? `${dep.label} : ${trad('dépenses pas encore saisies')}` : '',
-    rel.missing ? `${rel.label} : ${trad('relevé pas encore enregistré')}` : '',
-  ].filter(Boolean);
 
   const pastille = (id, actif, texte) => {
     const p = $(id);
@@ -10306,7 +10313,10 @@ function majOnglets() {
     p.hidden = !actif;
     p.title = actif ? texte : '';
   };
-  pastille('#tabBadgeBudget', enAttente.length, enAttente.join(' · '));
+  pastille('#tabBadgeBudget', dep.missing,
+    dep.missing ? `${dep.label} : ${trad('dépenses pas encore saisies')}` : '');
+  pastille('#tabBadgeOverview', rel.missing,
+    rel.missing ? `${rel.label} : ${trad('relevé pas encore enregistré')}` : '');
 
   /* La cloche s'allume pour tout ce qui demande une action ou signale un chiffre
      faux — les saisies en attente comme les contrôles de cohérence. Un rappel
@@ -10328,10 +10338,8 @@ function renderSidebar() {
   };
   const dep = depensesEnAttente();
   const rel = currentMonthPending();
-  pastille('#badgeBudget',
-    { missing: dep.missing || rel.missing, label: (dep.missing ? dep : rel).label },
-    [dep.missing ? trad('dépenses pas encore saisies') : '',
-     rel.missing ? trad('relevé pas encore enregistré') : ''].filter(Boolean).join(` ${trad('et')} `));
+  pastille('#badgeBudget', dep, trad('dépenses pas encore saisies'));
+  pastille('#badgeOverview', rel, trad('relevé pas encore enregistré'));
 
   const netWorth = $('#sbNetWorth');
   const montant = fmtEUR0(t.total);

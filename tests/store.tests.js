@@ -2957,13 +2957,17 @@ suite('Pièges de source', () => {
   });
 
   test('l’onglet « Charges fixes » ne porte pas de pastille', () => {
-    /* Le libellé occupe 78 px des 88 px utiles d'un onglet à 375 px. Nu, il
-       tient sur une ligne. Une pastille ajoute 6 px plus son écart, le texte
-       passe à la ligne et la barre gagne 17 px de haut.
+    /* Le libellé occupe 78 px des 88 px utiles d'un onglet de barre à TROIS
+       onglets, à 375 px. Nu il tient sur une ligne ; une pastille ajoute 6 px
+       plus son écart, le texte passe à la ligne et la barre gagne 17 px.
+
+       Budget n'en porte plus que deux depuis que l'historique est passé sur la
+       vue d'ensemble, donc chaque onglet dispose de 168 px et la contrainte est
+       levée pour lui. L'invariant reste : il ne coûte rien, et un troisième
+       onglet peut revenir sans que personne se rappelle ce calcul.
 
        Mesuré, pas supposé. Le contrôle ne refait pas le calcul de pixels : il
-       garde l'invariant qui le rend inutile. Si cet onglet doit un jour
-       réclamer une saisie, il faut d'abord raccourcir son nom. */
+       garde l'invariant qui le rend inutile. */
     vrai(source, 'app.js doit être lisible pour ce contrôle');
     const bloc = source.match(/const PASTILLE_SOUS_ONGLET = \{([\s\S]*?)\n\};/);
     vrai(bloc, 'PASTILLE_SOUS_ONGLET doit rester repérable dans le source');
@@ -15324,6 +15328,108 @@ suite('La graine de la démonstration parle une seule langue', () => {
     eq(fautifs.length, 0,
       'libellé(s) français dans la graine d’une démonstration anglaise : '
       + fautifs.join(' | '));
+  });
+});
+
+suite('La ligne du temps se lit sur une seule ligne', () => {
+
+  /* « Relevés » etait un sous-onglet de Budget, entre deux saisies de depenses.
+     Le mot disait le GESTE — enregistrer un releve — et non ce qu'on vient y
+     chercher, qui est l'histoire du patrimoine. Renomme « Historique » et place
+     entre « Aujourd'hui » et « Projection », il donne une ligne du temps qui se
+     lit sans explication : ce qui est, ce qui a ete, ce qui pourrait etre.
+
+     Ce qui devait etre mesure avant de le faire : la barre passe a trois
+     onglets, et celui du milieu porte la pastille ambre quand un releve manque.
+     C'est exactement le cas dont le code se mefiait pour « Charges fixes ».
+
+     Mesure a 375 px : onglet utile 112 px, « Aujourd'hui » 69 px de texte,
+     « Historique » 61, « Projection » 60. La pastille vaut 6 px plus 6 px de
+     marge, donc « Historique » en demande 73 sur les 88 disponibles. Aucun
+     debord, barre inchangee a 53 px. « Charges fixes », a 78 px, n'aurait pas
+     tenu — c'est bien le nom qui decide, pas la position. */
+
+  /* Le harnais ne charge pas `app.js` : les tables des vues se lisent donc dans
+     la source, comme partout ailleurs dans ce fichier. Un seul lecteur, pose
+     ici, plutot qu'une expression rationnelle recopiee dans chaque controle. */
+  function ongletsParVue() {
+    const src = lireSource('assets/app.js');
+    const d = src.indexOf('const SOUS_ONGLETS');
+    const bloc = src.slice(d, src.indexOf('\n};', d));
+    const vues = {};
+    /* Chaque clef de premier niveau ouvre sa liste ; on decoupe sur elles. */
+    const bornes = [...bloc.matchAll(/^  (\w+):\s*\[/gm)];
+    bornes.forEach((b, i) => {
+      const fin = i + 1 < bornes.length ? bornes[i + 1].index : bloc.length;
+      const part = bloc.slice(b.index, fin);
+      vues[b[1]] = [...part.matchAll(/\['([\w-]+)',\s*'([^']*)'/g)]
+        .map(m => ({ cle: m[1], label: m[2] }));
+    });
+    return vues;
+  }
+
+  function clesAPastille() {
+    const src = lireSource('assets/app.js');
+    const m = src.match(/const PASTILLE_SOUS_ONGLET = \{([\s\S]*?)\n\};/);
+    vrai(m, 'PASTILLE_SOUS_ONGLET doit rester repérable');
+    return [...m[1].matchAll(/^\s*(\w+)\s*:/gm)].map(x => x[1]);
+  }
+
+  test('la vue d’ensemble porte les trois onglets, dans l’ordre du temps', () => {
+    const noms = ongletsParVue().overview.map(o => o.cle);
+    eq(noms.join(' → '), 'aujourdhui → historique → projection',
+      'l’ordre raconte le temps : ce qui est, ce qui a été, ce qui pourrait être');
+  });
+
+  test('un onglet qui peut porter une pastille garde un nom court', () => {
+    /* Le controle ne refait pas la mesure, il garde l'invariant qu'elle etablit.
+       Onze caracteres : « Historique » en fait dix, « Charges fixes » treize et
+       ne tiendrait pas. Un proxy, et il est dit comme tel — sans rendu, la suite
+       ne peut pas mesurer des pixels. */
+    const LIMITE = 11;
+    const pastilles = clesAPastille();
+    const fautifs = [];
+    for (const [vue, onglets] of Object.entries(ongletsParVue())) {
+      if (onglets.length < 3) continue;          // a deux, la place est double
+      for (const o of onglets) {
+        if (!pastilles.includes(o.cle)) continue;
+        if (o.label.length > LIMITE) fautifs.push(`${vue}/${o.cle} : « ${o.label} »`);
+      }
+    }
+    eq(fautifs.length, 0,
+      'onglet(s) à pastille dont le nom dépasse ' + LIMITE + ' caractères dans une '
+      + 'barre à trois : ' + fautifs.join(', ') + ' — le libellé passera à la ligne '
+      + 'et la barre gagnera 17 px');
+  });
+
+  test('l’ancienne adresse des relevés mène au nouvel onglet', () => {
+    /* Elle est dans les favoris de quelqu'un, et elle a deja change de place une
+       fois. Une redirection cassee renvoie sur la vue d'ensemble sans dire
+       pourquoi l'onglet attendu n'est pas la. */
+    const src = lireSource('assets/app.js');
+    const m = src.match(/history:\s*\['(\w+)',\s*'(\w+)',\s*'(\w+)'\]/);
+    vrai(m, 'la redirection history doit rester repérable');
+    eq(m[1], 'overview', 'elle mène désormais à la vue d’ensemble');
+    eq(m[3], 'historique', 'et à l’onglet historique');
+    /* Et l'onglet vise existe vraiment : une redirection vers un onglet absent
+       retombe silencieusement sur le premier. */
+    vrai(ongletsParVue().overview.some(o => o.cle === m[3]),
+      `l’onglet « ${m && m[3]} » doit exister dans la vue d’ensemble`);
+  });
+
+  test('chaque saisie en attente s’annonce là où elle se fait', () => {
+    /* Les deux pastilles de menu ont ete confondues le temps ou les releves
+       vivaient dans Budget. Les garder ensemble enverrait maintenant chercher au
+       mauvais onglet une fois sur deux. */
+    const src = lireSource('assets/app.js');
+    vrai(/pastille\('#badgeOverview'/.test(src),
+      'la vue d’ensemble doit porter la pastille du relevé');
+    vrai(/pastille\('#tabBadgeOverview'/.test(src),
+      'la barre du bas aussi, sinon le signal disparaît sur téléphone');
+    const html = lireSource('index.html');
+    for (const id of ['badgeOverview', 'tabBadgeOverview']) {
+      vrai(html.includes(`id="${id}"`), `${id} doit exister dans le balisage`);
+    }
   });
 });
 
