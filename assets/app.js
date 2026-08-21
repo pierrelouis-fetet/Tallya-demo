@@ -4070,7 +4070,7 @@ function espaceBien(c, idx, t) {
             return `
             <dl class="kv" style="margin-top:4px">
               <dt>${trad('Il te reste')}</dt>
-                <dd>${esc(duree)} <span class="muted">· ${r.mois} ${trad('échéances')}</span></dd>
+                <dd class="phrase">${esc(duree)} <span class="muted">· ${r.mois} ${trad('échéances')}</span></dd>
               <dt>${trad('Dernière échéance')}</dt>
                 <dd>${esc(fmtMoisAn(r.fin))}</dd>
               <dt>${trad('Intérêts restants')}${aide(trad('Ce que le crédit te coûtera encore, hors assurance, si tu le mènes à son terme sans remboursement anticipé.'))}</dt>
@@ -4079,7 +4079,7 @@ function espaceBien(c, idx, t) {
               <dt>${trad('Assurance restante')}</dt>
                 <dd>${fmtEUR0(r.assurance)}</dd>` : ''}
               <dt>${trad('Ta mensualité, ce mois-ci')}${aide(trad('La part de capital monte chaque mois, celle des intérêts baisse : c’est le même montant qui se répartit autrement.'))}</dt>
-                <dd><span class="muted">${trad('capital')}</span> ${fmtEUR(r.capitalDuMois)}
+                <dd class="phrase"><span class="muted">${trad('capital')}</span> ${fmtEUR(r.capitalDuMois)}
                   <span class="muted">· ${trad('intérêts')}</span> ${fmtEUR(r.interetsDuMois)}${
                   r.assuranceDuMois > 0.5 ? ` <span class="muted">· ${trad('assurance')}</span> ${fmtEUR(r.assuranceDuMois)}` : ''}</dd>
             </dl>`;

@@ -2860,10 +2860,32 @@ td .empty, th .empty { background: none; border: none; }
    que 52 px pour le montant, qui se cassait en deux lignes. C'est la valeur
    qui doit prendre ce dont elle a besoin, et l'intitule ce qui reste : lui
    peut se replier, pas un chiffre. */
-.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; font-size: 13px; }
+/* `minmax(min-content, 1fr)` et non `minmax(0, 1fr)` pour la colonne des
+   libelles, et le mot qui change est `0`.
+   Dans une grille, une piste `auto` prend son max-content AVANT que le `fr` ne
+   recoive quoi que ce soit : le `fr` n'a que le reliquat. Avec un minimum de
+   zero, une seule valeur large — « capital 644,79 EUR · interets 190,15 EUR ·
+   assurance 59,50 EUR », 301 px pour 300 disponibles — reduisait donc la colonne
+   des libelles a ZERO, et les cinq intitules de la grille s'imprimaient une
+   lettre par ligne. Quatre n'y etaient pour rien : une valeur affame toute sa
+   grille.
+   Le plancher `min-content` vaut le plus long MOT du libelle, jamais une lettre
+   (c'est `break-word` et non `anywhere` qui coupe, voir le bloc mobile). Il
+   s'adapte donc au contenu au lieu d'etre un nombre ecrit a la main. */
+.kv { display: grid; grid-template-columns: minmax(min-content, 1fr) auto; gap: 6px 14px; font-size: 13px; }
 .kv dt { color: var(--text-secondary); min-width: 0; }
 .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 550;
          white-space: nowrap; }
+/* Une valeur qui est une PHRASE, et non un montant seul, a le droit de se
+   replier. Le `nowrap` ci-dessus existe pour qu'un nombre ne se coupe jamais de
+   sa devise ; applique a « capital 644,79 EUR · interets 190,15 EUR · assurance
+   59,50 EUR », il reclamait 315 px sur les 300 disponibles. La colonne des
+   libelles, en `minmax(0, 1fr)`, tombait alors a ZERO : les cinq intitulés de la
+   grille s'ecrivaient une lettre par ligne, dont quatre qui n'y etaient pour
+   rien. Une seule valeur affame toute sa grille.
+   C'est le meme defaut que `.kv-texte` corrige pour les listes entierement en
+   prose ; celle-ci est mixte, donc la permission se pose sur la valeur. */
+.kv dd.phrase { white-space: normal; }
 /* Variante pour les listes qui portent du texte et non des montants : le
    `nowrap` ci-dessus existe pour qu'un montant ne se coupe jamais entre le
    nombre et sa devise, mais applique a une phrase il elargit la grille jusqu'a
@@ -3327,7 +3349,7 @@ td .empty, th .empty { background: none; border: none; }
 
      `break-word` coupe un mot trop long sans autoriser cette reduction :
      contrairement a `anywhere`, il ne compte pas dans la largeur minimale. */
-  .kv { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; }
+  .kv { grid-template-columns: minmax(min-content, 1fr) auto; gap: 5px 10px; }
   .kv dt { min-width: 0; overflow-wrap: break-word; }
 
   .kv-texte { grid-template-columns: auto minmax(0, 1fr); }

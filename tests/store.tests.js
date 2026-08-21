@@ -15288,6 +15288,67 @@ suite('Le README ne promet que ce qui est mesurable', () => {
   });
 });
 
+suite('Une valeur n’affame pas les libellés de sa grille', () => {
+
+  /* Le defaut, signale sur une capture de telephone : dans la carte
+     « Financement », les cinq intitules s'imprimaient une lettre par ligne.
+
+     La cause n'etait pas dans le libelle mais dans la definition de la grille.
+     Une piste `auto` prend son max-content AVANT que le `fr` ne recoive quoi que
+     ce soit : le `fr` n'a que le reliquat. Avec `minmax(0, 1fr)`, une seule
+     valeur large — « capital 644,79 € · intérêts 190,15 € · assurance 59,50 € »,
+     301 px pour 300 disponibles — reduisait la colonne des libelles a ZERO.
+     Quatre des cinq intitules n'y etaient pour rien : une valeur affame toute sa
+     grille.
+
+     Ce meme defaut avait deja frappe « Nom officiel » sur la fiche d'un titre, et
+     avait ete corrige la par une variante de grille. Le corriger une seconde fois
+     au meme endroit veut dire que la cause n'avait pas ete traitee : c'est le
+     minimum a zero qu'il fallait retirer, pas la valeur qu'il fallait raccourcir. */
+  test('la colonne des libellés porte un plancher', () => {
+    const css = lireSource('assets/styles.css');
+    vrai(css, 'styles.css doit se lire');
+    /* `.kv` seule, pas `.kv-texte` : celle-la met deliberement le minimum a zero
+       sur la colonne des VALEURS, ce qui est l'inverse et qui est juste. */
+    const pistes = [...css.matchAll(/\.kv\s*\{[^}]*?grid-template-columns:\s*([^;]+);/g)]
+      .map(m => m[1].trim());
+    vrai(pistes.length >= 2,
+      'la règle existe au moins deux fois, une fois pour le mobile');
+    const fautives = pistes.filter(p => /minmax\(\s*0\s*,\s*1fr\s*\)\s+auto/.test(p));
+    eq(fautives.length, 0,
+      'colonne de libellés sans plancher : « ' + fautives.join(' » « ')
+      + ' » — une valeur large l’écrasera à zéro et les mots se couperont '
+      + 'lettre par lettre');
+    for (const p of pistes) {
+      vrai(/minmax\(\s*min-content\s*,\s*1fr\s*\)/.test(p),
+        `« ${p} » : le plancher doit être min-content, pas un nombre écrit à la main`);
+    }
+  });
+
+  test('une valeur qui est une phrase a le droit de se replier', () => {
+    /* Le plancher suffit a rendre les libelles lisibles, mais une phrase forcee
+       sur une ligne prendrait encore tout le reste. Les deux vont ensemble : le
+       plancher protege le libelle, la permission laisse la valeur tenir dans ce
+       qui reste. */
+    const css = lireSource('assets/styles.css');
+    vrai(/\.kv dd\.phrase\s*\{[^}]*white-space:\s*normal/.test(css),
+      'une valeur marquée comme phrase doit pouvoir passer à la ligne');
+
+    const src = lireSource('assets/app.js');
+    /* Une valeur qui joint plusieurs montants par un point median est une phrase,
+       pas un montant. Le controle ne regarde que celles-la : un point median
+       decoratif dans une valeur courte ne pose aucun probleme. */
+    const dds = [...src.matchAll(/<dd([^>]*)>((?:(?!<\/dd>)[\s\S]){0,600})<\/dd>/g)];
+    const fautifs = dds
+      .filter(m => (m[2].match(/fmtEUR/g) || []).length >= 2 && m[2].includes('·'))
+      .filter(m => !/class="[^"]*phrase/.test(m[1]))
+      .map(m => m[2].replace(/\s+/g, ' ').slice(0, 50));
+    eq(fautifs.length, 0,
+      'valeur(s) joignant plusieurs montants sans être marquée(s) « phrase » : '
+      + fautifs.join(' | '));
+  });
+});
+
 suite('Une infobulle de graphique reste dans sa carte', () => {
 
   /* Le defaut, signale sur une capture de telephone : en bas des listes
