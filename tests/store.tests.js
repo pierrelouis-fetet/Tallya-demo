@@ -15331,6 +15331,68 @@ suite('La graine de la démonstration parle une seule langue', () => {
   });
 });
 
+suite('Un réglage vit avec les réglages', () => {
+
+  /* Notifications avait son entree de menu, donc sa vue, et un commentaire du
+     code le justifiait ainsi : « une entree, une adresse, un titre ». C'etait
+     prendre le menu pour la cause alors qu'il en etait la consequence. Ce qu'on
+     regle la est un reglage, et le menu portait deja Donnees et Preferences cote
+     a cote — une troisieme ligne pour un interrupteur.
+
+     Preferences dit donc quatre choses, dans cet ordre : apparence, langue,
+     marches, puis ce que la cloche a le droit de dire. L'apparence passe devant
+     la langue parce qu'on la change plus souvent, et que son effet se voit sur
+     la page ou on la pose.
+
+     « Marchés » remplace « Comportement » : ce dernier nommait un mecanisme, pas
+     un sujet. La carte regle le rafraichissement des cours et la place de
+     cotation par defaut — ce sont les marches. Le mot sert aussi de nom a la
+     page Positions ; ici il se lit sous « Préférences », donc « les preferences
+     de marche », et aucune ambiguite ne subsiste. */
+
+  test('les quatre sections se suivent dans l’ordre annoncé', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewSettings'),
+                          src.indexOf('\n}', src.indexOf('function viewSettings')));
+    vrai(vue, 'viewSettings doit être trouvable');
+    const titres = [...vue.matchAll(/<h2>\$\{(?:t|trad)\('([^']+)'\)\}<\/h2>/g)].map(m => m[1]);
+    eq(titres.join(' · '),
+      "settings.appearance · settings.language · settings.behaviour",
+      'l’ordre des trois premières sections');
+    vrai(/\$\{viewNotifs\(\)\}/.test(vue),
+      'la quatrième section, les notifications, ferme la page');
+  });
+
+  test('les notifications n’ont plus de vue ni d’entrée de menu', () => {
+    const src = lireSource('assets/app.js');
+    vrai(!/notifications:\s*\{\s*cle:/.test(src),
+      'la vue notifications a rejoint Préférences, elle ne doit plus exister à part');
+    const html = lireSource('index.html');
+    vrai(!/href="#\/notifications"/.test(html),
+      'le menu ne doit plus porter d’entrée Notifications');
+  });
+
+  test('l’ancienne adresse mène aux préférences', () => {
+    /* Elle est dans des signets, et la cloche n'y mene plus : sans redirection,
+       `#/notifications` retombe sur la vue d'ensemble sans rien dire. */
+    const src = lireSource('assets/app.js');
+    const m = src.match(/notifications:\s*\['(\w+)',\s*'(\w+)',\s*(\w+)\]/);
+    vrai(m, 'la redirection notifications doit exister');
+    eq(m[1], 'settings', 'elle mène aux préférences');
+  });
+
+  test('la cloche garde son bouton et son action', () => {
+    /* Fusionner la page ne doit pas emporter le signal : la cloche de l'en-tete
+       est le chemin court vers ce que l'application a a dire, et elle n'a rien a
+       voir avec l'ecran de reglage. */
+    const html = lireSource('index.html');
+    vrai(/id="btnCloche"/.test(html), 'le bouton de la cloche reste dans l’en-tête');
+    const src = lireSource('assets/app.js');
+    vrai(/'notifications'\(\)\s*\{/.test(src),
+      'son action reste câblée, elle ouvre le panneau et non une page');
+  });
+});
+
 suite('La ligne du temps se lit sur une seule ligne', () => {
 
   /* « Relevés » etait un sous-onglet de Budget, entre deux saisies de depenses.

@@ -277,7 +277,6 @@ const VIEWS = {
   accounts:   { cle: 'accounts',    render: viewAccounts },
   data:       { cle: 'data',        render: viewData },
   settings:   { cle: 'settings',    render: viewSettings },
-  notifications: { cle: 'notifications', render: viewNotifs },
   ficheCompte:{ cle: 'accounts',    render: () => viewFicheCompte(routeParam()?.id) },
   ficheEtab:  { cle: 'accounts',    render: () => viewFicheEtab(routeParam()?.id) },
 };
@@ -286,6 +285,7 @@ const REDIRECTIONS = {
   /* Projection est devenue un onglet de la vue d'ensemble. Son adresse reste
      `#/objective` : l'entree du menu la porte, elle est dans des signets, et
      c'est aussi la route de l'onglet. */
+  notifications: ['settings', 'settings', null],
   objective:   ['overview', 'overview', 'projection'],
   rebalance:   ['positions', 'positions', 'cible'],
   /* `#/patrimoine` est la route de l'onglet, `#/allocation` l'adresse de base
@@ -1054,6 +1054,19 @@ function viewSettings() {
   return `
   <div class="grid g-2">
     <div class="card">
+      <div class="card-head"><h2>${t('settings.appearance')}</h2></div>
+      <div class="modal-champs">
+        <div class="field">
+          <label>${t('settings.theme')}</label>
+          <select data-action-change="set-theme">
+            <option value="dark" ${currentTheme() === 'dark' ? 'selected' : ''}>${t('settings.theme.dark')}</option>
+            <option value="light" ${currentTheme() === 'light' ? 'selected' : ''}>${t('settings.theme.light')}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-head"><h2>${t('settings.language')}</h2></div>
       <div class="modal-champs">
         <div class="field">
@@ -1063,19 +1076,6 @@ function viewSettings() {
               `<option value="${code}" ${code === currentLang() ? 'selected' : ''}>${nom}</option>`).join('')}
           </select>
           <span class="hint">${t('settings.language.hint')}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h2>${t('settings.appearance')}</h2></div>
-      <div class="modal-champs">
-        <div class="field">
-          <label>${t('settings.theme')}</label>
-          <select data-action-change="set-theme">
-            <option value="dark" ${currentTheme() === 'dark' ? 'selected' : ''}>${t('settings.theme.dark')}</option>
-            <option value="light" ${currentTheme() === 'light' ? 'selected' : ''}>${t('settings.theme.light')}</option>
-          </select>
         </div>
       </div>
     </div>
@@ -1104,6 +1104,7 @@ function viewSettings() {
     </div>
   </div>
 
+  ${viewNotifs()}
 `;
 }
 
@@ -1112,7 +1113,7 @@ function viewNotifs() {
   const masquees = notifsMasquees();
   return `
   <div class="card">
-    <div class="card-head"><h2>Notifications</h2>
+    <div class="card-head"><h2>${trad('Notifications & rappels')}</h2>
       <span class="hint">${n.length ? `${n.length} ${trad('en attente')}` : trad('rien à signaler')}</span></div>
     <p class="hint" style="margin:0 0 12px">${trad('La cloche de l’en-tête montre les saisies qui restent à faire et les contrôles de cohérence : ce que l’application sait d’incomplet ou de faux. Une famille éteinte ne compte plus dans sa pastille.')}</p>
     <div class="bascules">
