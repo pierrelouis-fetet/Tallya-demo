@@ -775,8 +775,10 @@ function viewOverview() {
                 >${fmtSigned(p.apports)}</button></dd>` : ''}
           <dt>${trad('Moyenne mensuelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d’un mois sur l’autre, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Le mois en cours reste dehors : il est incomplet."))}
             <span class="sub">${trad('marchés et apports compris')}</span></dt><dd class="${cls(p.average)}">${fmtSigned(p.average)}</dd>
-          <dt>${trad('Épargne que ton budget laisse')}${aide(trad("Revenus moins charges fixes moins tes dépenses moyennes. C’est une prévision tirée de tes saisies, là où la ligne du dessus est une variation constatée. L’écart entre les deux vient des marchés et des apports : Budget le détaille."))}
-            <span class="sub">${trad('prévision, hors marchés')}</span></dt>
+          <dt>${trad('Accumulation patrimoniale théorique')}${aide(trad('Progression théorique de ton patrimoine net : ta capacité d’épargne, plus le capital de crédit remboursé, qui fait baisser ta dette. La ligne du dessus est une variation constatée ; celle-ci est une prévision tirée de tes saisies.'))}
+            <span class="sub">${budgetee.capitalRembourse > 0.005
+              ? `${fmtEUR0(budgetee.investable)} ${trad('de capacité d’épargne')} + ${fmtEUR0(budgetee.capitalRembourse)} ${trad('de capital de crédit remboursé')}`
+              : trad('prévision, hors marchés')}</span></dt>
             <dd><button type="button" class="mois-lien" data-action="goto" data-view="budget" data-anchor=""
                         title="${trad('Voir le rapprochement dans Budget')}">${fmtEUR0(budgetee.theoretical)}</button></dd>
           <dt>${trad('Mois en hausse')}</dt><dd>${p.positive} / ${p.count}</dd>
@@ -1311,12 +1313,17 @@ function viewObjective() {
      `aideTexte` et non `aide` en parametre : le second nom est celui de la
      fonction appelee juste dessous, et le masquer ici aurait rendu le champ
      muet sans qu'aucune erreur ne le signale. */
-  const champ = (label, path, paliers, format, aideTexte, valeur) => `
+  /* `sous` : une ligne d'annotation sous le controle, pour dire d'ou vient une
+     valeur que l'application a calculee. Le « ? » du libelle explique la notion,
+     cette ligne dit la provenance — deux questions differentes, et celle de la
+     provenance ne doit pas demander un survol. */
+  const champ = (label, path, paliers, format, aideTexte, valeur, sous) => `
     <div class="field">
       <label>${esc(trad(label))}${aideTexte ? aide(aideTexte) : ''}</label>
       <select data-path="${path}" data-type="num">
         ${listeChoix(path, paliers, valeur, format)}
       </select>
+      ${sous ? `<span class="hint">${sous}</span>` : ''}
     </div>`;
 
   /* Le meme champ, pour une valeur qui n'est pas un nombre. `champ()` pose
@@ -1414,10 +1421,21 @@ function viewObjective() {
       <div class="modal-champs" style="margin-top:12px">
         ${champ('Versement mensuel', 'meta.projMonthly', paliers(10000, 50),
                 v => `${fmtEUR0(v)} ${trad('/ mois')}`,
-                num(Store.state.meta.projMonthly)
-                  ? `${trad('Ton budget dégage')} ${fmtEUR0(suggestedMonthly())} ${trad('par mois.')}`
-                  : trad('Repris de ton budget ; choisis une valeur pour la figer.'),
-                s.monthly)}
+                trad('Le cash qui reste chaque mois : revenus moins charges fixes '
+                  + 'moins dépenses moyennes. Le capital remboursé sur tes crédits '
+                  + 'n’y est pas : il augmente ton patrimoine, mais il est déjà '
+                  + 'parti avec la mensualité, donc il n’est pas disponible à '
+                  + 'investir.'),
+                s.monthly,
+                /* La condition suit `monthlyAuto` et non la valeur : depuis que
+                   zero veut dire zero, un versement fige a 0 est un choix. */
+                s.monthlyAuto
+                  ? `${trad('Repris de ta capacité d’épargne dans Budget')}
+                     <button type="button" class="mois-lien" data-action="apercu"
+                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>`
+                  : `${trad('Valeur figée. Ta capacité d’épargne est de')} ${fmtEUR0(suggestedMonthly())}
+                     <button type="button" class="mois-lien" data-action="apercu"
+                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>`)}
         ${champText('Affectation des versements', 'meta.projVersementVers', VERSEMENT_VERS,
                 s.versementVers,
                 trad('Ces euros capitalisent au taux de la poche que tu choisis. '
@@ -4617,7 +4635,7 @@ function viewStrategy() {
     </div>
     <div class="card">
       <div class="card-head"><h2>${trad('Réserve tactique')}</h2></div>
-      <div class="field"><label>${trad('Épargne mensuelle (€)')}</label>
+      <div class="field"><label>${trad('Épargne mensuelle (€)')}${aide(trad('Le montant que tu places chaque mois, saisi à la main. Il sert de base au partage ci-dessous, et il est indépendant de la capacité d’épargne que Budget calcule.'))}</label>
         <input type="number" step="50" data-path="strategy.reserveBase" value="${st.reserveBase}"></div>
       <div class="field" style="margin-top:12px"><label>${trad('Part réservée au tactique (%)')}</label>
         <input type="number" step="5" data-path="strategy.reservePct" value="${st.reservePct}"></div>
@@ -5196,12 +5214,12 @@ function viewBudget(section = 'depenses') {
           <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
           <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
           <dt>− ${trad('Dépenses (moy.')} ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
-          <dt><b>${trad('= Épargne investissable')}</b>${aide(trad("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est le cash réellement disponible pour investir, et c'est lui que Projection reprend comme versement mensuel. Une prévision tirée de tes saisies, pas un montant constaté sur un compte."))}</dt><dd><b class="${cls(rec.investable)}">${fmtEUR0(rec.investable)}</b></dd>
+          <dt><b>${trad('= Capacité d’épargne')}</b>${aide(trad('Le montant qui reste chaque mois après tes revenus, tes charges fixes et tes dépenses. C’est le cash réellement disponible : investir, poser sur un livret, ou laisser dormir. Projection le reprend comme versement mensuel. Une prévision tirée de tes saisies, pas un montant constaté sur un compte.'))}</dt><dd><b class="${cls(rec.investable)}">${fmtEUR0(rec.investable)}</b></dd>
           ${rec.capitalRembourse > 0.005 ? `
-          <dt>${trad('+ Capital remboursé')}${aide(trad("La part de tes mensualités de crédit qui rembourse le capital, intérêts et assurance exclus. Elle augmente ton patrimoine net (le bien ne bouge pas, la dette baisse) mais elle n'arrive sur aucun compte : elle est déjà partie avec la mensualité. Projection ne la traite donc jamais comme un versement à investir."))}</dt><dd>+${fmtEUR0(rec.capitalRembourse)}</dd>
-          <dt><b>${trad('= Accumulation patrimoniale')}</b>${aide(trad("Ce que ton patrimoine net gagne chaque mois si tout se passe comme ton budget le prévoit : l'épargne investissable plus le capital remboursé."))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>` : ''}
-          <dt>${trad('Taux d’épargne')}${aide(trad("Part de tes revenus que cette accumulation représente, capital remboursé compris. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
-          <dt>${trad('Objectif d’investissement')}${aide(trad("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent."))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
+          <dt>${trad('+ Capital de crédit remboursé')}${aide(trad("La part de tes mensualités de crédit qui rembourse le capital, intérêts et assurance exclus. Elle augmente ton patrimoine net (le bien ne bouge pas, la dette baisse) mais elle n'arrive sur aucun compte : elle est déjà partie avec la mensualité. Projection ne la traite donc jamais comme un versement à investir."))}</dt><dd>+${fmtEUR0(rec.capitalRembourse)}</dd>
+          <dt><b>${trad('= Accumulation patrimoniale')}</b>${aide(trad('Progression théorique de ton patrimoine net : ta capacité d’épargne, plus le capital de crédit remboursé. Ce n’est pas un montant disponible.'))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>` : ''}
+          <dt>${trad('Taux d’accumulation')}${aide(trad('Part de tes revenus que cette accumulation représente, capital de crédit remboursé compris. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne.'))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+          <dt>${trad('Objectif d’investissement')}${aide(trad('Revenus moins charges fixes moins ton objectif de dépenses. C’est le montant que tu vises, là où la capacité d’épargne est ce que tes dépenses réelles laissent.'))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
         </dl>
         ${rec.realPerMonth != null ? `
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
@@ -9569,6 +9587,28 @@ const APERCUS = {
      Le sous-titre suit : `invested` retire toutes les liquidites, pas seulement
      celles du quotidien, et la carte qui ouvre ce panneau montre l'epargne de
      precaution et le cash a investir comme deux parts distinctes de « Place ». */
+  capaciteEpargne: () => {
+    const rec = savingsReconciliation();
+    return {
+      titre: trad('Capacité d’épargne'),
+      sous: trad('ce que ton budget laisse disponible chaque mois'),
+      total: rec.investable,
+      totalNote: trad('disponibles chaque mois'),
+      html: `<table><tbody>
+        <tr><td class="name">${trad('Revenus fixes')}</td><td class="muted"></td>
+            <td><b>${fmtEUR(rec.income)}</b></td></tr>
+        <tr><td class="name">${trad('− Charges fixes')}</td><td class="muted"></td>
+            <td><b>−${fmtEUR(rec.fixed)}</b></td></tr>
+        <tr><td class="name">${trad('− Dépenses moyennes')}</td><td class="muted"></td>
+            <td><b>−${fmtEUR(rec.spend)}</b></td></tr>
+      </tbody></table>
+      ${rec.capitalRembourse > 0.005 ? `<p class="hint" style="margin:12px 0 0">
+        ${trad('Le capital remboursé sur tes crédits')} (${fmtEUR0(rec.capitalRembourse)}
+        ${trad('par mois')}) ${trad('augmente ton patrimoine, mais il n’est pas compté ici : il est déjà parti avec la mensualité, donc il n’est pas disponible à investir.')}</p>` : ''}`,
+      vue: 'budget', ancre: '', cta: trad('Voir le Budget'),
+    };
+  },
+
   investiTotal: () => ({
     titre: BASES.place.nom, sous: trad('Tout sauf les liquidités'),
     total: nowTotals().invested,

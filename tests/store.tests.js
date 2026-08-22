@@ -15676,6 +15676,106 @@ suite('La graine de la démonstration parle une seule langue', () => {
   });
 });
 
+suite('Deux montants, deux noms, et le lecteur voit lequel', () => {
+
+  /* Le probleme etait entierement de vocabulaire, et il produisait une
+     contradiction apparente : « Épargne que ton budget laisse : 2 298 € » d'un
+     cote, « Versement mensuel : 1 653 € » de l'autre, et rien pour expliquer
+     l'ecart. Les deux chiffres etaient justes. Un seul des deux est du cash. */
+
+  test('« Épargne que ton budget laisse » ne nomme plus l’accumulation', () => {
+    const src = lireSource('assets/app.js');
+    vrai(!/Épargne que ton budget laisse/.test(src),
+      'le libellé fautif a disparu : il appelait « épargne » un montant dont une '
+      + 'partie rembourse une dette');
+    vrai(!/= Épargne investissable/.test(src),
+      '« investissable » cède la place à « capacité d’épargne », un seul nom par notion');
+  });
+
+  test('le rythme d’accumulation porte le bon nom et dit sa composition', () => {
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf("trad('Accumulation patrimoniale théorique')"),
+                            src.indexOf("trad('Mois en hausse')"));
+    vrai(carte, 'la carte doit être trouvable');
+    vrai(/budgetee\.theoretical/.test(src),
+      'la valeur affichée reste l’accumulation : c’est bien ce nombre-là');
+    vrai(/budgetee\.investable[\s\S]{0,200}budgetee\.capitalRembourse/.test(carte),
+      'et la ligne du dessous décompose : capacité d’épargne plus capital remboursé');
+  });
+
+  test('la décomposition affichée fait exactement le total affiché', () => {
+    /* La regle cardinale du projet appliquee a une phrase : les deux montants
+       cites sous le total doivent le composer, sinon la ligne qui explique
+       devient la ligne qui embrouille. */
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 3850 }];
+      s.budget.fixedCharges = [{ id: 'c1', label: 'Loyer', amount: 1209, periode: 'mois' }];
+      s.budget.expenses = [{ month: '2026-01', v: { Courses: 987 }, note: '' }];
+      s.etabs.find(e => e.id === 'e_bien').dettes = [
+        { id: 'd', libelle: 'Prêt', montant: 150000, taux: 2, mensualite: 900, note: '' }];
+    });
+    const rec = savingsReconciliation();
+    pres(rec.investable + rec.capitalRembourse, rec.theoretical,
+      'capacité d’épargne + capital remboursé = accumulation patrimoniale');
+    pres(rec.investable, rec.income - rec.fixed - rec.spend,
+      'et la capacité d’épargne est bien revenus − charges − dépenses');
+    vrai(rec.capitalRembourse > 0.005,
+      'ce fixture porte un crédit amortissable, sinon le test ne prouve rien');
+  });
+
+  test('le versement de Projection nomme sa source, et offre le calcul', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/trad\('Repris de ta capacité d’épargne dans Budget'\)/.test(src),
+      '« Repris de ton budget » ne disait pas lequel des deux chiffres du budget');
+    vrai(/data-apercu="capaciteEpargne"/.test(src),
+      'un accès au détail du calcul existe à côté du champ');
+    vrai(/^  capaciteEpargne: \(\) => \{/m.test(src),
+      'et le panneau est défini');
+  });
+
+  test('le panneau du calcul montre les trois termes, et rien de plus', () => {
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('  capaciteEpargne: () => {'),
+                           src.indexOf("      vue: 'budget', ancre: '', cta: trad('Voir le Budget')"));
+    for (const attendu of ['Revenus fixes', '− Charges fixes', '− Dépenses moyennes']) {
+      vrai(bloc.includes(attendu), `le détail doit porter « ${attendu} »`);
+    }
+    vrai(/total: rec\.investable/.test(bloc),
+      'et son total est la capacité d’épargne, pas l’accumulation');
+    vrai(/rec\.capitalRembourse > 0\.005/.test(bloc),
+      'la note sur le capital remboursé ne s’affiche que s’il y en a');
+  });
+
+  test('la progression constatée reste distincte des deux autres', () => {
+    /* Trois notions, trois lignes, et aucune fusion : la moyenne observee vient
+       des releves, l'accumulation du budget, la capacite d'epargne du budget
+       aussi mais sans la dette. Les confondre ferait passer un mouvement de
+       marche pour un effort d'epargne. */
+    const src = lireSource('assets/app.js');
+    vrai(/trad\('Moyenne mensuelle du patrimoine'\)/.test(src),
+      'la variation constatée garde son propre libellé');
+    vrai(/marchés et apports compris/.test(src),
+      'et dit ce qu’elle contient');
+  });
+
+  test('aucun libellé n’appelle « épargne » un montant qui rembourse une dette', () => {
+    /* Le motif est serre : on cherche les libelles qui affichent
+       `rec.theoretical` ou `budgetee.theoretical` et le mot « épargne » dans le
+       meme fragment. Un controle plus large crierait sur « épargne de
+       précaution », qui est une autre notion et un nom juste. */
+    const src = lireSource('assets/app.js');
+    const fautes = [];
+    for (const m of src.matchAll(/<dt>([\s\S]{0,400}?)<\/dt><dd>([\s\S]{0,120}?)<\/dd>/g)) {
+      const [, libelle, valeur] = m;
+      if (!/\.theoretical/.test(valeur)) continue;
+      const nom = (libelle.match(/trad\('([^']+)'\)/) || [])[1] || '';
+      if (/pargne/.test(nom) && !/[Aa]ccumulation/.test(nom)) fautes.push(nom);
+    }
+    eq(fautes.join(' | '), '',
+      'un montant qui contient du capital remboursé ne s’appelle pas « épargne »');
+  });
+});
+
 suite('Épargne investissable et versement suggéré', () => {
 
   /* Un credit dont l'amortissement est calculable : capital, taux, mensualite.
