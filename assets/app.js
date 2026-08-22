@@ -970,6 +970,23 @@ function aide(texte) {
                 aria-label="Explication" tabindex="0">?</span>`;
 }
 
+/* Deux cas, et l'ordre compte : le texte nu d'abord, puis les intitules en gras.
+   Le premier motif exclut « > » de son mot, donc il ne touche pas aux seconds ;
+   l'inverse ferait envelopper deux fois. Le gras se traite a part parce qu'un
+   groupe insecable ne peut pas ouvrir dedans et fermer dehors : il se pose donc a
+   l'interieur du `<b>`, avec le badge, ce qui reste un emboitement valide.
+
+   Des litterales, et non `new RegExp` depuis une chaine : celle-la demande trois
+   niveaux d'echappement — le fichier, la chaine, la regex — et un niveau perdu
+   donne `[^s<>]`, une classe qui exclut la lettre « s ». Elle ne matche rien
+   d'utile et ne leve aucune erreur. */
+const MOTIF_AIDE_COLLEE = /([^\s<>]+)(<span class="aide"[^>]*>\?<\/span>)/g;
+const MOTIF_AIDE_GRAS = /<b>([^<]*?)(\S+)<\/b>(<span class="aide"[^>]*>\?<\/span>)/g;
+const collerAides = html => String(html)
+  .replace(MOTIF_AIDE_COLLEE, (m, mot, badge) => `<span class="aide-collee">${mot}${badge}</span>`)
+  .replace(MOTIF_AIDE_GRAS, (m, debut, mot, badge) =>
+    `<b>${debut}<span class="aide-collee">${mot}${badge}</span></b>`);
+
 /* La version du code en cours d'execution, lue sur la balise du script.
 
    Elle se **derive**, elle ne se recopie pas : la seule source est le `?v=` que
@@ -10125,7 +10142,7 @@ function openApercu(cle, arg) {
      juste en dessous — et le sous-titre, lui, l'est toujours. */
   $('#modalSub').innerHTML = escMontant(a.sous) + (a.sousAction || '');
   $('#modalSub').classList.toggle('avec-action', !!a.sousAction);
-  $('#modalBody').innerHTML = `
+  $('#modalBody').innerHTML = collerAides(`
     <div class="modal-total"><b>${a.totalTexte || fmtEUR(a.total)}</b>
       <span>${escMontant(noteApercu(a))}</span></div>
 
@@ -10144,7 +10161,7 @@ function openApercu(cle, arg) {
       <td>${l.champ
         ? `<input type="number" step="any" data-path="${esc(l.champ)}" value="${getPath(l.champ) ?? 0}" class="champ-inline">`
         : `<b>${fmtEUR(l.valeur)}</b>`}</td>
-    </tr>`).join('')}</tbody></table>`}`;
+    </tr>`).join('')}</tbody></table>`}`);
   /* Une fenetre ou l'on saisit porte « Enregistrer », et rien n'entre dans
      l'etat avant le clic.
 
@@ -10403,7 +10420,7 @@ function render() {
     return i >= 0 ? i : null;
   })();
 
-  host.innerHTML = v.render();
+  host.innerHTML = collerAides(v.render());
 
   if (lavisAvant !== null) {
     const seg = $('.sous-onglets .segmented');

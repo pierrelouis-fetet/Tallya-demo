@@ -15742,6 +15742,61 @@ suite('La graine de la démonstration parle une seule langue', () => {
   });
 });
 
+suite('Le « ? » d’une aide ne tombe jamais seul sur une ligne', () => {
+
+  /* Mesure a l'ecran : sur une colonne de 208 px, « Moyenne mensuelle du
+     patrimoine » tient sur une ligne et son badge passe a la suivante, seul.
+     Quinze largeurs de colonne produisaient le cas sur les deux seuls intitules
+     de cette carte. Une ligne entiere pour un signe de quinze pixels, et ca se
+     lit comme un defaut d'affichage.
+
+     Ni une espace insecable ni un liant (U+2060) n'y changent rien : le badge est
+     une boite atomique, et le navigateur coupe devant elle parce qu'elle ne tient
+     pas, non parce qu'une espace le lui permet. Ce qui marche est de rendre le
+     dernier mot et le badge indissociables.
+
+     Apres correction : 36 badges sur onze vues, tous colles, aucun orphelin,
+     aucun debordement horizontal a 375 px. */
+
+  test('le collage s’applique à la sortie du rendu, pas à chaque appel', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/host\.innerHTML = collerAides\(v\.render\(\)\)/.test(src),
+      'les vues passent par le collage : un intitulé ajouté demain en hérite');
+    vrai(/\$\('#modalBody'\)\.innerHTML = collerAides\(/.test(src),
+      'et les panneaux d’aperçu aussi, qui portent des intitulés eux aussi');
+    /* 81 appels a aide() : les envelopper un a un aurait laisse passer le 82e. */
+    vrai((src.match(/\$\{aide\(/g) || []).length > 40,
+      'le nombre d’appels justifie de traiter la sortie plutôt que les appels');
+  });
+
+  test('les deux motifs sont des littérales, jamais construites depuis une chaîne', () => {
+    /* `new RegExp('([^\\s<>]+)')` demande trois niveaux d'echappement : le
+       fichier, la chaine JavaScript, la regex. Un niveau perdu donne `[^s<>]`,
+       une classe qui exclut la lettre « s » -- elle ne matche rien d'utile et ne
+       leve aucune erreur. C'est arrive, et rien ne l'a signale sauf la mesure a
+       l'ecran : zero badge colle sur trente-six. */
+    const src = lireSource('assets/app.js');
+    vrai(/const MOTIF_AIDE_COLLEE = \/\(\[\^\\s<>\]\+\)/.test(src),
+      'le motif du texte nu est une littérale');
+    vrai(/const MOTIF_AIDE_GRAS = \/<b>\(\[\^<\]\*\?\)\(\\S\+\)/.test(src),
+      'celui des intitulés en gras aussi');
+    vrai(!/new RegExp\([^)]*aide/.test(src),
+      'et aucun des deux ne se construit depuis une chaîne');
+  });
+
+  test('le groupe insécable reste un emboîtement valide', () => {
+    /* Un groupe qui ouvrirait dans le `<b>` et fermerait dehors serait du
+       balisage casse, repare differemment selon le navigateur. Le badge entre
+       donc DANS le gras, avec le dernier mot. */
+    const src = lireSource('assets/app.js');
+    vrai(/`<b>\$\{debut\}<span class="aide-collee">\$\{mot\}\$\{badge\}<\/span><\/b>`/.test(src),
+      'le groupe vit à l’intérieur du <b>, pas à cheval sur lui');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.aide-collee \{[^}]*white-space: nowrap/.test(css),
+      'et la classe fait ce qu’elle promet');
+  });
+});
+
 suite('Un réglage montre ce qu’il commande', () => {
 
   /* Scenario « Dynamique », 8 % ecrits sur son pave, et « Rendement des actifs
