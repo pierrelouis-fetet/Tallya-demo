@@ -254,7 +254,7 @@ function blankState() {
     version: 1,
     meta: { objective: 0, objectiveYear: an, expectedInflow: 0, modelCapital: 100000,
             autoRefresh: true, preferredExchange: 'auto',
-            projMonthly: 0, projScenario: 'dynamique', projInflation: 2,
+            projScenario: 'dynamique', projInflation: 2,
             projTarget: 0, projHorizon: 20 },
     quotes: { lastRun: null, fx: {}, changes: [] },
     sales: [],
@@ -289,7 +289,9 @@ const SEED = {
     modelCapital: 100000,   // base des modèles d'allocation
     autoRefresh: false,
     preferredExchange: 'auto', // 'auto' = on suit la place de référence du titre
-    projMonthly: 0,      // 0 = reprend l'épargne dégagée par le budget
+    /* Pas de `projMonthly` : la clef absente veut dire « reprends l'épargne que
+       dégage le budget ». Zéro voulait dire ça avant, et zéro veut maintenant
+       dire zéro — c'est une réponse, pas une absence de réponse. */
     /* Un scénario nommé plutôt que des taux posés à la main. Poser `projRate`
        ici ferait passer tout premier lancement en « personnalisé » : les trois
        pavés s'afficheraient éteints, et personne ne verrait le réglage qui

@@ -15676,6 +15676,480 @@ suite('La graine de la démonstration parle une seule langue', () => {
   });
 });
 
+suite('Épargne investissable et versement suggéré', () => {
+
+  /* Un credit dont l'amortissement est calculable : capital, taux, mensualite.
+     Sans les trois, l'application ne separe pas capital et interets et ne
+     devine pas — c'est la regle de `capitalRembourseParMois()`. */
+  const avecCredit = (montant = 100000, taux = 2, mens = 1000) => Fixture.poser(s => {
+    s.budget.income = [{ label: 'Salaire', amount: 3850 }];
+    s.budget.fixedCharges = [{ id: 'c1', label: 'Loyer', amount: 1197, periode: 'mois' }];
+    s.budget.expenses = [{ month: '2026-01', v: { Courses: 1000 }, note: '' }];
+    s.etabs.find(e => e.id === 'e_bien').dettes = [
+      { id: 'd_pret', libelle: 'Prêt', montant, taux, mensualite: mens, note: '' }];
+  });
+
+  test('le capital remboursé n’est jamais proposé comme versement à investir', () => {
+    /* Le defaut central, mesure sur la demonstration : 645 EUR par mois de
+       capital rembourse venaient gonfler le versement suggere, donc
+       capitalisaient a 6 % l'an sur les marches. Cet argent est deja parti avec
+       la mensualite ; il n'arrive sur aucun compte. */
+    avecCredit();
+    const rec = savingsReconciliation();
+    vrai(rec.capitalRembourse > 800,
+      `le crédit doit rembourser du capital chaque mois (${Math.round(rec.capitalRembourse)} €)`);
+    pres(rec.investable, rec.income - rec.fixed - rec.spend,
+      'l’épargne investissable est le cash qui reste, et rien d’autre');
+    pres(rec.theoretical, rec.investable + rec.capitalRembourse,
+      'l’accumulation patrimoniale y ajoute le capital remboursé');
+    eq(suggestedMonthly(), Math.round(rec.investable),
+      'et c’est l’épargne investissable que Projection reprend');
+    vrai(suggestedMonthly() < Math.round(rec.theoretical),
+      'strictement moins que l’accumulation : c’est tout l’objet de la correction');
+  });
+
+  test('sans crédit amortissable, les deux grandeurs se confondent', () => {
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 3000 }];
+      s.etabs.find(e => e.id === 'e_bien').dettes = [
+        /* Sans taux : l'application ne sait pas separer capital et interets. */
+        { id: 'd', libelle: 'Prêt', montant: 100000, note: '' }];
+    });
+    const rec = savingsReconciliation();
+    eq(rec.capitalRembourse, 0, 'une dette sans taux ne rembourse rien de calculable');
+    pres(rec.theoretical, rec.investable, 'les deux grandeurs se rejoignent alors');
+  });
+
+  test('le versement suggéré nourrit la poche du marché, capital exclu', () => {
+    /* Le test de non-regression : on suit l'argent jusqu'au moteur. Ce qui entre
+       dans la poche du marche chaque mois doit etre l'epargne investissable,
+       jamais l'accumulation. */
+    avecCredit();
+    Fixture.poser(s => {
+      delete s.meta.projMonthly;                 // versement automatique
+      s.meta.projScenario = 'central';
+      s.meta.projVersementVers = 'marche';
+      s.etabs.find(e => e.id === 'e_bien').dettes = [
+        { id: 'd_pret', libelle: 'Prêt', montant: 100000, taux: 2, mensualite: 1000, note: '' }];
+      s.budget.income = [{ label: 'Salaire', amount: 3850 }];
+      s.budget.fixedCharges = [{ id: 'c1', label: 'Loyer', amount: 1197, periode: 'mois' }];
+      s.budget.expenses = [{ month: '2026-01', v: { Courses: 1000 }, note: '' }];
+    });
+    const s = projectionSettings();
+    const rec = savingsReconciliation();
+    eq(s.monthly, Math.round(rec.investable),
+      'le versement de la projection est l’épargne investissable');
+    vrai(s.monthly < Math.round(rec.theoretical),
+      'et non l’accumulation, capital remboursé compris');
+  });
+
+  test('le capital remboursé entre quand même dans le patrimoine, par la dette', () => {
+    /* Il n'est pas perdu : il ne capitalise pas, mais il fait monter le
+       patrimoine net puisque la dette baisse. La projection le porte donc, sur
+       la part plate, et jamais comme un gain. */
+    /* Un seul `Fixture.poser` : il repart du fixture vierge a chaque appel, donc
+       un second effacerait la dette pose par le premier. */
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 3850 }];
+      s.etabs.find(e => e.id === 'e_bien').dettes = [
+        { id: 'd_pret', libelle: 'Prêt', montant: 100000, taux: 2, mensualite: 1000, note: '' }];
+      s.meta.projScenario = 'central';
+      delete s.meta.projMonthly;
+    });
+    const p = capitalisation({ years: 5 });
+    const cinq = p.points[5];
+    vrai(cinq.capitalRendu > 40000,
+      `cinq ans de mensualités remboursent du capital (${Math.round(cinq.capitalRendu)} €)`);
+    pres(cinq.plat, p.plat + cinq.capitalRendu,
+      'la part plate monte exactement du capital remboursé');
+    pres(cinq.total, cinq.contributed + cinq.gains,
+      'et le total égale toujours versé plus gains');
+  });
+});
+
+suite('Zéro euro par mois est une réponse', () => {
+
+  test('choisir 0 €/mois donne vraiment une courbe plate', () => {
+    /* `num(m.projMonthly) || suggestedMonthly()` traitait zero comme une
+       absence : le menu offrait « 0 € / mois », et le choisir affichait la
+       suggestion du budget a la place. Un reglage qui refuse la valeur qu'il
+       propose. */
+    Fixture.poser(s => {
+      s.meta.projScenario = 'central';
+      s.meta.projMonthly = 0;
+      s.meta.projMonthlyZeroLu = true;      // la migration a deja passe
+    });
+    eq(projectionSettings().monthly, 0, 'zéro veut dire zéro');
+    eq(projectionSettings().monthlyAuto, false, 'et c’est un choix, pas un défaut');
+    const p = capitalisation({ years: 10 });
+    pres(p.points[10].contributed, p.points[0].contributed,
+      'aucun euro versé en dix ans : seuls les gains bougent');
+  });
+
+  test('la clef absente demande la suggestion du budget', () => {
+    Fixture.poser(s => { delete s.meta.projMonthly; s.meta.projScenario = 'central'; });
+    const s = projectionSettings();
+    eq(s.monthlyAuto, true, 'aucune valeur réglée : le budget décide');
+    eq(s.monthly, suggestedMonthly(), 'et c’est exactement la suggestion');
+  });
+
+  test('un montant réglé est respecté', () => {
+    Fixture.poser(s => { s.meta.projMonthly = 500; s.meta.projScenario = 'central'; });
+    eq(projectionSettings().monthly, 500, 'cinq cents euros, ni plus ni moins');
+    eq(projectionSettings().monthlyAuto, false, 'et le bouton du budget reste offert');
+  });
+
+  test('la migration retire l’ancien zéro, une fois et une seule', () => {
+    /* Le zero de la graine voulait dire « automatique ». Le garder aurait aplati
+       la courbe de tous les etats existants sans que personne l'ait demande.
+       La migration l'efface — mais une seule fois, sinon un zero choisi
+       volontairement serait effacé au chargement suivant. */
+    Fixture.poser(s => { s.meta.projMonthly = 0; delete s.meta.projMonthlyZeroLu; });
+    Store.migrate();
+    eq(Store.state.meta.projMonthly, undefined,
+      'l’ancien sentinelle disparaît : la clef absente veut dire automatique');
+    eq(Store.state.meta.projMonthlyZeroLu, true, 'et le passage est noté');
+
+    Store.state.meta.projMonthly = 0;          // un choix, cette fois
+    Store.migrate();
+    eq(Store.state.meta.projMonthly, 0, 'un zéro choisi après la migration survit');
+    Store.migrate();
+    eq(Store.state.meta.projMonthly, 0, 'et deux passes donnent le même état');
+  });
+
+  test('la graine ne pose plus de zéro', () => {
+    const src = lireSource('assets/seed.js');
+    vrai(!/projMonthly: 0/.test(src),
+      'le sentinelle a quitté la graine : un état neuf n’a pas la clef du tout');
+  });
+});
+
+suite('Le moteur de projection, chiffre par chiffre', () => {
+
+  /* Une configuration explicite : le noyau ne lit aucun etat, donc un test peut
+     poser exactement les quatre poches, les quatre taux et la dette qu'il veut.
+     C'est la seule facon de verifier une formule sans qu'un fixture s'en mele. */
+  const cfg = (o = {}) => Object.assign({
+    marche: 0, nonCote: 0, garanti: 0, liquidites: 0, plat: 0,
+    rate: 0, rateNonCote: 0, rateGaranti: 0,
+    monthly: 0, inflation: 0, target: 0, mois: 120, dettes: [],
+    fractions: { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 },
+  }, o);
+  const final = o => moteurProjection(cfg(o)).final;
+
+  // --- la conversion du taux ------------------------------------------
+  test('un taux annuel devient un taux mensuel, et douze mois le redonnent', () => {
+    /* La convention du projet : le taux affiche est un taux ANNUEL EFFECTIF, et
+       le taux mensuel en est la racine douzieme. Douze mois composes redonnent
+       donc exactement le taux annuel. Un taux nominal divise par douze aurait
+       donne 6,17 % l'an pour 6 % affiches. */
+    const un = final({ marche: 1000, rate: 6, mois: 12 });
+    pres(un.total, 1060, 'mille euros a 6 % font mille soixante au bout d’un an');
+    const dix = final({ marche: 1000, rate: 6, mois: 120 });
+    pres(dix.total, 1000 * Math.pow(1.06, 10),
+      'et la composition sur dix ans suit exactement (1,06)^10');
+  });
+
+  test('sans versement et sans rendement, rien ne bouge', () => {
+    const r = final({ marche: 50000, nonCote: 10000, garanti: 20000,
+                      liquidites: 15000, plat: 60000, mois: 240 });
+    pres(r.total, 155000, 'vingt ans a zero pour cent laissent le total intact');
+    pres(r.gains, 0, 'et aucun gain n’apparaît');
+  });
+
+  // --- la convention du versement -------------------------------------
+  test('le versement arrive en FIN de mois, il ne produit rien ce mois-là', () => {
+    /* La convention se lit dans un seul mois : un versement de fin de mois ne
+       touche pas d'interet le mois ou il tombe. Debut de mois donnerait
+       (P + M)(1 + rm), soit 5,89 EUR de plus ici. La difference est petite sur
+       un mois et vaut des milliers d'euros sur vingt ans. */
+    const rm = Math.pow(1.06, 1 / 12) - 1;
+    const r = final({ marche: 10000, rate: 6, monthly: 1000, mois: 1 });
+    pres(r.total, 10000 * (1 + rm) + 1000,
+      'un mois : le capital capitalise, puis le versement s’ajoute');
+    vrai(Math.abs(r.total - (10000 + 1000) * (1 + rm)) > 4,
+      'et ce n’est pas la convention de début de mois');
+  });
+
+  test('sans rendement, le versement s’accumule à l’euro près', () => {
+    const r = final({ monthly: 500, rate: 0, mois: 120 });
+    pres(r.total, 500 * 120, 'cinq cents euros pendant cent vingt mois font soixante mille');
+    pres(r.gains, 0, 'et pas un centime de gain');
+  });
+
+  test('la valeur future d’une annuité ordinaire, terme à terme', () => {
+    /* Le moteur boucle ; la formule fermee sert de temoin. Elles doivent se
+       rejoindre au centime, sinon l'une des deux se trompe :
+       P(1+r)^n + M·((1+r)^n − 1)/r, avec r mensuel et n en mois. */
+    const rm = Math.pow(1.06, 1 / 12) - 1, n = 240;
+    const attendu = 20000 * Math.pow(1 + rm, n)
+                  + 1000 * ((Math.pow(1 + rm, n) - 1) / rm);
+    const r = final({ marche: 20000, rate: 6, monthly: 1000, mois: n });
+    pres(r.total, attendu, 'le moteur et la formule fermée disent le même nombre');
+  });
+
+  // --- les classes d'actifs -------------------------------------------
+  test('chaque poche capitalise à son propre taux, et le total les somme', () => {
+    const r = final({ marche: 20000, nonCote: 10000, garanti: 20000, liquidites: 15000,
+                      rate: 6, rateNonCote: 0, rateGaranti: 2.5, mois: 120 });
+    const attendu = 20000 * Math.pow(1.06, 10) + 10000
+                  + 20000 * Math.pow(1.025, 10) + 15000;
+    pres(r.total, attendu,
+      'les 65 000 € ne progressent pas tous à 6 % : chacun suit sa poche');
+    pres(r.gainsNonCote, 0, 'le non coté à 0 % ne produit rien');
+    pres(r.gainsLiquidites, 0, 'les liquidités non plus');
+    vrai(r.gainsGaranti > 0 && r.gainsGaranti < r.gainsMarche,
+      'le garanti rapporte, moins que le marché');
+    pres(r.total, r.contributed + r.gains, 'et le total égale versé plus gains');
+  });
+
+  test('dix mille euros de non coté à 0 % valent dix mille euros dans dix ans', () => {
+    /* Zero ne veut pas dire « ca ne rapporte rien » mais « l'application ne
+       suppose aucune revalorisation ». La valeur doit donc rester exactement
+       constante, et non deriver d'un arrondi a chaque mois. */
+    const r = final({ nonCote: 10000, rate: 8, mois: 120,
+                      fractions: { marche: 0, nonCote: 1, garanti: 0, liquidites: 0 } });
+    pres(r.total, 10000, 'inchangé, quel que soit le taux du marché à côté');
+  });
+
+  test('un versement sur les liquidités ne rapporte rien, et reste compté', () => {
+    const r = final({ liquidites: 5000, monthly: 300, rate: 8, mois: 120,
+                      fractions: { marche: 0, nonCote: 0, garanti: 0, liquidites: 1 } });
+    pres(r.total, 5000 + 300 * 120, 'un livret non déclaré rémunéré ne rapporte rien');
+    pres(r.gains, 0, 'et le versement n’est pas un gain');
+  });
+
+  // --- l'inflation ----------------------------------------------------
+  test('l’inflation se retire une fois, sur le total, au nombre exact de mois', () => {
+    const r = final({ marche: 100000, rate: 0, inflation: 2, mois: 120 });
+    pres(r.total, 100000, 'le nominal ne bouge pas sans rendement');
+    pres(r.real, 100000 / Math.pow(1.02, 10),
+      'et le réel vaut le nominal déflaté de dix ans d’inflation');
+    vrai(r.real < r.total, 'une inflation positive rend le réel plus petit');
+  });
+
+  test('sans inflation, réel et nominal se confondent', () => {
+    const r = final({ marche: 100000, rate: 6, inflation: 0, mois: 120 });
+    pres(r.real, r.total, 'zéro pour cent d’inflation ne déflate rien');
+  });
+
+  // --- la dette qui s'amortit -----------------------------------------
+  test('le capital remboursé augmente le patrimoine, sans jamais capitaliser', () => {
+    /* Un credit de 100 000 EUR a 2 % sur une mensualite de 1 000 EUR. Chaque
+       mois, la part de capital augmente le patrimoine net : le bien ne bouge
+       pas, la dette baisse. Cet argent n'arrive sur aucun compte, donc il ne
+       capitalise a aucun taux — et il compte comme verse, jamais comme un gain. */
+    const dette = { reste: 100000, taux: 0.02 / 12, mens: 1000 };
+    const r = moteurProjection(cfg({ plat: 50000, rate: 6, mois: 12,
+                                     dettes: [dette] })).final;
+    vrai(r.capitalRendu > 9000 && r.capitalRendu < 11000,
+      `douze mensualités de 1 000 € remboursent près de 10 000 € de capital (${Math.round(r.capitalRendu)})`);
+    pres(r.total, 50000 + r.capitalRendu,
+      'le patrimoine plat monte exactement du capital remboursé');
+    pres(r.gains, 0, 'et pas d’un centime de gain : rien n’a été placé');
+    pres(r.total, r.contributed + r.gains, 'le total reste la somme de ses parts');
+  });
+
+  test('une dette qui s’éteint arrête de rembourser', () => {
+    const dette = { reste: 5000, taux: 0.02 / 12, mens: 1000 };
+    const r = moteurProjection(cfg({ plat: 0, mois: 120, dettes: [dette] })).final;
+    pres(r.capitalRendu, 5000,
+      'le capital remboursé s’arrête au capital dû, il ne le dépasse jamais');
+  });
+
+  test('à rendement nul, plus de versement ne peut pas faire moins', () => {
+    /* Un invariant simple et qui a deja ete faux ailleurs : la monotonie. */
+    let precedent = -Infinity;
+    for (const m of [0, 100, 500, 1000, 5000]) {
+      const total = final({ marche: 30000, rate: 6, monthly: m, mois: 240 }).total;
+      vrai(total >= precedent, `verser ${m} € ne peut pas donner moins que le palier précédent`);
+      precedent = total;
+    }
+  });
+
+  test('monter le taux d’une poche pleine ne peut pas la faire baisser', () => {
+    let precedent = -Infinity;
+    for (const taux of [0, 2, 4, 6, 8, 12]) {
+      const total = final({ marche: 30000, rate: taux, monthly: 200, mois: 240 }).total;
+      vrai(total >= precedent, `un rendement de ${taux} % ne peut pas donner moins`);
+      precedent = total;
+    }
+  });
+
+  test('le total égale la somme de ses parts à chaque point, dans tous les cas', () => {
+    const cas = [
+      { marche: 20000, nonCote: 10000, garanti: 20000, liquidites: 15000, plat: 60000,
+        rate: 6, rateGaranti: 2.5, monthly: 500, mois: 240 },
+      { marche: 1000, monthly: 0, rate: 8, mois: 120 },
+      { liquidites: 1000, monthly: 700, mois: 120,
+        fractions: { marche: 0, nonCote: 0, garanti: 0, liquidites: 1 } },
+      { plat: 20000, mois: 120, dettes: [{ reste: 80000, taux: 0.03 / 12, mens: 900 }] },
+    ];
+    for (const [i, o] of cas.entries()) {
+      for (const pt of moteurProjection(cfg(o)).points) {
+        pres(pt.total, pt.contributed + pt.gains,
+          `cas ${i}, année ${pt.year} : le total doit égaler versé plus gains`);
+      }
+    }
+  });
+});
+
+suite('La cible se compare au patrimoine, et se date au mois', () => {
+
+  const cfg = (o = {}) => Object.assign({
+    marche: 0, nonCote: 0, garanti: 0, liquidites: 0, plat: 0,
+    rate: 0, rateNonCote: 0, rateGaranti: 0,
+    monthly: 0, inflation: 0, target: 0, mois: 240, dettes: [],
+    fractions: { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 },
+  }, o);
+
+  test('une cible déjà atteinte aujourd’hui se dit atteinte, pas absente', () => {
+    /* Elle rendait `null`, que l'ecran lisait « non atteinte » : quelqu'un a
+       600 000 EUR avec une cible a 500 000 lisait que sa cible n'etait pas
+       atteinte. C'est le pire genre de faux — un chiffre juste, une phrase qui
+       le contredit. */
+    const r = moteurProjection(cfg({ marche: 600000, target: 500000 }));
+    vrai(r.atteinte, 'la cible atteinte ne rend plus un vide');
+    vrai(r.atteinte.dejaAtteinte, 'et elle se declare comme déjà franchie');
+    eq(r.atteinte.monthsFromNow, 0, 'zéro mois : c’est aujourd’hui');
+    eq(r.atteinte.year, new Date().getFullYear(), 'et l’année est celle du jour');
+  });
+
+  test('une cible atteinte exactement au départ compte comme atteinte', () => {
+    const r = moteurProjection(cfg({ marche: 500000, target: 500000 }));
+    vrai(r.atteinte && r.atteinte.dejaAtteinte, 'l’égalité suffit, elle n’exige pas un euro de plus');
+  });
+
+  test('une cible franchie dans quelques mois tombe sur le bon mois du calendrier', () => {
+    /* L'ancien calcul interpolait entre deux points ANNUELS et ajoutait les mois
+       a l'annee du point precedent : en aout 2026, une cible franchie six mois
+       plus tard s'annoncait « 2026 (+6 mois) » au lieu de fevrier 2027. Le mois
+       de depart est desormais le vrai mois courant. */
+    const attendu = new Date();
+    attendu.setMonth(attendu.getMonth() + 6);
+    const r = moteurProjection(cfg({ marche: 0, monthly: 1000, rate: 0, target: 6000 }));
+    eq(r.atteinte.monthsFromNow, 6, 'six versements de mille euros font six mille');
+    eq(r.atteinte.year, attendu.getFullYear(), 'l’année est celle du sixième mois à venir');
+    eq(r.atteinte.month, attendu.getMonth() + 1, 'et le mois aussi');
+  });
+
+  test('une cible franchie dans plusieurs années donne l’année juste', () => {
+    const r = moteurProjection(cfg({ marche: 0, monthly: 1000, rate: 0, target: 120000 }));
+    eq(r.atteinte.monthsFromNow, 120, 'cent vingt versements');
+    const attendu = new Date();
+    attendu.setMonth(attendu.getMonth() + 120);
+    eq(r.atteinte.year, attendu.getFullYear(), 'soit dix ans plus tard, au mois près');
+    pres(r.atteinte.yearsFromNow, 10, 'et dix ans de durée');
+  });
+
+  test('une cible hors de portée sur l’horizon ne s’invente pas', () => {
+    const r = moteurProjection(cfg({ marche: 1000, monthly: 10, rate: 0, mois: 120,
+                                     target: 1000000 }));
+    eq(r.atteinte, null, 'aucune date : la cible n’est pas atteinte dans l’horizon');
+  });
+
+  test('sans cible, il n’y a rien à annoncer', () => {
+    const r = moteurProjection(cfg({ marche: 100000, target: 0 }));
+    eq(r.atteinte, null, 'aucune cible posée, aucune date');
+  });
+
+  test('la cible se mesure sur le nominal, patrimoine plat compris', () => {
+    /* La convention de l'application : une cible de 500 000 EUR est une cible en
+       euros COURANTS, comparee au total nominal — et sur le patrimoine entier,
+       immobilier compris, puisque c'est ce que la courbe affiche. Un test la
+       fixe, faute de quoi elle deriverait en silence. */
+    const r = moteurProjection(cfg({ marche: 100000, plat: 400000, target: 500000,
+                                     inflation: 5 }));
+    vrai(r.atteinte && r.atteinte.dejaAtteinte,
+      'cent mille de placements et quatre cents mille de bien atteignent la cible');
+    const s = moteurProjection(cfg({ marche: 100000, plat: 400000, target: 500000,
+                                     inflation: 5, mois: 12 })).final;
+    vrai(s.real < s.total, 'le réel existe à côté, mais ce n’est pas lui qui décide');
+  });
+});
+
+suite('Les leviers d’une cible passent par le moteur, pas par une formule à côté', () => {
+
+  test('le versement recommandé atteint vraiment la cible', () => {
+    /* La propriete qui compte, et la seule qui garantissait quelque chose :
+       reinjecter la recommandation dans le moteur doit franchir la cible. La
+       formule fermee d'avant faisait progresser TOUT le patrimoine financier au
+       taux des actifs de marche — non cote et liquidites compris — donc elle
+       annoncait un versement trop faible, et la phrase contredisait la courbe
+       affichee juste au-dessus. */
+    Fixture.poser(s => {
+      s.meta.projScenario = 'central';
+      s.meta.projMonthly = 200;
+      s.meta.projTarget = 400000;
+      s.meta.projVersementVers = 'marche';
+    });
+    const req = targetRequirements({ target: 400000, years: 20 });
+    vrai(req.monthly > 0, `un versement doit être proposé (${req.monthly})`);
+    const avec = capitalisation({ years: 20, monthly: req.monthly });
+    vrai(avec.points[20].total >= 400000 - 1,
+      `avec ${Math.round(req.monthly)} € par mois, la cible doit être atteinte `
+      + `(${Math.round(avec.points[20].total)} contre 400 000)`);
+    /* Et pas beaucoup plus : une dichotomie qui converge doit serrer la borne. */
+    const sans = capitalisation({ years: 20, monthly: req.monthly - 20 });
+    vrai(sans.points[20].total < 400000,
+      'vingt euros de moins ne doivent plus suffire : la valeur est bien la borne');
+  });
+
+  test('le rendement recommandé atteint vraiment la cible', () => {
+    Fixture.poser(s => {
+      s.meta.projScenario = 'central';
+      s.meta.projMonthly = 300;
+      s.meta.projTarget = 400000;
+    });
+    const req = targetRequirements({ target: 400000, years: 20 });
+    if (req.rate == null) { vrai(true, 'aucun rendement réaliste ne suffit, et c’est dit'); return; }
+    const avec = capitalisation({ years: 20, rate: req.rate });
+    vrai(avec.points[20].total >= 400000 - 1,
+      `à ${req.rate.toFixed(2)} % l’an la cible doit être atteinte `
+      + `(${Math.round(avec.points[20].total)})`);
+  });
+
+  test('le nombre d’années annoncé est celui où le moteur franchit la cible', () => {
+    Fixture.poser(s => {
+      s.meta.projScenario = 'central';
+      s.meta.projMonthly = 500;
+      s.meta.projTarget = 400000;
+    });
+    const req = targetRequirements({ target: 400000, years: 20 });
+    vrai(req.years > 0, 'une durée doit être proposée');
+    const long = capitalisation({ years: Math.ceil(req.years) + 1 });
+    vrai(Math.abs(long.targetReached.yearsFromNow - req.years) < 0.1,
+      `la durée du levier (${req.years.toFixed(2)}) et celle de la courbe `
+      + `(${long.targetReached.yearsFromNow.toFixed(2)}) sont le même nombre`);
+  });
+
+  test('une cible déjà atteinte ne demande aucun levier', () => {
+    Fixture.poser(s => { s.meta.projTarget = 1000; s.meta.projScenario = 'central'; });
+    const req = targetRequirements({ target: 1000, years: 20 });
+    vrai(req.reachable, 'la cible est déjà franchie');
+    eq(req.monthly, null, 'et aucun versement n’est réclamé');
+    eq(req.years, null, 'ni aucune attente');
+  });
+
+  test('les poches à 0 % ne se font pas passer pour des actifs de marché', () => {
+    /* Le defaut d'origine, mesure : 10 000 EUR de marche et 55 000 EUR a zero
+       pour cent. L'ancienne formule capitalisait les 65 000 a 6 %, donc elle
+       reclamait un versement nettement plus faible que celui qu'il faut. Le
+       moteur, lui, ne prete le taux du marche qu'a la poche du marche. */
+    const cfg = {
+      marche: 10000, nonCote: 25000, garanti: 0, liquidites: 30000, plat: 0,
+      rate: 6, rateNonCote: 0, rateGaranti: 0, monthly: 0, inflation: 0,
+      target: 0, mois: 240, dettes: [],
+      fractions: { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 },
+    };
+    const vraiTotal = moteurProjection(cfg).final.total;
+    const commeSiTout = 65000 * Math.pow(1.06, 20);
+    vrai(vraiTotal < commeSiTout * 0.75,
+      `le vrai total (${Math.round(vraiTotal)}) est loin de celui d’un patrimoine `
+      + `entièrement au taux du marché (${Math.round(commeSiTout)})`);
+  });
+});
+
 suite('Un scénario nommé plutôt qu’un rendement à deviner', () => {
 
   /* Cinq champs demandaient un rendement par poche : actifs de marche, non

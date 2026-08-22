@@ -1391,9 +1391,10 @@ function viewObjective() {
       }</dt><dd>${fmtEUR(dernier.real)}</dd>` : ''}
     </dl>
     ${s.target ? `<p class="ligne-cible">${trad('Cible de')} ${fmtEUR0(s.target)}${deuxPoints()}
-      <b>${anneeAtteinte
-        ? `${trad('franchie en')} ${anneeAtteinte.year}`
-        : `${trad('non atteinte')} ${trad('d’ici')} ${dernier.year}`}</b>${anneeAtteinte
+      <b>${!anneeAtteinte ? `${trad('non atteinte')} ${trad('d’ici')} ${dernier.year}`
+        : anneeAtteinte.dejaAtteinte ? trad('déjà atteinte')
+        : `${trad('franchie en')} ${anneeAtteinte.year}`}</b>${
+        anneeAtteinte && !anneeAtteinte.dejaAtteinte
         ? ` <span class="muted">(${trad('dans')} ${Math.round(anneeAtteinte.yearsFromNow)} ${trad('ans')})</span>`
         : ''}</p>` : ''}
   </div>`;
@@ -1473,18 +1474,18 @@ function viewObjective() {
         ${champ('Cible', 'meta.projTarget',
                 [0, 100000, 250000, 500000, 1000000],
                 v => v ? fmtEUR0(v) : trad('Pas de cible'),
-                trad('Optionnel. Si tu en poses une, la page dit en quelle année tu la franchis.'))}
+                trad('Optionnel. Si tu en poses une, la page dit en quelle année tu la franchis. '
+                  + 'La cible se lit en euros courants, comme le total : elle se compare '
+                  + 'au montant nominal, pas à sa valeur après inflation.'))}
       </div>
-      ${num(Store.state.meta.projMonthly) ? `
+      ${!s.monthlyAuto ? `
       <button class="btn sm ghost" data-action="proj-use-budget" style="margin-top:12px">
         ${trad('Reprendre')} ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} ${trad('depuis le budget')}</button>` : ''}
       </details>
 
       ${s.target && !anneeAtteinte ? `<div class="note" style="margin-top:12px">
         ${(() => {
-            const plat = num(p.plat);
-            const req = targetRequirements({ start: g.total - plat, target: s.target - plat,
-              monthly: s.monthly, rate: s.rate, years: projHorizon });
+            const req = targetRequirements({ target: s.target, years: projHorizon });
             const lignes = [];
             if (req.years) lignes.push(`${trad('attendre')} <b>${req.years.toFixed(1).replace('.', enAnglais() ? '.' : ',')} ${trad('ans')}</b> `
               + `(${trad('soit')} ${new Date().getFullYear() + Math.ceil(req.years)}) ${trad('sans rien changer')}`);
@@ -5195,8 +5196,11 @@ function viewBudget(section = 'depenses') {
           <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
           <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
           <dt>− ${trad('Dépenses (moy.')} ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
-          <dt><b>${trad('= Épargne théorique')}</b>${aide(trad("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est une prévision tirée de tes saisies, pas un montant constaté sur un compte."))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>
-          <dt>${trad('Taux d’épargne')}${aide(trad("Part de tes revenus que cette épargne théorique représente. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+          <dt><b>${trad('= Épargne investissable')}</b>${aide(trad("Ce que ton budget laisse chaque mois une fois les charges fixes et tes dépenses moyennes retirées. C'est le cash réellement disponible pour investir, et c'est lui que Projection reprend comme versement mensuel. Une prévision tirée de tes saisies, pas un montant constaté sur un compte."))}</dt><dd><b class="${cls(rec.investable)}">${fmtEUR0(rec.investable)}</b></dd>
+          ${rec.capitalRembourse > 0.005 ? `
+          <dt>${trad('+ Capital remboursé')}${aide(trad("La part de tes mensualités de crédit qui rembourse le capital, intérêts et assurance exclus. Elle augmente ton patrimoine net (le bien ne bouge pas, la dette baisse) mais elle n'arrive sur aucun compte : elle est déjà partie avec la mensualité. Projection ne la traite donc jamais comme un versement à investir."))}</dt><dd>+${fmtEUR0(rec.capitalRembourse)}</dd>
+          <dt><b>${trad('= Accumulation patrimoniale')}</b>${aide(trad("Ce que ton patrimoine net gagne chaque mois si tout se passe comme ton budget le prévoit : l'épargne investissable plus le capital remboursé."))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>` : ''}
+          <dt>${trad('Taux d’épargne')}${aide(trad("Part de tes revenus que cette accumulation représente, capital remboursé compris. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne."))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
           <dt>${trad('Objectif d’investissement')}${aide(trad("Revenus moins charges fixes moins ton objectif de dépenses. C'est le montant que tu vises, là où l'épargne théorique est ce que tes dépenses réelles laissent."))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
         </dl>
         ${rec.realPerMonth != null ? `

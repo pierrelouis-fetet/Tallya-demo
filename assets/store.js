@@ -1319,6 +1319,22 @@ const Store = {
        aucun écran ne lit deviendrait invisible sans disparaître, et il sortirait
        encore dans les sauvegardes. Idempotente par construction — elle supprime
        une clé absente au second passage. */
+    /* Le zero qui voulait dire « automatique ».
+
+       `projMonthly: 0` etait le sentinelle de la graine : zero etant faux en
+       JavaScript, la projection retombait sur l'epargne du budget. Maintenant
+       que zero veut dire zero, ces etats-la verraient leur courbe s'aplatir
+       sans que personne l'ait demande. La clef s'en va donc, ce qui redonne
+       exactement le comportement d'avant — et la clef absente est desormais le
+       seul moyen de dire « automatique ».
+
+       A un coup, et c'est necessaire : sans le drapeau, un utilisateur qui
+       choisit vraiment 0 verrait son choix efface au chargement suivant. */
+    if (!s.meta.projMonthlyZeroLu) {
+      if (num(s.meta.projMonthly) === 0) delete s.meta.projMonthly;
+      s.meta.projMonthlyZeroLu = true;
+    }
+
     if (!s.meta.detailRetire) {
       for (const r of (s.budget?.expenses || [])) delete r.d;
       s.meta.detailRetire = true;
@@ -3379,12 +3395,28 @@ function resteAPayer(d) {
   };
 }
 
+/* Deux grandeurs que rien ne separait, et elles ne veulent pas dire la meme
+   chose.
+
+   `investable` est le cash qui reste sur le compte : revenus moins charges
+   fixes moins depenses. C'est lui, et lui seul, qu'on peut virer vers un
+   compte-titres.
+
+   `theoretical` y ajoute le capital rembourse sur les credits. Cette part
+   augmente bien le patrimoine net — le bien ne bouge pas, la dette baisse — mais
+   elle n'arrive sur aucun compte : elle est deja partie avec la mensualite. La
+   confondre avec de l'epargne investissable faisait capitaliser a 6 % l'an un
+   argent qui n'existe nulle part. Sur la demonstration, 645 EUR par mois.
+
+   Les deux restent rendues : la croissance du patrimoine se lit avec le capital
+   rembourse, le versement d'une projection sans lui. */
 function savingsReconciliation() {
   const f = budgetFrame();
   const stats = expenseYearStats(todayISO().slice(0, 4));
   const spend = stats.average || f.target;
   const capital = capitalRembourseParMois();
-  const theoretical = f.income - f.fixed - spend + capital;
+  const investable = f.income - f.fixed - spend;
+  const theoretical = investable + capital;
 
   const rythme = paceRecent();
   const monthsSpan = rythme.count;
@@ -3393,6 +3425,7 @@ function savingsReconciliation() {
   return {
     income: f.income, fixed: f.fixed, spend,
     capitalRembourse: capital,
+    investable,
     theoretical,
     theoreticalRate: f.income ? theoretical / f.income * 100 : 0,
     targetSaving: f.investTarget,
@@ -4109,9 +4142,24 @@ function projectionSettings() {
   const scenario = scenarioProjection();
   const preset = TAUX_SCENARIO[scenario];
   const taux = (champ, cle) => (preset ? preset[cle] : num(m[champ]));
+  /* Zero veut dire zero.
+
+     `num(m.projMonthly) || suggestedMonthly()` traitait 0 comme une absence :
+     en JavaScript zero est faux. Le menu offre pourtant « 0 € / mois », et le
+     choisir affichait la suggestion du budget a la place — un reglage qui
+     refuse la valeur qu'il propose. « Que devient mon patrimoine si je
+     n'investis plus rien ? » est une question legitime, et c'est meme la plus
+     utile de cette page.
+
+     La distinction porte donc sur la presence de la clef, pas sur sa valeur.
+     Une migration a un coup a retire les zeros deja enregistres, qui voulaient
+     dire « automatique » sous l'ancienne regle. */
+  const regle = m.projMonthly !== undefined && m.projMonthly !== null
+             && m.projMonthly !== '';
   return {
     scenario,
-    monthly: num(m.projMonthly) || suggestedMonthly(),
+    monthly: regle ? num(m.projMonthly) : suggestedMonthly(),
+    monthlyAuto: !regle,
     rate: taux('projRate', 'marche'),
     rateAutres: taux('projRateAutres', 'nonCote'),
     rateGaranti: taux('projRateGaranti', 'garanti'),
@@ -4135,9 +4183,22 @@ function repartitionVersement(s = projectionSettings()) {
   return { ...nul, [poche]: 1 };
 }
 
+/* Versement mensuel proposé par défaut : le cash que ton budget laisse
+   vraiment, sinon le rythme réellement observé sur tes relevés.
+
+   `investable` et non `theoretical` : le capital rembourse sur un credit
+   augmente le patrimoine net, mais il n'est pas disponible pour investir. Le
+   proposer comme versement mensuel le faisait capitaliser au taux des actifs de
+   marche, alors qu'il est deja parti avec la mensualite. Le patrimoine en tenait
+   compte deux fois : une fois par la dette qui baisse, une fois par un
+   placement imaginaire.
+
+   Le repli sur le rythme observe, lui, garde sa nature : c'est une variation de
+   patrimoine, pas un flux de budget, mais c'est tout ce qu'on a quand aucun
+   revenu n'est declare. */
 function suggestedMonthly() {
   const rec = savingsReconciliation();
-  const brut = rec.theoretical > 0 ? rec.theoretical
+  const brut = rec.investable > 0 ? rec.investable
              : (rec.realPerMonth > 0 ? rec.realPerMonth : 0);
   return Math.round(brut);
 }
@@ -4202,7 +4263,23 @@ function pochesProjection(t = nowTotals()) {
   };
 }
 
-function capitalisation(opts = {}) {
+/* --- le moteur, et lui seul ---------------------------------------------
+
+   Trois fonctions calculaient la meme courbe de trois facons. `capitalisation()`
+   capitalisait poche par poche, mois par mois. `targetRequirements()` portait sa
+   propre formule fermee d'annuite, qui faisait progresser TOUT le patrimoine
+   financier au taux des actifs de marche : 10 000 EUR de non cote a 0 % et
+   15 000 EUR de liquidites y rapportaient 6 % l'an. Elle annoncait donc un
+   versement plus faible que celui qu'il faut vraiment, et la phrase « il
+   faudrait verser X » contredisait la courbe affichee juste au-dessus.
+   `targetReachedAt()` interpolait entre deux points annuels.
+
+   Un seul noyau desormais, et les trois questions passent par lui. Une methode
+   numerique coute quelques milliers d'operations flottantes — le prix d'un seul
+   rendu — et supprime la seule chose qu'une formule fermee ne peut pas garantir
+   ici : dire la meme chose que la courbe. */
+
+function configProjection(opts = {}) {
   const s = Object.assign(projectionSettings(), opts);
   const t = nowTotals();
   const poches = pochesProjection(t);
@@ -4210,145 +4287,213 @@ function capitalisation(opts = {}) {
 
   /* `start` reste la base qui capitalise, entiere, pour que les appels qui la
      forcaient continuent de marcher — la fiche « horizon » et les tests. Quand
-     elle n'est pas imposee, elle se repartit entre les deux poches ; quand elle
+     elle n'est pas imposee, elle se repartit entre les poches ; quand elle
      l'est, tout va au marche, ce qui reproduit l'ancien comportement. */
-  const start = opts.start != null ? num(opts.start) : poches.marche + poches.autres;
-  const departMarche = opts.start != null ? num(opts.start) : poches.marche;
-  /* Le reste se partage entre non cote et liquidites, chacun a son taux. Quand
-     `start` est impose — la fiche « horizon », des tests — tout va au marche et
-     ces deux poches sont vides : l'ancien comportement, a l'identique. */
+  const impose = opts.start != null;
+  const start = impose ? num(opts.start) : poches.marche + poches.autres;
+  const departMarche = impose ? num(opts.start) : poches.marche;
   const resteAutres = start - departMarche;
   const part = q => (poches.autres ? q / poches.autres : 0);
   const departNonCote = resteAutres * part(poches.nonCote);
   const departGaranti = resteAutres * part(poches.garanti);
   const departProjet = resteAutres * part(poches.projet);
   const departLiquides = resteAutres - departNonCote - departGaranti - departProjet;
-  const departAutres = resteAutres;
 
-  const annees = opts.years || Math.max(...PROJECTION_HORIZONS);
-  const rMois = Math.pow(1 + s.rate / 100, 1 / 12) - 1;
-  const rMoisNonCote = Math.pow(1 + num(s.rateAutres) / 100, 1 / 12) - 1;
-  const rMoisGaranti = Math.pow(1 + num(s.rateGaranti) / 100, 1 / 12) - 1;
-  const anneeDebut = new Date().getFullYear();
-
-  /* `total` doit toujours egaler `contributed` + `gains`. La part plate compte
-     comme versee : elle est la des le depart et ne produit rien. Le depart de
-     la poche « autres » aussi : il est acquis, seul ce qu'il produit est un
-     gain. */
-  const points = [{ year: anneeDebut, label: String(anneeDebut),
-                    contributed: start + plat, gains: 0,
-                    total: start + plat, real: start + plat }];
-  let capital = departMarche, verse = departMarche;
-  let nonCote = departNonCote, liquides = departLiquides + departProjet, garanti = departGaranti;
-
-  /* Le versement se PARTAGE desormais, au lieu de tomber tout entier dans une
-     poche. « Selon mon allocation cible » repartit selon les cibles declarees ;
-     les autres choix donnent une fraction de 1 sur une seule poche, ce qui
-     reproduit exactement le comportement anterieur.
-
-     Quand `opts.start` est impose — la fiche « horizon », des tests — tout va au
-     marche : les autres poches sont vides dans ce mode, et y verser produirait
-     un gain sur un depart inexistant. */
-  const f = opts.start != null
-    ? { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 }
-    : repartitionVersement(s);
-  const vm = s.monthly * f.marche, vn = s.monthly * f.nonCote;
-  const vg = s.monthly * f.garanti, vl = s.monthly * f.liquidites;
-  for (let mois = 1; mois <= annees * 12; mois++) {
-    capital = capital * (1 + rMois) + vm;
-    verse += s.monthly;
-    nonCote = nonCote * (1 + rMoisNonCote) + vn;
-    garanti = garanti * (1 + rMoisGaranti) + vg;
-    liquides += vl;
-    if (mois % 12) continue;
-    const an = mois / 12;
-    const autres = nonCote + liquides + garanti;
-    /* Ce qui a ete MIS dans chaque poche, depart compris : c'est la seule base
-       qui donne un gain juste quand le versement ne va pas au marche.
-       `capital - verse` supposait le contraire — un versement sur livret aurait
-       rendu le gain du marche negatif, et compte le versement lui-meme comme un
-       gain du cote des liquidites. */
-    const cumul = mois * s.monthly;
-    const misMarche = departMarche + cumul * f.marche;
-    const misNonCote = departNonCote + cumul * f.nonCote;
-    const misLiquides = departLiquides + departProjet + cumul * f.liquidites;
-    const misGaranti = departGaranti + cumul * f.garanti;
-    const gainsMarche = capital - misMarche;
-    const gainsAutres = autres - (misNonCote + misLiquides + misGaranti);
-    points.push({
-      year: anneeDebut + an, label: String(anneeDebut + an),
-      contributed: misMarche + misNonCote + misLiquides + misGaranti + plat,
-      gains: gainsMarche + gainsAutres,
-      gainsMarche, gainsAutres,
-      gainsNonCote: nonCote - misNonCote,
-      gainsLiquidites: liquides - misLiquides,
-      gainsGaranti: garanti - misGaranti,
-      total: capital + autres + plat,
-      real: (capital + autres + plat) / Math.pow(1 + s.inflation / 100, an),
-    });
-  }
-
-  const reperes = new Set(PROJECTION_HORIZONS.filter(h => h <= annees));
-  for (let h = 30; h <= annees; h += 10) reperes.add(h);
-  reperes.add(annees);
-  const jalons = [...reperes].sort((a, b) => a - b)
-    .filter(h => points[h])
-    .map(h => Object.assign({ horizon: h }, points[h]));
-
-  return { start, plat, poches, points, jalons, settings: s,
-           targetReached: targetReachedAt(points, s.target) };
+  return {
+    settings: s, start, plat, poches,
+    marche: departMarche, nonCote: departNonCote, garanti: departGaranti,
+    liquidites: departLiquides + departProjet,
+    rate: s.rate, rateNonCote: s.rateAutres, rateGaranti: s.rateGaranti,
+    monthly: s.monthly, inflation: s.inflation, target: s.target,
+    /* Quand `plat` ou `start` est impose, aucune dette n'est amortie : le
+       patrimoine plat est alors une donnee d'entree, pas le solde d'un bien et
+       d'un emprunt. */
+    dettes: (impose || opts.plat != null) ? [] : dettesAmortissables(),
+    fractions: impose
+      ? { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 }
+      : repartitionVersement(s),
+    mois: Math.round((opts.years || Math.max(...PROJECTION_HORIZONS)) * 12),
+  };
 }
 
-function targetRequirements({ start, target, monthly, rate, years }) {
-  const T = num(target), P = num(start), M = num(monthly);
-  const N = years * 12;
-  const r = Math.pow(1 + num(rate) / 100, 1 / 12) - 1;
-  const out = { reachable: false, years: null, monthly: null, rate: null };
-  if (T <= P) { out.reachable = true; return out; }
+/* Les dettes que la projection sait amortir, et leur echeancier mensuel.
 
-  if (r > 0) {
-    const base = P + M / r, cible = T + M / r;
-    if (base > 0) out.years = Math.log(cible / base) / Math.log(1 + r) / 12;
-  } else if (M > 0) {
-    out.years = (T - P) / M / 12;
-  }
-  if (!isFinite(out.years) || out.years <= 0) out.years = null;
+   Le capital rembourse chaque mois augmente le patrimoine net : le bien ne
+   bouge pas, la dette baisse. Ce n'est pas un versement financier — cet argent
+   n'arrive sur aucun compte — donc il ne capitalise a aucun taux. Il entre dans
+   `contributed`, comme un euro mis de cote, et jamais dans les gains.
 
-  const facteur = Math.pow(1 + r, N);
-  if (r > 0) {
-    const requis = (T - P * facteur) * r / (facteur - 1);
-    out.monthly = requis > 0 ? requis : 0;
-  } else if (N > 0) {
-    out.monthly = Math.max(0, (T - P) / N);
-  }
-
-  const valeurFinale = tauxAnnuel => {
-    const rm = Math.pow(1 + tauxAnnuel / 100, 1 / 12) - 1;
-    if (rm === 0) return P + M * N;
-    return P * Math.pow(1 + rm, N) + M * ((Math.pow(1 + rm, N) - 1) / rm);
-  };
-  if (valeurFinale(60) >= T) {
-    let bas = 0, haut = 60;
-    for (let k = 0; k < 60; k++) {
-      const milieu = (bas + haut) / 2;
-      if (valeurFinale(milieu) < T) bas = milieu; else haut = milieu;
+   Une dette sans taux ou sans mensualite reste constante : sans taux on ne sait
+   pas separer capital et interets, et on ne devine pas. Meme regle que
+   `capitalRembourseParMois()`, dont ceci est la version mois par mois. */
+function dettesAmortissables() {
+  const out = [];
+  for (const e of ETABS()) {
+    for (const d of (e.dettes || [])) {
+      const reste = num(d.montant);
+      const taux = num(d.taux) / 100 / 12;
+      const mens = mensualiteCredit(d);
+      if (!reste || !taux || !mens) continue;
+      const assurance = num(d.tauxAssurance)
+        ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
+      if (mens - assurance <= reste * taux) continue;
+      out.push({ reste, taux, mens: mens - assurance });
     }
-    out.rate = haut;
   }
   return out;
 }
 
-function targetReachedAt(points, cible) {
-  if (!cible || cible <= points[0].total) return null;
-  for (let i = 1; i < points.length; i++) {
-    if (points[i].total < cible) continue;
-    const avant = points[i - 1], apres = points[i];
-    const part = (cible - avant.total) / (apres.total - avant.total);
-    const mois = Math.round(part * 12);
-    return { year: avant.year + (mois === 12 ? 1 : 0), months: mois === 12 ? 0 : mois,
-             yearsFromNow: (i - 1) + part };
+function moteurProjection(c) {
+  const parMois = taux => Math.pow(1 + num(taux) / 100, 1 / 12) - 1;
+  const rMarche = parMois(c.rate);
+  const rNonCote = parMois(c.rateNonCote);
+  const rGaranti = parMois(c.rateGaranti);
+  const f = c.fractions;
+  const vm = c.monthly * f.marche, vn = c.monthly * f.nonCote;
+  const vg = c.monthly * f.garanti, vl = c.monthly * f.liquidites;
+
+  let marche = c.marche, nonCote = c.nonCote;
+  let garanti = c.garanti, liquidites = c.liquidites;
+  const dettes = c.dettes.map(d => ({ ...d }));
+  let capitalRendu = 0;
+
+  const aujourdhui = new Date();
+  const anneeDebut = aujourdhui.getFullYear();
+  const moisDebut = aujourdhui.getMonth();
+  const total0 = c.marche + c.nonCote + c.garanti + c.liquidites + c.plat;
+  const points = [{ year: anneeDebut, label: String(anneeDebut),
+                    contributed: total0, gains: 0, total: total0, real: total0 }];
+  let atteinte = c.target > 0 && total0 >= c.target
+    ? { dejaAtteinte: true, monthsFromNow: 0, yearsFromNow: 0,
+        year: anneeDebut, month: moisDebut + 1 }
+    : null;
+
+  for (let mois = 1; mois <= c.mois; mois++) {
+    marche = marche * (1 + rMarche) + vm;
+    nonCote = nonCote * (1 + rNonCote) + vn;
+    garanti = garanti * (1 + rGaranti) + vg;
+    liquidites += vl;
+    for (const d of dettes) {
+      if (d.reste <= 0) continue;
+      const capital = Math.min(d.reste, d.mens - d.reste * d.taux);
+      d.reste -= capital;
+      capitalRendu += capital;
+    }
+
+    const plat = c.plat + capitalRendu;
+    const total = marche + nonCote + garanti + liquidites + plat;
+    if (!atteinte && c.target > 0 && total >= c.target) {
+      const date = new Date(anneeDebut, moisDebut + mois, 1);
+      atteinte = { dejaAtteinte: false, monthsFromNow: mois,
+                   yearsFromNow: mois / 12,
+                   year: date.getFullYear(), month: date.getMonth() + 1 };
+    }
+    if (mois % 12 === 0) points.push(pointDe(mois));
   }
-  return null;
+
+  /* Le point de sortie, toujours construit, meme quand l'horizon ne tombe pas
+     sur une annee pleine : `points[points.length - 1]` rendait alors le point de
+     DEPART, en silence, et `targetRequirements()` cherchait un versement contre
+     un total qui n'avait pas bouge. Treize mois suffisaient a le declencher. */
+  const final = c.mois > 0 && c.mois % 12 === 0
+    ? points[points.length - 1] : pointDe(c.mois);
+
+  return { points, atteinte, capitalRendu, final };
+
+  function pointDe(mois) {
+    const an = mois / 12;
+    const plat = c.plat + capitalRendu;
+    const total = marche + nonCote + garanti + liquidites + plat;
+    const cumul = mois * c.monthly;
+    const misMarche = c.marche + cumul * f.marche;
+    const misNonCote = c.nonCote + cumul * f.nonCote;
+    const misGaranti = c.garanti + cumul * f.garanti;
+    const misLiquides = c.liquidites + cumul * f.liquidites;
+    return {
+      year: anneeDebut + Math.round(an), label: String(anneeDebut + Math.round(an)),
+      mois,
+      contributed: misMarche + misNonCote + misGaranti + misLiquides + plat,
+      gains: (marche - misMarche) + (nonCote - misNonCote)
+           + (garanti - misGaranti) + (liquidites - misLiquides),
+      gainsMarche: marche - misMarche,
+      gainsAutres: (nonCote - misNonCote) + (garanti - misGaranti)
+                 + (liquidites - misLiquides),
+      gainsNonCote: nonCote - misNonCote,
+      gainsLiquidites: liquidites - misLiquides,
+      gainsGaranti: garanti - misGaranti,
+      capitalRendu, plat, total,
+      real: total / Math.pow(1 + num(c.inflation) / 100, mois / 12),
+    };
+  }
+}
+
+function capitalisation(opts = {}) {
+  const c = configProjection(opts);
+  const r = moteurProjection(c);
+  return { start: c.start, plat: c.plat, poches: c.poches,
+           points: r.points, settings: c.settings,
+           targetReached: r.atteinte,
+           jalons: jalonsProjection(r.points, c.mois / 12) };
+}
+
+function jalonsProjection(points, annees) {
+  const reperes = new Set(PROJECTION_HORIZONS.filter(h => h <= annees));
+  for (let h = 30; h <= annees; h += 10) reperes.add(h);
+  reperes.add(annees);
+  return [...reperes].sort((a, b) => a - b)
+    .filter(h => points[h])
+    .map(h => Object.assign({ horizon: h }, points[h]));
+}
+
+const RECHERCHE_PAS = 40;          // 40 bissections : l'intervalle est divise par 2^40
+const RECHERCHE_ANNEES_MAX = 60;   // au-dela, « attendre » n'est plus une reponse
+const RECHERCHE_TAUX_MAX = 60;     // en % par an
+const RECHERCHE_VERSEMENT_MAX = 1e7;
+
+function targetRequirements({ target, years, opts = {} } = {}) {
+  const base = configProjection(Object.assign({ years }, opts));
+  const T = num(target != null ? target : base.target);
+  const out = { reachable: false, years: null, monthly: null, rate: null };
+  if (!(T > 0)) return out;
+
+  const joue = modif => moteurProjection(Object.assign({}, base, modif));
+  const atteint = modif => {
+    const r = joue(modif);
+    return r.final.total >= T;
+  };
+
+  if (base.marche + base.nonCote + base.garanti + base.liquidites + base.plat >= T) {
+    out.reachable = true;
+    return out;
+  }
+
+  const long = joue({ mois: RECHERCHE_ANNEES_MAX * 12, target: T });
+  if (long.atteinte) out.years = long.atteinte.monthsFromNow / 12;
+
+  if (!atteint({ monthly: 0 })) {
+    if (atteint({ monthly: RECHERCHE_VERSEMENT_MAX })) {
+      let bas = 0, haut = RECHERCHE_VERSEMENT_MAX;
+      for (let k = 0; k < RECHERCHE_PAS && haut - bas > 0.5; k++) {
+        const milieu = (bas + haut) / 2;
+        if (atteint({ monthly: milieu })) haut = milieu; else bas = milieu;
+      }
+      out.monthly = haut;
+    }
+  } else {
+    out.monthly = 0;
+  }
+
+  if (base.marche > 0 || base.fractions.marche > 0) {
+    if (atteint({ rate: RECHERCHE_TAUX_MAX })) {
+      let bas = 0, haut = RECHERCHE_TAUX_MAX;
+      for (let k = 0; k < RECHERCHE_PAS && haut - bas > 0.05; k++) {
+        const milieu = (bas + haut) / 2;
+        if (atteint({ rate: milieu })) haut = milieu; else bas = milieu;
+      }
+      out.rate = haut;
+    }
+  }
+  return out;
 }
 
 function monthsToObjective() {
