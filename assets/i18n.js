@@ -84,7 +84,7 @@ const I18N = {
     'view.data': 'Data',
     'view.data.sub': 'Export, import and reset',
     'view.settings': 'Preferences',
-    'view.settings.sub': 'Language, appearance and app behaviour',
+    'view.settings.sub': 'Language, appearance, notifications and app behaviour',
     'view.notifications': 'Notifications',
     'view.notifications.sub': 'What the bell is allowed to tell you',
 
@@ -2095,7 +2095,7 @@ const FR = {
   'view.data': 'Données',
   'view.data.sub': 'Export, import et remise à zéro',
   'view.settings': 'Préférences',
-  'view.settings.sub': "Langue, apparence et comportement de l'app",
+  'view.settings.sub': "Langue, apparence, notifications et comportement de l'app",
   'view.notifications': 'Notifications',
   'view.notifications.sub': 'Ce que la cloche a le droit de dire',
 
