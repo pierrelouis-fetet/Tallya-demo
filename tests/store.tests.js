@@ -18530,17 +18530,27 @@ suite('L’horizon retenu se marque sans se nommer', () => {
       'l’année suit le libellé : une étiquette ne se coupe pas en deux encres');
   });
 
-  test('le menu ne repropose pas les jalons du tableau', () => {
-    /* Le menu s'ouvre sous les jalons : lui faire redire 5, 10, 15 et 20, c'est
-       offrir de choisir la ligne qu'on a sous les yeux, et imposer quatre crans
-       de defilement avant la premiere option qui apprend quelque chose. */
-    eq(PROJECTION_CHOICES[0], 25, 'la liste commence après le dernier jalon fixe');
-    const doublons = PROJECTION_HORIZONS.filter(h => PROJECTION_CHOICES.includes(h));
-    eq(doublons.join(', '), '', 'ces horizons sont déjà des lignes du tableau');
+  test('le menu offre les horizons courts, pas seulement les longs', () => {
+    /* Les cinq reperes du tableau en etaient exclus, au motif qu'ils y
+       figuraient deja : le menu commencait donc a vingt-cinq ans. Le
+       raisonnement se tenait sur la redondance et ratait l'essentiel -- choisir
+       un horizon ne designe pas une ligne, il change toute la page, et tout le
+       monde n'a pas vingt-cinq ans devant soi. */
+    eq(PROJECTION_CHOICES[0], 3, 'la liste commence au premier repère, trois ans');
+    for (const h of PROJECTION_HORIZONS) {
+      vrai(PROJECTION_CHOICES.includes(h),
+        `« ${h} ans » doit pouvoir se choisir : c'est un horizon comme un autre`);
+    }
     vrai(PROJECTION_CHOICES.includes(80), 'et la liste couvre toujours 80 ans');
+    /* Triee et sans doublon : 5, 10, 15 et 20 sont a la fois des reperes et des
+       paliers de cinq ans, et la liste se derive des deux. */
+    const triee = [...PROJECTION_CHOICES].sort((a, b) => a - b);
+    eq(PROJECTION_CHOICES.join(','), triee.join(','), 'la liste est triée');
+    eq(new Set(PROJECTION_CHOICES).size, PROJECTION_CHOICES.length,
+      'et sans doublon, bien qu’elle vienne de deux sources');
   });
 
-  test('mais il affiche toujours l’horizon en cours', () => {
+  test('le menu affiche toujours l’horizon en cours', () => {
     /* La fonction ne depend que de la liste, de `trad` et de l'horizon : on la
        reconstruit depuis sa source et on la joue, plutot que de chercher un
        motif dans une chaine. */
@@ -18550,15 +18560,15 @@ suite('L’horizon retenu se marque sans se nommer', () => {
     vrai(debut > 0 && corps.length > 100, 'le sélecteur se relit depuis sa source');
     const rendre = h => new Function('PROJECTION_CHOICES', 'trad', 'projHorizon',
       corps + ' return selecteurHorizon();')(PROJECTION_CHOICES, trad, h);
-    /* Vingt ans est le defaut, et le tableau le porte : la liste ne l'offre
-       donc plus. Un menu qui n'offre pas sa propre valeur affiche la premiere
-       venue, et annoncerait 25 ans pendant que la ligne marquee dit 20. */
-    vrai(/value="20" selected/.test(rendre(20)),
-      'au défaut, le menu montre bien vingt ans');
-    const a30 = rendre(30);
-    vrai(/value="30" selected/.test(a30), 'et trente ans quand c’est trente ans');
-    vrai(!/value="20"/.test(a30),
-      'vingt ans quitte alors la liste : le tableau le porte déjà');
+    for (const h of [3, 10, 20, 30, 80]) {
+      vrai(new RegExp(`value="${h}" selected`).test(rendre(h)),
+        `le menu montre « ${h} ans » quand c'est l'horizon en cours`);
+    }
+    /* Une valeur hors liste s'y ajoute : un menu qui n'offre pas sa propre
+       valeur affiche la premiere venue, et annoncerait un horizon qui n'est ni
+       celui du graphique ni celui de la ligne marquee. */
+    vrai(/value="27" selected/.test(rendre(27)),
+      'et un horizon hors paliers rejoint la liste plutôt que de disparaître');
   });
 });
 

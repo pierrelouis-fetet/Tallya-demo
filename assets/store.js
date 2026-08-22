@@ -4108,8 +4108,23 @@ function salesYears() {
 
 const PROJECTION_HORIZONS = [3, 5, 10, 15, 20];
 
-const PROJECTION_CHOICES = Array.from({ length: 16 }, (_, i) => (i + 1) * 5)
-  .filter(h => !PROJECTION_HORIZONS.includes(h));
+/* Horizons proposés dans la liste déroulante : les repères du tableau, puis des
+   paliers de cinq ans jusqu'à 80 — de quoi couvrir une vie d'épargne entière.
+
+   Les cinq repères en étaient exclus, au motif qu'ils figuraient déjà dans le
+   tableau. Le raisonnement se tenait sur la redondance et ratait l'essentiel :
+   choisir un horizon ne désigne pas une ligne, il change toute la page — le
+   total en tête, la courbe, et la ligne mise en avant, qui suit `projHorizon`.
+   Le menu commençait donc à vingt-cinq ans, et tout le monde n'a pas
+   vingt-cinq ans devant soi.
+
+   La liste se dérive des repères, elle ne les recopie pas : deux listes écrites
+   à la main pour une seule vérité finissent par se contredire, et c'est celle
+   qu'on oublie de changer qui ment. */
+const PROJECTION_CHOICES = [...new Set([
+  ...PROJECTION_HORIZONS,
+  ...Array.from({ length: 16 }, (_, i) => (i + 1) * 5),
+])].sort((a, b) => a - b);
 
 /* Trois jeux d'hypotheses nommes, et un quatrieme qui n'en est pas un.
 
