@@ -254,7 +254,7 @@ function blankState() {
     version: 1,
     meta: { objective: 0, objectiveYear: an, expectedInflow: 0, modelCapital: 100000,
             autoRefresh: true, preferredExchange: 'auto',
-            projMonthly: 0, projRate: 8, projRateAutres: 0, projInflation: 2,
+            projMonthly: 0, projScenario: 'dynamique', projInflation: 2,
             projTarget: 0, projHorizon: 20 },
     quotes: { lastRun: null, fx: {}, changes: [] },
     sales: [],
@@ -290,8 +290,19 @@ const SEED = {
     autoRefresh: false,
     preferredExchange: 'auto', // 'auto' = on suit la place de référence du titre
     projMonthly: 0,      // 0 = reprend l'épargne dégagée par le budget
-    projRate: 8,         // rendement annuel supposé des actifs de marché, en %
-    projRateAutres: 0,
+    /* Un scénario nommé plutôt que des taux posés à la main. Poser `projRate`
+       ici ferait passer tout premier lancement en « personnalisé » : les trois
+       pavés s'afficheraient éteints, et personne ne verrait le réglage qui
+       gouverne pourtant la courbe.
+
+       « Dynamique » et non « central » : c'est 8 % par an sur les actifs de
+       marché, l'ordre de grandeur du rendement long terme d'un portefeuille
+       d'actions — et cette répartition est à 60 % en actions. Un mélange
+       prudent décrirait autre chose que ce qu'elle porte.
+
+       Le non coté et les liquidités restent à zéro dans les trois scénarios :
+       l'application n'affirme aucun rendement sur des parts illiquides sans
+       prix de marché ni sur un compte qui ne rapporte rien. */
     projInflation: 2,    // pour traduire le résultat en euros d'aujourd'hui
     projTarget: 0,       // cible long terme, optionnelle
     projHorizon: 20,     // horizon affiche par la vue Objectif

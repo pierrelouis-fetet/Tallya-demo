@@ -2089,6 +2089,8 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 }
 .repart-barre i { display: block; height: 100%; border-radius: var(--radius-pill); }
 .repart-pied { margin: 4px 0 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.ligne-cible { margin: -4px 0 12px; font-size: 13px; color: var(--text-secondary); }
+.ligne-cible b { color: var(--text-primary); }
 .repart-base { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
 /* Un montant ne se coupe pas apres la virgule. La regle mobile qui fait
    replier les cellules de tableau — necessaire pour les libelles longs —
@@ -2913,6 +2915,30 @@ td .empty, th .empty { background: none; border: none; }
   padding: 7px 12px; border-radius: var(--radius-xs); cursor: pointer;
 }
 .segmented button.on { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); }
+
+.choix-hypothese {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  width: min(28em, 100%);
+}
+.choix-hypothese button {
+  display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  font: inherit; text-align: left; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.choix-hypothese button b { font-size: 13px; font-weight: 600; }
+.choix-hypothese button span { font-size: 11.5px; color: var(--muted); }
+.choix-hypothese button.on {
+  background: color-mix(in oklab, var(--accent) 10%, var(--surface-1));
+  border-color: var(--accent); color: var(--text-primary);
+}
+.choix-hypothese button.on span { color: var(--text-secondary); }
+@media (hover: hover) {
+  .choix-hypothese button:not(.on):hover { border-color: var(--text-secondary); }
+}
+
+.field > .hint { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
 
 .sous-onglets {
   display: flex; margin-bottom: 2px;

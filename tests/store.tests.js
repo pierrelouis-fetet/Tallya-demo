@@ -3185,14 +3185,26 @@ suite('Projection de capitalisation', () => {
        comme une seule. */
     Fixture.poser(s => { s.meta.projRate = 7; delete s.meta.projRateAutres; });
     Store.migrate();
-    eq(Store.state.meta.projRateAutres, 0,
+    eq(projectionSettings().rateAutres, 0,
       'un état d’avant le second champ part de zéro, il n’hérite pas de 7 %');
 
     Store.state.meta.projRateAutres = 3;
     Store.migrate();
-    eq(Store.state.meta.projRateAutres, 3, 'un taux réglé à la main survit');
+    eq(projectionSettings().rateAutres, 3, 'un taux réglé à la main survit');
     Store.migrate();
     eq(Store.state.meta.projRateAutres, 3, 'et deux passes donnent le même état');
+
+    /* Le taux effectif et non la clé enregistrée : SEED.meta ne plante plus
+       `projRateAutres`, parce que la même fusion planterait aussi un scénario
+       chez qui n'en a jamais choisi -- et un scénario planté écraserait ses taux
+       en silence, ce que cette page ne fait jamais. L'absence vaut zéro, et le
+       scénario par défaut se décide dans le code. */
+    Fixture.poser(s => { s.meta.projRate = 8; delete s.meta.projScenario; });
+    Store.migrate();
+    eq(Store.state.meta.projScenario, undefined,
+      'la migration ne pose aucun scénario sur un état qui a déjà des taux');
+    eq(scenarioProjection(), 'perso', 'il reste donc en personnalisé');
+    pres(projectionSettings().rate, 8, 'et son taux survit intact');
   });
 
   test('la projection part du patrimoine net, immobilier compris', () => {
@@ -12936,14 +12948,27 @@ suite('Le versement mensuel dit où il va', () => {
 
   test('l’écran le dit sans qu’on déplie, et le réglage existe', () => {
     const src = lireSource('assets/app.js');
-    vrai(/champText\('Versé sur', 'meta\.projVersementVers', VERSEMENT_VERS/.test(src),
+    vrai(/champText\('Affectation des versements', 'meta\.projVersementVers', VERSEMENT_VERS/.test(src),
       'le champ existe, avec la table pour seule source de ses options');
-    /* Le resume replie porte l'hypothese : c'est la qu'on lit les reglages sans
-       ouvrir la carte. */
-    vrai(/VERSEMENT_VERS\)\[s\.versementVers\]/.test(src),
-      'et le résumé replié dit la destination');
-    eq(VERSEMENT_VERS.length, 3, 'trois destinations, les trois poches de la projection');
-    eq(VERSEMENT_VERS[0][0], 'marche', 'le marché en tête : c’est le défaut');
+    /* Le resume replie ne porte plus la destination ni les taux : il porte le
+       versement, le nom du scenario et l'inflation. Quatre pourcentages a lire
+       pour savoir ou l'on en est, c'etait trois de trop. */
+    vrai(/trad\('scénario'\)\} \$\{trad\(nomScenario\(s\.scenario\)\)/.test(src),
+      'le résumé replié nomme le scénario');
+    vrai(!/marché'\)\} \$\{fmtPct\(s\.rate/.test(src),
+      'et n’énumère plus les taux');
+    /* Le marche d'abord, et par defaut : c'est la destination de l'epargne
+       longue, celle qui vaut pour presque tout le monde. */
+    eq(VERSEMENT_VERS[0][0], 'marche', 'les actifs de marché en tête : c’est le défaut');
+    Fixture.poser(s => { delete s.meta.projVersementVers; });
+    eq(projectionSettings().versementVers, 'marche',
+      'un état neuf verse sur les actifs de marché');
+    /* Chaque poche du moteur doit pouvoir recevoir le versement, sinon une
+       allocation cible qui la nomme enverrait son argent ailleurs. */
+    const offertes = VERSEMENT_VERS.map(([c]) => c);
+    for (const poche of ['marche', 'nonCote', 'garanti', 'liquidites']) {
+      vrai(offertes.includes(poche), `« ${poche} » doit être offert comme destination`);
+    }
   });
 });
 
@@ -15328,6 +15353,219 @@ suite('La graine de la démonstration parle une seule langue', () => {
     eq(fautifs.length, 0,
       'libellé(s) français dans la graine d’une démonstration anglaise : '
       + fautifs.join(' | '));
+  });
+});
+
+suite('Un scénario nommé plutôt qu’un rendement à deviner', () => {
+
+  /* Cinq champs demandaient un rendement par poche : actifs de marche, non
+     cote, capital garanti, liquidites, inflation. Personne ne connait le
+     rendement futur de la bourse — pas meme un investisseur experimente — donc
+     la question demande a l'utilisateur de deviner a notre place, et il lit
+     ensuite sa propre reponse comme une prevision.
+
+     Un scenario nomme deplace la question de « combien ? » a « plutot prudent
+     ou plutot optimiste ? ». Les taux restent poseables a la main, replies. */
+
+  test('les trois scénarios montent, et le non coté reste à zéro dans tous', () => {
+    const marche = SCENARIOS_PROJECTION.map(([, , r]) => r.marche);
+    eq(marche.join(' < '), '4 < 6 < 8',
+      'prudent, central, dynamique : des hypothèses ordonnées');
+    for (const [cle, , r] of SCENARIOS_PROJECTION) {
+      eq(r.nonCote, 0,
+        `« ${cle} » ne doit supposer aucune hausse du non coté : sa valeur ne bouge `
+        + 'qu’au prochain tour de table, date qu’aucun calcul ne connaît');
+      eq(r.liquidites, 0, `« ${cle} » : un livret non déclaré rémunéré ne rapporte rien`);
+      vrai(r.garanti > 0 && r.garanti < r.marche,
+        `« ${cle} » : le capital garanti rapporte, moins que le marché`);
+    }
+    eq(SCENARIO_DEFAUT, 'central', 'le scénario central s’applique par défaut');
+  });
+
+  test('un état neuf part sur central, un état déjà réglé ne bouge pas', () => {
+    /* La regle qui compte : appliquer « central » a quelqu'un qui avait pose 8 %
+       changerait sa courbe sans qu'il ait rien demande. Une projection ne fait
+       jamais ca. */
+    Fixture.poser(s => { delete s.meta.projScenario; delete s.meta.projRate; });
+    eq(scenarioProjection(), 'central', 'sans rien de réglé, le scénario central');
+    pres(projectionSettings().rate, 6, 'et son taux de marché');
+
+    Fixture.poser(s => { delete s.meta.projScenario; s.meta.projRate = 8; });
+    eq(scenarioProjection(), 'perso',
+      'un taux déjà saisi passe en personnalisé, il ne se fait pas écraser');
+    pres(projectionSettings().rate, 8, 'et sa valeur survit intacte');
+  });
+
+  test('le scénario gouverne les trois taux, le personnalisé les rend', () => {
+    Fixture.poser(s => {
+      s.meta.projScenario = 'prudent';
+      s.meta.projRate = 19; s.meta.projRateGaranti = 7; s.meta.projRateAutres = 5;
+    });
+    const p = projectionSettings();
+    pres(p.rate, 4, 'le scénario prudent impose son taux de marché');
+    pres(p.rateGaranti, 2, 'et celui du garanti');
+    pres(p.rateAutres, 0, 'et celui du non coté');
+
+    Fixture.poser(s => {
+      s.meta.projScenario = 'perso';
+      s.meta.projRate = 19; s.meta.projRateGaranti = 7; s.meta.projRateAutres = 5;
+    });
+    const q = projectionSettings();
+    pres(q.rate, 19, 'en personnalisé, les champs reprennent la main');
+    pres(q.rateGaranti, 7, 'les trois');
+    pres(q.rateAutres, 5, 'sans exception');
+  });
+
+  test('chaque destination reçoit tout le versement, et les parts font un', () => {
+    /* Une poche recoit, les trois autres rien. La regle qui compte est que les
+       quatre fractions fassent exactement un : en dessous, un euro verse se
+       perd ; au-dessus, la projection en invente. */
+    for (const [poche] of VERSEMENT_VERS) {
+      Fixture.poser(s => { s.meta.projVersementVers = poche; });
+      const f = repartitionVersement();
+      pres(f.marche + f.nonCote + f.garanti + f.liquidites, 1,
+        `« ${poche} » : les quatre parts doivent faire exactement un`);
+      pres(f[poche], 1, `« ${poche} » doit recevoir tout le versement`);
+    }
+  });
+
+  test('une destination inconnue retombe sur le marché', () => {
+    /* Un etat ecrit par une version anterieure peut porter n'importe quoi ici —
+       « cible » l'a ete un temps. Le repli est muet et sans perte : mieux vaut
+       une hypothese lisible qu'un versement qui s'evapore. */
+    Fixture.poser(s => { s.meta.projVersementVers = 'cible'; });
+    pres(repartitionVersement().marche, 1,
+      'une valeur qui ne nomme aucune poche verse sur les actifs de marché');
+    pres(repartitionVersement().garanti, 0, 'et nulle part ailleurs');
+  });
+
+  test('le total égale toujours ce qui a été versé plus les gains', () => {
+    /* La regle cardinale du projet, appliquee au moteur : elle etait tenue quand
+       le versement tombait dans une seule poche, et le partage pouvait la casser
+       — la part envoyee au garanti aurait compte comme un gain. */
+    for (const vers of ['marche', 'garanti', 'nonCote', 'liquidites']) {
+      Fixture.poser(s => {
+        s.meta.projMonthly = 500; s.meta.projScenario = 'central';
+        s.meta.projVersementVers = vers;
+      });
+      const c = capitalisation({ years: 10 });
+      for (const pt of c.points) {
+        pres(pt.total, pt.contributed + pt.gains,
+          `« ${vers} », année ${pt.year} : le total doit égaler versé plus gains`);
+      }
+    }
+  });
+
+  test('le capital garanti reçoit sa part, et elle n’est pas un gain', () => {
+    /* Il ne recevait rien : les trois destinations offertes l'ignoraient, et un
+       versement dirige vers lui disparaissait du capital tout en restant compte
+       comme verse. */
+    Fixture.poser(s => {
+      s.meta.projMonthly = 1000; s.meta.projScenario = 'central';
+      s.meta.projVersementVers = 'garanti';
+    });
+    const c = capitalisation({ years: 1 });
+    const un = c.points[1];
+    vrai(un.contributed > c.points[0].contributed + 11000,
+      'douze mille euros versés doivent se retrouver dans le versé');
+    pres(un.total, un.contributed + un.gains, 'et le total reste la somme de ses parts');
+  });
+
+  test('les montants sont nominaux, et le réel en découle', () => {
+    /* Le moteur capitalise en euros courants ; `real` retire l'inflation une
+       fois, sur le total. Les deux coexistent, et la page dit lequel elle
+       montre — c'est ce qui permet d'ecrire « en euros d'aujourd'hui » sans
+       mentir. */
+    Fixture.poser(s => {
+      s.meta.projMonthly = 0; s.meta.projScenario = 'central'; s.meta.projInflation = 2;
+    });
+    const c = capitalisation({ years: 10 });
+    const dix = c.points[10];
+    pres(dix.real, dix.total / Math.pow(1.02, 10),
+      'le réel est le nominal déflaté de l’inflation, sur dix ans');
+    vrai(dix.real < dix.total, 'et il est plus petit : c’est le pouvoir d’achat');
+  });
+
+  test('plus le scénario est dynamique, plus la projection monte', () => {
+    const total = scen => {
+      Fixture.poser(s => { s.meta.projMonthly = 300; s.meta.projScenario = scen; });
+      return capitalisation({ years: 20 }).points[20].total;
+    };
+    const p = total('prudent'), c = total('central'), d = total('dynamique');
+    vrai(p < c && c < d,
+      `les trois scénarios doivent s’ordonner : ${Math.round(p)} < ${Math.round(c)} < ${Math.round(d)}`);
+  });
+
+  test('le choix d’hypothèses ne se déguise pas en barre d’onglets', () => {
+    /* Deux raisons, et la seconde a ete vue a l'ecran.
+
+       Le dessin : trois pilules `.segmented` reprenaient exactement l'allure des
+       sous-onglets qui coiffent la meme page. Deux controles identiques a
+       l'oeil, l'un qui change d'ecran et l'autre un calcul.
+
+       La geometrie : `.sous-onglets` est collante et vit a z-index 6, ce qu'il
+       faut pour une navigation en tete de page et ce qui est ruineux dans une
+       carte. Mesure a 375 px : la barre recouvrait le menu « Affectation des
+       versements » et l'intitule suivant. */
+    const src = lireSource('assets/app.js');
+    vrai(/\$\{choixHypothese\(s\.scenario\)\}/.test(src),
+      'le scénario a son propre contrôle');
+    vrai(!/segments\(SCENARIOS_PROJECTION/.test(src),
+      'et il n’emprunte plus le balisage des sous-onglets');
+    /* Les paves descendent de la table : trois libelles ecrits a la main a cote
+       d'elle finiraient par ne plus la decrire. Et le taux imprime est celui de
+       la table, non un reglage relu — sinon un scenario non retenu afficherait
+       le taux du scenario en cours. */
+    vrai(/SCENARIOS_PROJECTION\.map\(\(\[cle, nom, taux\]\)/.test(src),
+      'les trois pavés descendent de la table des scénarios');
+    vrai(/fmtPct\(taux\.marche, 0\)/.test(src),
+      'chaque pavé imprime le taux de son propre scénario');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.choix-hypothese \{[\s\S]{0,200}grid-template-columns: repeat\(3/.test(css),
+      'trois colonnes égales : la cible du doigt ne dépend pas de la longueur du mot');
+    vrai(/\.choix-hypothese button\.on \{[\s\S]{0,200}border-color: var\(--accent\)/.test(css),
+      'le choix retenu se voit au bord accentué, pas seulement à sa teinte de fond');
+  });
+
+  test('la cible répond là où on la lit, pas deux cartes plus bas', () => {
+    /* Poser une cible pose une question : « quand ? ». La reponse vivait au bas
+       de la carte des hypotheses, en petit, sous des reglages replies — donc a
+       deux cartes de l'endroit ou l'on lit le total. Elle est desormais au meme
+       rang que le total, dans le pied de la carte de tete, et la carte des
+       hypotheses ne garde que les leviers, qui parlent bien des hypotheses. */
+    /* La fenetre va du pied de la carte de tete a la fin de la phrase du
+       verdict : pas une longueur en caracteres, qui bougerait au prochain
+       commentaire ajoute. */
+    const brut = lireSource('assets/app.js');
+    const debut = brut.indexOf('kv repart-pied');
+    const src = brut.slice(debut, brut.indexOf('ligne-cible">', debut) + 400);
+    vrai(debut > 0, 'le pied de la carte de tête doit exister');
+    /* Hors de la grille, mesure faite : « franchie en 2050 (dans 25 ans) » dans
+       une cellule de valeur repoussait l'intitule voisin sur deux lignes. */
+    vrai(brut.indexOf('ligne-cible">') > brut.indexOf('</dl>', debut),
+      'le verdict vit après la grille du pied, pas dedans');
+    vrai(/trad\('franchie en'\)/.test(src),
+      'l’année d’atteinte se lit dans le pied de la carte de tête');
+    vrai(/trad\('non atteinte'\)/.test(src),
+      'et le verdict inverse s’y lit aussi : une cible manquée est une réponse, pas un silence');
+
+    /* Le verdict ne se dit qu'une fois : deux copies, et c'est celle qu'on
+       oublie de changer qui contredit l'autre. */
+    const tout = lireSource('assets/app.js');
+    eq((tout.match(/trad\('franchie en'\)/g) || []).length, 1,
+      '« franchie en » ne doit exister qu’à un seul endroit');
+    vrai(/s\.target && !anneeAtteinte \? `<div class="note"/.test(tout),
+      'la note des leviers ne s’affiche que si la cible n’est pas atteinte');
+  });
+
+  test('plus aucun jargon dans les valeurs affichées', () => {
+    /* « aucun, porté à plat » demandait de savoir ce que « porter a plat »
+       veut dire. « 0 % par an » se lit sans glossaire, et l'aide explique. */
+    const src = lireSource('assets/app.js');
+    eq((src.match(/porté à plat|portées à plat/g) || []).length, 0,
+      '« porté à plat » est du jargon : afficher « 0 % par an » et expliquer dans l’aide');
+    vrai(!/trad\('aucune'\)/.test(src),
+      '« aucune » comme valeur de cible se lit comme une absence de réponse, pas comme un choix');
   });
 });
 

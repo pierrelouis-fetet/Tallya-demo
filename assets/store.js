@@ -3955,13 +3955,72 @@ const PROJECTION_HORIZONS = [3, 5, 10, 15, 20];
 const PROJECTION_CHOICES = Array.from({ length: 16 }, (_, i) => (i + 1) * 5)
   .filter(h => !PROJECTION_HORIZONS.includes(h));
 
+/* Trois jeux d'hypotheses nommes, et un quatrieme qui n'en est pas un.
+
+   Personne ne sait quel rendement la bourse fera. Demander « quel rendement
+   annuel pour les actifs de marche ? » a quelqu'un qui ouvre l'application, c'est
+   lui demander de deviner a notre place : il repondra au hasard, et lira ensuite
+   sa reponse comme une prevision. Un scenario nomme dit exactement ce que c'est
+   — une hypothese de travail, prudente, centrale ou dynamique — et deplace la
+   question de « combien ? » a « plutot prudent ou plutot optimiste ? », a
+   laquelle tout le monde peut repondre.
+
+   Les valeurs sont NOMINALES et annuelles. L'inflation se retire ensuite, une
+   fois, sur le total : c'est le champ `real` de chaque point.
+
+   Le non cote reste a zero dans les trois. Une participation dans une societe ne
+   progresse pas de 8 % par an parce que la bourse le fait ; sa valeur ne bouge
+   qu'au prochain tour de table ou a la revente, dates qu'aucun calcul ne connait.
+   Zero ne veut pas dire « ça ne vaudra rien de plus », mais « l'application ne
+   suppose rien ». C'est le seul cote ou se tromper est sans consequence.
+
+   Les liquidites aussi : un livret non declare remunere ne rapporte rien, et le
+   supposer gonflerait un patrimoine sans qu'on l'ait demande.
+
+   Le capital garanti, lui, rapporte quelque chose de connu d'avance a un ordre
+   de grandeur pres — un fonds euros, un livret regemente. Il suit donc le
+   scenario, plus prudemment que le marche.
+
+   Ces valeurs se modifient ici, et nulle part ailleurs. */
+const SCENARIOS_PROJECTION = [
+  ['prudent',   'Prudent',   { marche: 4, garanti: 2,   nonCote: 0, liquidites: 0 }],
+  ['central',   'Central',   { marche: 6, garanti: 2.5, nonCote: 0, liquidites: 0 }],
+  ['dynamique', 'Dynamique', { marche: 8, garanti: 3,   nonCote: 0, liquidites: 0 }],
+];
+const TAUX_SCENARIO = Object.fromEntries(SCENARIOS_PROJECTION.map(([c, , r]) => [c, r]));
+const SCENARIO_DEFAUT = 'central';
+
+const TAUX_PROJECTION = ['meta.projRate', 'meta.projRateAutres', 'meta.projRateGaranti'];
+
+const nomScenario = cle => (Object.fromEntries(
+  SCENARIOS_PROJECTION.map(([c, l]) => [c, l]))[cle] || 'Personnalisé');
+
+const PHRASE_SCENARIO = {
+  prudent: 'Hypothèses volontairement prudentes.',
+  central: 'Hypothèses équilibrées pour une projection long terme.',
+  dynamique: 'Hypothèses plus favorables, mais encore plausibles.',
+  perso: 'Tes propres taux, posés plus bas.',
+};
+
+function scenarioProjection() {
+  const m = Store.state.meta;
+  if (m.projScenario) return m.projScenario;
+  const aDesTaux = [m.projRate, m.projRateGaranti, m.projRateAutres]
+    .some(v => v !== undefined && v !== null && v !== '');
+  return aDesTaux ? 'perso' : SCENARIO_DEFAUT;
+}
+
 function projectionSettings() {
   const m = Store.state.meta;
+  const scenario = scenarioProjection();
+  const preset = TAUX_SCENARIO[scenario];
+  const taux = (champ, cle) => (preset ? preset[cle] : num(m[champ]));
   return {
+    scenario,
     monthly: num(m.projMonthly) || suggestedMonthly(),
-    rate: num(m.projRate),
-    rateAutres: num(m.projRateAutres),
-    rateGaranti: num(m.projRateGaranti),
+    rate: taux('projRate', 'marche'),
+    rateAutres: taux('projRateAutres', 'nonCote'),
+    rateGaranti: taux('projRateGaranti', 'garanti'),
     versementVers: m.projVersementVers || 'marche',
     inflation: num(m.projInflation),
     target: num(m.projTarget),
@@ -3970,9 +4029,17 @@ function projectionSettings() {
 
 const VERSEMENT_VERS = [
   ['marche',     'Actifs de marché'],
+  ['garanti',    'Capital garanti'],
   ['nonCote',    'Non coté'],
   ['liquidites', 'Liquidités'],
 ];
+
+function repartitionVersement(s = projectionSettings()) {
+  const nul = { marche: 0, nonCote: 0, garanti: 0, liquidites: 0 };
+  const vers = s.versementVers;
+  const poche = ['liquidites', 'nonCote', 'garanti'].includes(vers) ? vers : 'marche';
+  return { ...nul, [poche]: 1 };
+}
 
 function suggestedMonthly() {
   const rec = savingsReconciliation();
@@ -4080,14 +4147,25 @@ function capitalisation(opts = {}) {
   let capital = departMarche, verse = departMarche;
   let nonCote = departNonCote, liquides = departLiquides + departProjet, garanti = departGaranti;
 
-  const vers = ['liquidites', 'nonCote'].includes(s.versementVers)
-    ? s.versementVers : 'marche';
+  /* Le versement se PARTAGE desormais, au lieu de tomber tout entier dans une
+     poche. « Selon mon allocation cible » repartit selon les cibles declarees ;
+     les autres choix donnent une fraction de 1 sur une seule poche, ce qui
+     reproduit exactement le comportement anterieur.
+
+     Quand `opts.start` est impose — la fiche « horizon », des tests — tout va au
+     marche : les autres poches sont vides dans ce mode, et y verser produirait
+     un gain sur un depart inexistant. */
+  const f = opts.start != null
+    ? { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 }
+    : repartitionVersement(s);
+  const vm = s.monthly * f.marche, vn = s.monthly * f.nonCote;
+  const vg = s.monthly * f.garanti, vl = s.monthly * f.liquidites;
   for (let mois = 1; mois <= annees * 12; mois++) {
-    capital = capital * (1 + rMois) + (vers === 'marche' ? s.monthly : 0);
+    capital = capital * (1 + rMois) + vm;
     verse += s.monthly;
-    nonCote = nonCote * (1 + rMoisNonCote) + (vers === 'nonCote' ? s.monthly : 0);
-    garanti = garanti * (1 + rMoisGaranti);
-    if (vers === 'liquidites') liquides += s.monthly;
+    nonCote = nonCote * (1 + rMoisNonCote) + vn;
+    garanti = garanti * (1 + rMoisGaranti) + vg;
+    liquides += vl;
     if (mois % 12) continue;
     const an = mois / 12;
     const autres = nonCote + liquides + garanti;
@@ -4097,10 +4175,10 @@ function capitalisation(opts = {}) {
        rendu le gain du marche negatif, et compte le versement lui-meme comme un
        gain du cote des liquidites. */
     const cumul = mois * s.monthly;
-    const misMarche = departMarche + (vers === 'marche' ? cumul : 0);
-    const misNonCote = departNonCote + (vers === 'nonCote' ? cumul : 0);
-    const misLiquides = departLiquides + departProjet + (vers === 'liquidites' ? cumul : 0);
-    const misGaranti = departGaranti;
+    const misMarche = departMarche + cumul * f.marche;
+    const misNonCote = departNonCote + cumul * f.nonCote;
+    const misLiquides = departLiquides + departProjet + cumul * f.liquidites;
+    const misGaranti = departGaranti + cumul * f.garanti;
     const gainsMarche = capital - misMarche;
     const gainsAutres = autres - (misNonCote + misLiquides + misGaranti);
     points.push({

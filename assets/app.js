@@ -424,6 +424,29 @@ function barreCommutateur(choix, actif, action, cle) {
   </div>`;
 }
 
+/* Le choix d'un jeu d'hypotheses, et son habillage lui appartient.
+
+   Les trois pilules d'un `.segmented` etaient exactement le dessin des onglets
+   « Aujourd'hui | Historique | Projection » qui coiffent la meme page : deux
+   controles identiques a l'oeil, l'un qui change d'ecran et l'autre qui change
+   un calcul. Un pave borde ne se confond avec aucune navigation, et il a la
+   place d'afficher ce qu'il suppose — c'est le taux qui distingue les trois
+   choix, pas le mot.
+
+   Le taux imprime est celui du scenario, une propriete de la table, jamais un
+   reglage relu : ces trois valeurs ne dependent pas de l'etat. */
+function choixHypothese(actif) {
+  return `
+    <div class="choix-hypothese" role="group">
+      ${SCENARIOS_PROJECTION.map(([cle, nom, taux]) => `<button
+        data-action="proj-scenario" data-scenario="${esc(cle)}"
+        class="${cle === actif ? 'on' : ''}" aria-pressed="${cle === actif}">
+        <b>${esc(trad(nom))}</b>
+        <span>${fmtPct(taux.marche, 0)} ${trad('par an')}</span>
+      </button>`).join('')}
+    </div>`;
+}
+
 function barreSousOnglets(vue) {
   const choix = SOUS_ONGLETS[vue];
   if (!choix) return '';
@@ -1167,7 +1190,7 @@ function viewNotifs() {
   </div>` : ''}`;
 }
 
-const A_PLAT = trad('porté à plat, sans rendement');
+const A_PLAT = trad('sans rendement');
 
 const NOM_LIGNE_MAX = 30;
 
@@ -1367,6 +1390,12 @@ function viewObjective() {
         aide(`${trad('Le même montant, une fois retirée une inflation de')} ${fmtPct(s.inflation, 0)} ${trad('par an pendant')} ${projHorizon} ${trad('ans. C’est ce que cette somme permettrait d’acheter aux prix que tu connais.')}`)
       }</dt><dd>${fmtEUR(dernier.real)}</dd>` : ''}
     </dl>
+    ${s.target ? `<p class="ligne-cible">${trad('Cible de')} ${fmtEUR0(s.target)}${deuxPoints()}
+      <b>${anneeAtteinte
+        ? `${trad('franchie en')} ${anneeAtteinte.year}`
+        : `${trad('non atteinte')} ${trad('d’ici')} ${dernier.year}`}</b>${anneeAtteinte
+        ? ` <span class="muted">(${trad('dans')} ${Math.round(anneeAtteinte.yearsFromNow)} ${trad('ans')})</span>`
+        : ''}</p>` : ''}
   </div>`;
   })()}
 
@@ -1375,11 +1404,10 @@ function viewObjective() {
       <div class="card-head"><h2>${trad('Tes hypothèses')}</h2></div>
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
-          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} ${trad('sur')}
-            ${trad(Object.fromEntries(VERSEMENT_VERS)[s.versementVers]).toLowerCase()} ·
-            ${trad('marché')} ${fmtPct(s.rate, 0)} ·
-            ${trad('non coté')} ${num(s.rateAutres) ? fmtPct(s.rateAutres, 0) : trad('à plat')} ·
-            ${trad('inflation')} ${fmtPct(s.inflation, 0)}${num(s.target) ? ` · ${trad('cible')} ${fmtEUR0(s.target)}` : ''}</span>
+          <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} ·
+            ${trad('scénario')} ${trad(nomScenario(s.scenario)).toLowerCase()} ·
+            ${trad('inflation')} ${fmtPct(s.inflation, 0)}${
+              num(s.target) ? ` · ${trad('cible')} ${fmtEUR0(s.target)}` : ''}</span>
           <span class="pli-action">${trad('Régler')}</span>
         </summary>
       <div class="modal-champs" style="margin-top:12px">
@@ -1389,7 +1417,7 @@ function viewObjective() {
                   ? `${trad('Ton budget dégage')} ${fmtEUR0(suggestedMonthly())} ${trad('par mois.')}`
                   : trad('Repris de ton budget ; choisis une valeur pour la figer.'),
                 s.monthly)}
-        ${champText('Versé sur', 'meta.projVersementVers', VERSEMENT_VERS,
+        ${champText('Affectation des versements', 'meta.projVersementVers', VERSEMENT_VERS,
                 s.versementVers,
                 trad('Ces euros capitalisent au taux de la poche que tu choisis. '
                   + 'Sur les liquidités, ils s’accumulent sans rendement : c’est ce que fait '
@@ -1397,15 +1425,34 @@ function viewObjective() {
                   + 'honnête si tu épargnes sans investir. '
                   + 'Si tu partages ton versement, garde un seul choix et ajuste le taux : '
                   + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'))}
+        <div class="field">
+          <label>${trad('Scénario de projection')}${aide(trad(
+            'Ces valeurs sont des hypothèses de simulation, pas des prévisions de '
+            + 'rendement. Les marchés peuvent évoluer très différemment. Le scénario '
+            + 'fixe un rendement par poche ; tu peux les poser toi-même plus bas.'))}</label>
+          ${choixHypothese(s.scenario)}
+          <span class="hint">${trad(PHRASE_SCENARIO[s.scenario] || PHRASE_SCENARIO.perso)}</span>
+          <span class="hint">${trad('Capital garanti')} ${fmtPct(s.rateGaranti, 1)} ${trad('par an')} ·
+            ${trad('non coté')} ${num(s.rateAutres)
+              ? `${fmtPct(s.rateAutres, 1)} ${trad('par an')}` : trad('valeur constante')} ·
+            ${trad('liquidités')} ${trad('sans rendement')}</span>
+        </div>
+      <details class="pli-reglages pli-avance" ${s.scenario === 'perso' ? 'open' : ''}>
+        <summary>
+          <span class="pli-valeurs">${trad('Personnaliser les rendements')}</span>
+          <span class="pli-action">${s.scenario === 'perso'
+            ? trad('personnalisé') : trad('Ouvrir')}</span>
+        </summary>
+        <div class="modal-champs" style="margin-top:8px">
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de titres et de crypto.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'))}
         ${champ('Rendement du non coté', 'meta.projRateAutres', paliers(20, 1),
-                v => v ? `${fmtPct(v, 0)} ${trad('par an')}` : trad('aucun, porté à plat'),
+                v => `${fmtPct(v, 0)} ${trad('par an')}`,
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} ${trad('de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application')}`)}
         ${champ('Rendement du capital garanti', 'meta.projRateGaranti', paliers(8, 0.5),
-                v => v ? `${fmtPct(v, 1)} ${trad('par an')}` : trad('aucun, porté à plat'),
+                v => `${fmtPct(v, 1)} ${trad('par an')}`,
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`)}
         <div class="field">
           <label>${trad('Rendement des liquidités')}${aide(
@@ -1413,26 +1460,28 @@ function viewObjective() {
             + trad('livret ou non, y compris le cash déjà chez ton courtier : tant qu’il '
             + 'n’est pas placé, il ne rapporte rien. Elles traversent donc la '
             + 'projection telles quelles, et il n’y a rien à régler.'))}</label>
-          <p class="valeur-figee">${trad('aucun, portées à plat')}</p>
+          <p class="valeur-figee">0 % ${trad('par an')}</p>
         </div>
+        </div>
+      </details>
         ${champ('Inflation', 'meta.projInflation', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                trad('Alimente les lignes « Après inflation » : le résultat traduit en euros d’aujourd’hui'))}
-        ${champ('Cible long terme', 'meta.projTarget',
-                [0, ...paliers(1000000, 50000, 50000), 1500000, 2000000, 3000000, 5000000],
-                v => v ? fmtEUR0(v) : trad('aucune'),
-                trad('Optionnel, pour savoir quand tu la franchis'))}
+                trad('Les rendements des scénarios sont nominaux : l’inflation se retire '
+                  + 'ensuite, une fois, sur le total. La ligne « Après inflation » donne '
+                  + 'donc le résultat en euros d’aujourd’hui, c’est-à-dire ce que cette '
+                  + 'somme permettrait d’acheter aux prix que tu connais.'))}
+        ${champ('Cible', 'meta.projTarget',
+                [0, 100000, 250000, 500000, 1000000],
+                v => v ? fmtEUR0(v) : trad('Pas de cible'),
+                trad('Optionnel. Si tu en poses une, la page dit en quelle année tu la franchis.'))}
       </div>
       ${num(Store.state.meta.projMonthly) ? `
       <button class="btn sm ghost" data-action="proj-use-budget" style="margin-top:12px">
         ${trad('Reprendre')} ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} ${trad('depuis le budget')}</button>` : ''}
       </details>
 
-      ${s.target ? `<div class="note" style="margin-top:12px">
-        ${anneeAtteinte ? `◎ <span>${trad('Cible de')} <b>${fmtEUR0(s.target)}</b> ${trad('franchie en')}
-            <b>${anneeAtteinte.year}${anneeAtteinte.months ? ` (+${anneeAtteinte.months} ${trad('mois')})` : ''}</b>,
-            ${trad('soit dans')} ${Math.round(anneeAtteinte.yearsFromNow)} ${trad('ans')}.</span>`
-          : (() => {
+      ${s.target && !anneeAtteinte ? `<div class="note" style="margin-top:12px">
+        ${(() => {
             const plat = num(p.plat);
             const req = targetRequirements({ start: g.total - plat, target: s.target - plat,
               monthly: s.monthly, rate: s.rate, years: projHorizon });
@@ -1449,7 +1498,7 @@ function viewObjective() {
               ${lignes.length ? `:<br>${lignes.map(l => `• ${l}`).join('<br>')}` : ''}
               ${req.rate == null && req.monthly != null
                 ? `<br><span class="muted">${trad('Aucun rendement réaliste ne suffit à lui seul.')}</span>` : ''}</span>`;
-          })()}
+        })()}
       </div>` : ''}
 
       <div class="note" style="margin-top:12px">
@@ -1475,8 +1524,8 @@ function viewObjective() {
       <p class="small muted" style="margin:12px 0 0">
         ${fmtPct(s.rate)} ${trad('par an sur tes actifs de marché.')}
         ${num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('sur ton non coté.')}`
-                            : trad('Ton non coté est porté à plat.')}
-        ${trad('Tes liquidités sont portées à plat, le cash qui attend chez ton courtier compris.')}
+                            : trad('Ton non coté garde sa valeur actuelle.')}
+        ${trad('Tes liquidités gardent leur valeur, le cash qui attend chez ton courtier compris.')}
       </p>
       ${(() => {
         const t0 = nowTotals();
@@ -7029,6 +7078,10 @@ const ACTIONS = {
      reglage : `hero-base` est un alias historique de `evo-base`. */
   'evo-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
+  'proj-scenario'(btn) {
+    Store.state.meta.projScenario = btn.dataset.scenario;
+    Store.save(); render();
+  },
   'hero-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   /* On change d'adresse, pas d'état : `hashchange` déclenche le rendu, et le
      bouton retour du navigateur ramène au sous-onglet précédent. */
@@ -11008,7 +11061,11 @@ function bindGlobal() {
     if (!f) return;
     const bloc = f.closest('[data-differe]');
     if (bloc) { bloc.dataset.differe = 'sale'; return; }
+    if (bloc) { bloc.dataset.differe = 'sale'; return; }
     applyField(f);
+    if (TAUX_PROJECTION.includes(f.dataset.path)) {
+      Store.state.meta.projScenario = 'perso';
+    }
     /* `change` clot une saisie — une liste choisie, un champ quitte — donc rien a
        regrouper : l'envoi part tout de suite. Seul `input`, caractere par
        caractere, a besoin du delai. */
