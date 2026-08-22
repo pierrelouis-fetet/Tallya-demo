@@ -1830,7 +1830,7 @@ const I18N = {
     "Dans quoi c’est réparti": "How it is split",
     "Par classe d’actif": "By asset class",
     "Par compte": "By account",
-    "Ligne par ligne": "Line by line",
+    "Par catégorie d’actif": "By asset category",
     "Où c’est placé": "Where it is held",
     "Compte par compte": "Account by account",
     "Régler l’objectif de dépenses mensuel,": "Set the monthly spending target,",

@@ -2835,7 +2835,7 @@ function viewAllocation() {
     <div class="chart" id="aMacro"></div>
     ${tbl(poches, baseAlloc().nom,
            valeurBaseAlloc())}
-    <h3 class="sous-titre-carte">${trad('Ligne par ligne')}</h3>
+    <h3 class="sous-titre-carte">${trad('Par catégorie d’actif')}</h3>
     <div class="chart" id="aAsset"></div>    <div class="chart" id="aAsset"></div>
     ${phraseConcentration()}
     ${t.dettes && !allocFinancier ? `<dl class="kv" style="margin-top:8px">

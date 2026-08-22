@@ -17117,10 +17117,10 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
         + 'pourcentage : un tableau dessous répète la même liste');
     }
 
-    /* Et « Ligne par ligne » porte a la place la lecture que l'ordre ne donne
+    /* Et « Par categorie d'actif » porte a la place la lecture que l'ordre ne donne
        pas tout seul. */
-    const detail = vue.slice(vue.indexOf("trad('Ligne par ligne')"),
-                             vue.indexOf('data-anchor', vue.indexOf("trad('Ligne par ligne')")));
+    const detail = vue.slice(vue.indexOf("trad('Par catégorie d’actif')"),
+                             vue.indexOf('data-anchor', vue.indexOf("trad('Par catégorie d’actif')")));
     vrai(/phraseConcentration\(\)/.test(detail),
       'le classement par poids porte la lecture que son ordre ne donne pas');
   });
