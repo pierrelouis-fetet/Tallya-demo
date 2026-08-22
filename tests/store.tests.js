@@ -15807,6 +15807,45 @@ suite('La graine de la démonstration parle une seule langue', () => {
   });
 });
 
+suite('Un identifiant ne se porte qu’une fois', () => {
+
+  test('aucun conteneur de graphique n’est en double', () => {
+    /* Une greffe a laisse deux `<div class="chart" id="aAsset">` cote a cote.
+       `Charts.mount()` cible par identifiant : il n'en trouve qu'un, et le
+       second reste un vide de la hauteur d'un graphique -- sans erreur, sans
+       trace dans la console, et le seul symptome est un trou dans une carte.
+
+       Douze conteneurs, douze identifiants distincts : la convention tient dans
+       toute l'application, et ce controle la garde. */
+    const src = lireSource('assets/app.js');
+    const ids = [...src.matchAll(/class="chart[^"]*"\s+id="([^"]+)"/g)].map(m => m[1]);
+    vrai(ids.length >= 10,
+      `les conteneurs doivent etre trouvables (${ids.length} vus)`);
+    const vus = new Map();
+    const doubles = [];
+    for (const id of ids) {
+      if (vus.has(id)) doubles.push(id); else vus.set(id, true);
+    }
+    eq(doubles.join(', '), '',
+      'un conteneur en double laisse un vide de la hauteur d’un graphique');
+  });
+
+  test('chaque conteneur est monté, et chaque montage a son conteneur', () => {
+    /* L'autre moitie du meme accident : un conteneur que personne ne remplit. Il
+       se lit comme un graphique absent, et il ne leve aucune erreur.
+
+       Le sens inverse ne se teste pas ici : `$('#...')` sert a tout dans ce
+       fichier -- le corps d'une fenetre, la vue, un total -- donc comparer tous
+       ses selecteurs aux seuls conteneurs de graphiques crierait sur trente
+       identifiants parfaitement legitimes. */
+    const src = lireSource('assets/app.js');
+    const poses = new Set([...src.matchAll(/class="chart[^"]*"\s+id="([^"]+)"/g)].map(m => m[1]));
+    const vises = new Set([...src.matchAll(/\$\('#([A-Za-z0-9_-]+)'\)/g)].map(m => m[1]));
+    const orphelins = [...poses].filter(id => !vises.has(id));
+    eq(orphelins.join(', '), '', 'ces conteneurs existent mais rien ne les remplit');
+  });
+});
+
 suite('Le « ? » d’une aide ne tombe jamais seul sur une ligne', () => {
 
   /* Mesure a l'ecran : sur une colonne de 208 px, « Moyenne mensuelle du

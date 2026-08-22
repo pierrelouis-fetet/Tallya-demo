@@ -759,7 +759,7 @@ function viewOverview() {
   ${pasAFaire('comptes') ? `
   <div class="card">
     <p class="empty" style="margin:0">${trad('Le reste de cette page se remplit tout seul : '
-      + 'la courbe de ton patrimoine, ton rythme d’épargne, ce que tu tiendrais sans '
+      + 'la courbe de ton patrimoine, ton rythme d’accumulation, ce que tu tiendrais sans '
       + 'revenus, ton portefeuille. Tout part des comptes que tu déclares.')}</p>
   </div>`
   : `
@@ -779,7 +779,7 @@ function viewOverview() {
           ${p.apports ? `
           <dt>${trad('Dont')} ${p.apports < 0 ? trad('sorties exceptionnelles') : trad('entrées extérieures')}${aide(
               trad('Les entrées et sorties exceptionnelles de la période affichée : un héritage, une prime, la vente d’un bien, ou à l’inverse une voiture, des travaux. Elles déplacent ton patrimoine sans rien dire de ton épargne, et la moyenne du dessous les compte : hors elles, ton rythme propre est de')
-            + ' ' + fmtEUR0(p.averageHorsApports) + ' ' + trad('par mois. Le journal est dans Budget, onglet Relevés.'))}</dt>
+            + ' ' + fmtEUR0(p.averageHorsApports) + ' ' + trad('par mois. Retrouve le journal dans Aperçu > Historique.'))}</dt>
             <dd><button type="button" class="mois-lien ${cls(p.apports)}" data-action="goto" data-view="history"
                         data-anchor="" title="${trad('Voir le journal des entrées et sorties exceptionnelles')}"
                 >${fmtSigned(p.apports)}</button></dd>` : ''}
@@ -2880,7 +2880,7 @@ function viewAllocation() {
     ${tbl(poches, baseAlloc().nom,
            valeurBaseAlloc())}
     <h3 class="sous-titre-carte">${trad('Par catégorie d’actif')}</h3>
-    <div class="chart" id="aAsset"></div>    <div class="chart" id="aAsset"></div>
+    <div class="chart" id="aAsset"></div>
     ${phraseConcentration()}
     ${t.dettes && !allocFinancier ? `<dl class="kv" style="margin-top:8px">
       <dt>${trad('Crédits en cours')}${aide(trad("Ils ne figurent pas dans les parts ci-dessus : une répartition dit où est ton argent, et un crédit n’est pas un endroit. Il se retire du total, ici, pour donner le patrimoine net."))}</dt>
@@ -3083,7 +3083,7 @@ function viewRebalance() {
   return `
   <p class="perimetre perimetre-tete">${trad('Ces cibles ne portent que sur')}
     <b>${trad('tes comptes d’investissement')}</b> ${trad('et leur trésorerie,')}
-    ${fmtEUR0(r.base)}${aide(trad("PEA, compte-titres, assurance-vie, PER, portefeuille de cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger donnerait des pourcentages qu’aucune décision ne peut suivre. L’onglet Patrimoine, lui, montre tout."))}.</p>
+    ${fmtEUR0(r.base)}${aide(trad("PEA, compte-titres, assurance-vie, PER, portefeuille de cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger donnerait des pourcentages qu’aucune décision ne peut suivre. Allocation, elle, montre tout ton patrimoine."))}.</p>
 
   <div class="card plan">
     <div class="card-head"><h2>${trad('Ce qu’il y a à faire')}${aide(trad("Les mouvements qui ramènent chaque classe à sa cible. Quand tes pourcentages totalisent 100 %, ce qu’il faut vendre finance exactement ce qu’il faut acheter."))}</h2>
@@ -3309,7 +3309,7 @@ function viewHistory() {
     ${pasAFaire('comptes') ? `
     <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
       + 'à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton '
-      + 'patrimoine et ton rythme d’épargne. Il attend donc un compte.')}</p>
+      + 'patrimoine et ton rythme d’accumulation. Il attend donc un compte.')}</p>
     ${invitePremierPas('comptes')}`
     : invitePremierPas('releves')}
     <div class="liste-principale">
@@ -5265,7 +5265,7 @@ function viewBudget(section = 'depenses') {
         ${rec.realPerMonth != null ? `
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
           <dl class="kv">
-            <dt>${trad('Croissance réelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d'un mois sur l'autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C'est le même chiffre que « ton rythme observé » dans Objectif."))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
+            <dt>${trad('Croissance réelle du patrimoine')}${aide(trad('Moyenne des variations du patrimoine net d’un mois sur l’autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C’est le même chiffre que le rythme observé dans Aperçu > Aujourd’hui.'))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
             <dt>${trad('Ce qui ne vient pas du budget')}${aide(trad("Ce qui sépare la croissance de ton patrimoine de l'épargne que ton budget dégage : les marchés, un apport extérieur, le capital d'un crédit que tu rembourses. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n'est une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
           </dl>
           <p class="small muted" style="margin:12px 0 0">
