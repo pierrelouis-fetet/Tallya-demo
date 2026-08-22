@@ -3260,10 +3260,39 @@ function neePlusDetailler() {
   return garde;
 }
 
+function regrouperMois(ligne, garde) {
+  const avant = { ...(ligne.v || {}) };
+  const remplis = Object.keys(avant).filter(k => num(avant[k]));
+  const total = round2(remplis.reduce((s, k) => s + num(avant[k]), 0));
+  ligne.v = total ? { [garde]: total } : {};
+  if (remplis.length > 1) ligne.avantRegroupement = { v: avant, total };
+  else delete ligne.avantRegroupement;
+  return total;
+}
+
+/* Rendre le decoupage garde, si et seulement si le total n'a pas bouge.
+
+   Rend `true` quand il a ete rendu. Dans le cas contraire la memoire s'efface :
+   elle ne decrit plus ce mois, et la garder ferait esperer un retour qui ne
+   viendra pas. */
+function defaireRegroupement(ligne) {
+  const memoire = ligne && ligne.avantRegroupement;
+  if (!memoire) return false;
+  const total = Object.values(ligne.v || {}).reduce((s, x) => s + num(x), 0);
+  delete ligne.avantRegroupement;
+  if (Math.abs(total - num(memoire.total)) > 0.005) return false;
+  ligne.v = memoire.v;
+  return true;
+}
+
 function reprendreLeDetail() {
   const retirees = [...(Store.state.budget.retirees || [])];
   retirees.forEach(reprendreCategorie);
-  return retirees.length;
+  let mois = 0;
+  for (const ligne of (Store.state.budget.expenses || [])) {
+    if (defaireRegroupement(ligne)) mois++;
+  }
+  return { categories: retirees.length, mois };
 }
 
 function addExpenseCategory(nom) {

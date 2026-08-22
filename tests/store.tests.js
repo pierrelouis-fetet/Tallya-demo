@@ -5530,7 +5530,7 @@ suite('Retirer une catégorie n’efface rien', () => {
                             src.indexOf('function remettreLeDetail'));
     vrai(geste.includes('saisie ? saisie.v :'),
       'le total se somme sur ce qui est SAISI quand la fenetre est ouverte');
-    vrai(geste.includes('ligne.v = total ? { [garde]: round2(total) }'),
+    vrai(geste.includes('regrouperMois(ligne, garde)'),
       'et il s ecrit sur la seule case qui reste');
     vrai(geste.includes('Store.addBackup'),
       'une sauvegarde precede : c est le seul endroit du geste qui touche des montants');
@@ -5659,6 +5659,60 @@ suite('Retirer une catégorie n’efface rien', () => {
       'et aucun fourre-tout n’est créé pour rien');
   });
 
+  test('le decoupage d un mois regroupe se garde, et se rend', () => {
+    /* « Ne plus detailler » sommait les montants du mois sur une seule case, et
+       revenir rendait les categories sans les montants : tout restait sur la
+       case unique. Ctrl+Z les rendait, mais il defait aussi tout le reste, et
+       personne n'y pense. */
+    Fixture.poser(s => {
+      s.budget.categories = ['Courses', 'Restos', 'Transports'];
+      s.budget.expenses = [{ month: '2026-01', note: '',
+                             v: { Courses: 205, Restos: 145, Transports: 35 } }];
+    });
+    const ligne = Store.state.budget.expenses[0];
+    const garde = neePlusDetailler();
+    const total = regrouperMois(ligne, garde);
+    pres(total, 385, 'le total du mois ne bouge pas d un centime');
+    eq(Object.keys(ligne.v).length, 1, 'une seule case reste');
+    pres(ligne.v[garde], 385, 'et elle porte la somme');
+    vrai(ligne.avantRegroupement, 'le decoupage d avant est garde');
+    pres(ligne.avantRegroupement.total, 385, 'avec le total qu il faisait');
+
+    const fait = reprendreLeDetail();
+    eq(fait.mois, 1, 'le retour rend le decoupage d un mois');
+    pres(ligne.v.Courses, 205, 'Courses revient a son montant');
+    pres(ligne.v.Restos, 145, 'Restos aussi');
+    pres(ligne.v.Transports, 35, 'et Transports');
+    eq(ligne.avantRegroupement, undefined, 'la memoire s efface : elle a servi');
+  });
+
+  test('une case modifiee depuis refuse la memoire, et le montant reste', () => {
+    /* La condition du retour est le total. Remettre un decoupage qui ne fait
+       plus le total afficherait un mois different de celui qu'on a saisi, et le
+       total cesserait d egaler la somme de ses parts. */
+    Fixture.poser(s => {
+      s.budget.categories = ['Courses', 'Restos'];
+      s.budget.expenses = [{ month: '2026-01', note: '', v: { Tout: 500 },
+                             avantRegroupement: { v: { Courses: 300, Restos: 145 }, total: 445 } }];
+    });
+    const ligne = Store.state.budget.expenses[0];
+    eq(defaireRegroupement(ligne), false, 'la memoire est refusee');
+    pres(ligne.v.Tout, 500, 'le montant saisi depuis reste intact');
+    eq(ligne.avantRegroupement, undefined,
+      'et la memoire s efface : elle ne decrit plus ce mois');
+  });
+
+  test('regrouper une seule case ne garde rien : il n y a rien a defaire', () => {
+    Fixture.poser(s => {
+      s.budget.categories = ['Courses'];
+      s.budget.expenses = [{ month: '2026-01', note: '', v: { Courses: 205 } }];
+    });
+    const ligne = Store.state.budget.expenses[0];
+    regrouperMois(ligne, neePlusDetailler());
+    eq(ligne.avantRegroupement, undefined,
+      'un seul montant regroupe ne perd aucun decoupage');
+  });
+
   test('reprendre le détail remet tout, et le dit', () => {
     /* Il remet AUSSI ce qui avait ete retire a la main avant : l'application ne
        sait pas les distinguer, et retenir un avant demanderait un second etat
@@ -5666,8 +5720,9 @@ suite('Retirer une catégorie n’efface rien', () => {
        du bouton le dit, et rien n'est perdu — re-retirer coute un clic. */
     Fixture.poser(troisMois);
     neePlusDetailler();
-    const n = reprendreLeDetail();
-    vrai(n >= 2, `au moins deux catégories reviennent, obtenu ${n}`);
+    const fait = reprendreLeDetail();
+    vrai(fait.categories >= 2,
+      `au moins deux catégories reviennent, obtenu ${fait.categories}`);
     eq(categoriesSaisie().length, expenseCategories().length,
       'plus rien n’est retiré');
     vrai(!sansDistinction(), 'et l’état se relit à l’envers, toujours sans drapeau');
@@ -15912,8 +15967,12 @@ suite('Projection se lit sans explication', () => {
 
   test('l’affectation dit ce qu’elle veut dire', () => {
     const src = lireSource('assets/app.js');
-    vrai(/trad\('Où va ton épargne future\.'\)\)\}/.test(src),
+    vrai(src.includes("trad('Où va ton épargne future.')"),
       '« Affectation des versements » est juste mais abstrait : une ligne le traduit');
+    /* Et quand la poche choisie ne rapporte rien, la ligne le dit : sinon taper
+       sur les trois paves ne produit presque rien, sans explication. */
+    vrai(src.includes('num(tauxDeDestination(s))'),
+      'la ligne signale une destination sans rendement');
   });
 
   test('« actifs de marché » énumère ce que le moteur y met, et rien d’autre', () => {

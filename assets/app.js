@@ -435,6 +435,16 @@ function barreCommutateur(choix, actif, action, cle) {
 
    Le taux imprime est celui du scenario, une propriete de la table, jamais un
    reglage relu : ces trois valeurs ne dependent pas de l'etat. */
+const TAUX_DESTINATION = {
+  marche: s => s.rate,
+  garanti: s => s.rateGaranti,
+  nonCote: s => s.rateAutres,
+  liquidites: () => 0,
+};
+/* Le repli sur le marche est celui de `repartitionVersement()` : une valeur qui
+   ne nomme aucune poche verse sur les actifs de marche. */
+const tauxDeDestination = s => (TAUX_DESTINATION[s.versementVers] || TAUX_DESTINATION.marche)(s);
+
 function choixHypothese(actif) {
   return `
     <div class="choix-hypothese" role="group">
@@ -442,7 +452,7 @@ function choixHypothese(actif) {
         data-action="proj-scenario" data-scenario="${esc(cle)}"
         class="${cle === actif ? 'on' : ''}" aria-pressed="${cle === actif}">
         <b>${esc(trad(nom))}</b>
-        <span>${fmtPct(taux.marche, 0)} ${trad('par an')}</span>
+        <span>${trad('marché')} ${fmtPct(taux.marche, 0)}</span>
       </button>`).join('')}
     </div>`;
 }
@@ -1435,8 +1445,7 @@ function viewObjective() {
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
           <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} ·
-            ${trad('scénario')} ${trad(nomScenario(s.scenario)).toLowerCase()} ·
-            ${trad('inflation')} ${fmtPct(s.inflation, 0)}${
+            ${trad('scénario')} ${trad(nomScenario(s.scenario)).toLowerCase()}${
               num(s.target) ? ` · ${trad('cible')} ${fmtEUR0(s.target)}` : ''}</span>
           <span class="pli-action">${trad('Régler')}</span>
         </summary>
@@ -1466,7 +1475,10 @@ function viewObjective() {
                   + 'honnête si tu épargnes sans investir. '
                   + 'Si tu partages ton versement, garde un seul choix et ajuste le taux : '
                   + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'),
-                trad('Où va ton épargne future.'))}
+                trad('Où va ton épargne future.')
+                  + (num(tauxDeDestination(s)) ? ''
+                    : ' ' + trad('Cette poche ne produit aucun rendement dans les scénarios : '
+                        + 'ce que tu y verses s’accumule sans grossir.')))}
         <div class="field">
           <label>${trad('Scénario de projection')}${aide(trad(
             'Ces valeurs sont des hypothèses de simulation, pas des prévisions de '
@@ -7423,11 +7435,10 @@ const ACTIONS = {
     toast(`${trad('Une seule case à remplir :')} ${guill(fait.garde)}`);
   },
   'reprendre-detail'() {
-    const n = remettreLeDetail();
-    if (!n) return;
+    const fait = remettreLeDetail();
+    if (!fait.categories && !fait.mois) return;
     render();
-    toast(`${n} ${n > 1 ? trad('catégories reviennent dans la saisie')
-                        : trad('catégorie revient dans la saisie')}`);
+    toast(phraseRetourDetail(fait));
   },
   async 'del-category'(btn) {
     const cat = btn.dataset.cat;
@@ -8919,7 +8930,9 @@ function cablerSommePlus(racine) {
 function ecrireDepensesMois(index, saisi) {
   const r = Store.state.budget.expenses[index];
   if (!r || !saisi) return null;
-  r.v = saisi.v;
+  /* `v: null` veut dire « garde ce que l'etat porte » : le retour du decoupage
+     vient de le reecrire, et renvoyer la saisie d'avant l'ecraserait. */
+  if (saisi.v != null) r.v = saisi.v;
   r.note = saisi.note;
   Store.save();
   return r;
@@ -8941,15 +8954,25 @@ async function nePlusDetaillerPartout({ index = null, saisie = null } = {}) {
   if (!await askConfirm(question, { danger: false, ok: trad('Une seule case') })) return null;
   Store.addBackup('avant regroupement des dépenses');
   const garde = neePlusDetailler();
-  if (ligne) ligne.v = total ? { [garde]: round2(total) } : {};
+  /* `regrouperMois` garde le decoupage d'avant sur la ligne, avec son total :
+     c'est ce qui permet a « Reprendre le detail » de rendre les montants. */
+  if (ligne) regrouperMois(ligne, garde);
   Store.save();
   return { garde, total };
 }
 
 function remettreLeDetail() {
-  const n = reprendreLeDetail();
-  if (n) Store.save();
-  return n;
+  const fait = reprendreLeDetail();
+  if (fait.categories || fait.mois) Store.save();
+  return fait;
+}
+
+function phraseRetourDetail(fait) {
+  const cat = `${fait.categories} ${fait.categories > 1
+    ? trad('catégories reviennent dans la saisie') : trad('catégorie revient dans la saisie')}`;
+  if (!fait.mois) return cat;
+  return `${cat}, ${trad('et les montants de')} ${fait.mois} ${fait.mois > 1
+    ? trad('mois regroupés') : trad('mois regroupé')}`;
 }
 
 function askExpenseMonth(index) {
@@ -9069,10 +9092,9 @@ function askExpenseMonth(index) {
 
     function remettreDetailIci() {
       const etat = saisie();
-      const n = remettreLeDetail();
-      if (n) toast(`${n} ${n > 1 ? trad('catégories reviennent dans la saisie')
-                                 : trad('catégorie revient dans la saisie')}`);
-      fermer({ ...etat, rouvrir: true });
+      const fait = remettreLeDetail();
+      if (fait.categories || fait.mois) toast(phraseRetourDetail(fait));
+      fermer({ v: null, note: etat.note, rouvrir: true });
     }
 
     const fermer = v => {
