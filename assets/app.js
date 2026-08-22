@@ -1471,13 +1471,22 @@ function viewObjective() {
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('d’actions, d’obligations, d’immobilier coté, de multi-actifs, de métaux précieux et de crypto : tout ce qui se vend sur un marché.')} `
-                + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'))}
+                + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'),
+                /* Le taux EN VIGUEUR, et non celui qui dort dans l'etat.
+                   Ces trois champs lisaient `meta.projRate` et compagnie, alors
+                   que c'est le scenario qui gouverne : « Dynamique » affichait
+                   8 % sur son pave et « 0 % par an » dans le champ juste en
+                   dessous. Un reglage qui montre autre chose que ce qu'il
+                   commande n'est pas un reglage, c'est un piege. */
+                s.rate)}
         ${champ('Rendement du non coté', 'meta.projRateAutres', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} ${trad('de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application')}`)}
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.nonCote)} ${trad('de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application')}`,
+                s.rateAutres)}
         ${champ('Rendement du capital garanti', 'meta.projRateGaranti', paliers(8, 0.5),
                 v => `${fmtPct(v, 1)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`)}
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`,
+                s.rateGaranti)}
         <div class="field">
           <label>${trad('Rendement des liquidités')}${aide(
             `${fmtEUR0(capitalisation({ years: 1 }).poches.liquidites)} ${trad('de liquidités,')} `
@@ -11191,9 +11200,15 @@ function bindGlobal() {
     const bloc = f.closest('[data-differe]');
     if (bloc) { bloc.dataset.differe = 'sale'; return; }
     if (bloc) { bloc.dataset.differe = 'sale'; return; }
+    const tauxAvant = TAUX_PROJECTION.includes(f.dataset.path)
+      ? projectionSettings() : null;
     applyField(f);
-    if (TAUX_PROJECTION.includes(f.dataset.path)) {
-      Store.state.meta.projScenario = 'perso';
+    if (tauxAvant) {
+      const m = Store.state.meta;
+      if (f.dataset.path !== 'meta.projRate') m.projRate = tauxAvant.rate;
+      if (f.dataset.path !== 'meta.projRateAutres') m.projRateAutres = tauxAvant.rateAutres;
+      if (f.dataset.path !== 'meta.projRateGaranti') m.projRateGaranti = tauxAvant.rateGaranti;
+      m.projScenario = 'perso';
     }
     /* `change` clot une saisie — une liste choisie, un champ quitte — donc rien a
        regrouper : l'envoi part tout de suite. Seul `input`, caractere par

@@ -15679,6 +15679,81 @@ suite('La graine de la démonstration parle une seule langue', () => {
   });
 });
 
+suite('Un réglage montre ce qu’il commande', () => {
+
+  /* Scenario « Dynamique », 8 % ecrits sur son pave, et « Rendement des actifs
+     de marche : 0 % par an » dans le champ juste en dessous. Les deux etaient
+     vrais chacun de son cote : le pave disait le scenario, le champ lisait
+     `meta.projRate`, reste a zero. Le moteur, lui, prenait bien 8 %.
+
+     Un reglage qui montre autre chose que ce qu'il commande n'est pas un
+     reglage, c'est un piege : on croit lire une valeur inactive, on la corrige,
+     et c'est autre chose qui bouge. */
+
+  test('les trois champs de taux reçoivent la valeur en vigueur', () => {
+    const src = lireSource('assets/app.js');
+    for (const [champ, attendu] of [
+      ["champ('Rendement des actifs de marché'", 's.rate)}'],
+      ["champ('Rendement du non coté'", 's.rateAutres)}'],
+      ["champ('Rendement du capital garanti'", 's.rateGaranti)}'],
+    ]) {
+      const d = src.indexOf(champ);
+      vrai(d > 0, `${champ} doit être trouvable`);
+      const bloc = src.slice(d, src.indexOf('\n        ${', d + 10));
+      vrai(bloc.includes(attendu),
+        `${champ} doit recevoir ${attendu} : sans valeur passée, listeChoix lit `
+        + 'l’état brut, que le scénario ignore');
+    }
+  });
+
+  test('chaque scénario propose un palier qui existe dans la liste', () => {
+    /* `listeChoix` ajoute la valeur courante si elle ne tombe pas sur un palier,
+       donc rien ne casse — mais un scenario qui produirait « 2,7 % » ferait
+       apparaitre une option isolee au milieu des rondes. Les trois scenarios
+       tombent juste, et ce test le garde. */
+    for (const [cle, , taux] of SCENARIOS_PROJECTION) {
+      eq(taux.marche % 1, 0, `« ${cle} » : le taux de marché tombe sur un palier entier`);
+      eq((taux.garanti * 2) % 1, 0, `« ${cle} » : le garanti tombe sur un demi-point`);
+      vrai(taux.garanti <= 8, `« ${cle} » : le garanti tient dans la liste, qui s’arrête à 8 %`);
+      vrai(taux.marche <= 20, `« ${cle} » : le marché tient dans la liste, qui s’arrête à 20 %`);
+    }
+  });
+
+  test('passer en personnalisé fige les trois taux, pas seulement celui qu’on touche', () => {
+    /* Le piege du correctif precedent : si les champs affichent les taux du
+       scenario mais que l'etat porte encore des zeros, regler le garanti ferait
+       tomber le marche de 8 % a 0 % au rendu suivant. Personne ne l'a demande,
+       et la courbe change. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('const tauxAvant = TAUX_PROJECTION.includes'),
+                           src.indexOf("m.projScenario = 'perso';") + 30);
+    vrai(bloc, 'la bascule doit être trouvable');
+    vrai(/projectionSettings\(\)/.test(bloc),
+      'les taux en vigueur se lisent AVANT l’écriture du champ');
+    for (const champ of ['projRate', 'projRateAutres', 'projRateGaranti']) {
+      vrai(bloc.includes(`m.${champ} = tauxAvant.`),
+        `« ${champ} » se fige quand ce n’est pas lui qu’on modifie`);
+    }
+    for (const champ of ['projRate', 'projRateAutres', 'projRateGaranti']) {
+      vrai(bloc.includes(`f.dataset.path !== 'meta.${champ}'`),
+        `et « ${champ} » n’est jamais réécrit quand c’est lui qu’on vient de modifier`);
+    }
+  });
+
+  test('le moteur ne change pas de réponse pour autant', () => {
+    /* La correction est d'affichage. Le calcul prenait deja le taux du scenario,
+       et il doit continuer a le prendre, quoi que porte l'etat. */
+    Fixture.poser(s => {
+      s.meta.projScenario = 'dynamique';
+      s.meta.projRate = 0; s.meta.projRateGaranti = 0; s.meta.projRateAutres = 0;
+    });
+    const s = projectionSettings();
+    pres(s.rate, 8, 'le scénario dynamique impose 8 %, malgré le zéro enregistré');
+    pres(s.rateGaranti, 3, 'et 3 % sur le garanti');
+    pres(s.rateAutres, 0, 'le non coté reste à zéro dans les trois scénarios');
+  });
+});
+
 suite('Projection se lit sans explication', () => {
 
   /* Cinq questions qu'un nouveau venu doit trancher en dix secondes : combien il
