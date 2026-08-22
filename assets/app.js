@@ -878,6 +878,7 @@ function viewOverview() {
 
   </div>
 `}
+  ${carteObjectif()}
 `;
 }
 
@@ -1226,14 +1227,8 @@ const selecteurHorizon = () => {
 
 let hypoOuvert = false;
 
-function viewObjective() {
-  if (!(patrimoine().brut > 0.005) && !(num(Store.state.meta.projMonthly) > 0)) {
-    return pageAvantDonnees('Une projection part de ce que tu as et de ce que tu mets de '
-      + 'côté chaque mois. Sans l’un ni l’autre, elle ne peut que multiplier zéro par les '
-      + 'années. Déclare un compte, ou règle un versement mensuel dans tes hypothèses.');
-  }
+const carteObjectif = () => {
   const g = objectiveStatus();
-  const carteObjectif = () => {
     const an = Store.state.meta.objectiveYear;
     const mois = monthsToObjective();
 
@@ -1286,7 +1281,15 @@ function viewObjective() {
       <span>${g.remaining >= 0 ? `${trad('Objectif atteint')} 🎉` : ''}</span>
     </div>
   </button>`;
-  };
+};
+
+function viewObjective() {
+  if (!(patrimoine().brut > 0.005) && !(num(Store.state.meta.projMonthly) > 0)) {
+    return pageAvantDonnees('Une projection part de ce que tu as et de ce que tu mets de '
+      + 'côté chaque mois. Sans l’un ni l’autre, elle ne peut que multiplier zéro par les '
+      + 'années. Déclare un compte, ou règle un versement mensuel dans tes hypothèses.');
+  }
+  const g = objectiveStatus();
   const s = projectionSettings();
   const p = capitalisation({ years: projHorizon });
   const dernier = p.points[p.points.length - 1];
@@ -1367,8 +1370,6 @@ function viewObjective() {
     ].filter(x => Math.abs(num(x.value)) > 0.005)
      .map(x => ({ ...x, pct: dernier.total ? num(x.value) / dernier.total * 100 : 0 }));
     return `
-  ${carteObjectif()}
-
   <div class="card repart">
     <div class="card-head">
       <h2>${trad('De quoi sera fait ton patrimoine')}</h2>
@@ -4929,6 +4930,13 @@ function viewBudget(section = 'depenses') {
     <div class="row" style="margin:-4px 0 12px">
       <span class="hint">${lignesDepenses.length} ${lignesDepenses.length > 1 ? trad('mois affichés') : trad('mois affiché')} · ${expenseCategories().length} ${trad('catégories')}</span>
       <span class="spacer"></span>
+      ${sansDistinction()
+        ? `<button class="btn sm ghost" data-action="reprendre-detail" type="button"
+                   title="${esc(trad('Reprendre le détail remet toutes tes catégories dans la saisie, y compris celles que tu avais retirées à la main : l’application ne sait pas les distinguer. Tu peux en retirer à nouveau, ligne par ligne, sans rien perdre.'))}"
+             >${trad('Reprendre le détail')}</button>`
+        : `<button class="btn sm ghost" data-action="sans-distinction" type="button"
+                   title="${esc(trad('Pour qui ne veut pas ventiler ses dépenses : une seule catégorie reste proposée à la saisie du mois, les autres sont retirées. Rien n’est effacé, les mois déjà détaillés gardent leur découpage dans le tableau, les graphiques et les exports. Réversible, et Ctrl+Z annule.'))}"
+             >${trad('Ne plus détailler')}</button>`}
       <button class="btn sm ghost" data-action="add-category">${trad('+ Ajouter une catégorie')}</button>
       <button class="btn sm ghost" data-action="add-expense-month">${trad('+ Ouvrir l’année suivante')}</button>
     </div>
@@ -5056,16 +5064,6 @@ function viewBudget(section = 'depenses') {
         <b>${trad('Retirer')}</b> ${trad("garde l'historique,")} <b>${trad('Supprimer')}</b> ${trad("l'efface.")}${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
     </details>
-    <div class="row" style="margin-top:12px">
-      ${sansDistinction()
-        ? `<button class="btn sm ghost" data-action="reprendre-detail" type="button">${trad('Reprendre le détail')}</button>`
-        : `<button class="btn sm ghost" data-action="sans-distinction" type="button">${trad('Ne plus détailler')}</button>`}
-      <span class="hint" style="margin-left:auto">${sansDistinction()
-        ? trad('Une seule case à remplir chaque mois.')
-        : trad('Une seule case au lieu de toutes.')}${aide(trad(sansDistinction()
-          ? 'Reprendre le détail remet toutes tes catégories dans la saisie, y compris celles que tu avais retirées à la main : l’application ne sait pas les distinguer. Tu peux en retirer à nouveau, ligne par ligne, sans rien perdre.'
-          : 'Pour qui ne veut pas ventiler ses dépenses : une seule catégorie reste proposée à la saisie du mois, les autres sont retirées. Rien n’est effacé, les mois déjà détaillés gardent leur découpage dans le tableau, les graphiques et les exports. Réversible, et Ctrl+Z annule.'))}</span>
-    </div>
   </div>`}
 
   ${!cadre ? '' : `
@@ -8933,6 +8931,8 @@ function askExpenseMonth(index) {
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
+        ${sansDistinction() ? '' : `<button class="btn sm ghost" id="depSansDetail" type="button"
+          >${trad('Ne plus détailler')}</button>`}
         ${aide(trad('Plusieurs dépenses dans une catégorie : tape-les additionnées, 100+50+70. '
           + 'Le + du champ écrit le signe, que le pavé numérique n’a pas. Pour suivre deux '
           + 'choses séparément, fais deux catégories.'))}
@@ -8983,6 +8983,7 @@ function askExpenseMonth(index) {
     majTotal();
     focusChamp(champs[0]);
 
+    if ($('#depSansDetail')) $('#depSansDetail').onclick = regrouperCeMois;
     $('#depNouvelleCat').onclick = async () => {
       /* La saisie se relève **avant** d'ouvrir la question par-dessus : les
          deux fenêtres partagent le même corps, et `saisie()` cherchait le
@@ -9000,6 +9001,30 @@ function askExpenseMonth(index) {
       Store.save();
       fermer({ ...etat, rouvrir: true });
     };
+
+    /* Declaree, et non posee dans une constante : le branchement du bouton
+       tourne plus haut que cette ligne, et une constante n'existe pas avant sa
+       declaration. Le meme piege que `peindre()` sur la fiche d'une ligne, et il
+       casse tout le reste de la fenetre en silence. */
+    async function regrouperCeMois() {
+      const etat = saisie();
+      const total = Object.values(etat.v).reduce((s, x) => s + num(x), 0);
+      const lignes = Object.keys(etat.v).length;
+      const question = `${trad('Ne plus détailler tes dépenses')} ?\n`
+        + trad('Une seule case à remplir, ce mois-ci et les suivants.')
+        + (lignes > 1
+          ? '\n' + trad('Les {n} montants de ce mois se regroupent sur cette case, soit {v}.')
+              .replace('{n}', lignes).replace('{v}', fmtEUR0(total))
+          : '');
+      if (!await askConfirm(question, { danger: false, ok: trad('Une seule case') })) {
+        fermer({ ...etat, rouvrir: true });
+        return;
+      }
+      Store.addBackup('avant regroupement des dépenses');
+      const garde = neePlusDetailler();
+      Store.save();
+      fermer({ v: total ? { [garde]: round2(total) } : {}, note: etat.note, rouvrir: true });
+    }
 
     const fermer = v => {
       masquerModal(m);      $('#modalClose').onclick = null;

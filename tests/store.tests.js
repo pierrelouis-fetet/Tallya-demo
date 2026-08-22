@@ -5506,6 +5506,69 @@ suite('Retirer une catégorie n’efface rien', () => {
     vrai(categorieRetiree('Sport'), 'et prend effet');
   });
 
+  test('regrouper le mois en cours ne perd pas un centime', () => {
+    /* La fenetre du mois garde les categories qui portent deja un montant : la
+       regle protege les totaux passes, mais elle faisait afficher cinq cases a
+       qui venait d'en demander une. Mesure sur la demonstration : 205 + 145 + 60
+       + 35, cinq cases pour un reglage qui en promet une.
+
+       Le mois qu'on saisit n'est pas de l'histoire : ses montants se somment sur
+       la case qui reste. La propriete a garder est celle de la maison, un total
+       egale la somme de ses parts -- avant comme apres. */
+    const src = lireSource('assets/app.js');
+    /* La borne de fin se cherche APRES le debut : « const fermer = v => »
+       existe sept fois dans le fichier, et le premier vient bien avant. */
+    const d = src.indexOf('async function regrouperCeMois()');
+    const bloc = src.slice(d, src.indexOf('const fermer = v =>', d));
+    vrai(bloc, 'le geste doit etre trouvable');
+    vrai(/Object\.values\(etat\.v\)\.reduce/.test(bloc),
+      'le total se somme sur ce qui est SAISI, pas sur ce qui est enregistre : '
+      + 'un montant tape et pas encore ecrit compte aussi');
+    vrai(/\{ \[garde\]: round2\(total\) \}/.test(bloc),
+      'et il s ecrit sur la seule case qui reste');
+    vrai(/Store\.addBackup/.test(bloc),
+      'une sauvegarde precede : c est le seul endroit du geste qui touche des montants');
+    vrai(/askConfirm/.test(bloc),
+      'et il demande, parce que le decoupage de ce mois-la disparait');
+    /* Le bouton n'existe que s'il y a quelque chose a regrouper. */
+    vrai(/\$\{sansDistinction\(\) \? '' : `<button class="btn sm ghost" id="depSansDetail"/.test(src),
+      'le bouton disparait quand une seule case est deja proposee');
+  });
+
+  test('le réglage du détail vit au bord de sa carte, pas après ses données', () => {
+    /* Trois places en deux jours, et les deux premieres etaient fausses.
+
+       Dans le pli du tableau : le pli sert aux donnees et se fait discret par
+       construction, un chevron gris. Il a fallu lire la source pour retrouver le
+       bouton.
+
+       Sous le tableau, hors du pli : il devenait le dernier element de la page,
+       mesure a 2 704 px sur une page de 2 855. Sorti d'un pli, tombe dans le
+       vide.
+
+       En tete de la carte, avec les deux autres commandes de categories : en
+       ajouter une, ne plus les detailler, ouvrir l'annee suivante. Trois gestes
+       de meme nature, une seule rangee, et la hauteur de la rangee ne bouge pas
+       -- mesure a 375 px, 99 px avant comme apres. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf("data-anchor=\"detail-mensuel\""),
+                            src.indexOf("trad('Détail mensuel')") + 40000);
+    const bouton = carte.indexOf('data-action="sans-distinction"');
+    const table = carte.indexOf('<details');
+    vrai(bouton > 0, 'le réglage doit exister dans la carte');
+    vrai(bouton < table,
+      'et se lire AVANT le pli du tableau : un réglage posé après les données '
+      + 'devient le dernier élément de la page');
+    /* Les trois commandes de categories dans la meme rangee : c'est ce qui rend
+       le geste trouvable, puisqu'on vient y chercher les categories. */
+    const rangee = carte.slice(carte.indexOf('<div class="row"'),
+                               carte.indexOf('</div>', carte.indexOf('add-expense-month')));
+    for (const action of ['sans-distinction', 'add-category', 'add-expense-month']) {
+      vrai(rangee.includes(action),
+        `« ${action} » appartient à la rangée des commandes de catégories`);
+    }
+  });
+
   test('ne plus détailler ne laisse qu’une case, et n’efface rien', () => {
     Fixture.poser(troisMois);
     const totaux = Store.state.budget.expenses.map(expenseRowTotal);
