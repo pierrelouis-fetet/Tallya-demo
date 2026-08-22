@@ -2324,12 +2324,34 @@ function allocationByAccount({ financier = false } = {}) {
       const parClasse = new Map([['liquidites', cashCompte(c)]]);
       for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
       const dominante = [...parClasse.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      return { label: nomCompteV2(c),
+      return { id: c.id, label: nomCompteV2(c),
                value: financier ? valeurFinanciere(c) : valeurCompte(c),
                etab: nomEtabDe(c), type: trad(typeCompte(c.type).label),
                couleur: CLASSE_COULEURS[dominante] || CLASSE_COULEURS.nonCote };
     })
     .filter(r => r.value)
+    .map(r => ({ ...r, pct: base ? r.value / base * 100 : 0 }))
+    .sort((a, b) => b.value - a.value);
+}
+
+/* Le meme decoupage par compte, mais sur ce qui est place : la valeur du compte
+   moins ses especes.
+
+   `allocationByAccount()` ne peut pas servir ici. Sa base est le brut, especes
+   comprises, et c'est voulu depuis qu'Allocation montre le liquide. Le panneau
+   « Place » a pour total `invested`, qui vaut le brut moins tout le cash : il
+   listait donc des comptes de liquidites entiers sous un total qui les exclut,
+   et ses lignes sommaient le brut. Mesure faite, l'ecart valait a l'euro les
+   liquidites du detenteur.
+
+   La soustraction est la meme des deux cotes — `invested` retire `g.cash`, cette
+   liste retire `cashCompte()` compte par compte — donc la somme des lignes fait
+   le total, et un controle l'exige. */
+function placeByAccount() {
+  const base = nowTotals().invested;
+  return allocationByAccount()
+    .map(r => ({ ...r, value: r.value - cashCompte(compteById(r.id)) }))
+    .filter(r => Math.abs(r.value) > 0.005)
     .map(r => ({ ...r, pct: base ? r.value / base * 100 : 0 }))
     .sort((a, b) => b.value - a.value);
 }
@@ -3166,6 +3188,68 @@ function reprendreCategorie(cat) {
   return true;
 }
 
+/* Ne pas detailler ses depenses, pour qui ne veut pas de neuf cases par mois.
+
+   Aucun mecanisme nouveau, et c'est le point : `retirees` fait deja exactement
+   ça, une categorie a la fois. Il manquait le geste d'un coup, et le nom qui dit
+   ce qu'on fait. Un « total du mois » pose a cote de `v` aurait ete un second
+   champ pour la meme valeur — treize endroits lisent `v`, dont `expenseRowTotal`,
+   et le total aurait cesse d'egaler la somme de ses parts chez ceux-la.
+
+   L'etat se derive, il ne se declare pas : ne rien detailler, c'est n'avoir plus
+   qu'une case a remplir. Un drapeau `sansDistinction` aurait pu mentir des la
+   premiere categorie reprise a la main.
+
+   Le fourre-tout n'est pas « Autres ». Les deux mots se ressemblent et ne disent
+   pas la meme chose : « Autres » est le reste, ce qui n'entrait pas ailleurs, et
+   il porte deja des montants chez qui detaille. Le confondre avec « tout » ferait
+   une serie qui change de sens au milieu de son historique.
+
+   C'est une categorie ordinaire, sans garde ni statut : elle se renomme, elle se
+   supprime, et quelqu'un qui prefere « Vie courante » a le droit. Un nom reserve
+   aurait demande des exceptions dans le renommage et la suppression, pour un
+   gain nul. */
+const CATEGORIE_TOUT = 'Tout confondu';
+
+/* Le nom de la categorie est une donnee : il part dans les cles de `v`, dans le
+   tableau, dans les exports. Il ne se traduit donc jamais APRES coup -- traduire
+   a l'affichage renommerait une colonne au changement de langue et le mois
+   precedent porterait l'autre nom.
+   Mais c'est l'application qui le cree, pas le detenteur : elle l'ecrit dans la
+   langue en vigueur au moment du clic. Un anglophone recevait « Tout confondu ».
+   La reconnaissance accepte les deux graphies, sinon changer de langue puis
+   recliquer creerait une seconde case a cote de la premiere. */
+const NOMS_TOUT = () => [CATEGORIE_TOUT, trad(CATEGORIE_TOUT)];
+
+function sansDistinction() {
+  return categoriesSaisie().length === 1;
+}
+
+/* Garde une seule case et retire les autres. Rend le nom de celle qui reste.
+
+   Rien n'est efface : `retirerCategorie` ne touche a aucun montant, les mois
+   passes gardent leur decoupage, et le tableau comme les exports continuent de
+   le montrer. C'est la saisie du mois prochain qui se simplifie, pas l'histoire.
+
+   Si une seule categorie est deja proposee, c'est elle qu'on garde : creer un
+   fourre-tout a cote ferait deux cases la ou l'on en demandait une. */
+function neePlusDetailler() {
+  const proposees = categoriesSaisie();
+  if (proposees.length === 1) return proposees[0];
+  const nom = trad(CATEGORIE_TOUT);
+  const garde = expenseCategories().find(c => NOMS_TOUT().includes(c))
+    || addExpenseCategory(nom) || nom;
+  reprendreCategorie(garde);
+  for (const c of expenseCategories()) if (c !== garde) retirerCategorie(c);
+  return garde;
+}
+
+function reprendreLeDetail() {
+  const retirees = [...(Store.state.budget.retirees || [])];
+  retirees.forEach(reprendreCategorie);
+  return retirees.length;
+}
+
 function addExpenseCategory(nom) {
   const propre = String(nom || '').trim();
   if (!propre) return null;
@@ -3593,15 +3677,25 @@ function runway() {
   const bloque     = p.mobilisable.bloque;
 
   const contenants = trad('comptes courants, livrets, espèces');
+  /* Les libelles viennent de `MOBILISABLE_LABEL`, ils ne se reecrivent pas ici.
+
+     Cette carte et « Par disponibilite » decoupent le meme argent selon les
+     memes cinq paliers, et chacune avait sa propre liste de mots : « En
+     quelques jours » d'un cote, « Disponible sous quelques jours » de l'autre,
+     pour la meme poche. Deux ecrans qu'on ne regarde pas en meme temps, donc
+     personne ne pouvait le voir. Une liste se derive, elle ne se recopie pas.
+
+     Les notes, elles, appartiennent a cette carte : elles disent ce que le
+     palier contient chez celui qui lit, ce que l'autre carte n'a pas a faire. */
   const tiers = [
-    { label: trad('Disponible tout de suite'), value: immediate,
+    { label: trad(MOBILISABLE_LABEL.immediat), value: immediate,
       note: p.projet > 0.005 ? `${contenants}${trad(' ; projets compris')}` : contenants },
-    { label: trad('En quelques jours'), value: differe,
+    { label: trad(MOBILISABLE_LABEL.differe), value: differe,
       note: trad('liquidités chez un courtier ; un titre se vend en séance, le virement prend 2 à 3 jours') },
-    { label: trad('En quelques mois'), value: lent, note: trad('immobilier, non coté, à vendre avec décote si pressé') },
-    ...(habite > 0.005 ? [{ label: trad('Le logement que tu habites'), value: habite,
+    { label: trad(MOBILISABLE_LABEL.lent), value: lent, note: trad('immobilier, non coté, à vendre avec décote si pressé') },
+    ...(habite > 0.005 ? [{ label: trad(MOBILISABLE_LABEL.habite), value: habite,
         note: trad('le vendre veut dire te reloger'), horsCumul: true }] : []),
-    { label: trad('Inaccessible'), value: bloque, note: trad('bloqué jusqu’à son échéance'), horsCumul: true },
+    { label: trad(MOBILISABLE_LABEL.bloque), value: bloque, note: trad('bloqué jusqu’à son échéance'), horsCumul: true },
   ];
   let cum = 0;
   for (const t of tiers) {
@@ -4347,22 +4441,28 @@ function healthChecks() {
   sujet = 'cours';
   for (const p of Store.state.positions) {
     if ((p.isin || '').trim() && !isinIsValid(p.isin))
-      add('error', `ISIN invalide sur « ${p.name} »`, `${p.isin}, clé de contrôle incorrecte`, 'positions');
+      add('error', trad('ISIN invalide sur {n}').replace('{n}', guill(p.name)),
+        trad('{v}, clé de contrôle incorrecte').replace('{v}', p.isin), 'positions');
     if (!p.manual && !(p.symbol || '').trim() && !(p.isin || '').trim())
-      add('warn', `« ${p.name} » sans identifiant`, 'Ni ISIN ni symbole : le cours ne peut pas être récupéré', 'positions');
+      add('warn', trad('{n} sans identifiant').replace('{n}', guill(p.name)),
+        trad('Ni ISIN ni symbole : le cours ne peut pas être récupéré'), 'positions');
     if (!p.manual && !num(p.qty))
-      add('warn', `« ${p.name} » a une quantité nulle`, 'La ligne compte pour 0 € dans le portefeuille', 'positions');
+      add('warn', trad('{n} a une quantité nulle').replace('{n}', guill(p.name)),
+        trad('La ligne compte pour 0 € dans le portefeuille'), 'positions');
     if (!p.manual && !num(p.price))
-      add('warn', `« ${p.name} » n'a pas de cours`, 'Valeur calculée à 0 €', 'positions');
+      add('warn', trad('{n} n’a pas de cours').replace('{n}', guill(p.name)),
+        trad('Valeur calculée à 0 €'), 'positions');
   }
 
   if (Store.state.positions.length) {
     const last = Store.state.quotes?.lastRun;
-    if (!last) add('info', 'Cours jamais actualisés', 'Les prix viennent du sheet, pas du marché', 'positions');
+    if (!last) add('info', trad('Cours jamais actualisés'),
+      trad('Les prix viennent du sheet, pas du marché'), 'positions');
     else {
       const days = (Date.now() - new Date(last)) / 86400000;
-      if (days > 7) add('warn', `Cours vieux de ${Math.round(days)} jours`,
-        'Valorisation et allocation sont décalées du marché', 'positions');
+      if (days > 7) add('warn',
+        trad('Cours vieux de {n} jours').replace('{n}', Math.round(days)),
+        trad('Valorisation et allocation sont décalées du marché'), 'positions');
     }
   }
 
@@ -4386,28 +4486,33 @@ function healthChecks() {
     const du = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
     if (!du) continue;
     if (COMPTES().some(c => c.etabId === e.id)) continue;
-    add('error', `Crédit sans bien chez ${e.nom}`,
-      `${fmtEUR0(du)} de capital restant dû se soustraient encore de ton patrimoine net, `
-      + `alors que plus aucun compte n'est rattaché. Ouvre la fiche pour retirer le crédit.`,
+    add('error', trad('Crédit sans bien chez {e}').replace('{e}', e.nom),
+      trad('{v} de capital restant dû se soustraient encore de ton patrimoine net, '
+        + 'alors que plus aucun compte n’est rattaché. Ouvre la fiche pour retirer le crédit.')
+        .replace('{v}', fmtEUR0(du)),
       'accounts');
   }
 
   sujet = 'echeances';
   for (const e of echeances()) {
     if (e.depassee) {
-      add('action', `« ${e.libelle} » a passé son échéance`,
-        `Échéance au ${fmtDate(e.echeance)}, il y a ${Math.abs(e.jours)} jours, et la ligne `
-        + `est toujours en cours pour ${fmtEUR0(e.valeur)}. Si l'argent est rentré, `
-        + `passe-la en « Remboursé » et baisse son montant ; sinon marque-la en retard.`,
+      add('action', trad('{l} a passé son échéance').replace('{l}', guill(e.libelle)),
+        trad('Échéance au {d}, il y a {n} jours, et la ligne est toujours en cours pour '
+          + '{v}. Si l’argent est rentré, passe-la en « Remboursé » et baisse son '
+          + 'montant ; sinon marque-la en retard.')
+          .replace('{d}', fmtDate(e.echeance)).replace('{n}', Math.abs(e.jours))
+          .replace('{v}', fmtEUR0(e.valeur)),
         'accounts');
     } else if (e.statut === 'retard') {
-      add('warn', `« ${e.libelle} » en retard`,
-        `${fmtEUR0(e.valeur)} chez ${e.etab}, échéance du ${fmtDate(e.echeance)}.`, 'accounts');
+      add('warn', trad('{l} en retard').replace('{l}', guill(e.libelle)),
+        trad('{v} chez {e}, échéance du {d}.')
+          .replace('{v}', fmtEUR0(e.valeur)).replace('{e}', e.etab)
+          .replace('{d}', fmtDate(e.echeance)), 'accounts');
     } else if (e.statut === 'defaut') {
-      add('error', `« ${e.libelle} » en défaut`,
-        `${fmtEUR0(e.valeur)} comptent encore en entier dans ton patrimoine. Si tu `
-        + `n'espères plus rien, baisse le montant : c'est la seule façon que ton `
-        + `patrimoine net dise la vérité.`, 'accounts');
+      add('error', trad('{l} en défaut').replace('{l}', guill(e.libelle)),
+        trad('{v} comptent encore en entier dans ton patrimoine. Si tu n’espères plus '
+          + 'rien, baisse le montant : c’est la seule façon que ton patrimoine net '
+          + 'dise la vérité.').replace('{v}', fmtEUR0(e.valeur)), 'accounts');
     }
   }
 
@@ -4420,28 +4525,32 @@ function healthChecks() {
       const orphelins = lignes.filter(cr => !adosse(cr));
       if (orphelins.length) {
         const cr = orphelins[0];
-        add('error', 'Patrimoine net négatif',
-          `Tes crédits (${fmtEUR0(p.dettes)}) dépassent tes avoirs (${fmtEUR0(p.brut)}) `
-          + `de ${fmtEUR0(-p.net)}. Si l'un d'eux finance un bien`
-          + ` (le plus gros sans bien en face est « ${cr.libelle} », ${fmtEUR0(cr.reste)})`
-          + `, déclare ce bien : sa valeur doit figurer dans tes avoirs, sinon seule `
-          + `la dette compte. Un crédit immobilier sans son logement fait plonger le net.`,
+        add('error', trad('Patrimoine net négatif'),
+          trad('Tes crédits ({d}) dépassent tes avoirs ({b}) de {e}. Si l’un d’eux '
+            + 'finance un bien (le plus gros sans bien en face est {l}, {r}), déclare '
+            + 'ce bien : sa valeur doit figurer dans tes avoirs, sinon seule la dette '
+            + 'compte. Un crédit immobilier sans son logement fait plonger le net.')
+            .replace('{d}', fmtEUR0(p.dettes)).replace('{b}', fmtEUR0(p.brut))
+            .replace('{e}', fmtEUR0(-p.net)).replace('{l}', guill(cr.libelle))
+            .replace('{r}', fmtEUR0(cr.reste)),
           'accounts');
       } else {
         /* Somme des parts de capital des prochaines echeances : ce que le mois
            ajoute vraiment au net. `capital` vaut null sans taux connu, et le
            message le dit alors autrement plutot que de compter zero. */
         const capital = lignes.reduce((s, cr) => s + (cr.capital || 0), 0);
-        add('info', 'Patrimoine net négatif, et c’est normal après un achat',
-          `Tes biens valent ${fmtEUR0(p.brut)} et il te reste ${fmtEUR0(p.dettes)} à `
-          + `rembourser : l'écart fait ${fmtEUR0(-p.net)}. C'est l'état ordinaire des `
-          + `premières années d'un achat à crédit, surtout quand le prêt a financé les `
-          + `frais de notaire, qui ne se revendent pas.`
-          + (capital > 0.005
-            ? ` Chaque mensualité rembourse ${fmtEUR0(capital)} de capital, et ton `
-              + `patrimoine net remonte d'autant.`
-            : ` Renseigne le taux de tes crédits pour voir ce que chaque mensualité `
-              + `rembourse en capital : c'est ce montant qui fait remonter ton net.`),
+        add('info', trad('Patrimoine net négatif, et c’est normal après un achat'),
+          trad('Tes biens valent {b} et il te reste {d} à rembourser : l’écart fait '
+            + '{e}. C’est l’état ordinaire des premières années d’un achat à crédit, '
+            + 'surtout quand le prêt a financé les frais de notaire, qui ne se '
+            + 'revendent pas.')
+            .replace('{b}', fmtEUR0(p.brut)).replace('{d}', fmtEUR0(p.dettes))
+            .replace('{e}', fmtEUR0(-p.net))
+          + ' ' + (capital > 0.005
+            ? trad('Chaque mensualité rembourse {c} de capital, et ton patrimoine net '
+              + 'remonte d’autant.').replace('{c}', fmtEUR0(capital))
+            : trad('Renseigne le taux de tes crédits pour voir ce que chaque mensualité '
+              + 'rembourse en capital : c’est ce montant qui fait remonter ton net.')),
           'accounts');
       }
     }
@@ -4450,40 +4559,49 @@ function healthChecks() {
   sujet = 'credits';
   for (const c of creditsEnCours().lignes) {
     if (!c.mensualite || c.charge) continue;
-    add('action', `Mensualité de « ${c.libelle} » hors du budget`,
-      `${fmtEUR0(c.mensualite)} par mois sortent de ton compte sans figurer dans tes `
-      + `charges fixes. Ouvre le crédit pour créer la ligne, ou rattache-lui la charge `
-      + `existante si elle y est déjà sous un autre nom.`, 'accounts');
+    add('action', trad('Mensualité de {l} hors du budget').replace('{l}', guill(c.libelle)),
+      trad('{v} par mois sortent de ton compte sans figurer dans tes charges fixes. '
+        + 'Ouvre le crédit pour créer la ligne, ou rattache-lui la charge existante '
+        + 'si elle y est déjà sous un autre nom.')
+        .replace('{v}', fmtEUR0(c.mensualite)), 'accounts');
   }
 
   sujet = 'credits';
   const RAPPEL_CREDIT_MOIS = 3;
   for (const c of creditsEnCours().lignes) {
     if (!c.verifieLe) {
-      add('action', `Crédit « ${c.libelle} » jamais vérifié`,
-        `${fmtEUR0(c.reste)} de capital restant dû, sans date de dernière vérification. `
-        + `Ouvre-le une fois : l'application saura ensuite suivre son évolution.`, 'accounts');
+      add('action', trad('Crédit {l} jamais vérifié').replace('{l}', guill(c.libelle)),
+        trad('{v} de capital restant dû, sans date de dernière vérification. Ouvre-le '
+          + 'une fois : l’application saura ensuite suivre son évolution.')
+          .replace('{v}', fmtEUR0(c.reste)), 'accounts');
       continue;
     }
     if (c.moisDepuis < RAPPEL_CREDIT_MOIS) continue;
     if (c.projete == null) {
-      add('action', `Crédit « ${c.libelle} » à relever`,
-        `Vérifié il y a ${c.moisDepuis} mois, et rien ne permet d'en déduire le solde `
-        + `d'aujourd'hui : ni échéances, ni taux. Va lire le montant chez ${c.etabNom} `
-        + `et corrige-le, c'est ${fmtEUR0(c.reste)} qui pèsent sur ton patrimoine net.`,
+      add('action', trad('Crédit {l} à relever').replace('{l}', guill(c.libelle)),
+        trad('Vérifié il y a {n} mois, et rien ne permet d’en déduire le solde '
+          + 'd’aujourd’hui : ni échéances, ni taux. Va lire le montant chez {e} et '
+          + 'corrige-le, c’est {v} qui pèsent sur ton patrimoine net.')
+          .replace('{n}', c.moisDepuis).replace('{e}', c.etabNom)
+          .replace('{v}', fmtEUR0(c.reste)),
         'accounts');
       continue;
     }
     if (Math.abs(c.ecart) < 1) continue;
-    add('action', `Crédit « ${c.libelle} » à mettre à jour`,
+    add('action', trad('Crédit {l} à mettre à jour').replace('{l}', guill(c.libelle)),
       c.sens === 'monte'
-        ? `Vérifié il y a ${c.moisDepuis} mois. Sans échéances, les intérêts le font `
-          + `grossir : à ${fmtNombre(c.taux)} % l'an il devrait atteindre `
-          + `${fmtEUR0(c.projete)} au lieu de ${fmtEUR0(c.reste)}. Relève le solde chez `
-          + `${c.etabNom} : ton patrimoine net est surestimé de ${fmtEUR0(-c.ecart)}.`
-        : `Vérifié il y a ${c.moisDepuis} mois. D'après ta mensualité, il devrait rester `
-          + `${fmtEUR0(c.projete)} au lieu de ${fmtEUR0(c.reste)} : ${fmtEUR0(c.ecart)} de `
-          + `patrimoine net que l'application ne compte pas encore.`, 'accounts');
+        ? trad('Vérifié il y a {n} mois. Sans échéances, les intérêts le font grossir : '
+            + 'à {t} % l’an il devrait atteindre {p} au lieu de {r}. Relève le solde '
+            + 'chez {e} : ton patrimoine net est surestimé de {x}.')
+            .replace('{n}', c.moisDepuis).replace('{t}', fmtNombre(c.taux))
+            .replace('{p}', fmtEUR0(c.projete)).replace('{r}', fmtEUR0(c.reste))
+            .replace('{e}', c.etabNom).replace('{x}', fmtEUR0(-c.ecart))
+        : trad('Vérifié il y a {n} mois. D’après ta mensualité, il devrait rester {p} '
+            + 'au lieu de {r} : {x} de patrimoine net que l’application ne compte pas '
+            + 'encore.')
+            .replace('{n}', c.moisDepuis).replace('{p}', fmtEUR0(c.projete))
+            .replace('{r}', fmtEUR0(c.reste)).replace('{x}', fmtEUR0(c.ecart)),
+      'accounts');
   }
 
   sujet = 'coherence';
@@ -4495,8 +4613,9 @@ function healthChecks() {
      jeu ne compte pas, son encours a quitté la base. */
   const sum = sommeCibles();
   if (sum > 0 && Math.abs(sum - 100) > 0.05 && patrimoine().brut > 0.005)
-    add('warn', `Cibles d'allocation à ${fmtPct(sum, 1)}`,
-      'La somme devrait faire 100 % pour que les montants cibles aient un sens', 'rebalance');
+    add('warn', trad('Cibles d’allocation à {v}').replace('{v}', fmtPct(sum, 1)),
+      trad('La somme devrait faire 100 % pour que les montants cibles aient un sens'),
+      'rebalance');
 
   sujet = 'coherence';
   /* --- trous dans les deux historiques ---
@@ -4511,14 +4630,15 @@ function healthChecks() {
      moyenne des dépenses sert de coût de la vie à l'autonomie financière et à la
      cible d'épargne de précaution : un mois manquant y pèse deux fois. */
   for (const [trous, quoi, vue] of [
-    [trousReleves(), 'des relevés', 'history'],
-    [trousDepenses(), 'des dépenses', 'budget'],
+    [trousReleves(), 'Trou dans l’historique des relevés', 'history'],
+    [trousDepenses(), 'Trou dans l’historique des dépenses', 'budget'],
   ]) {
     if (!trous.length) continue;
     const noms = trous.map(fmtMonth);
     const cite = noms.length > 3 ? `${noms.slice(0, 3).join(', ')}…` : noms.join(', ');
-    add('warn', `Trou dans l'historique ${quoi}`,
-      `${noms.length} mois sans donnée : ${cite}. Les moyennes se calculent sur ce qui reste.`,
+    add('warn', trad(quoi),
+      trad('{n} mois sans donnée : {c}. Les moyennes se calculent sur ce qui reste.')
+        .replace('{n}', noms.length).replace('{c}', cite),
       vue);
   }
 
@@ -4550,13 +4670,14 @@ function healthChecks() {
      bandeau de l'accueil et la pastille du menu. */
   const depEnAttente = depensesEnAttente();
   if (depEnAttente.missing)
-    add('action', `Dépenses de ${depEnAttente.label} à saisir`,
+    add('action', trad('Dépenses de {m} à saisir').replace('{m}', depEnAttente.label),
       trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
 
   const f = budgetFrame();
   if (f.income > 0 && f.available < f.target)
-    add('error', 'Objectif de dépenses au-dessus du reste pour vivre',
-      `${fmtEUR0(f.target)} visés pour ${fmtEUR0(f.available)} disponibles`, 'budget');
+    add('error', trad('Objectif de dépenses au-dessus du reste pour vivre'),
+      trad('{t} visés pour {a} disponibles')
+        .replace('{t}', fmtEUR0(f.target)).replace('{a}', fmtEUR0(f.available)), 'budget');
 
   sujet = 'budget';
   /* « 0 mois d'autonomie, 0 € pour 0 € de coût mensuel » etait la caricature de
@@ -4576,7 +4697,7 @@ function healthChecks() {
        jour où ce cash a rejoint les liquidités.
        Et `toFixed(1)` écrivait « 0.7 mois », seul point décimal d'une
        application qui met des virgules partout ailleurs. */
-    add('warn', `${trad('Épargne de précaution')} : ${fmtNombre(Math.round(rw.immediateMonths * 10) / 10)} ${trad('mois')}`,
+    add('warn', `${trad('Épargne de précaution')}${deuxPoints()} ${fmtNombre(Math.round(rw.immediateMonths * 10) / 10)} ${trad('mois')}`,
       `${trad('Disponible tout de suite')} ${fmtEUR0(rw.immediate)} ${trad('pour')} ${fmtEUR0(rw.burn)} ${trad('de coût mensuel, la règle courante est 3 à 6 mois')}`, 'overview');
 
   return out;

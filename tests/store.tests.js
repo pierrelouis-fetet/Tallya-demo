@@ -4825,6 +4825,128 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
     pres(parType, parCompte, 'les deux lectures partagent leur base');
     pres(parType, patrimoine().brut, 'et cette base est le brut');
   });
+
+  test('« Placé » ne liste que ce qui est placé', () => {
+    /* Le panneau annonçait `invested`, le brut moins toutes les liquidités, et
+       listait `allocationByAccount()`, qui les compte. Ses lignes sommaient donc
+       le brut sous un total qui ne le vaut pas : mesuré chez le détenteur,
+       28 332,93 EUR annoncés pour 35 212,93 EUR de lignes, l'écart valant à
+       l'euro ses 6 880 EUR de liquidités. La règle cardinale du projet prise à
+       l'envers, sur la carte la plus regardée de l'accueil. */
+    Fixture.poser();
+    const lignes = placeByAccount();
+    pres(lignes.reduce((s, x) => s + x.value, 0), nowTotals().invested,
+      'la somme des lignes fait le total annoncé');
+    pres(lignes.reduce((s, x) => s + x.pct, 0), 100, 'les parts font 100 %');
+
+    /* Un compte entièrement liquide n'a rien de placé : il quitte la liste, il
+       n'y figure pas à zéro. Une ligne à 0,00 EUR sous « Placé » ferait chercher
+       pourquoi elle est là. */
+    const cash = comptesOuverts().filter(c => typeCompte(c.type).groupe === 'cash');
+    vrai(cash.length, 'la fixture porte bien des comptes de liquidités');
+    for (const c of cash) {
+      if (lignesDe(c).length) continue;
+      vrai(!lignes.some(l => l.label === nomCompteV2(c)),
+        `${nomCompteV2(c)} n’est que du cash : il ne peut pas figurer sous « Placé »`);
+    }
+
+    /* Et le cash posé sur un compte-titres s'en retire aussi : c'est le cas que
+       le détenteur a signalé, son cash à investir dormant sur le PEA. */
+    const titres = comptesOuverts().find(c => cashCompte(c) && lignesDe(c).length);
+    vrai(titres, 'la fixture porte bien un compte-titres avec des espèces dessus');
+    const vue = lignes.find(l => l.label === nomCompteV2(titres));
+    pres(vue.value, valeurCompte(titres) - cashCompte(titres),
+      'ses espèces sortent de la ligne, ses titres restent');
+  });
+
+  test('le panneau « Placé » lit la liste qui exclut le cash', () => {
+    /* Le calcul juste ne sert à rien si la vue appelle l'autre liste. Les deux
+       existent, elles ne different que par les especes, et leurs noms se
+       ressemblent : c'est exactement la confusion qui a produit le defaut. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const bloc = src.slice(src.indexOf('investiTotal:'),
+                           src.indexOf('investiTotal:') + 700);
+    vrai(/placeByAccount\(\)/.test(bloc),
+      '« Placé » doit dériver ses lignes de placeByAccount()');
+    vrai(!/allocationByAccount\(\)/.test(bloc),
+      'allocationByAccount() compte les espèces : elle ne peut pas servir ici');
+  });
+
+  test('les cinq paliers y sont, le toit et le bloqué compris', () => {
+    /* Le piege de cette carte, et il aurait ete silencieux : l'autonomie
+       financiere ecarte `habite` et `bloque` de son cumul, a dessein. Cette
+       regle appartient a l'autonomie — elle compte ce sur quoi on peut vivre.
+       Une repartition compte ce qu'on possede : reprendre l'exclusion ici
+       donnerait une carte dont le total ne vaut pas la base annoncee, et
+       l'ecart serait exactement le logement du detenteur. */
+    Fixture.poser(e => {
+      const etab = e.etabs[0];
+      e.comptes.push({ id: 'c_toit', etabId: etab.id, type: 'immo', statut: 'ouvert',
+        ouvertLe: '2020-01-01', numero: '', notes: '', libelle: 'Maison',
+        court: 'Maison', alloc: '', cash: [],
+        lignes: [{ id: 'l_toit', classe: 'immobilier', libelle: 'Maison',
+                   valeur: 250000, usage: 'principale', prixDeRevient: 250000,
+                   quantite: 1, dateAcquisition: '2020-01-01' }] });
+      e.comptes.push({ id: 'c_per', etabId: etab.id, type: 'per', statut: 'ouvert',
+        ouvertLe: '2021-01-01', numero: '', notes: '', libelle: 'PER',
+        court: 'PER', alloc: '', cash: [],
+        lignes: [{ id: 'l_per', classe: 'actions', libelle: 'Fonds PER',
+                   valeur: 12000, prixDeRevient: 12000, quantite: 1,
+                   dateAcquisition: '2021-01-01' }] });
+    });
+
+    const d = allocationParDisponibilite();
+    const parCle = Object.fromEntries(d.map(x => [x.cle, x.value]));
+    pres(parCle.habite, 250000, 'le logement habité a sa part');
+    vrai(num(parCle.bloque) > 0, 'et le PER la sienne : il est fermé jusqu’à la retraite');
+    pres(d.reduce((s, x) => s + x.value, 0), nowTotals().brut,
+      'et le total vaut toujours les avoirs, les deux compris');
+
+    /* Ce qui reste vrai a cote, et qu'on ne casse pas en passant : l'autonomie,
+       elle, continue de les exclure. Les deux lectures coexistent parce que
+       chacune nomme ce qu'elle compte. */
+    const mob = poches().mobilisable;
+    pres(mob.habite, 250000, 'la source porte bien le palier');
+  });
+
+  test('les deux cartes des délais disent les mêmes mots', () => {
+    /* « Il faut que les termes collent entre les 2 cartes. » L'autonomie
+       financiere de l'accueil et « Par disponibilite » decoupent le meme argent
+       selon les memes paliers, et chacune avait sa liste de mots ecrite a la
+       main : « En quelques jours » d'un cote, « Disponible rapidement » de
+       l'autre, pour la meme poche. Deux ecrans qu'on ne regarde jamais en meme
+       temps, donc le desaccord etait invisible.
+
+       Le controle compare les libelles rendus, et non la source : c'est ce que
+       lit quelqu'un, et c'est la seule chose qui doit s'accorder. */
+    Fixture.poser();
+    const dansLaCarte = new Map(
+      allocationParDisponibilite().map(x => [x.cle, x.label]));
+    for (const t of runway().tiers) {
+      const cle = Object.keys(MOBILISABLE_LABEL)
+        .find(k => trad(MOBILISABLE_LABEL[k]) === t.label);
+      vrai(cle,
+        `« ${t.label} » de l’autonomie ne vient pas de MOBILISABLE_LABEL : `
+        + 'deux listes pour les mêmes paliers finissent par se contredire');
+      if (dansLaCarte.has(cle))
+        eq(t.label, dansLaCarte.get(cle),
+          `le palier « ${cle} » doit porter le même mot sur les deux cartes`);
+    }
+  });
+
+  test('les paliers gardent l’ordre du délai, pas celui des montants', () => {
+    /* Les deux autres cartes classent par poids decroissant. Ici le rang porte
+       du sens — du plus liquide au moins — et trier par montant melangerait un
+       palier de trois jours avec un palier de trois mois selon les hasards du
+       patrimoine. Un axe ordonne se lit dans son ordre. */
+    Fixture.poser();
+    const attendu = Object.keys(MOBILISABLE_LABEL);
+    const obtenu = allocationParDisponibilite().map(x => x.cle);
+    const rangs = obtenu.map(c => attendu.indexOf(c));
+    vrai(rangs.every((r, i) => r >= 0 && (i === 0 || r > rangs[i - 1])),
+      `l’ordre doit suivre celui de MOBILISABLE_LABEL, obtenu : ${obtenu.join(' < ')}`);
+  });
 });
 
 /* ------------------------------------------------------------------
@@ -5111,7 +5233,10 @@ suite('L’application s’adresse toujours de la même façon', () => {
     for (const f of ['assets/app.js', 'assets/store.js', 'assets/i18n.js']) {
       const src = sansCommentaires(lireSource(f) || '');
       vrai(src, f + ' doit être lisible pour ce contrôle');
-      for (const m of src.matchAll(/\b(vous|vos|votre|Vous|Vos|Votre)\b/g))
+      /* « votres » manquait a la liste, et c'est une phrase de la demonstration
+         qui l'a montre : « sans toucher aux votres ». Le mot suivant s'ajoute
+         ici quand il se presente, comme le veut la regle de la maison. */
+      for (const m of src.matchAll(/\b(vous|vos|votre|v\u00f4tre|v\u00f4tres|Vous|Vos|Votre|V\u00f4tre|V\u00f4tres)\b/g))
         fautifs.push(`${f}:${src.slice(0, m.index).split('\n').length} (${m[1]})`);
     }
     eq(fautifs.length, 0,
@@ -5379,6 +5504,100 @@ suite('Retirer une catégorie n’efface rien', () => {
       'et la saisie propose toutes les catégories');
     vrai(retirerCategorie('Sport'), 'le premier retrait crée la liste au passage');
     vrai(categorieRetiree('Sport'), 'et prend effet');
+  });
+
+  test('ne plus détailler ne laisse qu’une case, et n’efface rien', () => {
+    Fixture.poser(troisMois);
+    const totaux = Store.state.budget.expenses.map(expenseRowTotal);
+    const listeAvant = expenseCategories().join('|');
+
+    const garde = neePlusDetailler();
+    vrai(garde, 'le geste doit rendre la case qui reste');
+    eq(categoriesSaisie().length, 1, 'une seule case reste à remplir');
+    eq(categoriesSaisie()[0], garde, 'et c’est celle qu’il annonce');
+    vrai(sansDistinction(), 'l’état se lit sur la liste, sans drapeau');
+
+    /* Le point qui compte : c'est la saisie qui se restreint, jamais l'histoire. */
+    Store.state.budget.expenses.forEach((r, i) =>
+      pres(expenseRowTotal(r), totaux[i], `le total du mois ${i + 1} ne bouge pas`));
+    pres(expenseCategoryTotal('Sport'), 120, 'les montants passés sont intacts');
+    vrai(expenseCategories().join('|').startsWith(listeAvant),
+      'et aucune catégorie ne disparaît de la liste qui sert aux totaux');
+  });
+
+  test('le fourre-tout naît dans la langue en vigueur, et se reconnaît dans les deux', () => {
+    /* La cle « Tout confondu » vivait dans le dictionnaire sans que personne ne
+       la traverse : le nom partait tel quel dans les donnees, donc un lecteur
+       anglophone recevait une categorie francaise.
+
+       Le nom ne se traduit pas a l'affichage -- c'est une donnee, elle part dans
+       les cles de `v` et dans les exports, et la traduire renommerait une colonne
+       au changement de langue. C'est a la creation que la langue compte. */
+    vrai(NOMS_TOUT().includes(CATEGORIE_TOUT),
+      'la graphie française reste reconnue, quelle que soit la langue');
+    const src = lireSource('assets/store.js');
+    vrai(/addExpenseCategory\(nom\)/.test(src) && /const nom = trad\(CATEGORIE_TOUT\)/.test(src),
+      'la catégorie se crée avec le nom traduit, pas avec la constante');
+    vrai(/expenseCategories\(\)\.find\(c => NOMS_TOUT\(\)\.includes\(c\)\)/.test(src),
+      'et les deux graphies sont reconnues : sinon changer de langue créerait une seconde case');
+  });
+
+  test('le fourre-tout n’est pas « Autres »', () => {
+    /* Les deux mots se ressemblent et ne disent pas la meme chose. « Autres »
+       est le reste, ce qui n'entrait pas ailleurs, et il porte deja des montants
+       chez qui detaille : dix mois sur dix-neuf dans les donnees reelles. Y
+       verser « tout » ferait une serie qui change de sens au milieu de son
+       historique, sans que rien ne le signale. */
+    Fixture.poser(e => {
+      troisMois(e);
+      e.budget.categories = ['Courses', 'Autres'];
+      e.budget.expenses = [{ month: '2026-01-01', v: { Courses: 400, Autres: 50 }, note: '' }];
+    });
+    const garde = neePlusDetailler();
+    vrai(garde !== 'Autres',
+      '« Autres » est le reste, pas le tout : le fourre-tout doit porter un autre nom');
+    pres(expenseCategoryTotal('Autres'), 50, 'et ses 50 € restent les siens');
+  });
+
+  test('le geste est idempotent, et ne crée pas deux fourre-tout', () => {
+    /* Un double clic ne doit pas laisser deux cases du meme nom : la regle des
+       migrations vaut pour les actes repetables. */
+    Fixture.poser(troisMois);
+    const a = neePlusDetailler();
+    const listeA = expenseCategories().join('|');
+    const b = neePlusDetailler();
+    eq(b, a, 'le second appel garde la même case');
+    eq(expenseCategories().join('|'), listeA, 'et n’ajoute aucune catégorie');
+    eq(categoriesSaisie().length, 1, 'il en reste toujours exactement une');
+  });
+
+  test('une seule catégorie déjà proposée est celle qu’on garde', () => {
+    /* Sinon le geste creerait un fourre-tout a cote de la case unique, et en
+       laisserait deux la ou l'on en demandait une. */
+    Fixture.poser(e => {
+      troisMois(e);
+      /* La liste se pose ici, et non par `retirerCategorie` : la callback
+         travaille sur le brouillon, l'etat n'est installe qu'apres. */
+      e.budget.retirees = ['Sport', 'Transports'];
+    });
+    eq(categoriesSaisie().length, 1, 'la fixture part bien d’une seule case');
+    eq(neePlusDetailler(), 'Courses', 'c’est elle qu’on garde, telle quelle');
+    vrai(!expenseCategories().includes(CATEGORIE_TOUT),
+      'et aucun fourre-tout n’est créé pour rien');
+  });
+
+  test('reprendre le détail remet tout, et le dit', () => {
+    /* Il remet AUSSI ce qui avait ete retire a la main avant : l'application ne
+       sait pas les distinguer, et retenir un avant demanderait un second etat
+       qui se contredirait au premier retrait suivant. C'est assume, le libelle
+       du bouton le dit, et rien n'est perdu — re-retirer coute un clic. */
+    Fixture.poser(troisMois);
+    neePlusDetailler();
+    const n = reprendreLeDetail();
+    vrai(n >= 2, `au moins deux catégories reviennent, obtenu ${n}`);
+    eq(categoriesSaisie().length, expenseCategories().length,
+      'plus rien n’est retiré');
+    vrai(!sansDistinction(), 'et l’état se relit à l’envers, toujours sans drapeau');
   });
 });
 
@@ -8340,6 +8559,50 @@ suite('Une ligne de titres se supprime depuis sa fiche', () => {
       'la suppression décale les index : elle se traite avant la vente et l’achat');
     vrai(/Store\.addBackup\('avant suppression de ligne'\)/.test(bloc[0]),
       'et pose une sauvegarde, comme la vente et l’achat');
+  });
+
+  test('« Enregistrer » repeint la fiche, il ne retouche pas des nœuds', () => {
+    /* « La plus-value ne se met pas à jour en changeant le PRU. » Elle ne le
+       pouvait pas : « Enregistrer » reprenait deux nœuds à la main, le montant
+       en tête et le total investi, et laissait tout le reste sur les anciens
+       chiffres — la plus-value, sa part du portefeuille, l'écart du jour. La
+       fiche se contredisait dans une même fenêtre, et sur le chiffre qu'on
+       venait justement relire.
+
+       C'est le défaut que ce projet nomme depuis longtemps : une liste écrite à
+       la main pour une seule vérité. Un sixième chiffre ajouté demain aurait été
+       oublié comme les trois autres. Le contrôle porte donc sur le mécanisme —
+       une peinture unique — et non sur la présence de tel ou tel rafraîchissement,
+       qui se satisferait de la version fautive. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const bloc = src.match(/function askPosition\(index\) \{[\s\S]*?\n\}\n/);
+    vrai(bloc, 'la fiche d’une ligne de titres doit être trouvable');
+
+    const enr = bloc[0].match(/const enregistrer = \(\) => \{[\s\S]*?\n    \};/);
+    vrai(enr, '« Enregistrer » doit être trouvable dans la fiche');
+    vrai(/peindre\(\)/.test(enr[0]),
+      'il repeint la fiche entière : tous ses chiffres dérivent de la même lecture');
+    vrai(!/innerHTML/.test(enr[0]),
+      'et il ne retouche aucun nœud à la main : le chiffre oublié serait le suivant');
+
+    /* La peinture doit vraiment tout refaire, sinon « repeindre » ne veut rien
+       dire : le corps, mais aussi l'en-tete, que le nom et le compte alimentent. */
+    vrai(/const peindre = \(\) => \{[\s\S]{0,400}?\$\('#modalBody'\)\.innerHTML =/.test(bloc[0]),
+      'la peinture reconstruit le corps de la fiche');
+    vrai(/const peindre = \(\) => \{[\s\S]{0,400}?\$\('#modalTitle'\)/.test(bloc[0]),
+      'et son en-tête, que le nom et le compte modifient depuis les champs');
+
+    /* Le corps reconstruit emporte ses ecouteurs : sans rebranchement, le bouton
+       de suppression et la verification d'ISIN meurent au premier enregistrement.
+       C'est le piege de ce genre de correctif, et il est silencieux. */
+    vrai(/brancher\(\);\n    \};/.test(bloc[0]),
+      'la peinture repose les commandes du corps, qui partent avec l’ancien balisage');
+
+    /* Une fiche longue qu'on repeint sans lui rendre sa place renvoie en haut,
+       donc loin du champ qu'on vient de corriger. */
+    vrai(/scrollTop/.test(enr[0]),
+      'et la place dans la fiche est rendue : elle est longue, et on corrige en son milieu');
   });
 });
 
@@ -11881,6 +12144,43 @@ suite('La traduction des écrans ne peut pas heurter les totaux', () => {
 
 suite('Le dictionnaire anglais ne laisse pas de trou', () => {
 
+  test('aucune balise ne porte de français écrit à la main', () => {
+    /* Le rattrapage de 2026 a repris deux mille chaines une a une. Rien ne
+       gardait ensuite la porte : soixante-dix textes affiches etaient repartis
+       sans `trad()` -- les vingt notifications de la cloche entierement, des
+       intitules de colonnes, des libelles de boutons, et des `aria-label`, qui
+       sont du texte affiche pour qui lit l'ecran a l'oreille.
+
+       Le controle ne cherche pas tout le francais : il cherche les quatre
+       formes ou il s'est cache, celles qui portent du texte visible et se
+       reconnaissent sans ambiguite. Un motif qui crierait sur du francais
+       ordinaire finirait par ne plus etre lu. */
+    const ACCENT = 'éèêëàâäçùûüôöîïœ';
+    const accentue = s => [...s].some(c => ACCENT.includes(c));
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+
+    const fautes = [];
+    const balise = (nom, motif) => {
+      for (const m of src.matchAll(motif)) {
+        const txt = m[1];
+        /* Une interpolation est le chemin normal : `${trad(...)}`, un montant,
+           une donnee du detenteur. Seul le texte ecrit en clair compte. */
+        if (txt.includes('${') || !accentue(txt)) continue;
+        fautes.push(`${nom} : « ${txt.trim().slice(0, 46)} »`);
+      }
+    };
+    balise('aria-label', /aria-label="([^"$]*)"/g);
+    balise('title', /\stitle="([^"$]*)"/g);
+    balise('en-tête', /<t[hd][^>]*>([^<>{}]*)</g);
+    balise('bouton', /<button[^>]*>([^<>{}]*)</g);
+    balise('option', /<option[^>]*>([^<>{}]*)</g);
+
+    eq(fautes.join(' | '), '',
+      'ces textes s’affichent sans passer par trad() : une chaîne posée sans sa '
+      + 'clef n’est pas un raccourci, c’est un bug');
+  });
+
   test('une clef ne se déclare qu’une fois', () => {
     /* Deux sessions ont pose « sur » chacune de son cote, over puis of : en
        JavaScript la derniere declaration gagne sans un mot, et « over 7
@@ -12472,7 +12772,9 @@ suite('Un patrimoine net négatif a deux causes', () => {
       'et ne demande pas de déclarer un bien déjà déclaré');
     /* Ce que le mois fait, sans annoncer de date : une date demanderait de parier
        sur la valeur du bien. */
-    vrai(/de capital, et ton patrimoine net remonte d'autant/.test(txt),
+    /* L'apostrophe typographique, comme partout ailleurs dans le texte
+       affiche : la clef du dictionnaire la porte. */
+    vrai(/de capital, et ton patrimoine net remonte d’autant/.test(txt),
       'elle dit ce que chaque mensualité rembourse');
     vrai(!/mois|ans/.test(txt.replace(/mensualité|premières années/g, '')),
       'aucune date de retour à l’équilibre : elle serait un pari sur la valeur');
@@ -14586,6 +14888,24 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
       "trad('Notes de marché')");
     vrai(croissant(l), `l’ordre attendu est relevé, apports, notes : ${l.join(' < ')}`);
   });
+
+  test('Allocation : ce que c’est, où c’est posé, puis en combien de temps', () => {
+    /* Trois axes sur la meme somme, et l'ordre dit lequel repond a la question
+       qu'on se pose en ouvrant la page. « Par disponibilite » vient en dernier
+       parce que c'est la lecture la moins familiere des trois — pas parce
+       qu'elle vaut moins. Elle ne corrige rien et ne detruit rien, donc rien ne
+       la tire plus bas que sa place. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewAllocation()'),
+                          src.indexOf('function mountAllocation'));
+    const l = positions(vue,
+      'class="card repart"',
+      "trad('Répartition globale')",
+      "trad('Où est placé ton argent')",
+      "trad('Par disponibilité')");
+    vrai(croissant(l),
+      `l’ordre attendu est poches, répartition globale, emplacement, disponibilité : ${l.join(' < ')}`);
+  });
 });
 
 suite('Les boutons d’une fiche ont une géométrie et une place', () => {
@@ -16185,6 +16505,81 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
        objet de valeur, ses deux boutons donnent la meme page. */
     vrai(/horsFinancierExiste\(\) \? barreCommutateur/.test(vue),
       'le commutateur se tait quand il n’y a rien à retirer');
+  });
+
+  test('un camembert a son tableau, des barres classées n’en ont pas', () => {
+    /* « C'est pas un doublon ça ? » Si. J'avais pose un tableau sous « Par
+       compte » au motif que les autres decoupages en avaient un et pas
+       celui-la. L'asymetrie etait reelle, sa cause mal lue.
+
+       `Charts.rankedBars` rend deja, sur chaque ligne, le libelle, le montant
+       et le pourcentage : c'est un tableau avec des barres. Les dix memes
+       lignes s'affichaient donc deux fois de suite, aux centimes pres. Ce qui
+       appelle un tableau, c'est le camembert, qui donne des proportions sans
+       nommer ni chiffrer.
+
+       Le controle porte sur cette regle et non sur un compte de tableaux : la
+       premiere formulation etait satisfaite par la version fautive. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewAllocation()'),
+                          src.indexOf('function mountAllocation'));
+    const mnt = corpsDe(src, 'mountAllocation');
+
+    /* Quel conteneur porte quoi, lu dans le montage : c'est lui qui decide. */
+    const camemberts = [...mnt.matchAll(/Charts\.donut\(\$\('#(\w+)'\)/g)].map(m => m[1]);
+    const barres = [...mnt.matchAll(/Charts\.rankedBars\(\$\('#(\w+)'\)/g)].map(m => m[1]);
+    vrai(camemberts.length >= 3 && barres.length >= 2,
+      `attendu au moins 3 camemberts et 2 jeux de barres, vu ${camemberts.length} et ${barres.length}`);
+
+    /* Un tableau suit son camembert dans le balisage, et rien ne suit des
+       barres avant le conteneur suivant ou la fin de la carte. */
+    for (const id of barres) {
+      const i = vue.indexOf(`id="${id}"`);
+      vrai(i > 0, `le conteneur #${id} doit être dans la vue`);
+      const suite = vue.slice(i, i + 400);
+      const finBloc = Math.min(...[suite.indexOf('</div>'), suite.length].filter(n => n >= 0));
+      vrai(!/\$\{tbl\(/.test(suite.slice(0, finBloc)),
+        `#${id} rend des barres classées, qui portent déjà libellé, montant et `
+        + 'pourcentage : un tableau dessous répète la même liste');
+    }
+
+    /* Et « Ligne par ligne » porte a la place la lecture que l'ordre ne donne
+       pas tout seul. */
+    const detail = vue.slice(vue.indexOf("trad('Ligne par ligne')"),
+                             vue.indexOf('data-anchor', vue.indexOf("trad('Ligne par ligne')")));
+    vrai(/phraseConcentration\(\)/.test(detail),
+      'le classement par poids porte la lecture que son ordre ne donne pas');
+  });
+
+  test('une poche porte le nom de sa classe, elle ne le recopie pas', () => {
+    /* Le vrai defaut, et mon premier correctif visait a cote : j'avais renomme
+       la carte pour qu'elle cesse de dire « classe d'actif » sur des poches,
+       alors que les poches SONT les classes a un grain plus large. Ce qui
+       n'allait pas, c'est que les deux tables donnaient deux noms au meme
+       argent — « Non cote » ici, « Placements non cotes » la, sur deux ecrans
+       qu'on ne regarde jamais en meme temps, donc invisible.
+
+       Le controle porte sur le lien et non sur les libelles : ecrire la bonne
+       paire de noms aujourd'hui ne dit rien de la prochaine poche ajoutee. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('const POCHE_CLASSE'),
+                           src.indexOf('function seriesUtiles'));
+    vrai(bloc.length > 100, 'la table des poches doit être trouvable');
+    vrai(!/label:\s*trad\('/.test(bloc),
+      'aucun libellé de poche ne s’écrit à la main : il vient de sa classe');
+    vrai(/CLASSES_ACTIFS\[POCHE_CLASSE\[s\.key\]\]/.test(bloc),
+      'chaque poche lit le nom de la classe que POCHE_CLASSE lui associe');
+
+    /* Et la table de correspondance couvre toutes les poches, sinon celle qui
+       manque naitrait sans nom. Les cles se lisent dans la source : le harnais
+       ne charge pas app.js. */
+    const cles = [...bloc.matchAll(/\{ key: '(\w+)'/g)].map(m => m[1]);
+    const mappees = Object.keys(Object.fromEntries(
+      [...bloc.slice(0, bloc.indexOf('SERIES_PATRIMOINE'))
+        .matchAll(/(\w+):\s*'(\w+)'/g)].map(m => [m[1], m[2]])));
+    eq(cles.length, 7, `sept poches attendues, trouvées : ${cles.join(', ')}`);
+    for (const k of cles)
+      vrai(mappees.includes(k), `la poche « ${k} » doit avoir sa classe dans POCHE_CLASSE`);
   });
 });
 

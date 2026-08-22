@@ -210,14 +210,13 @@ def main():
             # pixel force un evenement de defilement, seul declencheur du
             # recalcul des ancrages `position: sticky`.
             #
-            # Ce qui reste NON RESOLU, et il faut le dire ici plutot que de le
-            # laisser croire regle : la capture d'Allocation garde un bandeau
-            # « Holding / Amount / % » a peine visible sous la barre du haut.
-            # L'application en direct est propre — mesure a defilement zero, les
-            # trois entetes sont a 827, 2037 et 3003 px pour une fenetre de
-            # 812 — donc l'artefact appartient a la capture, pas au produit.
-            # Deux tentatives n'en ont pas eu raison ; la piste restante est la
-            # hauteur emulee de 844 px, ou le premier entete tombe a 827.
+            # Le bandeau fantome « Holding / Amount / % » qui restait sous la
+            # barre du haut de la capture d'Allocation a disparu : l'aller-retour
+            # d'un pixel ci-dessous suffit, et la mesure le confirme — au
+            # defilement zero les trois entetes collants sont a 827, 1982 et
+            # 2955 px pour une fenetre de 844, donc aucun n'est en haut de
+            # l'image. Si le bandeau revenait, la piste serait la meme : un
+            # ancrage collant recalcule apres le rendu, pas avant.
             onglet.js(
                 "(() => { window.scrollTo(0, 1); window.scrollTo(0, 0);"
                 " document.scrollingElement.scrollTop = 0;"

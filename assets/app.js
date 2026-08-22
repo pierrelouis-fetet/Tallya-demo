@@ -598,7 +598,7 @@ function detailEvolution() {
           <tbody>${pts.map(p => `<tr><td class="name sticky-col">${esc(p.label)}</td>${
             cols.map(c => `<td>${fmtEUR0(Number(p[c.key]) || 0)}</td>`).join('')
           }<td class="sticky-fin"><b>${fmtEUR0(p.total)}</b></td></tr>`).join('')
-            || `<tr><td colspan="${cols.length + 2}" class="empty">Aucun relevé sur cette année.</td></tr>`}</tbody>
+            || `<tr><td colspan="${cols.length + 2}" class="empty">${trad('Aucun relevé sur cette année.')}</td></tr>`}</tbody>
         </table>
       </div>
     </details>`;
@@ -2548,8 +2548,8 @@ function mountSymbolSearch() {
 
     const asIsin = looksLikeIsin(q) ? q.replace(/\s/g, '').toUpperCase() : null;
     if (asIsin && !isinIsValid(asIsin)) {
-      out.innerHTML = `<p class="down">⚠ <b>${esc(asIsin)}</b> a le bon format mais une clé de
-        contrôle incorrecte : il y a probablement une faute de frappe.</p>`;
+      out.innerHTML = `<p class="down">⚠ <b>${esc(asIsin)}</b> ${trad('a le bon format '
+        + 'mais une clé de contrôle incorrecte : il y a probablement une faute de frappe.')}</p>`;
       return;
     }
 
@@ -2568,9 +2568,10 @@ function mountSymbolSearch() {
       if (!res.length) { out.innerHTML = '<p class="muted">Aucun résultat.</p>'; return; }
 
       out.innerHTML = `
-        ${isinCode ? `<p class="small muted" style="margin:0 0 8px">ISIN valide · ${res.length}
-           cotation${res.length > 1 ? 's' : ''} trouvée${res.length > 1 ? 's' : ''}, la première
-           correspond à ta place privilégiée.</p>` : ''}
+        ${isinCode ? `<p class="small muted" style="margin:0 0 8px">${trad(res.length > 1
+           ? 'ISIN valide · {n} cotations trouvées, la première correspond à ta place privilégiée.'
+           : 'ISIN valide · {n} cotation trouvée, la première correspond à ta place privilégiée.')
+           .replace('{n}', res.length)}</p>` : ''}
         <table class="table-serree cols-nom-action"><tbody>${res.map(r => `
         <tr>
           <td class="name">${esc(r.symbol)}${r.symbol === bestSymbol ? ' <span class="tag">retenu</span>' : ''}
@@ -2810,7 +2811,7 @@ function viewAllocation() {
   </div>
 
   <div class="card" data-anchor="actifs">
-    <div class="card-head"><h2>${trad('Par classe d’actif')}</h2>
+    <div class="card-head"><h2>${trad('Répartition globale')}</h2>
       <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
     <div class="chart" id="aMacro"></div>
     ${tbl(poches, baseAlloc().nom,
@@ -2957,8 +2958,10 @@ function viewRebalance() {
               ? `<button class="chevron-role ouvert" data-action="refusionner-classe"
                          data-cle="${esc(row.classeParente)}"
                          aria-expanded="true"
-                         title="Refermer : une seule cible pour ${esc(row.labelClasse)}"
-                         aria-label="Refermer les deux rôles de ${esc(row.labelClasse)}"
+                         title="${esc(trad('Refermer : une seule cible pour {c}')
+                           .replace('{c}', row.labelClasse))}"
+                         aria-label="${esc(trad('Refermer les deux rôles de {c}')
+                           .replace('{c}', row.labelClasse))}"
                          >›</button>`
               : (() => {
                   const pr = stockTotals().parClasseRole?.[key.split('.')[1]];
@@ -3046,10 +3049,16 @@ function viewRebalance() {
   <div class="note" style="background:color-mix(in oklab, var(--${sumT > 100 ? 'critical' : 'warning'}) 12%, var(--surface-1));
        border-color:color-mix(in oklab, var(--${sumT > 100 ? 'critical' : 'warning'}) 40%, transparent)">
     ${sumT > 100 ? '⚠' : 'ⓘ'}
-    <span><b>Tes cibles totalisent ${sumT} %${sumT > 100 ? `, soit ${sumT - 100} % de trop` : `, il en manque ${100 - sumT}`}.</b>
+    <span><b>${sumT > 100
+      ? trad('Tes cibles totalisent {v} %, soit {x} % de trop.')
+          .replace('{v}', sumT).replace('{x}', sumT - 100)
+      : trad('Tes cibles totalisent {v} %, il en manque {x}.')
+          .replace('{v}', sumT).replace('{x}', 100 - sumT)}</b>
     ${sumT > 100
-      ? `Additionnés, les montants cibles demandent ${fmtEUR0(r.base * sumT / 100)} alors que tu as ${fmtEUR0(r.base)}.`
-      : `Les ${100 - sumT} % restants ne sont attribués à aucune classe.`}</span>
+      ? trad('Additionnés, les montants cibles demandent {v} alors que tu as {b}.')
+          .replace('{v}', fmtEUR0(r.base * sumT / 100)).replace('{b}', fmtEUR0(r.base))
+      : trad('Les {v} % restants ne sont attribués à aucune classe.')
+          .replace('{v}', 100 - sumT)}</span>
   </div>`}
 
   <div class="card">
@@ -3549,8 +3558,8 @@ function lignePlacement(l, compte, editable = false) {
    l'en-tete du groupe portait deja le mot, et le repeter sous chaque ligne
    remplissait la colonne de ce que le titre venait de dire.*/
   const sousTitre = [CLASSES_ACTIFS[l.classe] || l.classe, nomCompteV2(compte),
-    l.taux ? `${fmtNombre(num(l.taux))} % annoncé` : '',
-    l.echeance ? `échéance ${fmtJourMois(l.echeance)} ${String(l.echeance).slice(0, 4)}` : '',
+    l.taux ? `${fmtNombre(num(l.taux))} % ${trad('annoncé')}` : '',
+    l.echeance ? `${trad('échéance')} ${fmtJourMois(l.echeance)} ${String(l.echeance).slice(0, 4)}` : '',
     st !== 'encours' ? STATUTS_LIGNE[st] : '']
     .filter((x, i, t) => x && !pareil(x, libelle)
                            && t.indexOf(t.find(y => y && pareil(y, x))) === i)
@@ -4061,7 +4070,7 @@ function espaceBien(c, idx, t) {
         <p style="margin:0 0 12px">Aucun crédit déclaré : le bien est compté en entier dans
           ton patrimoine, et sa valeur nette est donc sa valeur tout court.</p>
         <button class="btn sm" data-action="ajouter-credit" data-id="${esc(c.etabId)}">
-          + Déclarer un crédit sur ce bien</button>
+          ${trad('+ Déclarer un crédit sur ce bien')}</button>
       </div>` : dettes.map(({ d, i }) => {
       const initial = num(d.initial);
       const restant = num(d.montant);
@@ -4629,7 +4638,7 @@ function viewStrategy() {
           <h3 style="margin:0 0 4px;font-size:14px">Allocation ${mi + 1}, ${esc(m.name)}</h3>
           <p class="small muted" style="margin:0 0 12px">${esc(m.note || '')}</p>
           <table>
-            <thead><tr><th>${trad('Classe d\'actif')}</th><th>%</th><th>Montant</th><th style="text-align:left">Véhicules</th></tr></thead>
+            <thead><tr><th>${trad('Classe d\'actif')}</th><th>%</th><th>${trad('Montant')}</th><th style="text-align:left">${trad('Véhicules')}</th></tr></thead>
             <tbody>${m.lines.map(l => `<tr>
               <td class="name">${esc(l.label)}</td>
               <td>${fmtPct(l.pct, 0)}</td>
@@ -4734,7 +4743,8 @@ function viewBudget(section = 'depenses') {
               <b class="flow-val">${fmtEUR0(p.v)}</b>
             </div>`).join('')}
           ${parts.length > 6 ? `<p class="small muted" style="margin:4px 0 0">
-            et ${parts.length - 6} autre${parts.length - 6 > 1 ? 's' : ''} catégorie${parts.length - 6 > 1 ? 's' : ''}</p>` : ''}
+            ${trad(parts.length - 6 > 1 ? 'et {n} autres catégories' : 'et {n} autre catégorie')
+              .replace('{n}', parts.length - 6)}</p>` : ''}
         </div>`;
       })()}
     </div>
@@ -4894,11 +4904,13 @@ function viewBudget(section = 'depenses') {
       if (!att.missing) return '';
       const visible = year === 'all' || String(att.key).startsWith(year);
       return `<div class="note note-relance" style="margin-bottom:12px">⚠ <span>
-        <b>${esc(att.label)} n'est pas saisi.</b> Le mois est clos : c'est le moment
-        d'enregistrer ce qu'il a coûté.${visible ? ' Sa ligne est signalée ci-dessous.'
-          : ` Change l'année pour ${esc(String(att.key).slice(0, 4))} pour la voir.`}</span>
+        <b>${esc(att.label)} ${trad('n’est pas saisi.')}</b> ${trad('Le mois est clos : '
+          + 'c’est le moment d’enregistrer ce qu’il a coûté.')}${visible
+          ? ` ${trad('Sa ligne est signalée ci-dessous.')}`
+          : ` ${trad('Change l’année pour {a} pour la voir.')
+              .replace('{a}', esc(String(att.key).slice(0, 4)))}`}</span>
         ${sortiesRappel('depenses', att.label,
-          `<button class="btn sm" data-action="saisir-mois-en-attente">Saisir ${esc(att.label)}</button>`)}
+          `<button class="btn sm" data-action="saisir-mois-en-attente">${trad('Saisir')} ${esc(att.label)}</button>`)}
       </div>`;
     })()}
     <div class="liste-mobile">
@@ -5011,6 +5023,16 @@ function viewBudget(section = 'depenses') {
         <b>${trad('Retirer')}</b> ${trad("garde l'historique,")} <b>${trad('Supprimer')}</b> ${trad("l'efface.")}${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
     </details>
+    <div class="row" style="margin-top:12px">
+      ${sansDistinction()
+        ? `<button class="btn sm ghost" data-action="reprendre-detail" type="button">${trad('Reprendre le détail')}</button>`
+        : `<button class="btn sm ghost" data-action="sans-distinction" type="button">${trad('Ne plus détailler')}</button>`}
+      <span class="hint" style="margin-left:auto">${sansDistinction()
+        ? trad('Une seule case à remplir chaque mois.')
+        : trad('Une seule case au lieu de toutes.')}${aide(trad(sansDistinction()
+          ? 'Reprendre le détail remet toutes tes catégories dans la saisie, y compris celles que tu avais retirées à la main : l’application ne sait pas les distinguer. Tu peux en retirer à nouveau, ligne par ligne, sans rien perdre.'
+          : 'Pour qui ne veut pas ventiler ses dépenses : une seule catégorie reste proposée à la saisie du mois, les autres sont retirées. Rien n’est effacé, les mois déjà détaillés gardent leur découpage dans le tableau, les graphiques et les exports. Réversible, et Ctrl+Z annule.'))}</span>
+    </div>
   </div>`}
 
   ${!cadre ? '' : `
@@ -5118,18 +5140,19 @@ function viewBudget(section = 'depenses') {
               <b>${esc(p.name)}</b>
               <span class="muted">${fmtEUR(p.total)} ${trad('/ mois')}</span>
               <button class="btn icon xs" data-action="del-contributor" data-id="${esc(p.id)}"
-                      title="Retirer ${esc(p.name)} des charges partagées"
-                      aria-label="Retirer ${esc(p.name)}">✕</button>
+                      title="${esc(trad('Retirer {n} des charges partagées')
+                        .replace('{n}', p.name))}"
+                      aria-label="${esc(trad('Retirer {n}').replace('{n}', p.name))}">✕</button>
             </span>`).join('')}
         </div>` : ''}
       </div>
       <div class="table-wrap large-seulement">
         <table class="editable">
           <thead><tr>
-            <th class="sticky-col">Poste</th><th>Montant</th><th>Facturé</th>
+            <th class="sticky-col">${trad('Poste')}</th><th>${trad('Montant')}</th><th>${trad('Facturé')}</th>
             <th title="${trad('Ce que la ligne pèse chaque mois, quelle que soit sa périodicité')}">${trad('€ / mois')}</th>
             <th>${trad('% charges')}</th>
-            ${gens.map(p => `<th title="Ce que ${esc(p.name)} prend en charge, sur la même période que le montant">
+            ${gens.map(p => `<th title="${esc(trad('Ce que {n} prend en charge, sur la même période que le montant').replace('{n}', p.name))}">
               Part de ${esc(p.name)}
               <button class="btn icon xs" data-action="del-contributor" data-id="${esc(p.id)}"
                       title="Retirer ${esc(p.name)}">✕</button></th>`).join('')}
@@ -5291,10 +5314,10 @@ function viewData() {
       </p>
       <div class="row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--grid)">
         ${modeDemo()
-          ? `<button class="btn sm" data-action="quitter-demo">← Revenir à mes données</button>
-             <span class="hint">La démonstration reste disponible</span>`
+          ? `<button class="btn sm" data-action="quitter-demo">← ${trad('Revenir à mes données')}</button>
+             <span class="hint">${trad('La démonstration reste disponible')}</span>`
           : `<button class="btn ghost sm" data-action="charger-demo">▷ ${trad('Voir la démonstration')}</button>
-             <span class="hint">${trad('Des chiffres fictifs, sans toucher aux vôtres')}</span>`}
+             <span class="hint">${trad('Des chiffres fictifs, sans toucher aux tiennes')}</span>`}
       </div>
     </div>
   </div>
@@ -5315,9 +5338,9 @@ function viewData() {
         ${s.error ? `<dt>Erreur</dt><dd class="down">${esc(s.error)}</dd>` : ''}
       </dl>
       ${s.conflict ? `<div class="note" style="margin-top:12px">⚠ <span>
-        <b>Conflit.</b> La version en ligne
-        (${new Date(s.conflict.remoteSavedAt).toLocaleString(locale())}) est plus récente
-        que celle de cet appareil. Choisis laquelle garder.</span></div>
+        <b>${trad('Conflit.')}</b> ${trad('La version en ligne ({d}) est plus récente '
+        + 'que celle de cet appareil. Choisis laquelle garder.')
+        .replace('{d}', new Date(s.conflict.remoteSavedAt).toLocaleString(locale()))}</span></div>
         <div class="row" style="margin-top:12px">
           <button class="btn sm" data-action="cloud-pull">${trad('↓ Prendre la version en ligne')}</button>
           <button class="btn sm ghost" data-action="cloud-force">${trad('↑ Imposer celle-ci')}</button>
@@ -5326,9 +5349,9 @@ function viewData() {
           <button class="btn sm ghost" data-action="cloud-push">${trad('↻ Synchroniser maintenant')}</button>
         </div>`}
       <p class="small muted" style="margin:12px 0 0">
-        La synchronisation est <b>automatique</b> : tout est envoyé quelques secondes
-        après chaque modification, et tes appareils partagent le même état. Ce bouton
-        ne sert qu'à forcer l'envoi avant de fermer.
+        ${trad('La synchronisation est automatique : tout est envoyé quelques secondes '
+          + 'après chaque modification, et tes appareils partagent le même état. Ce bouton '
+          + 'ne sert qu’à forcer l’envoi avant de fermer.')}
       </p>
     </div>`;
   })()}
@@ -5807,7 +5830,7 @@ function creditsRattachables(sien = null) {
     .map(c => c.creditId).filter(x => x && x !== sien));
   return [['', 'aucun, c’est une charge ordinaire'],
     ...creditsEnCours().lignes.filter(c => !pris.has(c.id))
-      .map(c => [c.id, `${c.libelle} · ${c.etabNom} · ${fmtEUR0(c.reste)} restant dû`])];
+      .map(c => [c.id, `${c.libelle} · ${c.etabNom} · ${fmtEUR0(c.reste)} ${trad('restant dû')}`])];
 }
 
 const ACTIONS = {
@@ -5866,7 +5889,8 @@ const ACTIONS = {
     const a = sellPosition(v);
     if (!a) { toast(trad('Vente impossible')); return; }
     Store.save(); render();
-    const ou = v.cashAccount ? ` · encaissé sur ${ACC[v.cashAccount]?.short || 'le cash'}` : '';
+    const ou = v.cashAccount
+      ? ` · ${trad('encaissé sur')} ${ACC[v.cashAccount]?.short || trad('le cash')}` : '';
     toast(`${a.realised >= 0 ? trad('Plus-value') : trad('Moins-value')} ${trad('de')} ${fmtSigned(a.realised)}${ou}`);
   },
   /* Ajouter une ligne : un seul chemin, et c'est la recherche.
@@ -5894,8 +5918,9 @@ const ACTIONS = {
              vide: 'aucun compte ne peut porter cette classe' },
       champs: [
         { cle: 'name', label: 'Nom', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
-          exemple: 'ex. MSCI World', aide: `${NOM_LIGNE_MAX} caractères au plus : ce nom se lit `
-            + `dans une colonne de tableau. Le nom officiel du titre reste sur sa fiche` },
+          exemple: 'ex. MSCI World',
+          aide: trad('{n} caractères au plus : ce nom se lit dans une colonne de tableau. '
+            + 'Le nom officiel du titre reste sur sa fiche').replace('{n}', NOM_LIGNE_MAX) },
         { cle: 'isin', label: 'ISIN', type: 'texte', exemple: 'ex. IE000OJ5TQP4',
           aide: trad('douze caractères, laisse vide si tu saisis le cours à la main') },
         { cle: 'assetClass', label: trad('Classe d’actif'), type: 'liste', options: OPTIONS_CLASSE, valeur: 'actions' },
@@ -6022,7 +6047,8 @@ const ACTIONS = {
     const sorties = r.exclues.map(x => x.cle);
     const libres = Object.entries(ASSET_CLASSES)
       .filter(([k]) => !visibles.includes(k))
-      .map(([k, label]) => [k, sorties.includes(k) ? `${label} (sortie, à remettre)` : label]);
+      .map(([k, label]) => [k, sorties.includes(k)
+        ? `${label} ${trad('(sortie, à remettre)')}` : label]);
     if (!libres.length) { toast(trad('Toutes les classes sont déjà suivies')); return; }
     const somme = sommeCibles();
     const premiere = libres[0][0];
@@ -6607,7 +6633,7 @@ const ACTIONS = {
         const et = etabById(etabId);
         et.dettes = et.dettes || [];
         et.dettes.push({ id: 'd' + Date.now().toString(36),
-          libelle: `Crédit ${nomContenant()}`.trim(),
+          libelle: `${trad('Crédit')} ${nomContenant()}`.trim(),
           montant: num(e3.credit), preteur: e3.preteur || '', note: '',
           mensualite: num(e3.mensualite) || null, taux: num(e3.taux) || null,
           tauxAssurance: num(e3.tauxAssurance) || null,
@@ -6940,7 +6966,7 @@ const ACTIONS = {
     const e = etabById(btn.dataset.id);
     if (!e) return;
     const v = await askForm({
-      titre: `Crédit chez ${e.nom}`,
+      titre: trad('Crédit chez {e}').replace('{e}', e.nom),
       sous: trad('Il pèse en négatif sur le patrimoine net'),
       ok: 'Ajouter',
       champs: [
@@ -6986,12 +7012,14 @@ const ACTIONS = {
     const lien = chargeDuCredit(d.id);
     const v = await askForm({
       titre: d.libelle || 'Crédit',
-      sous: [`chez ${e.nom}`,
-        lien ? `remboursé par ${guill(lien.charge.label || 'charge fixe')}, ${
-          fmtEUR0(chargeMensuelle(lien.charge))} par mois` : '',
+      sous: [trad('chez {e}').replace('{e}', e.nom),
+        lien ? trad('remboursé par {c}, {v} par mois')
+          .replace('{c}', guill(lien.charge.label || trad('charge fixe')))
+          .replace('{v}', fmtEUR0(chargeMensuelle(lien.charge))) : '',
         siens.length ? `${siens.map(c => nomCompteV2(c)).join(', ')} · ${fmtEUR0(
-          siens.reduce((s, c) => s + valeurCompte(c), 0))}` : 'aucun compte rattaché',
-        autres > 0 ? `${autres} autre${autres > 1 ? 's' : ''} crédit${autres > 1 ? 's' : ''} ici` : '',
+          siens.reduce((s, c) => s + valeurCompte(c), 0))}` : trad('aucun compte rattaché'),
+        autres > 0 ? trad(autres > 1 ? '{n} autres crédits ici' : '{n} autre crédit ici')
+          .replace('{n}', autres) : '',
       ].filter(Boolean).join(' · '),
       ok: 'Enregistrer',
       champs: [
@@ -7001,8 +7029,9 @@ const ACTIONS = {
             if (pr.projete == null || pr.ecart < 1) {
               return 'le premier champ : c’est celui qu’on vient corriger';
             }
-            return `d’après ta mensualité, ${fmtEUR0(pr.projete)} après ${pr.moisDepuis} `
-              + `mois : à recopier si tu n’as rien remboursé par avance`;
+            return trad('d’après ta mensualité, {v} après {n} mois : à recopier si tu '
+              + 'n’as rien remboursé par avance')
+              .replace('{v}', fmtEUR0(pr.projete)).replace('{n}', pr.moisDepuis);
           })() },
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, valeur: d.libelle || '' },
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre',
@@ -7336,6 +7365,18 @@ const ACTIONS = {
     Store.save(); render();
     toast(`${guill(cat)} ${trad('revient dans la saisie du mois')}`);
   },
+  'sans-distinction'() {
+    const garde = neePlusDetailler();
+    Store.save(); render();
+    toast(`${trad('Une seule case à remplir :')} ${guill(garde)}`);
+  },
+  'reprendre-detail'() {
+    const n = reprendreLeDetail();
+    if (!n) return;
+    Store.save(); render();
+    toast(`${n} ${n > 1 ? trad('catégories reviennent dans la saisie')
+                        : trad('catégorie revient dans la saisie')}`);
+  },
   async 'del-category'(btn) {
     const cat = btn.dataset.cat;
     const total = expenseCategoryTotal(cat);
@@ -7496,8 +7537,9 @@ const ACTIONS = {
       titre: c.label || 'Charge fixe',
       sous: chargePeriode(c) === 'mois'
         ? 'Le montant se saisit tel qu’il est facturé'
-        : `Facturée ${CHARGE_PERIODE_LABEL[chargePeriode(c)]}, soit ${
-            fmtEUR(chargeMensuelle(c))} par mois dans le budget`,
+        : trad('Facturée {p}, soit {v} par mois dans le budget')
+            .replace('{p}', trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]))
+            .replace('{v}', fmtEUR(chargeMensuelle(c))),
       ok: 'Enregistrer',
       champs: [
         { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX, valeur: c.label },
@@ -8365,7 +8407,7 @@ function askSale(indexInitial) {
       const defaut = defaultCashTarget(p.account);
       $('#veCash').innerHTML = cibles.map(c =>
         `<option value="${c.id}" ${c.id === defaut ? 'selected' : ''}>${esc(sousNom('', nomCompteV2(c), nomEtabDe(c)))}</option>`).join('')
-        + `<option value="">Ne rien créditer</option>`;
+        + `<option value="">${trad('Ne rien créditer')}</option>`;
       majApercuVente();
       avisCoursDuJour();
     };
@@ -8465,22 +8507,38 @@ function askPosition(index) {
     const p = Store.state.positions[index];
     if (!p) { resolve(null); return; }
     const dev = p.currency || 'EUR';
-    const jour = posDayChange(p);
-    const marche = marketStatus(p);
-    const compte = ACC[p.account];
     const m = $('#modal');
     apercuOuvert = null;
 
     const ligne = (label, valeur, classe) =>
       `<dt>${label}</dt><dd class="${classe || ''}">${valeur}</dd>`;
 
-    $('#modalTitle').textContent = p.name || 'Ligne sans nom';
-    $('#modalSub').textContent = [compte?.label, ASSET_CLASSES[assetClassDe(p)],
-                                  ROLES[roleDe(p)], dev].filter(Boolean).join(' · ');
     /* `data-differe` : rien de ce qui est saisi ici n'entre dans l'etat avant
        « Enregistrer ». Voir l'ecouteur des champs, plus bas dans ce fichier. */
     $('#modalBody').dataset.differe = 'propre';
-    $('#modalBody').innerHTML = `
+
+    /* Toute la fiche se repeint d'un seul geste, et aucun chiffre ne se
+       rafraichit a la main.
+
+       « Enregistrer » ne reprenait que deux noeuds, le montant en tete et le
+       total investi. Corriger un prix de revient laissait donc la plus-value,
+       sa part du portefeuille et l'ecart du jour sur les anciens chiffres, dans
+       la meme fenetre et a quelques lignes d'ecart. La fiche se contredisait
+       elle-meme, et c'est justement le chiffre corrige qu'on venait relire :
+       deux nombres repeints sur cinq, c'est une liste recopiee a la main.
+
+       L'en-tete en est aussi : le nom et le compte se modifient ici, et le titre
+       comme le sous-titre les portent. `brancher()` repose les commandes du
+       corps, qui partent avec l'ancien balisage ; celles du pied survivent, le
+       pied n'etant pas repeint. */
+    const peindre = () => {
+      const jour = posDayChange(p);
+      const marche = marketStatus(p);
+      const compte = ACC[p.account];
+      $('#modalTitle').textContent = p.name || 'Ligne sans nom';
+      $('#modalSub').textContent = [compte?.label, ASSET_CLASSES[assetClassDe(p)],
+                                    ROLES[roleDe(p)], dev].filter(Boolean).join(' · ');
+      $('#modalBody').innerHTML = `
       <div class="modal-total">
         <b>${fmtEUR(posValue(p))}</b>
         <span>${num(p.qty)} × ${fmtCur(p.price, dev)}${dev !== 'EUR' ? ` · change ${round4(num(p.fx) || 1)}` : ''}</span>
@@ -8620,6 +8678,10 @@ function askPosition(index) {
           + 'n’est encaissé, et aucune plus-value n’entre au journal. Pour solder en '
           + 'encaissant, c’est « Vendre ».')}</p>
       </div>`;
+      brancher();
+    };
+    peindre();
+
     $('#modalFoot').innerHTML =
       `<button class="btn ghost" id="posSell" type="button">− ${trad('Vendre')}</button>
        <button class="btn ghost" id="posBuy" type="button">+ ${trad('Acheter')}</button>
@@ -8628,10 +8690,13 @@ function askPosition(index) {
        <button class="btn ghost" id="posOk" type="button">${trad('Fermer')}</button>`;
     montrerModal(m);
 
-    const fermer = v => {
+    /* Declaree, et non posee dans un `const` : `peindre()` tourne plus haut et
+       appelle `brancher()`, qui a besoin d'elle. Une fonction declaree est
+       connue de toute la portee, une constante seulement apres sa ligne. */
+    function fermer(v) {
       masquerModal(m);      $('#modalClose').onclick = null;
       resolve(v);
-    };
+    }
     const propre = () => ($('#modalBody')?.dataset.differe || 'propre') === 'propre';
     const enregistrer = () => {
       /* `appliquerDiffere()` : la meme fonction que les panneaux d'apercu, et la
@@ -8640,12 +8705,9 @@ function askPosition(index) {
       appliquerDiffere();
       Store.save();
       render();                     // la page derriere suit
-      const t = $('#modalBody .modal-total');
-      if (t) t.innerHTML = `<b>${fmtEUR(posValue(p))}</b>`
-        + `<span>${num(p.qty)} × ${fmtCur(p.price, dev)}`
-        + `${dev !== 'EUR' ? ` · change ${round4(num(p.fx) || 1)}` : ''}</span>`;
-      const investi = $('#modalBody .hint');
-      if (investi) investi.innerHTML = `soit ${fmtEUR(posInvested(p))} investis`;
+      const y = $('#modalBody').scrollTop;
+      peindre();
+      $('#modalBody').scrollTop = y;
       toast(trad('Ligne enregistrée'));
     };
     $('#posSave').onclick = enregistrer;
@@ -8661,69 +8723,76 @@ function askPosition(index) {
     $('#modalClose').onclick = () => fermer('ferme');
     $('#posSell').onclick = () => fermer({ vendre: index });
     $('#posBuy').onclick = () => fermer({ acheter: index });
-    $('#posDelete').onclick = async () => {
-      const ok = await askConfirm(`${trad('Supprimer')} ${guill(p.name || trad('cette ligne'))} ?\n`
-        + `${num(p.qty)} × ${fmtCur(p.price, dev)}, ${trad('soit')} ${fmtEUR(posValue(p))}.\n\n`
-        + trad('La ligne quitte le portefeuille sans vente : ni encaissement, ni '
-        + "plus-value au journal. Réversible avec Ctrl+Z, et une sauvegarde du "
-        + "jour existe dans l'onglet Données."), { ok: 'Supprimer', danger: true });
-      if (!ok) return;
-      fermer({ supprimer: index });
-    };
+    /* Les deux commandes qui vivent dans le corps de la fiche, et non dans son
+       pied : elles partent a chaque peinture avec le balisage qui les portait,
+       donc elles se reposent ici. Declaree pour la meme raison que `fermer`,
+       `peindre()` l'appelant plus haut que sa definition. */
+    function brancher() {
+      $('#posDelete').onclick = async () => {
+        const ok = await askConfirm(`${trad('Supprimer')} ${guill(p.name || trad('cette ligne'))} ?\n`
+          + `${num(p.qty)} × ${fmtCur(p.price, dev)}, ${trad('soit')} ${fmtEUR(posValue(p))}.\n\n`
+          + trad('La ligne quitte le portefeuille sans vente : ni encaissement, ni '
+          + "plus-value au journal. Réversible avec Ctrl+Z, et une sauvegarde du "
+          + "jour existe dans l'onglet Données."), { ok: 'Supprimer', danger: true });
+        if (!ok) return;
+        fermer({ supprimer: index });
+      };
 
-    const avis = $('#posIsinAvis');
-    const champIsin = $(`#modalBody [data-path="positions.${index}.isin"]`);
-    const dire = (texte, ton) => {
-      avis.className = `hint ${ton || ''}`;
-      avis.innerHTML = texte;
-    };
-    $('#posIsinVerif').onclick = async () => {
-      const saisi = (champIsin.value || '').trim().toUpperCase();
-      if (!saisi) { dire('Aucun ISIN à vérifier sur cette ligne.'); return; }
+      const avis = $('#posIsinAvis');
+      const champIsin = $(`#modalBody [data-path="positions.${index}.isin"]`);
+      const dire = (texte, ton) => {
+        avis.className = `hint ${ton || ''}`;
+        avis.innerHTML = texte;
+      };
+      $('#posIsinVerif').onclick = async () => {
+        const saisi = (champIsin.value || '').trim().toUpperCase();
+        if (!saisi) { dire('Aucun ISIN à vérifier sur cette ligne.'); return; }
 
-      const corrige = isinCorrige(saisi);
-      if (!cleIsin(saisi)) {
-        dire(`<b>${esc(saisi)}</b> n'a pas la forme d'un ISIN : deux lettres de pays,
-              neuf caractères, puis une clé de contrôle.`, 'down');
-        return;
-      }
-      let code = saisi;
-      if (corrige) {
-        code = corrige;
-        champIsin.value = code;
-        champIsin.dispatchEvent(new Event('change', { bubbles: true }));
-        dire(`Clé de contrôle corrigée : <b>${esc(saisi)}</b> devient
-              <b>${esc(code)}</b>. Vérification du titre…`);
-      } else {
-        dire('Clé de contrôle valide. Vérification du titre…');
-      }
-
-      try {
-        const r = await Quotes.resolveIsin(code);
-        const best = r && r.best;
-        if (!best || !best.symbol) {
-          dire(`<b>${esc(code)}</b> est bien formé, mais aucune cotation ne lui
-                répond. ${esc(r && r.error ? r.error : 'Vérifie le code auprès de ton courtier.')}`, 'down');
+        const corrige = isinCorrige(saisi);
+        if (!cleIsin(saisi)) {
+          dire(`<b>${esc(saisi)}</b> n'a pas la forme d'un ISIN : deux lettres de pays,
+                neuf caractères, puis une clé de contrôle.`, 'down');
           return;
         }
-        const p2 = Store.state.positions[index];
-        const dejaBon = (p2.symbol || '').toUpperCase() === best.symbol.toUpperCase();
-        if (!p2.symbol) {
-          p2.symbol = best.symbol;
-          Store.save();
-          const champSym = $(`#modalBody [data-path="positions.${index}.symbol"]`);
-          if (champSym) champSym.value = best.symbol;
+        let code = saisi;
+        if (corrige) {
+          code = corrige;
+          champIsin.value = code;
+          champIsin.dispatchEvent(new Event('change', { bubbles: true }));
+          dire(`Clé de contrôle corrigée : <b>${esc(saisi)}</b> devient
+                <b>${esc(code)}</b>. Vérification du titre…`);
+        } else {
+          dire('Clé de contrôle valide. Vérification du titre…');
         }
-        dire(`<b>${esc(code)}</b> correspond à <b>${esc(best.name || best.symbol)}</b>
-              · ${esc(best.symbol)}${best.exchange ? ` · ${esc(best.exchange)}` : ''}.
-              ${dejaBon || !p2.symbol ? '' : `Ta ligne porte le symbole
-              <b>${esc(p2.symbol)}</b> : si les deux titres diffèrent, c'est l'un des deux qui est faux.`}`,
-          dejaBon || !best ? 'up' : '');
-      } catch (e) {
-        dire(`Impossible de joindre la passerelle : ${esc(e.message)}.
-              La clé de contrôle, elle, est vérifiée.`, 'down');
-      }
-    };
+
+        try {
+          const r = await Quotes.resolveIsin(code);
+          const best = r && r.best;
+          if (!best || !best.symbol) {
+            dire(`<b>${esc(code)}</b> est bien formé, mais aucune cotation ne lui
+                  répond. ${esc(r && r.error ? r.error : 'Vérifie le code auprès de ton courtier.')}`, 'down');
+            return;
+          }
+          const p2 = Store.state.positions[index];
+          const dejaBon = (p2.symbol || '').toUpperCase() === best.symbol.toUpperCase();
+          if (!p2.symbol) {
+            p2.symbol = best.symbol;
+            Store.save();
+            const champSym = $(`#modalBody [data-path="positions.${index}.symbol"]`);
+            if (champSym) champSym.value = best.symbol;
+          }
+          dire(`<b>${esc(code)}</b> ${trad('correspond à')} <b>${esc(best.name || best.symbol)}</b>
+                · ${esc(best.symbol)}${best.exchange ? ` · ${esc(best.exchange)}` : ''}.
+                ${dejaBon || !p2.symbol ? '' : trad('Ta ligne porte le symbole {s} : si les '
+                  + 'deux titres diffèrent, c’est l’un des deux qui est faux.')
+                  .replace('{s}', `<b>${esc(p2.symbol)}</b>`)}`,
+            dejaBon || !best ? 'up' : '');
+        } catch (e) {
+          dire(trad('Impossible de joindre la passerelle : {m}. La clé de contrôle, '
+                + 'elle, est vérifiée.').replace('{m}', esc(e.message)), 'down');
+        }
+      };
+    }
   });
 }
 
@@ -9066,7 +9135,7 @@ function askMonthlySnapshot(index) {
         ${d ? `<span class="dep-ecart ${cls(d)}">
           ${d > 0 ? '▲' : '▼'} ${fmtSigned(d)} ${trad('depuis')} ${esc(fmtMonth(avant.date))}</span>` : ''}
         ${dettes ? `<span class="dep-ecart muted" style="flex-basis:100%">
-          net de crédits : <b>${fmtEUR0(t - dettes)}</b></span>` : ''}`;
+          ${trad('net de crédits')}${deuxPoints()} <b>${fmtEUR0(t - dettes)}</b></span>` : ''}`;
     };
     let sale = false;
     const touche = () => { sale = true; majTotal(); };
@@ -9221,9 +9290,11 @@ const APERCUS = {
       ]));
       return {
         titre: 'Immobilier',
-        sous: creditTotal
-          ? `${biens.length} bien${biens.length > 1 ? 's' : ''} · ${fmtEUR0(total - creditTotal)} net de crédits`
-          : `${biens.length} bien${biens.length > 1 ? 's' : ''} · sans crédit`,
+        sous: (biens.length > 1 ? trad('{n} biens') : trad('{n} bien'))
+            .replace('{n}', biens.length)
+          + (creditTotal
+            ? ` · ${trad('{v} net de crédits').replace('{v}', fmtEUR0(total - creditTotal))}`
+            : ` · ${trad('sans crédit')}`),
         total, lignes: [], live: vivants,
         html: biens.map((b, k) => {
           const gain = b.l.prixDeRevient ? b.l.valeur - b.l.prixDeRevient : null;
@@ -9259,7 +9330,8 @@ const APERCUS = {
                       <span class="sub">${trad('capital restant dû, à baisser après chaque mensualité')}</span></span>
                     <input type="number" step="any" class="champ-inline"
                            data-path="etabs.${b.idxEtab}.dettes.${i}.montant" value="${num(d.montant)}"
-                           aria-label="Capital restant dû, ${esc(d.libelle)}">
+                           aria-label="${esc(trad('Capital restant dû, {l}')
+                             .replace('{l}', d.libelle))}">
                   </div>`).join('')}
                 <dl class="kv">
                   <dt>${trad('Crédits en cours')}</dt><dd class="dette" data-live="credit-${k}">−${fmtEUR(b.credits)}</dd>
@@ -9486,11 +9558,18 @@ const APERCUS = {
       vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
   },
+  /* Les lignes viennent de `placeByAccount()` et non d'`allocationByAccount()` :
+     celle-la compte les especes, ce total les exclut. Un compte de liquidites
+     entier figurait donc sous un total qui ne le contient pas.
+
+     Le sous-titre suit : `invested` retire toutes les liquidites, pas seulement
+     celles du quotidien, et la carte qui ouvre ce panneau montre l'epargne de
+     precaution et le cash a investir comme deux parts distinctes de « Place ». */
   investiTotal: () => ({
-    titre: BASES.place.nom, sous: trad('Tout sauf le cash de vie'),
+    titre: BASES.place.nom, sous: trad('Tout sauf les liquidités'),
     total: nowTotals().invested,
     totalNote: `${fmtPct(nowTotals().total ? nowTotals().invested / nowTotals().total * 100 : 0)} ${trad('du patrimoine')}`,
-    lignes: allocationByAccount().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
+    lignes: placeByAccount().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
     vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
   }),
 
@@ -9755,7 +9834,7 @@ const APERCUS = {
             ? `${trad('hors séance')}${l.quoteTime ? ` · ${trad('cours')} ${esc(fmtCoursQuand(l.quoteTime))}` : ''}`
             : `${fmtSignedPct(l.pct, 2)} · ${delta >= 0 ? '+' : '−'}${nb(Math.abs(delta))}${unite}`}</dd>
         <dt>${trad('Clôture précédente')}</dt><dd>${nb(l.veille)}${unite}</dd>
-        ${m ? `<dt>Séance</dt><dd>${glypheSeance(m)} ${esc(m.label)}</dd>` : ''}
+        ${m ? `<dt>${trad('Séance')}</dt><dd>${glypheSeance(m)} ${esc(m.label)}</dd>` : ''}
         ${ponts.map(([t, v, note]) => `
           <dt>${esc(t)}<span class="sub">${esc(note)}</span></dt><dd><b>${fmtEUR(v)}</b></dd>`).join('')}
       </dl>`,
@@ -10178,7 +10257,8 @@ function render() {
       retour.dataset.action = 'goto';
       retour.dataset.view = parent;
       retour.dataset.anchor = '';
-      retour.setAttribute('aria-label', `Retour à ${viewTitle(parent)}`);
+      retour.setAttribute('aria-label',
+        trad('Retour à {v}').replace('{v}', viewTitle(parent)));
     } else if (orpheline) {
       retour.dataset.action = 'retour-arriere';
       delete retour.dataset.view;
@@ -11431,11 +11511,11 @@ function showFileModeBanner() {
   el.className = 'file-banner';
   el.innerHTML = `
     <span>📄</span>
-    <div><b>${trad('Mode fichier.')}</b> Les cours de bourse ne peuvent pas être récupérés, et
-      tes données sont enregistrées <b>séparément</b> de celles du mode serveur.
-      Pour n'avoir qu'un seul jeu de données, lance plutôt
+    <div><b>${trad('Mode fichier.')}</b> ${trad('Les cours de bourse ne peuvent pas être '
+      + 'récupérés, et tes données sont enregistrées séparément de celles du mode serveur. '
+      + 'Pour n’avoir qu’un seul jeu de données, lance plutôt')}
       <code>python serve.py</code>.</div>
-    <button class="btn ghost sm" type="button">Compris</button>`;
+    <button class="btn ghost sm" type="button">${trad('Compris')}</button>`;
   el.querySelector('button').addEventListener('click', () => {
     try { sessionStorage.setItem('wd:fileBannerSeen', '1'); } catch (e) {}
     el.remove();
