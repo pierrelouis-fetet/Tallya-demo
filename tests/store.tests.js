@@ -12175,6 +12175,9 @@ suite('Le dictionnaire anglais ne laisse pas de trou', () => {
     balise('en-tête', /<t[hd][^>]*>([^<>{}]*)</g);
     balise('bouton', /<button[^>]*>([^<>{}]*)</g);
     balise('option', /<option[^>]*>([^<>{}]*)</g);
+    /* Le texte nu d'un intitule : « Horizon » y dormait en francais, et
+       aucune des cinq formes precedentes ne le voyait. */
+    balise('intitulé', /<label[^>]*>([^<>{}]*)</g);
 
     eq(fautes.join(' | '), '',
       'ces textes s’affichent sans passer par trad() : une chaîne posée sans sa '
@@ -15673,6 +15676,71 @@ suite('La graine de la démonstration parle une seule langue', () => {
     eq(fautifs.length, 0,
       'libellé(s) français dans la graine d’une démonstration anglaise : '
       + fautifs.join(' | '));
+  });
+});
+
+suite('Projection se lit sans explication', () => {
+
+  /* Cinq questions qu'un nouveau venu doit trancher en dix secondes : combien il
+     investit, pourquoi ce montant, ou il va, a quel rendement, et si c'est une
+     prevision. Chacune a sa microcopie, et chacune est epinglee ici -- une
+     phrase d'interface se supprime plus facilement qu'une fonction. */
+
+  test('la page dit ce qu’elle fait, en texte secondaire', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf("trad('De quoi sera fait ton patrimoine')"),
+                          src.indexOf("trad('Tes hypothèses')"));
+    vrai(/trad\('Projette ton patrimoine '/.test(vue),
+      'la phrase se lit sous le premier titre qui concerne la projection');
+    vrai(/<p class="small muted"/.test(vue),
+      'et en texte secondaire : `hint` n’est stylée que dans un en-tête ou un champ, '
+      + 'donc elle sortait en 14 px pleine encre');
+  });
+
+  test('« simulation, pas prévision » se lit sans survol', () => {
+    /* La reserve vivait dans la bulle du scenario, invisible tant qu'on ne la
+       survolait pas. Elle est maintenant dans le sous-titre de la carte, donc
+       avant le premier pourcentage. */
+    const src = lireSource('assets/app.js');
+    vrai(/trad\('Tes hypothèses'\)\}<\/h2>\s*<span class="hint">\$\{trad\('hypothèses de simulation, pas prévisions de marché'\)/
+      .test(src),
+      'le sous-titre de « Tes hypothèses » porte la réserve');
+  });
+
+  test('l’affectation dit ce qu’elle veut dire', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/trad\('Où va ton épargne future\.'\)\)\}/.test(src),
+      '« Affectation des versements » est juste mais abstrait : une ligne le traduit');
+  });
+
+  test('« actifs de marché » énumère ce que le moteur y met, et rien d’autre', () => {
+    /* La composition doit suivre `pochesProjection()` : `marche` vaut la poche
+       bourse plus la crypto, et la poche bourse agrege actions, obligations,
+       immobilier cote, multi-actifs et metaux precieux. Nommer autre chose --
+       un fonds euros, du non cote -- serait faux, chacun a sa poche. */
+    const src = lireSource('assets/app.js');
+    const aide = (src.match(/trad\('(d’actions[^']*)'\)/) || [])[1] || '';
+    vrai(aide, 'l’aide du rendement de marché doit énumérer la poche');
+    for (const attendu of ['actions', 'obligations', 'immobilier coté',
+                           'multi-actifs', 'métaux précieux', 'crypto']) {
+      vrai(aide.includes(attendu), `la poche du marché contient ${attendu}`);
+    }
+    for (const absent of ['fonds euros', 'non coté', 'livret']) {
+      vrai(!aide.includes(absent), `${absent} a sa propre poche, il n’est pas cité ici`);
+    }
+  });
+
+  test('le détail des taux par poche reste replié', () => {
+    /* Le premier niveau se limite a trois paves. Remonter le rendement du non
+       cote, du garanti et des liquidites dans l'interface principale rendrait la
+       carte illisible pour le seul cas ou l'on veut les regler. */
+    const src = lireSource('assets/app.js');
+    const avance = src.indexOf('pli-avance');
+    for (const champ of ['Rendement du non coté', 'Rendement du capital garanti',
+                         'Rendement des liquidités']) {
+      vrai(src.indexOf(`trad('${champ}'`) > avance || src.indexOf(`champ('${champ}'`) > avance,
+        `« ${champ} » doit vivre après l’ouverture du repli`);
+    }
   });
 });
 

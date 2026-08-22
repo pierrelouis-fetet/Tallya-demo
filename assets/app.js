@@ -1329,13 +1329,14 @@ function viewObjective() {
   /* Le meme champ, pour une valeur qui n'est pas un nombre. `champ()` pose
      `data-type="num"` et sa liste de paliers : une destination n'est ni l'un ni
      l'autre, et l'y forcer aurait converti « marche » en zero. */
-  const champText = (label, path, options, valeur, aideTexte) => `
+  const champText = (label, path, options, valeur, aideTexte, sous) => `
     <div class="field">
       <label>${esc(trad(label))}${aideTexte ? aide(aideTexte) : ''}</label>
       <select data-path="${path}">
         ${options.map(([v, l]) => `<option value="${esc(v)}" ${v === valeur ? 'selected' : ''}
           >${esc(trad(l))}</option>`).join('')}
       </select>
+      ${sous ? `<span class="hint">${sous}</span>` : ''}
     </div>`;
 
   const paliers = (max, pas, depuis = 0) =>
@@ -1372,10 +1373,12 @@ function viewObjective() {
     <div class="card-head">
       <h2>${trad('De quoi sera fait ton patrimoine')}</h2>
       <label class="row" style="gap:8px; font-size:12px; color:var(--text-secondary)">
-        Horizon
+        ${trad('Horizon')}
         ${selecteurHorizon()}
       </label>
     </div>
+    <p class="small muted" style="margin:-6px 0 12px">${trad('Projette ton patrimoine '
+      + 'selon ton épargne et différentes hypothèses de rendement.')}</p>
     ${parts.map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="${esc(x.apercu)}"
@@ -1409,7 +1412,8 @@ function viewObjective() {
 
   <div class="grid g-1-2">
     <div class="card">
-      <div class="card-head"><h2>${trad('Tes hypothèses')}</h2></div>
+      <div class="card-head"><h2>${trad('Tes hypothèses')}</h2>
+        <span class="hint">${trad('hypothèses de simulation, pas prévisions de marché')}</span></div>
       <details class="pli-reglages" ${hypoOuvert ? 'open' : ''} id="hypoDetail">
         <summary>
           <span class="pli-valeurs">${fmtEUR0(s.monthly)} ${trad('/ mois')} ·
@@ -1443,7 +1447,8 @@ function viewObjective() {
                   + 'un livret que tu n’as pas déclaré rémunéré, et c’est le seul réglage '
                   + 'honnête si tu épargnes sans investir. '
                   + 'Si tu partages ton versement, garde un seul choix et ajuste le taux : '
-                  + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'))}
+                  + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'),
+                trad('Où va ton épargne future.'))}
         <div class="field">
           <label>${trad('Scénario de projection')}${aide(trad(
             'Ces valeurs sont des hypothèses de simulation, pas des prévisions de '
@@ -1465,7 +1470,7 @@ function viewObjective() {
         <div class="modal-champs" style="margin-top:8px">
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de titres et de crypto.')} `
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('d’actions, d’obligations, d’immobilier coté, de multi-actifs, de métaux précieux et de crypto : tout ce qui se vend sur un marché.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'))}
         ${champ('Rendement du non coté', 'meta.projRateAutres', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
