@@ -5520,19 +5520,29 @@ suite('Retirer une catégorie n’efface rien', () => {
        existe sept fois dans le fichier, et le premier vient bien avant. */
     const d = src.indexOf('async function regrouperCeMois()');
     const bloc = src.slice(d, src.indexOf('const fermer = v =>', d));
-    vrai(bloc, 'le geste doit etre trouvable');
-    vrai(/Object\.values\(etat\.v\)\.reduce/.test(bloc),
-      'le total se somme sur ce qui est SAISI, pas sur ce qui est enregistre : '
-      + 'un montant tape et pas encore ecrit compte aussi');
-    vrai(/\{ \[garde\]: round2\(total\) \}/.test(bloc),
+    vrai(bloc, 'la porte de la fenetre doit etre trouvable');
+    /* Le geste lui-meme vit dans nePlusDetaillerPartout(), pour que les deux
+       portes n'en aient qu'un. La fenetre ne fait que lui passer le mois ouvert
+       et ce qui y est saisi. */
+    vrai(bloc.includes('nePlusDetaillerPartout({ index, saisie: etat })'),
+      'la fenetre delegue au geste commun, en lui passant le mois et la saisie');
+    const geste = src.slice(src.indexOf('async function nePlusDetaillerPartout'),
+                            src.indexOf('function remettreLeDetail'));
+    vrai(geste.includes('saisie ? saisie.v :'),
+      'le total se somme sur ce qui est SAISI quand la fenetre est ouverte');
+    vrai(geste.includes('ligne.v = total ? { [garde]: round2(total) }'),
       'et il s ecrit sur la seule case qui reste');
-    vrai(/Store\.addBackup/.test(bloc),
+    vrai(geste.includes('Store.addBackup'),
       'une sauvegarde precede : c est le seul endroit du geste qui touche des montants');
-    vrai(/askConfirm/.test(bloc),
+    vrai(geste.includes('askConfirm'),
       'et il demande, parce que le decoupage de ce mois-la disparait');
-    /* Le bouton n'existe que s'il y a quelque chose a regrouper. */
-    vrai(/\$\{sansDistinction\(\) \? '' : `<button class="btn sm ghost" id="depSansDetail"/.test(src),
-      'le bouton disparait quand une seule case est deja proposee');
+    /* Les DEUX etats dans la fenetre : une fois replie, il faut pouvoir revenir. */
+    vrai(src.includes('id="depRemettreDetail"'),
+      'la fenetre offre le retour quand une seule case est proposee');
+    vrai(src.includes('id="depSansDetail"'),
+      'et le geste aller quand elles sont detaillees');
+    vrai(src.includes('${sansDistinction()'),
+      'les deux etats se decident sur sansDistinction(), pas sur un drapeau');
   });
 
   test('le réglage du détail vit au bord de sa carte, pas après ses données', () => {

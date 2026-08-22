@@ -7416,15 +7416,16 @@ const ACTIONS = {
     Store.save(); render();
     toast(`${guill(cat)} ${trad('revient dans la saisie du mois')}`);
   },
-  'sans-distinction'() {
-    const garde = neePlusDetailler();
-    Store.save(); render();
-    toast(`${trad('Une seule case à remplir :')} ${guill(garde)}`);
+  async 'sans-distinction'() {
+    const fait = await nePlusDetaillerPartout();
+    if (!fait) { render(); return; }
+    render();
+    toast(`${trad('Une seule case à remplir :')} ${guill(fait.garde)}`);
   },
   'reprendre-detail'() {
-    const n = reprendreLeDetail();
+    const n = remettreLeDetail();
     if (!n) return;
-    Store.save(); render();
+    render();
     toast(`${n} ${n > 1 ? trad('catégories reviennent dans la saisie')
                         : trad('catégorie revient dans la saisie')}`);
   },
@@ -8924,6 +8925,33 @@ function ecrireDepensesMois(index, saisi) {
   return r;
 }
 
+async function nePlusDetaillerPartout({ index = null, saisie = null } = {}) {
+  const i = index != null ? index
+    : Store.state.budget.expenses.findIndex(r => r.month === todayISO().slice(0, 7) + '-01');
+  const ligne = i >= 0 ? Store.state.budget.expenses[i] : null;
+  const v = saisie ? saisie.v : (ligne ? (ligne.v || {}) : {});
+  const montants = Object.keys(v).filter(k => num(v[k]));
+  const total = montants.reduce((s, k) => s + num(v[k]), 0);
+  const question = `${trad('Ne plus détailler tes dépenses')} ?\n`
+    + trad('Une seule case à remplir, ce mois-ci et les suivants.')
+    + (montants.length > 1
+      ? '\n' + trad('Les {n} montants de ce mois se regroupent sur cette case, soit {v}.')
+          .replace('{n}', montants.length).replace('{v}', fmtEUR0(total))
+      : '');
+  if (!await askConfirm(question, { danger: false, ok: trad('Une seule case') })) return null;
+  Store.addBackup('avant regroupement des dépenses');
+  const garde = neePlusDetailler();
+  if (ligne) ligne.v = total ? { [garde]: round2(total) } : {};
+  Store.save();
+  return { garde, total };
+}
+
+function remettreLeDetail() {
+  const n = reprendreLeDetail();
+  if (n) Store.save();
+  return n;
+}
+
 function askExpenseMonth(index) {
   return new Promise(resolve => {
     const r = Store.state.budget.expenses[index];
@@ -8948,8 +8976,11 @@ function askExpenseMonth(index) {
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
-        ${sansDistinction() ? '' : `<button class="btn sm ghost" id="depSansDetail" type="button"
-          >${trad('Ne plus détailler')}</button>`}
+        ${sansDistinction()
+          ? `<button class="btn sm ghost" id="depRemettreDetail" type="button"
+              >${trad('Reprendre le détail')}</button>`
+          : `<button class="btn sm ghost" id="depSansDetail" type="button"
+              >${trad('Ne plus détailler')}</button>`}
         ${aide(trad('Plusieurs dépenses dans une catégorie : tape-les additionnées, 100+50+70. '
           + 'Le + du champ écrit le signe, que le pavé numérique n’a pas. Pour suivre deux '
           + 'choses séparément, fais deux catégories.'))}
@@ -9001,6 +9032,7 @@ function askExpenseMonth(index) {
     focusChamp(champs[0]);
 
     if ($('#depSansDetail')) $('#depSansDetail').onclick = regrouperCeMois;
+    if ($('#depRemettreDetail')) $('#depRemettreDetail').onclick = remettreDetailIci;
     $('#depNouvelleCat').onclick = async () => {
       /* La saisie se relève **avant** d'ouvrir la question par-dessus : les
          deux fenêtres partagent le même corps, et `saisie()` cherchait le
@@ -9019,28 +9051,28 @@ function askExpenseMonth(index) {
       fermer({ ...etat, rouvrir: true });
     };
 
-    /* Declaree, et non posee dans une constante : le branchement du bouton
-       tourne plus haut que cette ligne, et une constante n'existe pas avant sa
+    /* Le geste vit dans `nePlusDetaillerPartout()`, avec celui de la carte :
+       deux portes, un seul comportement. Ici on ne fait que lui passer le mois
+       ouvert et ce qui y est saisi, puis rouvrir la fenetre sur le resultat.
+
+       Declarees, et non posees dans des constantes : le branchement des boutons
+       tourne plus haut que ces lignes, et une constante n'existe pas avant sa
        declaration. Le meme piege que `peindre()` sur la fiche d'une ligne, et il
        casse tout le reste de la fenetre en silence. */
     async function regrouperCeMois() {
       const etat = saisie();
-      const total = Object.values(etat.v).reduce((s, x) => s + num(x), 0);
-      const lignes = Object.keys(etat.v).length;
-      const question = `${trad('Ne plus détailler tes dépenses')} ?\n`
-        + trad('Une seule case à remplir, ce mois-ci et les suivants.')
-        + (lignes > 1
-          ? '\n' + trad('Les {n} montants de ce mois se regroupent sur cette case, soit {v}.')
-              .replace('{n}', lignes).replace('{v}', fmtEUR0(total))
-          : '');
-      if (!await askConfirm(question, { danger: false, ok: trad('Une seule case') })) {
-        fermer({ ...etat, rouvrir: true });
-        return;
-      }
-      Store.addBackup('avant regroupement des dépenses');
-      const garde = neePlusDetailler();
-      Store.save();
-      fermer({ v: total ? { [garde]: round2(total) } : {}, note: etat.note, rouvrir: true });
+      const fait = await nePlusDetaillerPartout({ index, saisie: etat });
+      if (!fait) { fermer({ ...etat, rouvrir: true }); return; }
+      fermer({ v: fait.total ? { [fait.garde]: round2(fait.total) } : {},
+               note: etat.note, rouvrir: true });
+    }
+
+    function remettreDetailIci() {
+      const etat = saisie();
+      const n = remettreLeDetail();
+      if (n) toast(`${n} ${n > 1 ? trad('catégories reviennent dans la saisie')
+                                 : trad('catégorie revient dans la saisie')}`);
+      fermer({ ...etat, rouvrir: true });
     }
 
     const fermer = v => {
