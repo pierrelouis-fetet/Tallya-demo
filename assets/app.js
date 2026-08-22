@@ -1481,7 +1481,7 @@ function viewObjective() {
         </div>
       <details class="pli-reglages pli-avance" ${s.scenario === 'perso' ? 'open' : ''}>
         <summary>
-          <span class="pli-valeurs">${trad('Personnaliser les rendements')}</span>
+          <span class="pli-valeurs">${trad('Personnaliser les hypothèses')}</span>
           <span class="pli-action">${s.scenario === 'perso'
             ? trad('personnalisé') : trad('Ouvrir')}</span>
         </summary>
@@ -1513,14 +1513,14 @@ function viewObjective() {
             + 'projection telles quelles, et il n’y a rien à régler.'))}</label>
           <p class="valeur-figee">0 % ${trad('par an')}</p>
         </div>
-        </div>
-      </details>
         ${champ('Inflation', 'meta.projInflation', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
                 trad('Les rendements des scénarios sont nominaux : l’inflation se retire '
                   + 'ensuite, une fois, sur le total. La ligne « Après inflation » donne '
                   + 'donc le résultat en euros d’aujourd’hui, c’est-à-dire ce que cette '
                   + 'somme permettrait d’acheter aux prix que tu connais.'))}
+        </div>
+      </details>
         ${champ('Cible', 'meta.projTarget',
                 [0, 100000, 250000, 500000, 1000000],
                 v => v ? fmtEUR0(v) : trad('Pas de cible'),

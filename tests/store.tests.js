@@ -15940,7 +15940,7 @@ suite('Projection se lit sans explication', () => {
     const src = lireSource('assets/app.js');
     const avance = src.indexOf('pli-avance');
     for (const champ of ['Rendement du non coté', 'Rendement du capital garanti',
-                         'Rendement des liquidités']) {
+                         'Rendement des liquidités', 'Inflation']) {
       vrai(src.indexOf(`trad('${champ}'`) > avance || src.indexOf(`champ('${champ}'`) > avance,
         `« ${champ} » doit vivre après l’ouverture du repli`);
     }
