@@ -4246,6 +4246,24 @@ const SCENARIOS_PROJECTION = [
 const TAUX_SCENARIO = Object.fromEntries(SCENARIOS_PROJECTION.map(([c, , r]) => [c, r]));
 const SCENARIO_DEFAUT = 'central';
 
+/* Les hypotheses qu'un scenario gouverne, derivees de la table elle-meme.
+
+   L'inflation n'en fait pas partie, et ce n'est pas un oubli : aucune entree de
+   SCENARIOS_PROJECTION ne la porte, elle vit dans `meta.projInflation` et se
+   regle seule. La regler ne doit donc pas faire basculer en personnalise --
+   sinon quelqu'un qui passe l'inflation a 3 % quitterait « Central » sans avoir
+   touche a un seul rendement.
+
+   Ecrire la liste a la main aurait suffi aujourd'hui, et aurait menti le jour ou
+   une poche s'ajoute : c'est le defaut que ce fichier traque partout. */
+const POCHES_SCENARIO = Object.keys(SCENARIOS_PROJECTION[0][2]);
+
+function detecteScenario(taux) {
+  const trouve = SCENARIOS_PROJECTION.find(([, , preset]) =>
+    POCHES_SCENARIO.every(k => Math.abs(num(taux[k]) - num(preset[k])) < 1e-9));
+  return trouve ? trouve[0] : 'perso';
+}
+
 const TAUX_PROJECTION = ['meta.projRate', 'meta.projRateAutres',
                          'meta.projRateGaranti'];
 
@@ -4259,7 +4277,19 @@ const PHRASE_SCENARIO = {
   perso: 'Tes propres taux, posés plus bas.',
 };
 
-function scenarioProjection() {
+/* D'OU viennent les taux, et non a quoi ils ressemblent. Les deux questions ont
+   vecu sous un seul nom, et c'est ce qui rendait le retour impossible : remettre
+   6 % sur le marche laissait « personnalise » enfonce alors que les quatre
+   valeurs etaient exactement celles de Central. `detecteScenario()` repond a la
+   seconde question, celle que l'ecran pose.
+
+   Celle-ci decide du calcul : la table d'un scenario nomme, ou l'etat. Et la
+   migration silencieuse qu'il ne faut pas faire -- un etat qui porte deja des
+   taux saisis a la main precede les scenarios. Lui appliquer « central »
+   changerait sa courbe sans qu'il ait rien demande, et c'est exactement ce
+   qu'une projection ne doit jamais faire. Ces etats-la lisent donc leurs propres
+   chiffres, intacts. Les autres partent sur le scenario central. */
+function sourceDesTaux() {
   const m = Store.state.meta;
   if (m.projScenario) return m.projScenario;
   const aDesTaux = [m.projRate, m.projRateGaranti, m.projRateAutres]
@@ -4269,9 +4299,12 @@ function scenarioProjection() {
 
 function projectionSettings() {
   const m = Store.state.meta;
-  const scenario = scenarioProjection();
-  const preset = TAUX_SCENARIO[scenario];
+  const preset = TAUX_SCENARIO[sourceDesTaux()];
   const taux = (champ, cle) => (preset ? preset[cle] : num(m[champ]));
+  const poches = Object.fromEntries(POCHES_SCENARIO.map(k => [k, 0]));
+  poches.marche = taux('projRate', 'marche');
+  poches.autres = taux('projRateAutres', 'autres');
+  poches.garanti = taux('projRateGaranti', 'garanti');
   /* Zero veut dire zero.
 
      `num(m.projMonthly) || suggestedMonthly()` traitait 0 comme une absence :
@@ -4287,10 +4320,10 @@ function projectionSettings() {
   const regle = m.projMonthly !== undefined && m.projMonthly !== null
              && m.projMonthly !== '';
   return {
-    scenario,
+    scenario: detecteScenario(poches),
     monthly: regle ? num(m.projMonthly) : suggestedMonthly(),
     monthlyAuto: !regle,
-    rate: taux('projRate', 'marche'),
+    rate: poches.marche,
     /* Le rendement des « autres actifs » : crypto, metaux precieux, non cote.
        Zero par defaut, et c'est le pivot de tout le dispositif — personne ne
        voit ses chiffres bouger, l'application ne suggere aucun rendement sur ce
@@ -4300,8 +4333,8 @@ function projectionSettings() {
        Un seul champ pour les trois, et la clef ne change pas : `projRateAutres`
        porte ce nom depuis toujours et n'a jamais rien promis de plus fin. Un
        etat enregistre le retrouve donc tel quel. */
-    rateAutres: taux('projRateAutres', 'autres'),
-    rateGaranti: taux('projRateGaranti', 'garanti'),
+    rateAutres: poches.autres,
+    rateGaranti: poches.garanti,
     versementVers: m.projVersementVers || 'marche',
     inflation: num(m.projInflation),
     target: num(m.projTarget),

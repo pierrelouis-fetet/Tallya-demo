@@ -895,6 +895,7 @@ const I18N = {
     "Central": "Balanced",
     "Dynamique": "Growth",
     "Personnalisé": "Custom",
+    "tes hypothèses": "your assumptions",
     "personnalisé": "custom",
     "scénario": "scenario",
     "Ouvrir": "Open",

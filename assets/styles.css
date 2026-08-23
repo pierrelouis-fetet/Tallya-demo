@@ -2897,8 +2897,11 @@ td .empty, th .empty { background: none; border: none; }
 .segmented button.on { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); }
 
 .choix-hypothese {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
-  width: min(28em, 100%);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+  width: min(36em, 100%);
+}
+@media (max-width: 767px) {
+  .choix-hypothese { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .choix-hypothese button {
   display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
@@ -2917,6 +2920,7 @@ td .empty, th .empty { background: none; border: none; }
 @media (hover: hover) {
   .choix-hypothese button:not(.on):hover { border-color: var(--text-secondary); }
 }
+.choix-hypothese button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .field > .hint { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
 

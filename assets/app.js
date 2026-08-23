@@ -446,13 +446,31 @@ const TAUX_DESTINATION = {
 const tauxDeDestination = s => (TAUX_DESTINATION[s.versementVers] || TAUX_DESTINATION.marche)(s);
 
 function choixHypothese(actif) {
+  /* La quatrieme case n'est pas un quatrieme scenario : elle n'a ni taux ni
+     valeurs a elle, elle dit seulement que les hypotheses en vigueur ne sont
+     plus exactement celles d'un preset. Elle s'allume donc toute seule, par
+     `detecteScenario()`, et jamais par un enregistrement.
+
+     Ce qui manquait sans elle : rien ne montrait qu'on peut sortir des trois
+     paves. Le depliant existait, mais il faut le chercher, et personne ne
+     cherche un reglage dont il ne sait pas qu'il existe.
+
+     Aucun taux affiche dessous, et c'est voulu : un jeu personnalise peut
+     changer plusieurs rendements a la fois, donc en montrer un seul designerait
+     le mauvais. Les trois autres n'annoncent que celui du marche parce que c'est
+     le seul que leur scenario fait varier. */
+  const cases = [
+    ...SCENARIOS_PROJECTION.map(([cle, nom, taux]) =>
+      [cle, nom, `${trad('marché')} ${fmtPct(taux.marche, 0)}`]),
+    ['perso', 'Personnalisé', trad('tes hypothèses')],
+  ];
   return `
     <div class="choix-hypothese" role="group">
-      ${SCENARIOS_PROJECTION.map(([cle, nom, taux]) => `<button
+      ${cases.map(([cle, nom, sous]) => `<button
         data-action="proj-scenario" data-scenario="${esc(cle)}"
         class="${cle === actif ? 'on' : ''}" aria-pressed="${cle === actif}">
         <b>${esc(trad(nom))}</b>
-        <span>${trad('marché')} ${fmtPct(taux.marche, 0)}</span>
+        <span>${sous}</span>
       </button>`).join('')}
     </div>`;
 }
@@ -1253,6 +1271,7 @@ const selecteurHorizon = () => {
 };
 
 let hypoOuvert = false;
+let avanceOuvert = false;
 
 const carteObjectif = () => {
   const g = objectiveStatus();
@@ -1501,7 +1520,8 @@ function viewObjective() {
               ? `${fmtPct(s.rateAutres, 1)} ${trad('par an')}` : trad('valeur constante')} ·
             ${trad('liquidités')} ${trad('sans rendement')}</span>
         </div>
-      <details class="pli-reglages pli-avance" ${s.scenario === 'perso' ? 'open' : ''}>
+      <details class="pli-reglages pli-avance" id="hypoAvance"
+               ${avanceOuvert || s.scenario === 'perso' ? 'open' : ''}>
         <summary>
           <span class="pli-valeurs">${trad('Personnaliser les hypothèses')}</span>
           <span class="pli-action">${s.scenario === 'perso'
@@ -1706,6 +1726,8 @@ function mountObjective() {
 
   const hy = $('#hypoDetail');
   if (hy) hy.addEventListener('toggle', () => { hypoOuvert = hy.open; });
+  const av = $('#hypoAvance');
+  if (av) av.addEventListener('toggle', () => { avanceOuvert = av.open; });
 }
 
 const POINTEUR_TACTILE = matchMedia('(pointer: coarse)').matches;
@@ -7135,6 +7157,24 @@ const ACTIONS = {
   'evo-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
   'proj-scenario'(btn) {
+    /* La case « Personnalise » n'applique rien : elle ouvre le depliant, et
+       c'est tout. Lui faire enregistrer `projScenario = 'perso'` aurait fige les
+       taux du scenario en cours sous un autre nom, sans qu'un seul chiffre
+       change a l'ecran — un etat qui ne veut rien dire, et un pave enfonce que
+       l'utilisateur n'a pas choisi. Le preset reconnu reste donc allume jusqu'a
+       ce qu'une hypothese bouge vraiment.
+
+       Le depliant ne se referme jamais ici : deja ouvert, il le reste. */
+    if (btn.dataset.scenario === 'perso') {
+      hypoOuvert = true;
+      avanceOuvert = true;
+      render();
+      /* `nearest` ne bouge la page que si le depliant n'est pas deja visible :
+         sur ordinateur il est juste sous les paves, et faire sauter l'ecran pour
+         rien serait pire que ne rien faire. */
+      $('#hypoAvance')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
     Store.state.meta.projScenario = btn.dataset.scenario;
     Store.save(); render();
   },

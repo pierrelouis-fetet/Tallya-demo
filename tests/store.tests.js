@@ -3209,7 +3209,7 @@ suite('Projection de capitalisation', () => {
     Store.migrate();
     eq(Store.state.meta.projScenario, undefined,
       'la migration ne pose aucun scénario sur un état qui a déjà des taux');
-    eq(scenarioProjection(), 'perso', 'il reste donc en personnalisé');
+    eq(sourceDesTaux(), 'perso', 'ses taux viennent donc de l’état, pas d’une table');
     pres(projectionSettings().rate, 8, 'et son taux survit intact');
   });
 
@@ -17087,6 +17087,284 @@ suite('Un dépliant ouvert est un dépliant fermé', () => {
 /* ------------------------------------------------------------------
    Projection : quatre poches, et pas une hypothese par classe d'actif
    ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Le scenario affiche se deduit des taux
+   ------------------------------------------------------------------ */
+suite('Personnalisé est une case, pas un quatrième scénario', () => {
+
+  /* Deux questions vivaient sous un seul nom. « D'ou viennent les taux ? » --
+     de la table d'un scenario nomme, ou de l'etat -- et « a quoi ces taux
+     ressemblent-ils ? ». La premiere decide du calcul, la seconde de ce que
+     l'ecran allume, et les confondre rendait le retour impossible : remettre
+     6 % sur le marche laissait « personnalise » enfonce alors que les quatre
+     valeurs etaient exactement celles de Central.
+
+     `sourceDesTaux()` repond a la premiere, `detecteScenario()` a la seconde, et
+     c'est la seconde que la vue lit. */
+
+  /* Les taux d'un scenario, pris dans la table : les recopier ici ferait deux
+     verites pour une, et c'est celle du test qui finirait par mentir. */
+  const tauxDe = cle => TAUX_SCENARIO[cle];
+
+  /* Poser les taux d'un scenario a la main, comme le fait le gel du depliant :
+     l'etat porte les trois chemins et `projScenario` vaut « perso », donc les
+     taux viennent de l'etat et non d'une table. */
+  const poserAlaMain = (marche, autres, garanti) => Fixture.poser(s => {
+    s.meta.projScenario = 'perso';
+    s.meta.projRate = marche;
+    s.meta.projRateAutres = autres;
+    s.meta.projRateGaranti = garanti;
+  });
+
+  test('un état neuf montre Central actif, et Personnalisé éteint', () => {
+    Fixture.poser(s => {
+      delete s.meta.projScenario;
+      delete s.meta.projRate; delete s.meta.projRateAutres; delete s.meta.projRateGaranti;
+    });
+    eq(projectionSettings().scenario, 'central', 'Central est le scénario montré');
+    eq(sourceDesTaux(), 'central', 'et ses taux viennent de la table');
+    /* La case existe et n'est pas allumee : c'est tout ce qu'on attend d'elle au
+       depart. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function choixHypothese'),
+                           src.indexOf('function barreSousOnglets'));
+    vrai(/\['perso', 'Personnalisé'/.test(bloc), 'la quatrième case est déclarée');
+    vrai(/class="\$\{cle === actif \? 'on' : ''\}"/.test(bloc),
+      'et elle s’allume par la même règle que les trois autres');
+  });
+
+  test('les quatre cases descendent d’une seule liste', () => {
+    /* Trois paves derives de la table plus un ecrit a cote auraient donne deux
+       balisages a tenir d'accord. Une seule liste, un seul gabarit de bouton, et
+       « Personnalise » herite donc de tout : hauteur, coins, etat retenu, focus,
+       aria-pressed. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function choixHypothese'),
+                           src.indexOf('function barreSousOnglets'));
+    eq((bloc.match(/<button/g) || []).length, 1,
+      'un seul gabarit de bouton pour les quatre cases');
+    vrai(/aria-pressed="\$\{cle === actif\}"/.test(bloc),
+      'et le même état accessible sur les quatre');
+    /* Les trois presets d'abord, la case libre en dernier. */
+    const iTable = bloc.indexOf('SCENARIOS_PROJECTION.map');
+    const iPerso = bloc.indexOf("['perso'");
+    vrai(iTable > 0 && iPerso > iTable, 'les trois presets viennent avant elle');
+  });
+
+  test('Personnalisé n’affiche aucun taux, parce qu’elle n’en a aucun', () => {
+    /* Un jeu personnalise peut changer plusieurs rendements a la fois : en
+       montrer un seul designerait le mauvais. Les trois autres n'annoncent que
+       celui du marche parce que c'est le seul que leur scenario fait varier. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function choixHypothese'),
+                           src.indexOf('function barreSousOnglets'));
+    vrai(/\['perso', 'Personnalisé', trad\('tes hypothèses'\)\]/.test(bloc),
+      'sa ligne du dessous dit « tes hypothèses », pas un pourcentage');
+    vrai(!/perso[^\n]*fmtPct/.test(bloc), 'aucun taux calculé sous cette case');
+    /* Et aucune entree dans la table des scenarios : pas de preset cache. */
+    vrai(!SCENARIOS_PROJECTION.some(([c]) => c === 'perso'),
+      '« perso » n’est pas un scénario de la table');
+    eq(TAUX_SCENARIO.perso, undefined, 'et il n’a aucun jeu de taux à lui');
+  });
+
+  test('cliquer sur Personnalisé n’écrit rien et ouvre le dépliant', () => {
+    /* Le clic est un raccourci vers les reglages, pas une selection. Lui faire
+       enregistrer `projScenario = 'perso'` aurait fige les taux du scenario en
+       cours sous un autre nom, sans qu'un seul chiffre change a l'ecran : un
+       etat qui ne veut rien dire, et un pave enfonce que personne n'a choisi. */
+    const src = lireSource('assets/app.js');
+    const action = src.slice(src.indexOf("'proj-scenario'(btn) {"),
+                             src.indexOf("'hero-base'(btn)"));
+    const tot = action.indexOf("if (btn.dataset.scenario === 'perso')");
+    vrai(tot > 0, 'le cas « perso » se traite avant tout le reste');
+    const branche = action.slice(tot, action.indexOf('return;', tot));
+    vrai(!/Store\.save|projScenario/.test(branche),
+      'cette branche n’enregistre rien et ne pose aucun scénario');
+    vrai(/avanceOuvert = true/.test(branche), 'elle ouvre le dépliant des taux');
+    vrai(/hypoOuvert = true/.test(branche),
+      'et la carte qui le contient, sinon le dépliant s’ouvrirait dans un pli fermé');
+    /* Le depliant deja ouvert le reste : poser un drapeau a vrai deux fois ne
+       ferme rien. Aucun `= false` dans cette branche. */
+    vrai(!/= false/.test(branche), 'rien ne se referme ici');
+  });
+
+  test('le dépliant reste ouvert quand les taux redeviennent ceux d’un preset', () => {
+    /* Son ouverture venait de `scenario === 'perso'`. Depuis que le scenario se
+       deduit, remettre 6 % rallume Central — et le depliant se serait referme
+       sous le doigt de celui qui venait de regler le champ. Un drapeau de
+       session porte le geste, et il n'est jamais enregistre : aucune preference
+       de plus dans le stockage pour une chose qui ne survit pas a l'onglet. */
+    const src = lireSource('assets/app.js');
+    vrai(/let avanceOuvert = false;/.test(src), 'le drapeau existe');
+    vrai(/avanceOuvert \|\| s\.scenario === 'perso' \? 'open' : ''/.test(src),
+      'le dépliant s’ouvre sur le geste OU sur des taux personnalisés');
+    vrai(/av\.addEventListener\('toggle'/.test(src),
+      'et le refermer à la main se retient aussi');
+    vrai(!/avanceOuvert/.test(lireSource('assets/store.js') || ''),
+      'ce drapeau ne touche pas au modèle : il ne s’enregistre pas');
+  });
+
+  test('changer un taux allume Personnalisé', () => {
+    /* Central plus un marche a 7 % : la combinaison ne correspond plus a aucun
+       preset, donc la case libre s'allume. Le reste des hypotheses n'a pas
+       bouge. */
+    const c = tauxDe('central');
+    poserAlaMain(7, c.autres, c.garanti);
+    eq(projectionSettings().scenario, 'perso', 'la case libre s’allume');
+    pres(projectionSettings().rate, 7, 'et le taux choisi est bien celui qui s’applique');
+    pres(projectionSettings().rateGaranti, c.garanti, 'le garanti reste celui de Central');
+  });
+
+  test('remettre exactement les valeurs d’un preset le rallume', () => {
+    /* Le retour, pour les trois. Aucun enregistrement ne le declenche : c'est la
+       comparaison des taux qui rend la reponse, donc l'etat ne peut pas se
+       contredire avec les chiffres qu'il decrit. */
+    for (const [cle] of SCENARIOS_PROJECTION) {
+      const p = tauxDe(cle);
+      poserAlaMain(p.marche, p.autres, p.garanti);
+      eq(projectionSettings().scenario, cle,
+        `des taux égaux à « ${cle} » rallument « ${cle} »`);
+      eq(sourceDesTaux(), 'perso',
+        'alors même que les taux viennent de l’état et non de la table');
+    }
+    /* Un seul chiffre a cote suffit a en sortir, et sur n'importe quelle poche. */
+    const c = tauxDe('central');
+    poserAlaMain(c.marche, c.autres + 1, c.garanti);
+    eq(projectionSettings().scenario, 'perso', 'un demi-point sur une autre poche suffit');
+    poserAlaMain(c.marche, c.autres, c.garanti + 0.5);
+    eq(projectionSettings().scenario, 'perso', 'le garanti aussi');
+  });
+
+  test('cliquer sur un preset depuis Personnalisé applique ses valeurs', () => {
+    /* Le comportement existant, inchange : le clic pose `projScenario`, et les
+       taux viennent alors de la table — les chiffres personnalises restent dans
+       l'etat, ignores, prets a revenir si l'on repasse par le depliant. */
+    poserAlaMain(7, 1, 3.5);
+    eq(projectionSettings().scenario, 'perso', 'on part de personnalisé');
+    for (const [cle] of SCENARIOS_PROJECTION) {
+      Store.state.meta.projScenario = cle;      // ce que fait le clic
+      const s = projectionSettings(), p = tauxDe(cle);
+      eq(s.scenario, cle, `« ${cle} » devient le scénario montré`);
+      pres(s.rate, p.marche, 'et ses taux s’appliquent');
+      pres(s.rateAutres, p.autres, 'sur toutes les poches');
+      pres(s.rateGaranti, p.garanti, 'sans exception');
+    }
+    /* Les chiffres personnalises n'ont pas ete effaces. */
+    pres(num(Store.state.meta.projRate), 7, 'le taux personnalisé dort dans l’état');
+  });
+
+  test('des hypothèses personnalisées d’avant cette case allument Personnalisé', () => {
+    /* La migration, et il n'y en a pas : un etat ecrit avant la quatrieme case
+       porte ses taux et pas de scenario. `sourceDesTaux()` le lit comme
+       personnalise, `detecteScenario()` classe ses valeurs, et rien n'est
+       reecrit. Un etat deduit n'a pas besoin d'etre converti. */
+    Fixture.poser(s => {
+      delete s.meta.projScenario;
+      s.meta.projRate = 7; s.meta.projRateAutres = 1; s.meta.projRateGaranti = 3;
+    });
+    eq(projectionSettings().scenario, 'perso', 'ses valeurs ne sont celles d’aucun preset');
+    eq(Store.state.meta.projScenario, undefined, 'et rien n’a été écrit pour le dire');
+    pres(projectionSettings().rate, 7, 'ses chiffres sont intacts');
+
+    /* Et si ses valeurs tombent pile sur un preset, c'est ce preset qui
+       s'allume : personne n'a « choisi » Central, mais c'est bien Central que
+       ses chiffres decrivent. */
+    const c = tauxDe('central');
+    Fixture.poser(s => {
+      delete s.meta.projScenario;
+      s.meta.projRate = c.marche; s.meta.projRateAutres = c.autres;
+      s.meta.projRateGaranti = c.garanti;
+    });
+    eq(projectionSettings().scenario, 'central',
+      'des taux égaux à Central allument Central, même sans scénario enregistré');
+  });
+
+  test('l’inflation ne fait pas basculer en personnalisé', () => {
+    /* Elle n'est pas dans les presets : aucune entree de SCENARIOS_PROJECTION ne
+       la porte. La regler ne quitte donc aucun scenario, et c'est la logique
+       actuelle du produit — pas une decision prise au passage. */
+    vrai(!POCHES_SCENARIO.includes('inflation'),
+      'l’inflation n’est pas une hypothèse de scénario');
+    for (const [cle] of SCENARIOS_PROJECTION) {
+      Fixture.poser(s => { s.meta.projScenario = cle; s.meta.projInflation = 5; });
+      eq(projectionSettings().scenario, cle,
+        `« ${cle} » survit à une inflation réglée à 5 %`);
+      pres(projectionSettings().inflation, 5, 'et l’inflation choisie s’applique');
+    }
+    /* Le versement et la cible non plus : ils ne sont pas des hypotheses de
+       rendement. */
+    Fixture.poser(s => {
+      s.meta.projScenario = 'central'; s.meta.projMonthly = 999; s.meta.projTarget = 500000;
+      s.meta.projVersementVers = 'garanti';
+    });
+    eq(projectionSettings().scenario, 'central',
+      'ni le versement, ni sa destination, ni la cible ne changent le scénario');
+  });
+
+  test('les quatre poches du scénario se dérivent de la table', () => {
+    /* La liste qui sert a comparer descend de la table : l'ecrire a la main
+       aurait menti le jour ou une poche s'ajoute, et la comparaison aurait
+       declare « Central » deux jeux de taux differents. */
+    eq(POCHES_SCENARIO.join(' '), Object.keys(TAUX_SCENARIO.central).join(' '),
+      'les poches comparées sont exactement celles que la table déclare');
+    const src = lireSource('assets/store.js');
+    vrai(/const POCHES_SCENARIO = Object\.keys\(SCENARIOS_PROJECTION\[0\]\[2\]\)/.test(src),
+      'et elle est dérivée, non recopiée');
+    /* Une seule fonction repond a la question, pour tout l'ecran. */
+    /* La vue ne rappelle pas la detection : elle lit `settings.scenario`. Les
+       commentaires ont le droit de la nommer pour dire d'ou vient l'etat retenu,
+       donc ils sortent avant le controle. */
+    const app = (lireSource('assets/app.js') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(!/detecteScenario/.test(app),
+      'la vue ne refait pas la détection : elle lit `settings.scenario`');
+    eq((src.match(/function detecteScenario/g) || []).length, 1,
+      'une seule définition de la détection');
+  });
+
+  test('le résumé replié nomme personnalisé quand c’est le cas, et pas avant', () => {
+    /* Le resume dit « 1 653 EUR / mois · scenario personnalise ». Il lit le meme
+       `s.scenario` que les paves : deux lectures de cette question finiraient par
+       se contredire, et l'une des deux allumerait un pave que l'autre eteint. */
+    const src = lireSource('assets/app.js');
+    vrai(/\$\{trad\('scénario'\)\} \$\{trad\(nomScenario\(s\.scenario\)\)\.toLowerCase\(\)\}/
+      .test(src), 'le résumé nomme le scénario montré');
+    eq(nomScenario('perso'), 'Personnalisé', 'et « perso » se dit « Personnalisé »');
+    const c = tauxDe('central');
+    poserAlaMain(7, c.autres, c.garanti);
+    eq(nomScenario(projectionSettings().scenario), 'Personnalisé',
+      'des taux hors preset donnent « personnalisé » dans le résumé');
+    poserAlaMain(c.marche, c.autres, c.garanti);
+    eq(nomScenario(projectionSettings().scenario), 'Central',
+      'et des taux égaux à Central y écrivent « central »');
+    /* La cible reste dans le resume si elle est posee. */
+    vrai(/num\(s\.target\) \? ` · \$\{trad\('cible'\)\}/.test(src),
+      'la cible garde sa place dans le résumé');
+  });
+
+  test('la case libre garde le style des trois autres, en clair comme en sombre', () => {
+    /* Aucune couleur « custom » : l'etat retenu est celui de tout le monde, un
+       lavis d'accent et un bord accentue, et les deux themes le tiennent parce
+       que la regle passe par les variables. */
+    const css = lireSource('assets/styles.css');
+    const on = (css.match(/\.choix-hypothese button\.on \{[^}]*\}/) || [''])[0];
+    vrai(/var\(--accent\)/.test(on) && /color-mix/.test(on),
+      'l’état retenu vient des variables du thème');
+    vrai(!/choix-hypothese button\[data-scenario="perso"\]/.test(css),
+      'et aucune règle ne singularise la case libre');
+    /* La cible du doigt ne depend pas de la longueur du mot : colonnes egales,
+       et deux par deux sous 768 px. */
+    vrai(/\.choix-hypothese \{[\s\S]{0,240}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/
+      .test(css), 'quatre colonnes égales');
+    const petit = css.slice(css.indexOf('@media (max-width: 767px)'));
+    vrai(/\.choix-hypothese \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/
+      .test(petit), 'deux par deux sur téléphone');
+    /* Et l'anneau de l'application au clavier, comme tout ce qui se focalise. */
+    const focus = (css.match(/\.choix-hypothese button:focus-visible \{[^}]*\}/) || [''])[0];
+    vrai(/outline: 2px solid var\(--accent\)/.test(focus),
+      'les quatre cases portent l’anneau d’accent au clavier');
+  });
+});
+
 suite('Projection tient sur quatre hypothèses', () => {
 
   /* La direction prise etait mauvaise, et vite : une hypothese par classe
@@ -18294,11 +18572,11 @@ suite('Un scénario nommé plutôt qu’un rendement à deviner', () => {
        changerait sa courbe sans qu'il ait rien demande. Une projection ne fait
        jamais ca. */
     Fixture.poser(s => { delete s.meta.projScenario; delete s.meta.projRate; });
-    eq(scenarioProjection(), 'central', 'sans rien de réglé, le scénario central');
+    eq(sourceDesTaux(), 'central', 'sans rien de réglé, les taux viennent de « central »');
     pres(projectionSettings().rate, 6, 'et son taux de marché');
 
     Fixture.poser(s => { delete s.meta.projScenario; s.meta.projRate = 8; });
-    eq(scenarioProjection(), 'perso',
+    eq(sourceDesTaux(), 'perso',
       'un taux déjà saisi passe en personnalisé, il ne se fait pas écraser');
     pres(projectionSettings().rate, 8, 'et sa valeur survit intacte');
   });
@@ -18434,8 +18712,15 @@ suite('Un scénario nommé plutôt qu’un rendement à deviner', () => {
     vrai(/fmtPct\(taux\.marche, 0\)/.test(src),
       'chaque pavé imprime le taux de son propre scénario');
     const css = lireSource('assets/styles.css');
-    vrai(/\.choix-hypothese \{[\s\S]{0,200}grid-template-columns: repeat\(3/.test(css),
-      'trois colonnes égales : la cible du doigt ne dépend pas de la longueur du mot');
+    /* Quatre colonnes egales depuis que « Personnalise » a sa case, et deux par
+       deux sous 768 px : quatre dans les 311 px d'une carte a 375 px feraient
+       70 px, moins que le mot qu'elles portent. La cible du doigt ne depend
+       jamais de la longueur du libelle. */
+    vrai(/\.choix-hypothese \{[\s\S]{0,200}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/
+      .test(css), 'quatre colonnes égales sur grand écran');
+    const petit = css.slice(css.indexOf('@media (max-width: 767px)'));
+    vrai(/\.choix-hypothese \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/
+      .test(petit), 'et deux par deux sous 768 px');
     vrai(/\.choix-hypothese button\.on \{[\s\S]{0,200}border-color: var\(--accent\)/.test(css),
       'le choix retenu se voit au bord accentué, pas seulement à sa teinte de fond');
   });
