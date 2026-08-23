@@ -1765,11 +1765,6 @@ let evoNet = true;    // évolution du patrimoine, vue d'ensemble
 let paceRange = '1y';        // rythme d'accumulation
 let evoYear = null;          // null = année en cours · 'all' = toute la série
 let evoDetailOuvert = false;
-/* Les deux plis de Budget retiennent leur etat, comme celui de l'evolution :
-   `render()` reconstruit le balisage, et un `details` neuf naît plie. Sans cela,
-   ouvrir les categories puis corriger un montant les refermait. */
-let pliCatsOuvert = null;
-let pliDetailOuvert = null;
 let journalOuvert = false;
 /* La ligne « Revenus » de la carte « Ou va ce que tu gagnes » ouvre ses sources.
    L'etat vit ici, comme les autres replis de vue : un `details` natif se
@@ -4682,8 +4677,6 @@ function viewBudget(section = 'depenses') {
 
   return `
   ${cadre ? '' : `
-  ${barreCommutateur([['synthese', 'Synthétique'], ['detail', 'Détaillé']],
-                     budgetDetail(), 'budget-detail', 'niveau')}
   <div class="grid g-hero">
     <div class="hero card-cliquable">
       <button type="button" class="card-couvre" data-action="saisir-mois-courant"
@@ -4865,6 +4858,7 @@ function viewBudget(section = 'depenses') {
     </details>
   </div>
 
+  ${sansDistinction() ? '' : `
   <div class="card">
     <div class="card-head"><h2>${trad('Par catégorie')}</h2>
       <div class="row">
@@ -4872,10 +4866,9 @@ function viewBudget(section = 'depenses') {
         ${yearControl('budget-year', years, year)}
       </div>
     </div>
-    <details class="data-view" id="pliCats" ${
-      (pliCatsOuvert ?? !budgetSynthese()) ? 'open' : ''}>
-      <summary>${budgetSynthese() ? trad('Afficher les catégories') : trad('Voir les données')}</summary>
-      <div class="chart" id="bCats" style="margin-top:12px"></div>
+    <div class="chart" id="bCats"></div>
+    <details class="data-view">
+      <summary>${trad('Voir les données')}</summary>
       <table>
         <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total')}</th>
           <th>${trad('/ mois')}</th><th>%</th></tr></thead>
@@ -4888,18 +4881,15 @@ function viewBudget(section = 'depenses') {
           <td>${fmtEUR0(stats.average)}</td><td></td></tr></tfoot>
       </table>
     </details>
-  </div>
+  </div>`}
   <div class="card" data-anchor="detail-mensuel">
     <div class="card-head">
       <h2>${trad('Détail mensuel')}</h2>
       ${yearControl('budget-year', years, year)}
     </div>
-    <details class="data-view" id="pliDetailMois" ${
-      (pliDetailOuvert ?? !budgetSynthese()) ? 'open' : ''}>
-      <summary>${budgetSynthese() ? trad('Afficher le détail par catégorie')
-                                  : trad('Corriger mois par mois')}</summary>
-    <div class="row" style="margin:8px 0 12px">
-      <span class="hint">${lignesDepenses.length} ${lignesDepenses.length > 1 ? trad('mois affichés') : trad('mois affiché')} · ${expenseCategories().length} ${trad('catégories')}</span>
+    <div class="row" style="margin:-4px 0 12px">
+      <span class="hint">${lignesDepenses.length} ${lignesDepenses.length > 1 ? trad('mois affichés') : trad('mois affiché')}${
+        sansDistinction() ? '' : ` · ${expenseCategories().length} ${trad('catégories')}`}</span>
       <span class="spacer"></span>
       ${sansDistinction()
         ? `<button class="btn sm ghost" data-action="reprendre-detail" type="button"
@@ -4952,7 +4942,8 @@ function viewBudget(section = 'depenses') {
                 + ` title="${trad('Trier par')} ${esc(trad(label))}, ${trad('ordre')} ${sens}">${esc(trad(label))}</button></th>`;
             };
             return th('mois', 'Mois', 'sticky-col') + th('total', 'Total') + `<th>${trad('vs obj.')}</th>`
-              + expenseCategories().map(c => th(`cat:${c}`, c)).join('');
+              + (sansDistinction() ? ''
+                 : expenseCategories().map(c => th(`cat:${c}`, c)).join(''));
           })()}
           <th class="prose">${trad('Note du mois')}</th><th></th>
         </tr></thead>
@@ -4984,8 +4975,8 @@ function viewBudget(section = 'depenses') {
                 trad('Le mois que la relance attend')}">⚠</span>` : ''}</td>
             <td><b>${tot ? fmtEUR0(tot) : ''}</b></td>
             <td class="${classeDepassement(tot, f.target)}">${tot ? fmtSigned(diff) : ''}</td>
-            ${expenseCategories().map(c => `<td>${r.v[c] != null && r.v[c] !== ''
-                ? fmtEUR0(r.v[c]) : ''}</td>`).join('')}
+            ${sansDistinction() ? '' : expenseCategories().map(c => `<td>${
+                r.v[c] != null && r.v[c] !== '' ? fmtEUR0(r.v[c]) : ''}</td>`).join('')}
             <td class="name prose">${esc(r.note || '')}</td>
             <td><button class="btn icon" data-action="del-expense-month" data-i="${i}" title="${trad('Supprimer')}">✕</button></td>
           </tr>`;
@@ -4993,7 +4984,7 @@ function viewBudget(section = 'depenses') {
         <tfoot><tr>
           <td class="sticky-col">Total ${esc(year)}</td>
           <td>${fmtEUR0(stats.total)}</td><td></td>
-          ${expenseCategories().map(c => {
+          ${sansDistinction() ? '' : expenseCategories().map(c => {
             const v = cats.find(x => x.label === c);
             return `<td>${v ? fmtEUR0(v.value) : ''}</td>`;
           }).join('')}
@@ -5035,8 +5026,6 @@ function viewBudget(section = 'depenses') {
       <p class="hint" style="margin-top:8px">
         <b>${trad('Retirer')}</b> ${trad("garde l'historique,")} <b>${trad('Supprimer')}</b> ${trad("l'efface.")}${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
-    </details>
-    ${/* Fin du depliant du detail mensuel, ouvert plus haut. */''}
     </details>
   </div>`}
 
@@ -5256,22 +5245,10 @@ function mountBudget() {
     target: num(Store.state.budget.monthlyTarget),
     targetLabel: 'Objectif',
   });
-  Charts.rankedBars($('#bCats'), { items: expenseByCategory(year) });
-
-  const plis = [
-    ['#pliCats', v => { pliCatsOuvert = v; },
-      () => Charts.rankedBars($('#bCats'), { items: expenseByCategory(year) })],
-    ['#pliDetailMois', v => { pliDetailOuvert = v; }, null],
-  ];
-  for (const [sel, retenir, redessiner] of plis) {
-    const d = $(sel);
-    if (!d) continue;
-    d.addEventListener('toggle', () => {
-      retenir(d.open);
-      if (d.open && redessiner) redessiner();
-    });
-    if (d.open && redessiner) redessiner();
-  }
+  /* Le conteneur n'existe pas quand les categories sont desactivees : la carte
+     entiere ne se rend plus. `mount()` sort en silence dans ce cas, mais on ne
+     l'appelle meme pas -- une carte absente n'a pas de graphique a monter. */
+  if ($('#bCats')) Charts.rankedBars($('#bCats'), { items: expenseByCategory(year) });
 }
 
 function viewData() {
@@ -7140,17 +7117,6 @@ const ACTIONS = {
      reglage : `hero-base` est un alias historique de `evo-base`. */
   'evo-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
-  /* Le niveau de detail de Budget. Il vit dans `meta`, pas dans une variable de
-     module : c'est une preference, elle doit survivre au rechargement comme le
-     theme et la langue. Ecrire le choix le rend explicite, donc gagnant sur le
-     defaut deduit de la saisie -- voir `budgetDetail()`. */
-  'budget-detail'(btn) {
-    const v = btn.dataset.niveau;
-    if (!BUDGET_DETAIL.includes(v)) return;
-    Store.state.meta.budgetDetail = v;
-    pliCatsOuvert = pliDetailOuvert = (v === 'detail');
-    Store.save(); render();
-  },
   'proj-scenario'(btn) {
     Store.state.meta.projScenario = btn.dataset.scenario;
     Store.save(); render();

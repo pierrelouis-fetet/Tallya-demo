@@ -3271,36 +3271,24 @@ const CATEGORIE_TOUT = 'Tout confondu';
    recliquer creerait une seconde case a cote de la premiere. */
 const NOMS_TOUT = () => [CATEGORIE_TOUT, trad(CATEGORIE_TOUT)];
 
+/* Les catégories sont-elles désactivées ? Deux états, pas trois.
+
+   C'est LA source de vérité de Budget, et la seule : ou l'on répartit ses
+   dépenses entre des catégories, ou l'on ne remplit qu'une case. Le choix se
+   fait dans la saisie du mois, là où il a un sens, et l'affichage le suit.
+
+   Une préférence d'affichage a été essayée à côté, `meta.budgetDetail`, avec
+   deux crans en tête de page. C'était un second système pour une question déjà
+   tranchée : rien ne garantissait que les deux s'accordent, et l'écran pouvait
+   proposer de détailler ce que la saisie ne détaillait plus. Deux portes sur un
+   même champ sont saines, deux champs pour la même valeur ne le sont pas.
+
+   Ce que cet état ne touche pas : les montants. `retirerCategorie` n'efface
+   rien, les mois passés gardent leur découpage, et l'export le porte toujours.
+   L'affichage suit le choix courant, le stockage garde l'histoire. */
 function sansDistinction() {
   return categoriesSaisie().length === 1;
 }
-
-/* Le niveau de détail de Budget : une préférence d'AFFICHAGE, et une seule.
-
-   Deux choses portaient le mot « détail » et ne faisaient pas la même. Celle-ci
-   décide ce que la page montre. L'autre, `sansDistinction()`, décrit une saisie
-   réduite à une seule case, ce qui est une opération sur les données : elle
-   retire des catégories de ce qu'on propose de remplir, et ne touche à aucun
-   montant — les mois passés gardent leur découpage, le tableau et les exports
-   continuent de le montrer. C'est délibéré, sans quoi un total cesserait
-   d'égaler la somme de ses parts.
-
-   Le résultat, lui, ne l'était pas : « Ne plus détailler » promettait une page
-   simple et rendait une page identique, ses 880 px de tableau par catégorie
-   compris. Le réglage existait, son effet non.
-
-   Aucune migration écrite : le défaut se DÉDUIT. Quelqu'un qui a déjà réduit sa
-   saisie à une case voulait bien une page simple, il arrive donc en synthèse ;
-   les autres ne voient rien changer. Un état déduit ne peut pas se contredire
-   avec celui qu'il décrit, et rejouer la lecture donne toujours le même
-   résultat. Choisir explicitement écrit `meta.budgetDetail`, et ce choix gagne. */
-const BUDGET_DETAIL = ['synthese', 'detail'];
-
-function budgetDetail() {
-  const v = Store.state.meta?.budgetDetail;
-  return BUDGET_DETAIL.includes(v) ? v : (sansDistinction() ? 'synthese' : 'detail');
-}
-const budgetSynthese = () => budgetDetail() === 'synthese';
 
 /* Les mois d'une année qu'il y a lieu de montrer.
 

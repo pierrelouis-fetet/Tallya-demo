@@ -1590,11 +1590,6 @@ const I18N = {
     "Effet": "Impact",
 
     "Dernier relevé,": "Last statement,",
-    "Synthétique": "Summary",
-    "Détaillé": "Detailed",
-    "Afficher les catégories": "Show categories",
-    "Afficher le détail par catégorie": "Show the category breakdown",
-    "Corriger mois par mois": "Correct month by month",
     "Reste sur l’objectif": "Left on the target",
     "Dépassement": "Over target",
     "Une seule case à remplir": "A single box to fill in",

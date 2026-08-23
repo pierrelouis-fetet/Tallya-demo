@@ -5552,39 +5552,35 @@ suite('Retirer une catégorie n’efface rien', () => {
       'les deux etats se decident sur sansDistinction(), pas sur un drapeau');
   });
 
-  test('le niveau de détail est un réglage de page, en tête', () => {
-    /* Quatre places en tout, et les trois premieres etaient fausses.
+  test('aucun réglage d’affichage ne double le choix de saisie', () => {
+    /* Un commutateur « Synthetique | Detaille » a vecu en tete de page, avec sa
+       preference dans `meta`. C'etait un second systeme pour une question deja
+       tranchee : l'ecran pouvait proposer de detailler ce que la saisie ne
+       detaillait plus, et rien ne garantissait que les deux s'accordent. Deux
+       portes sur un meme champ sont saines, deux champs pour la meme valeur ne
+       le sont pas.
 
-       Dans le pli du tableau : le pli sert aux donnees et se fait discret par
-       construction, un chevron gris. Il fallait lire la source pour le trouver.
-
-       Sous le tableau, hors du pli : il devenait le dernier element de la page,
-       mesure a 2 704 px sur 2 855. Sorti d'un pli, tombe dans le vide.
-
-       Au bord de la carte du detail, avec les commandes de categories : trouvable,
-       mais il gouverne toute la page et se presentait comme une commande de cette
-       carte-la. Et son nom niait -- « Ne plus detailler » dit ce qu'on cesse de
-       faire, pas ce qu'on obtient.
-
-       En tete de page, deux crans nommes : c'est le commutateur d'Allocation,
-       meme composant, meme place, et le libelle dit le resultat. */
+       Il ne reste donc qu'un etat, `sansDistinction()`, lu par la saisie comme
+       par l'affichage. */
     const src = lireSource('assets/app.js');
-    const vue = src.slice(src.indexOf('function viewBudget(section'),
-                          src.indexOf('function mountBudget('));
-    const commutateur = vue.indexOf("'budget-detail', 'niveau'");
-    vrai(commutateur > 0, 'le commutateur de niveau doit exister');
-    vrai(commutateur < vue.indexOf('class="grid g-hero"'),
-      'et se lire avant la première carte : c’est un réglage de page');
-    for (const cran of ['Synthétique', 'Détaillé']) {
-      vrai(vue.includes(`'${cran}'`), `le cran « ${cran} » doit être offert`);
+    const store = lireSource('assets/store.js');
+    const dico = lireSource('assets/i18n.js');
+    for (const mort of ['budgetDetail', 'budgetSynthese', 'BUDGET_DETAIL',
+                        'budget-detail', 'pliCats', 'pliDetailMois']) {
+      vrai(!src.includes(mort), `« ${mort} » n’a plus rien à faire dans app.js`);
     }
-    vrai(!/Ne plus détailler/.test(vue),
-      'le libellé qui niait a quitté la page : il promettait une page simple '
-      + 'et ne changeait que la saisie');
+    /* store.js ne le mentionne que dans le commentaire qui dit pourquoi il n'y
+       est plus : on interdit la declaration, pas le souvenir. */
+    vrai(!/const BUDGET_DETAIL|function budgetDetail/.test(store),
+      'ni de définition dans store.js');
+    for (const clef of ['"Synthétique"', '"Détaillé"', '"Afficher les catégories"',
+                        '"Afficher le détail par catégorie"']) {
+      vrai(!dico.includes(clef), `la clef ${clef} est morte avec le commutateur`);
+    }
 
     /* Les commandes de categories restent dans la carte du detail : elles
        agissent sur les categories, pas sur la page. */
-    const carte = vue.slice(vue.indexOf('data-anchor="detail-mensuel"'));
+    const carte = src.slice(src.indexOf('data-anchor="detail-mensuel"'));
     const rangee = carte.slice(carte.indexOf('<div class="row"'),
                                carte.indexOf('</div>', carte.indexOf('add-expense-month')));
     for (const action of ['sans-distinction', 'add-category', 'add-expense-month']) {
@@ -16742,84 +16738,125 @@ suite('Chaque chaîne affichée a sa clef anglaise', () => {
 /* ------------------------------------------------------------------
    Budget : le niveau de detail, le mois courant, les mois futurs
    ------------------------------------------------------------------ */
-suite('Le niveau de détail de Budget est respecté', () => {
+suite('Deux états, et l’affichage suit la saisie', () => {
 
-  /* « Ne plus detailler » promettait une page simple et rendait une page
-     identique : le reglage ne touchait que la SAISIE. C'est delibere du cote des
-     donnees -- retirer un montant ferait qu'un total cesserait d'egaler la somme
-     de ses parts -- mais l'ecran annonçait autre chose que ce qu'il faisait. */
+  /* Trois mois repartis entre trois categories, dont deux mois incomplets : de
+     quoi verifier qu'un total tient quand ses parts changent de place. Le
+     `troisMois` d'une autre suite lui est local, et deux fixtures identiques
+     finiraient par diverger -- celui-ci porte son propre nom. */
+  const troisMoisRepartis = e => {
+    e.budget.categories = ['Courses', 'Sport', 'Transports'];
+    e.budget.retirees = [];
+    e.budget.expenses = [
+      { month: '2026-01-01', v: { Courses: 400, Sport: 60, Transports: 40 }, note: '' },
+      { month: '2026-02-01', v: { Courses: 500, Sport: 60 }, note: '' },
+      { month: '2026-03-01', v: { Courses: 300, Transports: 90 }, note: '' },
+    ];
+  };
 
-  test('le niveau se déduit tant qu’il n’est pas choisi', () => {
-    /* Aucune migration ecrite : le defaut se deduit de la saisie. Quelqu'un qui
-       a deja reduit sa saisie a une case voulait bien une page simple, les autres
-       ne voient rien changer. Un etat deduit ne peut pas contredire celui qu'il
-       decrit, et le relire donne toujours le meme resultat. */
+  /* Ou l'on repartit ses depenses entre des categories, ou l'on ne remplit
+     qu'une case. Il n'y a pas de troisieme cas, et pas de reglage d'affichage a
+     cote : `sansDistinction()` est la seule source de verite. */
+
+  test('l’état se lit sur la saisie, sans drapeau ni préférence', () => {
     Fixture.poser();
-    delete Store.state.meta.budgetDetail;
-    vrai(!sansDistinction(), 'le fixture détaille ses dépenses');
-    eq(budgetDetail(), 'detail', 'donc la page reste détaillée');
-
+    vrai(!sansDistinction(), 'le fixture répartit ses dépenses');
     neePlusDetailler();
-    vrai(sansDistinction(), 'la saisie tient maintenant dans une case');
-    eq(budgetDetail(), 'synthese', 'et la page se met en synthèse d’elle-même');
-
-    /* Un choix explicite gagne sur la deduction, dans les deux sens. */
-    Store.state.meta.budgetDetail = 'detail';
-    eq(budgetDetail(), 'detail', 'le choix écrit gagne');
-    Store.state.meta.budgetDetail = 'nimportequoi';
-    eq(budgetDetail(), 'synthese', 'une valeur inconnue retombe sur la déduction');
+    vrai(sansDistinction(), 'après le geste, une seule case reste à remplir');
+    vrai(Store.state.meta.budgetDetail === undefined,
+      'et aucune préférence d’affichage n’est écrite à côté');
   });
 
-  test('la lecture du niveau est idempotente et ne touche à rien', () => {
-    Fixture.poser();
-    const avant = JSON.stringify(Store.state);
-    for (let i = 0; i < 3; i++) { budgetDetail(); budgetSynthese(); }
-    eq(JSON.stringify(Store.state), avant,
-      'lire le niveau n’écrit rien : c’est un getter, pas une migration');
-  });
-
-  test('la synthèse replie le détail, elle ne l’efface pas', () => {
-    /* Le point le plus important de tout ce lot : masquer n'est pas supprimer.
-       Les deux plis restent DANS le document, avec leurs colonnes et leurs
-       montants, donc un clic les rend sans changer la preference. */
+  test('catégories actives : la page montre les analyses catégorielles', () => {
     const src = lireSource('assets/app.js');
     const vue = src.slice(src.indexOf('function viewBudget(section'),
                           src.indexOf('function mountBudget('));
-    for (const pli of ['pliCats', 'pliDetailMois']) {
-      const i = vue.indexOf(`id="${pli}"`);
-      vrai(i > 0, `le dépliant ${pli} doit exister`);
-      const balise = vue.slice(i, vue.indexOf('>', i));
-      vrai(/budgetSynthese\(\)/.test(balise),
-        `${pli} doit suivre le niveau de détail`);
-    }
-    /* Rien n'est retire du rendu : les colonnes se derivent toujours de la liste
-       complete, jamais des categories encore proposees a la saisie. */
-    vrai(/expenseCategories\(\)\.map\(c => th\(/.test(vue),
-      'le tableau garde une colonne par catégorie, quelle que soit la vue');
-    vrai(!/categoriesSaisie\(\)/.test(vue),
-      'la vue ne filtre pas sur la saisie : ce serait perdre l’historique à l’écran');
-    /* Et le pli s'ouvre sans toucher a la preference. */
-    /* La fonction seule, bornee a son accolade fermante : sans borne, la tranche
-       atteignait l'action du commutateur, qui ecrit legitimement la preference. */
-    const debutMont = src.indexOf('function mountBudget(');
-    const mont = src.slice(debutMont, src.indexOf('\n}', debutMont));
-    vrai(/addEventListener\('toggle'/.test(mont),
-      'ouvrir un pli est retenu pour le rendu suivant');
-    vrai(!/budgetDetail = /.test(mont),
-      'mais n’écrit pas la préférence : lire simplement aujourd’hui n’est pas un choix définitif');
+    /* La carte et les colonnes sont sous condition, et la condition est la
+       bonne : une seule, lue partout de la meme facon. */
+    const i = vue.indexOf("trad('Par catégorie')");
+    vrai(i > 0, 'la carte doit exister dans la source');
+    vrai(/\$\{sansDistinction\(\) \? '' : `/.test(vue.slice(Math.max(0, i - 900), i)),
+      'elle ne se rend que si les catégories sont actives');
+    eq((vue.match(/sansDistinction\(\)/g) || []).length, 6,
+      'la carte, ses trois rangées de colonnes, le compte de l’en-tête, et le '
+      + 'commentaire qui dit pourquoi il n’y a pas de réglage de plus');
   });
 
-  test('changer de niveau ne perd aucune donnée', () => {
-    Fixture.poser(s => { s.meta.budgetDetail = 'detail'; });
-    const empreinte = () => JSON.stringify({
-      categories: expenseCategories(),
-      mois: Store.state.budget.expenses.map(r => [r.month, r.v, r.note]),
-    });
-    const avant = empreinte();
-    Store.state.meta.budgetDetail = 'synthese';
-    eq(empreinte(), avant, 'passer en synthèse ne touche ni aux catégories ni aux montants');
-    Store.state.meta.budgetDetail = 'detail';
-    eq(empreinte(), avant, 'et revenir non plus');
+  test('catégories désactivées : rien n’est affiché, rien n’est perdu', () => {
+    /* Le point le plus important : l'affichage suit le choix courant, le
+       stockage garde l'histoire. */
+    Fixture.poser(troisMoisRepartis);
+    const avant = JSON.stringify(Store.state.budget.expenses);
+    const detailles = Store.state.budget.expenses
+      .filter(r => Object.keys(r.v || {}).length > 1).length;
+    vrai(detailles > 0, 'le fixture porte des mois répartis entre catégories');
+
+    neePlusDetailler();
+    vrai(sansDistinction(), 'les catégories sont désactivées');
+    eq(JSON.stringify(Store.state.budget.expenses), avant,
+      'et aucun montant n’a bougé : le geste ne touche qu’à la liste proposée');
+    /* Les categories elles-memes restent dans la liste : c'est elle que
+       l'export et la fenetre du mois parcourent. */
+    vrai(expenseCategories().length > 1,
+      'les catégories restent dans le stockage, pour l’export et le retour');
+  });
+
+  test('la fenêtre du mois montre encore une case retirée qui porte un montant', () => {
+    /* Sans cela, un mois deja reparti deviendrait incorrigible : le total
+       resterait, ses parts seraient invisibles. */
+    const src = lireSource('assets/app.js');
+    vrai(/\.filter\(c => !categorieRetiree\(c\) \|\| num\(r\.v\?\.\[c\]\)\)/.test(src),
+      'la saisie propose les catégories actives, plus celles qui portent déjà un montant');
+  });
+
+  test('remettre les catégories les fait réapparaître, sans rien redistribuer', () => {
+    Fixture.poser(troisMoisRepartis);
+    neePlusDetailler();
+    const apresRegroupement = JSON.stringify(Store.state.budget.expenses);
+
+    const fait = reprendreLeDetail();
+    vrai(fait.categories > 0, 'les catégories retirées reviennent');
+    vrai(!sansDistinction(), 'la saisie répartit de nouveau');
+
+    /* Un mois saisi en une seule case le reste : aucun montant n'est reparti
+       entre des categories par une regle inventee. Seuls les mois dont le
+       decoupage etait garde ET dont le total n'a pas bouge le retrouvent. */
+    const apres = Store.state.budget.expenses;
+    for (const r of apres) {
+      const cles = Object.keys(r.v || {}).filter(k => num(r.v[k]));
+      vrai(cles.length !== 1 || !r.avantRegroupement,
+        'une case unique conservée n’a pas été éclatée au hasard');
+    }
+    vrai(apresRegroupement.length > 0, 'l’état intermédiaire était bien lisible');
+  });
+
+  test('le choix survit au rechargement, et il n’a rien à migrer', () => {
+    /* Il vit dans `budget.retirees`, qui est deja enregistre : aucune clef
+       nouvelle, donc aucune migration, donc rien a jouer deux fois. */
+    Fixture.poser(troisMoisRepartis);
+    neePlusDetailler();
+    const brut = JSON.stringify(Store.state);
+    const relu = JSON.parse(brut);
+    Store.state = relu;
+    vrai(sansDistinction(), 'après un aller-retour par le stockage, le choix tient');
+    eq(JSON.stringify(Store.state.budget.expenses),
+       JSON.stringify(JSON.parse(brut).budget.expenses),
+       'et aucune donnée historique ne s’est perdue en route');
+  });
+
+  test('le graphique global vit dans les deux états', () => {
+    /* Il repose sur le total mensuel, jamais sur les categories : il n'a aucune
+       raison de dependre du choix. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    const i = vue.indexOf('id="bChart"');
+    vrai(i > 0, 'le graphique annuel doit exister');
+    vrai(!/sansDistinction/.test(vue.slice(Math.max(0, i - 400), i)),
+      'et ne pas être conditionné par le niveau de détail');
+    const mont = src.slice(src.indexOf('function mountBudget('));
+    vrai(/if \(\$\('#bCats'\)\) Charts\.rankedBars/.test(mont),
+      'le montage des catégories, lui, vérifie que son conteneur existe');
   });
 });
 
