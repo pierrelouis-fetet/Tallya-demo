@@ -2297,7 +2297,15 @@ details.pli-reglages > summary::-webkit-details-marker { display: none; }
   color: var(--accent);
 }
 .pli-action::after { content: '▾'; display: inline-block; transition: transform .15s; }
-details.pli-reglages[open] .pli-action::after { transform: rotate(180deg); }
+/* `> summary` et non un descendant : le depliant des taux vit A L'INTERIEUR de
+   la carte des hypotheses, qui porte la meme classe. Sans cette restriction, la
+   carte ouverte retournait AUSSI le chevron de son enfant ferme -- on lisait
+   « Ouvrir ^ » sur un pli qui ne montrait rien, une fleche qui annonçait
+   l'inverse de ce que le clic allait faire.
+
+   La regle vaut pour tout depliant imbrique a venir : le chevron appartient au
+   sommaire de son propre depliant, jamais a celui d'un ancetre. */
+details.pli-reglages[open] > summary .pli-action::after { transform: rotate(180deg); }
 
 .acct-head { flex-wrap: wrap; row-gap: 6px; }
 .acct-nom {

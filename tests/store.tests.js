@@ -17341,6 +17341,53 @@ suite('Personnalisé est une case, pas un quatrième scénario', () => {
       'la cible garde sa place dans le résumé');
   });
 
+  test('le chevron d’un dépliant imbriqué suit son propre pli', () => {
+    /* Le depliant des taux vit A L'INTERIEUR de la carte des hypotheses, et les
+       deux portent `pli-reglages`. La regle qui retourne le chevron visait un
+       DESCENDANT : la carte ouverte retournait donc aussi le chevron de son
+       enfant ferme, et l'on lisait « Ouvrir ^ » sur un pli qui ne montrait
+       rien -- une fleche qui annonce l'inverse de ce que le clic va faire.
+
+       Mesure en DOM plutot qu'en lecture de CSS : c'est la cascade qui se
+       trompait, pas le texte de la regle. */
+    const css = lireSource('assets/styles.css');
+    vrai(/details\.pli-reglages\[open\] > summary \.pli-action::after/.test(css),
+      'la rotation porte sur le sommaire du dépliant lui-même');
+
+    const style = document.createElement('style');
+    style.textContent = css;
+    const boite = document.createElement('div');
+    boite.innerHTML = `
+      <details class="pli-reglages" open>
+        <summary><span class="pli-valeurs">Carte</span
+          ><span class="pli-action" id="chevDehors">Régler</span></summary>
+        <details class="pli-reglages pli-avance">
+          <summary><span class="pli-valeurs">Taux</span
+            ><span class="pli-action" id="chevDedans">Ouvrir</span></summary>
+          <p>des champs</p>
+        </details>
+      </details>`;
+    document.body.append(style, boite);
+    try {
+      const rotation = id => getComputedStyle(boite.querySelector('#' + id), '::after').transform;
+      /* La carte est ouverte : son chevron pointe vers le haut. */
+      vrai(rotation('chevDehors') !== 'none',
+        'le chevron de la carte ouverte est retourné');
+      /* Le pli interieur est ferme : le sien pointe vers le bas, donc aucune
+         rotation. */
+      eq(rotation('chevDedans'), 'none',
+        'et celui du pli fermé qu’elle contient ne l’est pas : sa flèche montre '
+        + 'vers le bas, comme ce que son clic va faire');
+      /* Et il se retourne quand c'est LUI qu'on ouvre. */
+      boite.querySelector('.pli-avance').open = true;
+      vrai(rotation('chevDedans') !== 'none',
+        'ouvert à son tour, il se retourne');
+    } finally {
+      style.remove();
+      boite.remove();
+    }
+  });
+
   test('la case libre garde le style des trois autres, en clair comme en sombre', () => {
     /* Aucune couleur « custom » : l'etat retenu est celui de tout le monde, un
        lavis d'accent et un bord accentue, et les deux themes le tiennent parce
