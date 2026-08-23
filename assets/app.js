@@ -3922,12 +3922,24 @@ function lignesDuMois(cf) {
       <dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte."))}
         <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
         <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : '',
-    ...cf.creditsListe.filter(x => x.mensualite > 0.005).map(x => ligneSource({
-      nom: x.libelle, montant: x.mensualite, signe: -1,
-      action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
-      donnees: x.chargeIndex != null ? { i: x.chargeIndex } : { etab: x.etabId, i: x.index },
-      sub: trad('mensualité du crédit'),
-    })),
+    ...(() => {
+      const avec = cf.creditsListe.filter(x => x.mensualite > 0.005);
+      if (!avec.length) return [];
+      const total = avec.reduce((s, x) => s + x.mensualite, 0);
+      const nom = avec.length > 1 ? trad('Mensualités de crédit')
+                                  : trad('Mensualité de crédit');
+      if (avec.length > 1) return [`
+      <dt>${nom}${aide(trad('Le total des mensualités des crédits rattachés à ce bien. Chaque prêt se lit séparément dans « Financement », plus bas.'))}
+        <span class="sub">${trad('{n} crédits, détaillés dans Financement')
+          .replace('{n}', avec.length)}</span></dt>
+        <dd class="dette">−${fmtEUR(total)} ${trad('/ mois')}</dd>`];
+      const x = avec[0];
+      return [ligneSource({
+        nom, montant: total, signe: -1,
+        action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
+        donnees: x.chargeIndex != null ? { i: x.chargeIndex } : { etab: x.etabId, i: x.index },
+      })];
+    })(),
   ].filter(Boolean).join('');
 }
 

@@ -863,6 +863,12 @@ function echeancierCredit(d) {
   }
   if (capital > 0.005) return mois0;
 
+  let derniere = mens + capital;
+  if (mois > 1 && derniere < mens / 100) {
+    mois--;
+    derniere += mens;
+  }
+
   /* Le premier du mois avant d'ajouter les mois : `setMonth` sur un 31 janvier
      saute en mars. L'un des deux moteurs le faisait, l'autre non -- une
      troisieme facon de ne pas tomber sur la meme date. */
@@ -876,8 +882,9 @@ function echeancierCredit(d) {
     mois, interets,
     assurance: assurance * mois,
     /* La derniere echeance solde le reliquat : `capital` est negatif ou nul en
-       sortie de boucle, donc elle est plus petite que les autres. */
-    derniere: mens + capital,
+       sortie de boucle, donc elle est plus petite que les autres -- sauf quand
+       elle a absorbe un reste d'arrondi, et elle depasse alors de peu. */
+    derniere,
     fin: cle, finLe: cle,
   };
 }

@@ -13759,13 +13759,22 @@ suite('Un montant n’a qu’un porteur', () => {
                            src.indexOf('function ligneSource'));
     vrai(bloc.length > 400, 'la fonction doit être trouvable');
     const litteraux = bloc.match(/<dt>[^\n]*/g) || [];
-    eq(litteraux.length, 2,
-      'deux lignes seulement s’écrivent à la main : les autres passent par ligneSource');
-    vrai(litteraux.every(l => /Vacance locative|Impôt déclaré/.test(l)),
-      'et ce sont la vacance et l’impôt, réglés par des champs de la même carte');
+    eq(litteraux.length, 3,
+      'trois lignes seulement s’écrivent à la main : les autres passent par ligneSource');
+    /* La regle qui compte n'est pas le nombre de lignes, c'est qu'aucune ne
+       laisse chercher : chacune porte une aide qui dit ou le montant se regle.
+       La vacance et l'impot renvoient a un champ de la meme carte, le total des
+       mensualites renvoie a « Financement », qui detaille chaque pret.
+
+       Les libelles ne se cherchent pas ici : celui du total des mensualites vient
+       d'une variable, parce qu'il se met au pluriel. Ce sont les aides qui
+       identifient les trois lignes, et c'est elles qui portent la regle. */
+    vrai(litteraux.every(l => l.includes('${aide(')),
+      'chacune porte une aide qui dit où le montant se règle');
     vrai(/Se règle par « Mois loués par an »/.test(bloc)
-      && /Se règle par « Impôt sur ce loyer »/.test(bloc),
-      'et elles le disent toutes les deux');
+      && /Se règle par « Impôt sur ce loyer »/.test(bloc)
+      && /se lit séparément dans « Financement »/.test(bloc),
+      'et les trois le disent');
   });
 
   test('supprimer une ligne rattachée dit ce que ça emporte ailleurs', () => {
@@ -17757,6 +17766,59 @@ suite('Un crédit ne s’amortit que d’une seule façon', () => {
     while (capital > 0.005 && mois < 1200) { capital += capital * taux - dispo; mois++; }
     eq(e.mois, mois, 'la durée est celle qu’on obtient en rejouant le tableau');
     vrai(e.mois > 200, 'soit plus de dix-sept ans, et non les seize d’avant');
+  });
+
+  test('la durée tombe sur celle du tableau de la banque, à chaque étape', () => {
+    /* Le cas reel qui a fait trouver le defaut : un appartement finance sur vingt
+       ans, et l'emprunteur a le tableau de sa banque sous les yeux.
+
+       210 000 EUR sur 240 mois a 1,45 % donnent une mensualite de 1 008,52 EUR --
+       arrondie au centime, comme toute mensualite de contrat. Cet arrondi laisse
+       0,99 EUR apres la 240e echeance, que la banque absorbe dans la derniere.
+       La boucle, elle, comptait un mois de plus pour ces quelques centimes et
+       annonçait une 193e echeance de 1,00 EUR : un mois d'ecart avec un papier
+       que l'emprunteur peut lire.
+
+       Le seuil du repli est relatif a la mensualite, un pour cent, et non en
+       euros : ce qui reste apres la penultieme echeance n'est un reste d'arrondi
+       que s'il est negligeable devant une echeance normale. */
+    const C = 210000, n = 240, r = 1.45 / 100 / 12;
+    const mens = Math.round(C * r / (1 - Math.pow(1 + r, -n)) * 100) / 100;
+    pres(mens, 1008.52, 'la mensualité du contrat, arrondie au centime');
+
+    /* Le tableau de la banque, mois par mois. */
+    const crdApres = [];
+    let cap = C;
+    for (let i = 1; i <= n; i++) {
+      cap -= Math.min(cap, mens - cap * r);
+      crdApres.push(Math.round(cap * 100) / 100);
+    }
+    vrai(crdApres[n - 1] > 0 && crdApres[n - 1] < 2,
+      'l’arrondi laisse bien un reliquat de moins de deux euros');
+
+    /* A chaque etape du pret, la duree deduite est celle qui reste au tableau. */
+    for (const payees of [1, 12, 48, 120, 200, 239]) {
+      poserPret({ montant: crdApres[payees - 1], mensualite: mens,
+                  taux: 1.45, tauxAssurance: null, initial: null });
+      const e = echeancierCredit(Store.state.etabs[0].dettes[0]);
+      eq(e.mois, n - payees,
+        `${payees} échéances payées : il en reste ${n - payees}, pas une de plus`);
+    }
+  });
+
+  test('une vraie dernière échéance réduite reste une échéance', () => {
+    /* L'autre moitie du repli : il ne doit avaler que l'arrondi. Une derniere
+       echeance qui vaut la moitie des autres est un vrai prelevement, et la
+       compter en moins ferait finir le pret un mois trop tot. */
+    poserPret({ montant: 1500, mensualite: 1000, taux: 0,
+                tauxAssurance: null, initial: null });
+    const e = echeancierCredit(Store.state.etabs[0].dettes[0]);
+    eq(e.mois, 2, 'mille cinq cents à mille par mois font deux échéances');
+    pres(e.derniere, 500, 'la seconde vaut cinq cents, et elle compte');
+    /* Et le repli se voit dans la source : relatif, jamais en euros. */
+    const src = lireSource('assets/store.js');
+    vrai(/derniere < mens \/ 100/.test(src),
+      'le seuil est un pour cent de la mensualité, pas un montant absolu');
   });
 
   test('la dernière mensualité solde le reliquat', () => {

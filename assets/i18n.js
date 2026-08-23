@@ -1582,6 +1582,11 @@ const I18N = {
     "{n} ligne": "{n} entry",
     "{n} lignes": "{n} entries",
     "net": "net",
+    "Mensualité de crédit": "Loan instalment",
+    "Mensualités de crédit": "Loan instalments",
+    "{n} crédits, détaillés dans Financement": "{n} loans, itemised under Financing",
+    "Le total des mensualités des crédits rattachés à ce bien. Chaque prêt se lit séparément dans « Financement », plus bas.":
+      "The total instalments of the loans attached to this property. Each loan is shown separately under “Financing”, below.",
     "Banque / prêteur": "Bank / lender",
     "Le loyer hors charges récupérables. Les charges du propriétaire se déclarent séparément et sont déduites une seule fois":
       "The rent excluding recoverable charges. Owner costs are declared separately and deducted only once",
@@ -2062,7 +2067,6 @@ const I18N = {
     "mois loués sur 12": "rented months out of 12",
     "Les mois où le bien n'est pas loué, lissés sur l'année. Se règle par « Mois loués par an », au bas de cette carte.": "The months the asset is not let, spread over the year. Set through “Rented months per year”, at the foot of this card.",
     "Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte.": "Your rate applied to rent minus costs. It comes from you, not from a tax rule the app would have guessed. Set through “Tax on this rent”, at the foot of this card.",
-    "mensualité du crédit": "loan instalment",
     "estimé": "estimated",
     "La somme des lignes au-dessus. Chacune s'ouvre par son nom, pour la corriger ou la supprimer.": "The sum of the lines above. Each one opens by its name, to correct or delete it.",
     "Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais.": "What is left in your account at the end of the month, once the loan is paid. The sum of the lines above, each one opening by its name. Negative in a loan's early years is common and not a mistake: you are repaying capital, so your wealth rises while your cash falls. Both figures are true.",
