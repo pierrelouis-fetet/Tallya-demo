@@ -1584,6 +1584,11 @@ const I18N = {
     "{n} ligne": "{n} entry",
     "{n} lignes": "{n} entries",
     "net": "net",
+    "{n} ligne sans clôture de référence n’y est pas comptée":
+      "{n} holding without a reference close is not counted in it",
+    "{n} lignes sans clôture de référence n’y sont pas comptées":
+      "{n} holdings without a reference close are not counted in it",
+    "brut": "gross",
     "aucune en": "none in",
     "{n} au total": "{n} in total",
     "+ Entrée": "+ Inflow",

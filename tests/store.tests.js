@@ -16796,10 +16796,11 @@ suite('Deux états, et l’affichage suit la saisie', () => {
     vrai(i > 0, 'la carte doit exister dans la source');
     vrai(/\$\{sansDistinction\(\) \? '' : `/.test(vue.slice(Math.max(0, i - 900), i)),
       'elle ne se rend que si les catégories sont actives');
-    eq((vue.match(/sansDistinction\(\)/g) || []).length, 8,
+    eq((vue.match(/sansDistinction\(\)/g) || []).length, 9,
       'la carte, ses trois rangées de colonnes, le compte de l’en-tête, la fiche '
-      + 'de la tuile de la moyenne, le bouton qui ajoute une catégorie, et le '
-      + 'commentaire qui dit pourquoi il n’y a pas de réglage de plus');
+      + 'de la tuile de la moyenne, le bouton qui ajoute une catégorie, le '
+      + 'dépliant qui les renomme et les supprime, et le commentaire qui dit '
+      + 'pourquoi il n’y a pas de réglage de plus');
   });
 
   test('aucune ventilation par catégorie ne survit, tuiles et fiches comprises', () => {
@@ -17675,6 +17676,206 @@ suite('Les textes de Projection suivent les presets', () => {
                         'ont leur propre hypothèse',
                         'Si le rendement fait deux points']) {
       vrai(!vue.includes(mort), `« ${mort} » ne décrit plus le moteur`);
+    }
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un patrimoine net peut etre negatif
+   ------------------------------------------------------------------ */
+suite('Le net dit la vérité, même sous zéro', () => {
+
+  const releve = (avoirs, dettes, mois) => ({
+    date: mois, comment: '', dettes, v: { c_courant: avoirs },
+  });
+  const poser = (...lignes) => Fixture.poser(e => {
+    e.comptes = [{ id: 'c_courant', etabId: 'e_b', type: 'courant', statut: 'ouvert',
+      libelle: 'Courant', court: 'Courant', numero: '', notes: '', alloc: '',
+      ouvertLe: '2019-01-01', cash: [{ montant: 0, affectation: 'courant' }], lignes: [] }];
+    e.etabs = [{ id: 'e_b', nom: 'Banque', notes: '', dettes: [] }];
+    e.monthly = lignes;
+  });
+
+  test('cinquante mille d’avoirs et soixante-dix mille de dette font moins vingt mille', () => {
+    poser(releve(50000, 70000, '2026-01-01'));
+    const r = Store.state.monthly[0];
+    pres(rowTotal(r), 50000, 'les avoirs valent cinquante mille');
+    pres(rowNet(r), -20000, 'et le net vaut moins vingt mille, jamais zéro');
+    /* La serie publie le meme nombre : c'est elle que la courbe et les
+       variations lisent. */
+    const pt = historySeries({ includeNow: false })[0];
+    pres(pt.net, -20000, 'la série le publie tel quel');
+  });
+
+  test('la pile de la courbe nette ne perd pas le reliquat de dette', () => {
+    /* Le defaut, precisement : la dette se retranchait poche par poche en
+       s'arretant a zero sur chacune, donc tout ce qui depassait les avoirs
+       disparaissait. La courbe se posait a zero au lieu de descendre sous
+       l'axe, et un patrimoine negatif n'apparaissait jamais.
+
+       `pointsEvolution` vit dans app.js, que le harnais ne charge pas : on
+       rejoue sa regle sur les memes donnees, puis on verifie que la source
+       porte bien le rattrapage. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function pointsEvolution()'),
+                         src.indexOf('function carteEvolution') > 0
+                           ? src.indexOf('function carteEvolution')
+                           : src.indexOf('function pointsEvolution()') + 2600);
+    vrai(/if \(reste > 0\.005\) q\.immo = \(q\.immo \|\| 0\) - reste;/.test(fn),
+      'ce qui dépasse les avoirs se retranche encore, sur la poche qui porte les prêts');
+    vrai(/q\.total = SERIES_PATRIMOINE\(\)\.reduce/.test(fn),
+      'et le total reste dérivé des séries tracées, donc la pile fait son total');
+
+    /* La regle, rejouee : 50 000 sur une poche, 70 000 de dette. */
+    const poches = ['immo', 'biens', 'pe', 'crypto', 'bourse', 'garanti', 'cash'];
+    const q = { immo: 0, biens: 0, pe: 0, crypto: 0, bourse: 0, garanti: 0, cash: 50000 };
+    let reste = 70000;
+    for (const cle of poches) {
+      const pris = Math.min(reste, q[cle] || 0);
+      q[cle] = (q[cle] || 0) - pris;
+      reste -= pris;
+    }
+    if (reste > 0.005) q.immo = (q.immo || 0) - reste;
+    pres(poches.reduce((s, c) => s + q[c], 0), -20000,
+      'la somme des poches vaut les avoirs moins les dettes');
+    pres(q.immo, -20000, 'et le reliquat se voit, sur la poche des prêts');
+  });
+
+  test('un relevé qui ne porte qu’une dette n’est pas vide', () => {
+    /* Zero avoir, vingt mille de dette : `rowIsEmpty` ne regardait que les
+       montants par compte, donc ce relevé disparaissait du journal, des années
+       offertes au sélecteur, de la courbe et de toutes les statistiques. Son
+       patrimoine net vaut -20 000 EUR, ce qui est un fait. */
+    poser(releve(0, 20000, '2026-01-01'));
+    const r = Store.state.monthly[0];
+    vrai(!rowIsEmpty(r), 'il porte une dette, donc il porte quelque chose');
+    pres(rowNet(r), -20000, 'et son net vaut moins vingt mille');
+    /* Tout ce qui derive de cette notion le voit. */
+    eq(historySeries({ includeNow: false }).length, 1, 'la série le compte');
+    vrai(historyYears().includes('2026'), 'et son année est offerte au sélecteur');
+  });
+
+  test('un relevé sans avoir ni dette reste vide', () => {
+    /* L'autre moitie : la definition ne s'est pas seulement elargie, elle est
+       restee juste. Une ligne du calendrier ne devient pas un releve. */
+    poser(releve(0, 0, '2026-01-01'));
+    vrai(rowIsEmpty(Store.state.monthly[0]), 'ni avoir ni dette : vide');
+    Store.state.monthly[0].dettes = undefined;
+    vrai(rowIsEmpty(Store.state.monthly[0]), 'et une dette absente vaut une dette nulle');
+    eq(historySeries({ includeNow: false }).length, 0, 'la série ne le compte pas');
+  });
+
+  test('effacer un relevé le fait vraiment quitter le journal', () => {
+    /* La consequence de l'elargissement, et elle se serait vue tout de suite :
+       `clearMonthRow` videt les montants et laissait la dette, donc le relevé
+       qu'on vient d'effacer restait au journal avec son seul capital restant dû.
+       Le geste aurait dit l'inverse de ce qu'il fait. */
+    poser(releve(50000, 70000, '2026-01-01'));
+    vrai(!rowIsEmpty(Store.state.monthly[0]), 'le relevé existe');
+    clearMonthRow(Store.state.monthly[0], 'comment');
+    vrai(rowIsEmpty(Store.state.monthly[0]), 'effacé, il est vide');
+    eq(Store.state.monthly[0].dettes, undefined, 'sa dette est partie avec ses montants');
+    eq(historySeries({ includeNow: false }).length, 0, 'et il quitte la série');
+    /* Le texte du geste ne promet plus une liste de douze mois : cette liste
+       n'existe plus pour les relevés. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('async function viderOuSupprimerMois'),
+                         src.indexOf('function askMonthlySnapshot'));
+    vrai(!/douze mois/.test(fn), 'le texte ne parle plus de douze mois affichés');
+    vrai(/quittera le journal/.test(fn), 'il dit que le mois quitte le journal');
+    vrai(/remettra à sa place/.test(fn), 'et qu’on peut le recréer');
+  });
+
+  test('la confirmation d’enregistrement annonce le net', () => {
+    /* Elle annonçait le brut : « 354 151 EUR enregistré », puis le journal
+       affichait 198 151 EUR. Deux chiffres pour un seul geste. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("${trad('enregistré')}`);", src.indexOf('function askMonthlySnapshot'));
+    const bloc = src.slice(i - 500, i + 40);
+    vrai(/const brut = rowTotal\(ligne\), net = rowNet\(ligne\)/.test(bloc),
+      'la confirmation calcule les deux');
+    vrai(/fmtEUR0\(brut\)\} \$\{trad\('brut'\)\} · \$\{fmtEUR0\(net\)\} \$\{trad\('net'\)\}/.test(bloc),
+      'et les dit tous les deux quand ils diffèrent');
+    vrai(/: fmtEUR0\(net\)/.test(bloc),
+      'un seul montant quand il n’y a pas de crédit, et c’est le net');
+    vrai(!/fmtEUR0\(rowTotal\(Store\.state\.monthly\[index\]\)\)/.test(bloc),
+      'le brut seul ne s’annonce plus');
+  });
+
+  test('la carte du jour dit quand son pourcentage est partiel', () => {
+    /* La convention ne change pas : le denominateur reste le portefeuille
+       entier, et une ligne sans cloture de reference y figure sans entrer dans
+       la variation. C'est justement pourquoi il faut le dire a cote du chiffre,
+       et non seulement en haut de la carte. Aucune variation inventee. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("class=\"jour-note\">${trad('sur ton portefeuille Marchés");
+    vrai(i > 0, 'la note doit être trouvable');
+    const note = src.slice(i, i + 1100);
+    vrai(/j\.sansDonnee \?/.test(note),
+      'la mention n’apparaît que s’il manque une clôture de référence');
+    vrai(/sans clôture de référence n’y (est|sont) pas compt/.test(note),
+      'et elle dit que ces lignes ne sont pas dans le pourcentage');
+    /* Le moteur, lui, ne les compte ni au numerateur ni dans la liste. */
+    Fixture.poser(e => {
+      e.positions = [{ id: 'p1', name: 'Sans cours', isin: '', symbol: 'Y',
+        currency: 'EUR', qty: 10, buyPrice: 100, price: 100, fx: 1, fxBuy: 1,
+        account: 'c_cto', manual: false, assetClass: 'actions', role: 'core' }];
+      e.comptes = [{ id: 'c_cto', etabId: 'e_c', type: 'cto', statut: 'ouvert',
+        libelle: 'CTO', court: 'CTO', numero: '', notes: '', alloc: '',
+        ouvertLe: '2020-01-01', lignes: [], cash: [] }];
+      e.etabs = [{ id: 'e_c', nom: 'Courtier', notes: '', dettes: [] }];
+      e.monthly = [];
+    });
+    const j = dayPerformance();
+    eq(j.sansDonnee, 1, 'la ligne se compte à part');
+    pres(j.eur, 0, 'aucune variation inventée pour elle');
+    eq(j.lignes.length, 0, 'et elle ne figure pas dans la liste');
+  });
+
+  test('le dépliant qui renomme et supprime suit le mode de saisie', () => {
+    /* Renommer, retirer, supprimer : trois gestes sur des categories, sans objet
+       quand on a demande a ne plus en avoir. Le seul geste qui reste offert est
+       celui qui annonce ce qu'il fait. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    const i = vue.indexOf("trad('Renommer, retirer ou supprimer une catégorie')");
+    vrai(i > 0, 'le dépliant existe, pour qui détaille');
+    vrai(/\$\{sansDistinction\(\) \? '' : `/.test(vue.slice(Math.max(0, i - 900), i)),
+      'et il ne se rend que si les catégories servent encore');
+    /* Les trois actions vivent dedans, donc elles disparaissent avec lui. */
+    const fin = vue.indexOf('</details>', i);
+    const bloc = vue.slice(i, fin);
+    for (const action of ['rename-category', 'retirer', 'del-category']) {
+      vrai(bloc.includes(action), `« ${action} » vit dans ce dépliant`);
+    }
+    /* Et le retour reste offert dans les deux modes. */
+    vrai(/data-action="reprendre-detail"/.test(vue),
+      '« Remettre toutes les catégories » reste, c’est la seule sortie');
+  });
+
+  test('les données catégorisées survivent au mode, une fois de plus', () => {
+    /* Deja verifie, et re-verifie ici parce que c'est la promesse que cette
+       passe ne doit pas casser : masquer des commandes ne touche a aucun
+       montant. */
+    Fixture.poser(e => {
+      e.budget.categories = ['Courses', 'Sport'];
+      e.budget.retirees = [];
+      e.budget.expenses = [
+        { month: '2026-01-01', v: { Courses: 400, Sport: 60 }, note: '' },
+      ];
+    });
+    const avant = JSON.stringify(Store.state.budget.expenses[0].v);
+    const total = expenseRowTotal(Store.state.budget.expenses[0]);
+    neePlusDetailler();
+    vrai(sansDistinction(), 'le mode est actif');
+    eq(JSON.stringify(Store.state.budget.expenses[0].v), avant,
+      'la ventilation du mois est intacte, à l’octet');
+    pres(expenseRowTotal(Store.state.budget.expenses[0]), total, 'et son total');
+    pres(expenseCategoryTotal('Sport'), 60, 'les montants par catégorie sont là');
+    reprendreLeDetail();
+    for (const c of ['Courses', 'Sport']) {
+      vrai(categoriesSaisie().includes(c), `« ${c} » revient à la saisie`);
     }
   });
 });

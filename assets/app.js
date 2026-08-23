@@ -458,7 +458,8 @@ function choixHypothese(actif) {
      Aucun taux affiche dessous, et c'est voulu : un jeu personnalise peut
      changer plusieurs rendements a la fois, donc en montrer un seul designerait
      le mauvais. Les trois autres n'annoncent que celui du marche parce que c'est
-     le seul que leur scenario fait varier. */
+     celui qui change le plus d'un scenario a l'autre -- le capital garanti varie
+     aussi, de 2 a 3 %, et la ligne sous les paves le dit. */
   const cases = [
     ...SCENARIOS_PROJECTION.map(([cle, nom, taux]) =>
       [cle, nom, `${trad('marché')} ${fmtPct(taux.marche, 0)}`]),
@@ -562,6 +563,7 @@ function pointsEvolution() {
       q[cle] = (q[cle] || 0) - pris;
       reste -= pris;
     }
+    if (reste > 0.005) q.immo = (q.immo || 0) - reste;
     q.total = SERIES_PATRIMOINE().reduce((s, se) => s + (q[se.key] || 0), 0);
     return q;
   });
@@ -2079,7 +2081,11 @@ function viewPositions() {
         <span class="jour-eur">${fmtSigned(j.eur)}</span>
         <span class="jour-pct">${arrow(j.pct)} ${fmtSignedPct(j.pct)}</span>
         <span class="jour-note">${trad('sur ton portefeuille Marchés depuis la clôture d’hier')}${
-          j.lignes.some(l => l.depuisAchat) ? `, ${trad('ou depuis ton achat du jour')}` : ''}</span>
+          j.lignes.some(l => l.depuisAchat) ? `, ${trad('ou depuis ton achat du jour')}` : ''}${
+          j.sansDonnee ? ` · ${
+            (j.sansDonnee > 1 ? trad('{n} lignes sans clôture de référence n’y sont pas comptées')
+                              : trad('{n} ligne sans clôture de référence n’y est pas comptée'))
+              .replace('{n}', j.sansDonnee)}` : ''}</span>
       </div>`}
 
       <div class="jour-lignes">
@@ -5040,7 +5046,7 @@ function viewBudget(section = 'depenses') {
       </table>
     </div>
 
-    <details class="data-view" style="margin-top:12px">
+    ${sansDistinction() ? '' : `    <details class="data-view" style="margin-top:12px">
       <summary>${trad('Renommer, retirer ou supprimer une catégorie')}</summary>
       <table class="editable table-serree">
         <thead><tr><th>${trad('Catégorie')}</th><th>${trad('Total saisi')}</th><th></th></tr></thead>
@@ -5073,7 +5079,7 @@ function viewBudget(section = 'depenses') {
       <p class="hint" style="margin-top:8px">
         <b>${trad('Retirer')}</b> ${trad("garde l'historique,")} <b>${trad('Supprimer')}</b> ${trad("l'efface.")}${aide(trad("Renommer déplace les montants déjà saisis. Retirer sort la catégorie de la saisie du mois sans toucher aux montants passés : c’est le geste pour un poste dans lequel tu ne dépenses plus. Supprimer retire la colonne et tout ce qu’elle contient. Ctrl+Z annule dans les deux cas."))}
       </p>
-    </details>
+    </details>`}
   </div>`}
 
   ${!cadre ? '' : `
@@ -9404,7 +9410,11 @@ function askMonthlySnapshot(index) {
                                dettes: $('#relDettes').value });
       sale = false;
       photoPrise = false;
-      toast(`${fmtMonth(r.date)} · ${fmtEUR0(rowTotal(Store.state.monthly[index]))} ${trad('enregistré')}`);
+      const ligne = Store.state.monthly[index];
+      const brut = rowTotal(ligne), net = rowNet(ligne);
+      toast(`${fmtMonth(r.date)} · ${Math.abs(brut - net) > 0.005
+        ? `${fmtEUR0(brut)} ${trad('brut')} · ${fmtEUR0(net)} ${trad('net')}`
+        : fmtEUR0(net)} ${trad('enregistré')}`);
       return true;
     };
     $('#relOk').onclick = enregistrer;

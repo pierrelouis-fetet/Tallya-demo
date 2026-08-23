@@ -2002,8 +2002,16 @@ function rowTotal(row) {
 function rowNet(row) {
   return rowTotal(row) - num(row.dettes);
 }
+/* Un releve est vide quand il ne porte NI avoir NI dette.
+
+   Le test ne regardait que `v`, les montants par compte : un releve a 0 EUR
+   d'avoirs et 20 000 EUR de dette passait donc pour vide, et disparaissait de
+   tout ce qui derive de cette notion -- le journal, les annees offertes au
+   selecteur, la courbe, les variations, le rythme. Son patrimoine net vaut
+   -20 000 EUR, ce qui est un fait, et le taire etait le seul moyen d'afficher
+   zero a la place. */
 function rowIsEmpty(row) {
-  return Object.values(row.v || {}).every(x => !num(x));
+  return Object.values(row.v || {}).every(x => !num(x)) && !num(row.dettes);
 }
 
 const moisRevolu = (date, aujourdhui = todayISO()) =>
@@ -2128,6 +2136,11 @@ function ensureCalendarMonths(rows, cle, champTexte) {
 function clearMonthRow(row, champTexte) {
   row.v = {};
   row[champTexte] = '';
+  /* La dette part avec les montants, sans quoi le releve qu'on vient d'effacer
+     resterait au journal : il porte encore un capital restant du, donc il n'est
+     plus vide au sens de `rowIsEmpty`. La ligne des depenses n'a pas ce champ,
+     et `delete` sur une clef absente ne fait rien. */
+  delete row.dettes;
 }
 
 const REPORT_JOURS = 7;
@@ -4404,15 +4417,19 @@ function suggestedMonthly() {
    Avant, un seul taux s'appliquait a l'ensemble du patrimoine net. L'apport
    d'un appartement capitalisait donc a 5 % par an comme un ETF, ce qu'un bien
    ne fait pas, et ce qui rendait fausse toute etiquette parlant de rendement
-   boursier. Verifie chez Finary : ils separent « actions » et « autres actifs »
-   avec un rendement propre a chacun. Nous n'en avons qu'un, donc on ne le prete
-   qu'a ce qu'il decrit, et le reste est porte a plat.
+   boursier. Chaque poche a donc son taux -- actifs de marche, autres actifs,
+   capital garanti, liquidites -- et un bien n'entre dans aucune : on ne prete un
+   rendement qu'a ce qu'il decrit, et le reste est porte a plat.
 
    A plat et non exclu : l'apport reste dans le total, parce qu'il fait partie du
    patrimoine et qu'on veut le voir. On ne lui prete simplement aucune
    performance, ce qui est prudent et lisible, plutot qu'une performance
-   inventee. L'amortissement du pret n'est pas modelise non plus, la carte des
-   hypotheses le dit.
+   inventee.
+
+   L'amortissement du pret, lui, EST modelise : `moteurProjection` rembourse mois
+   par mois et ajoute le capital rendu a cette part plate, qui monte donc toute
+   seule. Ce commentaire disait le contraire, et un commentaire qui contredit le
+   calcul fait douter du chiffre juste.
 
    La part plate peut etre negative : un credit a la consommation sans bien en
    face, ou un bien qui vaut moins que son pret. C'est honnete, et ca evite
