@@ -437,6 +437,7 @@ function barreCommutateur(choix, actif, action, cle) {
    reglage relu : ces trois valeurs ne dependent pas de l'etat. */
 const TAUX_DESTINATION = {
   marche: s => s.rate,
+  crypto: s => s.rateCrypto,
   garanti: s => s.rateGaranti,
   nonCote: s => s.rateAutres,
   liquidites: () => 0,
@@ -1392,8 +1393,13 @@ function viewObjective() {
         { label: trad('Rendement du non coté'), value: num(dernier.gainsAutres),
           couleur: couleurClasse('nonCote'), apercu: 'horizon' },
       ] : [
-        { label: trad('Ce que le rendement ajoute'), value: dernier.gains, couleur: S2(), apercu: 'horizon' },
+        { label: trad('Ce que le rendement ajoute'),
+          value: dernier.gains - num(dernier.gainsCrypto), couleur: S2(), apercu: 'horizon' },
       ]),
+      ...(Math.abs(num(dernier.gainsCrypto)) > 0.005 ? [
+        { label: trad('Rendement de la crypto'), value: num(dernier.gainsCrypto),
+          couleur: couleurClasse('crypto'), apercu: 'horizon' },
+      ] : []),
     ].filter(x => Math.abs(num(x.value)) > 0.005)
      .map(x => ({ ...x, pct: dernier.total ? num(x.value) / dernier.total * 100 : 0 }));
     return `
@@ -1502,7 +1508,7 @@ function viewObjective() {
         <div class="modal-champs" style="margin-top:8px">
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('d’actions, d’obligations, d’immobilier coté, de multi-actifs, de métaux précieux et de crypto : tout ce qui se vend sur un marché.')} `
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('d’actions, d’obligations, d’immobilier coté, de multi-actifs et de métaux précieux. La crypto a son propre taux, juste en dessous.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'),
                 /* Le taux EN VIGUEUR, et non celui qui dort dans l'etat.
                    Ces trois champs lisaient `meta.projRate` et compagnie, alors
@@ -1519,6 +1525,10 @@ function viewObjective() {
                 v => `${fmtPct(v, 1)} ${trad('par an')}`,
                 `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`,
                 s.rateGaranti)}
+        ${champ('Rendement de la crypto', 'meta.projRateCrypto', paliers(20, 1),
+                v => `${fmtPct(v, 0)} ${trad('par an')}`,
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.crypto)} ${trad('de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour qu’une hypothèse standard veuille dire quelque chose')}`,
+                s.rateCrypto)}
         <div class="field">
           <label>${trad('Rendement des liquidités')}${aide(
             `${fmtEUR0(capitalisation({ years: 1 }).poches.liquidites)} ${trad('de liquidités,')} `
@@ -1587,6 +1597,10 @@ function viewObjective() {
         ${fmtPct(s.rate)} ${trad('par an sur tes actifs de marché.')}
         ${num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('sur ton non coté.')}`
                             : trad('Ton non coté garde sa valeur actuelle.')}
+        ${num(pochesProjection().crypto)
+          ? (num(s.rateCrypto) ? `${fmtPct(s.rateCrypto)} ${trad('sur ta crypto.')}`
+                               : trad('Ta crypto garde sa valeur actuelle.'))
+          : ''}
         ${trad('Tes liquidités gardent leur valeur, le cash qui attend chez ton courtier compris.')}
       </p>
       ${(() => {
@@ -9626,7 +9640,7 @@ const APERCUS = {
     const aujourdhui = new Date();
     const date = new Date(aujourdhui.getFullYear() + projHorizon, aujourdhui.getMonth(), aujourdhui.getDate());
     const plat = num(p.plat);
-    const base = p.poches.marche + p.poches.autres;
+    const base = p.poches.marche + p.poches.crypto + p.poches.autres;
     const verses = Math.max(0, j.contributed - base - plat);
     return {
       titre: `${trad('Projection à')} ${projHorizon} ${trad('ans')}`,
@@ -9646,8 +9660,13 @@ const APERCUS = {
             meta: `${fmtPct(s.rateAutres, 1)} ${trad('par an')}`, valeur: num(j.gainsAutres) },
         ] : [
           { label: trad('Ce que le rendement ajoute'),
-            meta: `${fmtPct(s.rate, 1)} ${trad('par an sur tes actifs de marché')}`, valeur: j.gains },
+            meta: `${fmtPct(s.rate, 1)} ${trad('par an sur tes actifs de marché')}`,
+            valeur: j.gains - num(j.gainsCrypto) },
         ]),
+        ...(Math.abs(num(j.gainsCrypto)) > 0.005 ? [
+          { label: trad('Rendement de la crypto'),
+            meta: `${fmtPct(s.rateCrypto, 1)} ${trad('par an')}`, valeur: num(j.gainsCrypto) },
+        ] : []),
         { label: trad('Après inflation'), meta: `${fmtPct(s.inflation, 1)} ${trad('par an retirée, en euros d’aujourd’hui')}`, valeur: j.real },
       ],
       vue: 'objective', ancre: '', cta: trad('Voir la trajectoire'),
@@ -9682,13 +9701,20 @@ const APERCUS = {
     const tauxM = `${fmtPct(s.rate)} ${trad('par an')}`;
     const tauxNC = num(s.rateAutres) ? `${fmtPct(s.rateAutres)} ${trad('par an')}` : A_PLAT;
     const tauxG = num(s.rateGaranti) ? `${fmtPct(s.rateGaranti, 1)} ${trad('par an')}` : A_PLAT;
+    /* La crypto porte son taux, plus celui du marche : sa ligne annonçait
+       `tauxM` alors qu'elle n'a plus jamais ce rendement. Un meta qui nomme un
+       taux que le moteur n'applique pas est pire que pas de meta. */
+    const tauxC = num(s.rateCrypto) ? `${fmtPct(s.rateCrypto)} ${trad('par an')}` : A_PLAT;
     return {
       titre: trad('Ce que tu as déjà'),
       sous: trad('La base de la projection') + (num(t.immo) ? trad(', ton immobilier à part') : ''),
-      total: q.marche + q.autres,
+      /* La crypto entre dans le total : elle a quitte `q.marche` sans quitter
+         la liste, donc six lignes auraient fait plus que le total annonce --
+         exactement le defaut que le commentaire ci-dessous raconte. */
+      total: q.marche + q.crypto + q.autres,
       totalNote: trad('chaque ligne porte le taux qui lui est appliqué'),
       /* Une ligne par poche que la projection distingue, et la liste doit les
-         couvrir toutes : le total vient de `q.marche + q.autres`, donc une poche
+         couvrir toutes : le total vient de `q.marche + q.crypto + q.autres`, donc une poche
          oubliee ici se compte dans le total sans apparaitre nulle part. Le
          capital garanti a manque, et la fenetre annonçait 86 551 EUR pour
          quatre lignes qui en faisaient 76 551. La somme des parts fait le
@@ -9697,8 +9723,7 @@ const APERCUS = {
         { label: trad('Actifs de marché'), meta: tauxM,
           valeur: num(t.bourse) - num(t.projetParPoche?.bourse) },
         { label: trad('Capital garanti'), meta: tauxG, valeur: q.garanti },
-        { label: trad('Cryptomonnaies'), meta: tauxM,
-          valeur: num(t.crypto) - num(t.projetParPoche?.crypto) },
+        { label: trad('Cryptomonnaies'), meta: tauxC, valeur: q.crypto },
         { label: trad('Non coté'), meta: tauxNC, valeur: q.nonCote },
         { label: trad('Liquidités'), meta: A_PLAT, valeur: q.liquidites },
         { label: trad('Réservé à un projet'), meta: A_PLAT, valeur: q.projet },
@@ -11396,6 +11421,7 @@ function bindGlobal() {
       if (f.dataset.path !== 'meta.projRate') m.projRate = tauxAvant.rate;
       if (f.dataset.path !== 'meta.projRateAutres') m.projRateAutres = tauxAvant.rateAutres;
       if (f.dataset.path !== 'meta.projRateGaranti') m.projRateGaranti = tauxAvant.rateGaranti;
+      if (f.dataset.path !== 'meta.projRateCrypto') m.projRateCrypto = tauxAvant.rateCrypto;
       m.projScenario = 'perso';
     }
     /* `change` clot une saisie — une liste choisie, un champ quitte — donc rien a

@@ -914,7 +914,6 @@ const I18N = {
     "Projette ton patrimoine selon ton épargne et différentes hypothèses de rendement.": "Projects your wealth from your savings and a range of return assumptions.",
     "hypothèses de simulation, pas prévisions de marché": "simulation assumptions, not market forecasts",
     "Où va ton épargne future.": "Where your future savings go.",
-    "d’actions, d’obligations, d’immobilier coté, de multi-actifs, de métaux précieux et de crypto : tout ce qui se vend sur un marché.": "of shares, bonds, listed property, multi-asset funds, precious metals and crypto: everything that trades on a market.",
     "Capacité d’épargne": "Savings capacity",
     "= Capacité d’épargne": "= Savings capacity",
     "Accumulation patrimoniale théorique": "Theoretical wealth accumulation",
@@ -1590,6 +1589,14 @@ const I18N = {
     "Effet": "Impact",
 
     "Dernier relevé,": "Last statement,",
+    "Rendement de la crypto": "Crypto return",
+    "sur ta crypto.": "on your crypto.",
+    "Ta crypto garde sa valeur actuelle.": "Your crypto holds its current value.",
+    "de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour qu’une hypothèse standard veuille dire quelque chose":
+      "of cryptocurrencies. Value held constant by default: its path is too uncertain for a standard assumption to mean anything",
+    "d’actions, d’obligations, d’immobilier coté, de multi-actifs et de métaux précieux. La crypto a son propre taux, juste en dessous.":
+      "of equities, bonds, listed property, multi-asset funds and precious metals. Crypto has its own rate, just below.",
+    "Crypto": "Crypto",
     "{n} montants déjà répartis, {v}": "{n} amounts already split, {v}",
     "{n} montant déjà réparti, {v}": "{n} amount already split, {v}",
     "Reste sur l’objectif": "Left on the target",

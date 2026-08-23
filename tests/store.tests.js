@@ -17075,6 +17075,241 @@ suite('Un dépliant ouvert est un dépliant fermé', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Projection : la crypto est une poche, pas un actif de marche
+   ------------------------------------------------------------------ */
+suite('La crypto se projette pour elle-même', () => {
+
+  /* Elle vivait dans « Actifs de marche » : `pochesProjection` faisait
+     `marche: bourse + crypto`, donc un bitcoin capitalisait a 8 % l'an sous le
+     scenario Dynamique, comme un ETF monde. Deux actifs dont la nature ne se
+     ressemble pas sous une meme hypothese, et l'ecran ne le disait pas.
+
+     Zero par defaut, et ce n'est pas une prevision de stagnation : c'est le
+     refus d'une fausse precision, exactement la regle du non cote. */
+
+  /* Un patrimoine ou les deux poches sont nettes et rondes : 20 000 de titres,
+     5 000 de crypto, et rien d'autre qui capitalise. */
+  const marcheEtCrypto = e => {
+    e.positions = [];
+    e.comptes = [
+      { id: 'c_cto', etabId: 'e_courtier', type: 'cto', nom: 'CTO',
+        ouvertLe: '2020-01-01', cash: [],
+        lignes: [{ id: 'l_etf', classe: 'actions', libelle: 'ETF', valeur: 20000,
+                   prixDeRevient: 20000 }] },
+      { id: 'c_crypto', etabId: 'e_courtier', type: 'crypto', nom: 'Wallet',
+        ouvertLe: '2021-01-01', cash: [],
+        lignes: [{ id: 'l_btc', classe: 'crypto', libelle: 'BTC', valeur: 5000,
+                   prixDeRevient: 5000 }] },
+    ];
+    e.etabs = [{ id: 'e_courtier', nom: 'Courtier', notes: '', dettes: [] }];
+    e.monthly = [];
+    e.meta.projMonthly = 0;
+    e.meta.projInflation = 0;
+    e.meta.projTarget = 0;
+    e.meta.projScenario = 'central';
+  };
+
+  test('vingt mille de titres et cinq mille de crypto font deux poches', () => {
+    Fixture.poser(marcheEtCrypto);
+    const p = pochesProjection();
+    pres(p.marche, 20000, 'les titres restent seuls dans les actifs de marché');
+    pres(p.crypto, 5000, 'et la crypto a la sienne');
+    vrai(p.marche !== 25000, 'surtout pas 25 000 sous un seul taux');
+  });
+
+  test('la somme du patrimoine initial ne bouge pas d’un centime', () => {
+    /* Le point qui compte : la frontiere entre deux poches se deplace, le total
+       non. Ni perte, ni doublon. */
+    Fixture.poser(marcheEtCrypto);
+    const t = nowTotals();
+    const p = pochesProjection();
+    const ancienMarche = num(t.bourse) + num(t.crypto)
+      - num(t.projetParPoche?.bourse) - num(t.projetParPoche?.crypto);
+    pres(p.marche + p.crypto, ancienMarche,
+      'marché plus crypto vaut exactement l’ancienne poche fusionnée');
+    const c = configProjection({ years: 10 });
+    pres(c.start, p.marche + p.crypto + p.autres,
+      'et la base qui capitalise les compte toutes');
+    pres(c.marche + c.crypto + c.nonCote + c.garanti + c.liquidites, c.start,
+      'la somme des départs égale cette base');
+  });
+
+  test('scénario central : le marché monte, la crypto reste', () => {
+    Fixture.poser(marcheEtCrypto);
+    const c = configProjection({ years: 10 });
+    pres(c.rate, 6, 'six pour cent sur les actifs de marché');
+    pres(c.rateCrypto, 0, 'zéro sur la crypto');
+    const m = moteurProjection(c);
+    pres(m.final.poches.marche, 20000 * Math.pow(1.06, 10),
+      'les titres suivent leur taux');
+    pres(m.final.poches.crypto, 5000,
+      'la crypto reste constante nominalement, sans versement');
+    pres(m.final.total,
+      Object.values(m.final.poches).reduce((s, x) => s + x, 0),
+      'et le total égale la somme des poches');
+  });
+
+  test('les trois scénarios laissent la crypto à zéro', () => {
+    for (const [cle] of SCENARIOS_PROJECTION) {
+      Fixture.poser(e => { marcheEtCrypto(e); e.meta.projScenario = cle; });
+      pres(configProjection({ years: 5 }).rateCrypto, 0,
+        `« ${cle} » ne suppose aucune revalorisation de la crypto`);
+    }
+    /* Et la table est la seule source : un scenario ajoute demain devra porter
+       sa colonne, sinon `preset[cle]` rendrait `undefined`. */
+    for (const [cle, , taux] of SCENARIOS_PROJECTION) {
+      vrai(taux.crypto === 0, `le scénario « ${cle} » déclare crypto: 0`);
+    }
+  });
+
+  test('un taux crypto personnalisé s’applique sans toucher au marché', () => {
+    Fixture.poser(e => {
+      marcheEtCrypto(e);
+      e.meta.projScenario = 'perso';
+      e.meta.projRate = 6; e.meta.projRateAutres = 0; e.meta.projRateGaranti = 2.5;
+      e.meta.projRateCrypto = 10;
+    });
+    const m = moteurProjection(configProjection({ years: 10 }));
+    pres(m.final.poches.crypto, 5000 * Math.pow(1.10, 10),
+      'la crypto suit ses dix pour cent');
+    pres(m.final.poches.marche, 20000 * Math.pow(1.06, 10),
+      'et le marché garde les siens');
+  });
+
+  test('un ancien réglage personnalisé n’hérite pas du taux du marché', () => {
+    /* La retrocompatibilite, et c'est la moitie la plus facile a rater : un etat
+       ecrit avant cette poche porte `projRate: 7` et aucun champ crypto. Rien ne
+       doit appliquer 7 % a la crypto, et aucune autre hypothese ne doit bouger.
+
+       Aucune migration n'est ecrite et il n'en faut pas : en personnalise,
+       `num(undefined)` vaut zero. Un etat deduit ne peut pas se contredire avec
+       celui qu'il decrit. */
+    Fixture.poser(e => {
+      marcheEtCrypto(e);
+      e.meta.projScenario = 'perso';
+      e.meta.projRate = 7; e.meta.projRateAutres = 3; e.meta.projRateGaranti = 2;
+      delete e.meta.projRateCrypto;
+    });
+    const s = projectionSettings();
+    pres(s.rateCrypto, 0, 'la crypto part de zéro');
+    pres(s.rate, 7, 'le marché garde ses sept');
+    pres(s.rateAutres, 3, 'le non coté ses trois');
+    pres(s.rateGaranti, 2, 'le garanti ses deux');
+  });
+
+  test('l’inflation traite la crypto comme les autres poches', () => {
+    /* Valeur nominale constante a taux nul, et pouvoir d'achat qui baisse : la
+       convention ne change pas, c'est le meme retrait sur le total. */
+    Fixture.poser(e => { marcheEtCrypto(e); e.meta.projInflation = 2; });
+    const m = moteurProjection(configProjection({ years: 20 }));
+    pres(m.final.poches.crypto, 5000, 'nominalement, la crypto n’a pas bougé');
+    vrai(m.final.real < m.final.total,
+      'mais le total en euros d’aujourd’hui est inférieur au nominal');
+  });
+
+  test('la crypto peut recevoir le versement mensuel', () => {
+    /* Une poche qu'on projette et ou l'on ne peut rien verser serait une demi
+       poche, et acheter la meme somme chaque mois est precisement ce que font
+       ceux qui en detiennent. A taux nul, ce qu'on y verse s'accumule a plat. */
+    vrai(VERSEMENT_VERS.some(([c]) => c === 'crypto'),
+      'la crypto est une destination offerte');
+    Fixture.poser(e => {
+      marcheEtCrypto(e);
+      e.meta.projVersementVers = 'crypto';
+      e.meta.projMonthly = 100;
+    });
+    const f = repartitionVersement();
+    pres(f.crypto, 1, 'tout le versement y va');
+    pres(Object.values(f).reduce((s, x) => s + x, 0), 1, 'et les parts font un');
+    const m = moteurProjection(configProjection({ years: 10 }));
+    pres(m.final.poches.crypto, 5000 + 100 * 120,
+      'à taux nul, cent euros par mois pendant dix ans s’y accumulent à plat');
+    pres(m.final.poches.marche, 20000 * Math.pow(1.06, 10),
+      'et le marché ne reçoit rien');
+  });
+
+  test('les cartes qui ventilent le futur font toujours leur total', () => {
+    /* Une poche qui sort d'une somme sans sortir de la liste, ou l'inverse :
+       c'est le defaut que cette separation pouvait produire, et il s'est
+       presente trois fois.
+
+       - « Ce que tu as deja » totalisait `marche + autres`, et la crypto avait
+         quitte `marche` sans quitter sa ligne : six lignes pour un total qui
+         n'en comptait que cinq. La fiche avait deja paye ce defaut une fois avec
+         le capital garanti, 86 551 EUR annonces pour 76 551 affiches.
+       - « De quoi sera fait ton patrimoine » et la fiche de l'horizon replient
+         tout le rendement en une ligne quand le non cote est a zero, et
+         `gains` contient le gain de la crypto : la ligne crypto au-dessus
+         l'aurait compte deux fois.
+
+       Le controle est textuel parce que ces trois cartes sont des vues, mais il
+       vise l'arithmetique, pas la formulation. */
+    const src = lireSource('assets/app.js');
+    const fiche = src.slice(src.indexOf('baseProjection: () =>'),
+                            src.indexOf('immobilierNet: () =>'));
+    vrai(/total: q\.marche \+ q\.crypto \+ q\.autres/.test(fiche),
+      '« Ce que tu as déjà » compte la crypto dans son total, comme dans ses lignes');
+    vrai(/valeur: q\.crypto/.test(fiche),
+      'et sa ligne lit la même poche que ce total');
+    vrai(!/trad\('Cryptomonnaies'\), meta: tauxM/.test(fiche),
+      'la ligne n’annonce plus le taux du marché, qu’elle ne reçoit plus');
+
+    /* Les deux replis agreges retranchent le gain de la crypto. A crypto nulle
+       le retrait vaut zero, donc la carte de quelqu'un qui n'en a pas est
+       exactement celle d'avant. */
+    /* Les deux endroits ou la phrase porte un montant, et non la legende du
+       graphique qui la reprend sans chiffre : ce sont ceux precedes de
+       `label:`. */
+    const morceaux = src.split("trad('Ce que le rendement ajoute')");
+    const replis = morceaux.slice(0, -1)
+      .map((avant, i) => ({ avant, apres: morceaux[i + 1] }))
+      .filter(x => /label:\s*$/.test(x.avant.slice(-40)));
+    eq(replis.length, 2, 'les deux replis agrégés sont là, la légende exclue');
+    for (const r of replis) {
+      vrai(/(dernier|j)\.gains - num\((dernier|j)\.gainsCrypto\)/.test(r.apres.slice(0, 300)),
+        'le repli retranche le gain déjà montré par la ligne crypto');
+    }
+  });
+
+  test('chaque destination de versement porte le taux qui lui est appliqué', () => {
+    /* `TAUX_DESTINATION` sert a la phrase « cette poche ne produit aucun
+       rendement » sous le selecteur. Une destination absente de la table retombe
+       sur le repli, donc sur le taux du marche : choisir la crypto aurait fait
+       annoncer 6 % sur une poche a zero. Deux listes pour une seule verite, et
+       c'est la seconde qui aurait menti. */
+    const src = lireSource('assets/app.js');
+    const table = src.slice(src.indexOf('const TAUX_DESTINATION = {'),
+                            src.indexOf('const tauxDeDestination'));
+    for (const [cle] of VERSEMENT_VERS) {
+      vrai(new RegExp('^\\s*' + cle + ':', 'm').test(table),
+        `« ${cle} » a son taux dans la table, pas celui du repli`);
+    }
+    vrai(/crypto: s => s\.rateCrypto/.test(table),
+      'et la crypto porte le sien, pas celui du marché');
+  });
+
+  test('la crypto ne se présente plus comme un actif de marché', () => {
+    /* Allocation distingue deja les deux classes. Projection suivait une autre
+       taxonomie, et son infobulle disait « et de crypto » sous le taux du
+       marche : le texte annonçait le defaut. */
+    const src = lireSource('assets/app.js').replace(/'\s*\+\s*'/g, '');
+    vrai(!/de métaux précieux et de crypto/.test(src),
+      'l’infobulle du taux du marché ne compte plus la crypto');
+    vrai(/La crypto a son propre taux/.test(src),
+      'elle dit où le régler à la place');
+    /* Le reglage vit dans le depliant, pas au premier niveau : la page garde
+       ses quatre commandes. */
+    const vue = src.slice(src.indexOf('function viewObjective'),
+                          src.indexOf('function mountObjective'));
+    const i = vue.indexOf("'meta.projRateCrypto'");
+    vrai(i > 0, 'le champ existe');
+    const depliant = vue.lastIndexOf('<details', i);
+    vrai(depliant > 0 && depliant < i,
+      'et il vit dans le dépliant des hypothèses, comme le non coté');
+  });
+});
+
 suite('Un identifiant ne se porte qu’une fois', () => {
 
   test('aucun conteneur de graphique n’est en double', () => {
@@ -17948,14 +18183,20 @@ suite('Un scénario nommé plutôt qu’un rendement à deviner', () => {
   });
 
   test('chaque destination reçoit tout le versement, et les parts font un', () => {
-    /* Une poche recoit, les trois autres rien. La regle qui compte est que les
-       quatre fractions fassent exactement un : en dessous, un euro verse se
-       perd ; au-dessus, la projection en invente. */
+    /* Une poche recoit, les autres rien. La regle qui compte est que la somme
+       des fractions fasse exactement un : en dessous, un euro verse se perd ;
+       au-dessus, la projection en invente.
+
+       La somme se fait sur les clefs RENDUES, non sur une liste ecrite ici : la
+       crypto est devenue une destination, et un compte fige aurait laisse passer
+       une poche qui recoit sans entrer dans le total. */
     for (const [poche] of VERSEMENT_VERS) {
       Fixture.poser(s => { s.meta.projVersementVers = poche; });
       const f = repartitionVersement();
-      pres(f.marche + f.nonCote + f.garanti + f.liquidites, 1,
-        `« ${poche} » : les quatre parts doivent faire exactement un`);
+      eq(Object.keys(f).length, VERSEMENT_VERS.length,
+        'une fraction par destination, ni plus ni moins');
+      pres(Object.values(f).reduce((s, x) => s + x, 0), 1,
+        `« ${poche} » : les parts doivent faire exactement un`);
       pres(f[poche], 1, `« ${poche} » doit recevoir tout le versement`);
     }
   });

@@ -4228,14 +4228,15 @@ const PROJECTION_CHOICES = [...new Set([
 
    Ces valeurs se modifient ici, et nulle part ailleurs. */
 const SCENARIOS_PROJECTION = [
-  ['prudent',   'Prudent',   { marche: 4, garanti: 2,   nonCote: 0, liquidites: 0 }],
-  ['central',   'Central',   { marche: 6, garanti: 2.5, nonCote: 0, liquidites: 0 }],
-  ['dynamique', 'Dynamique', { marche: 8, garanti: 3,   nonCote: 0, liquidites: 0 }],
+  ['prudent',   'Prudent',   { marche: 4, garanti: 2,   nonCote: 0, crypto: 0, liquidites: 0 }],
+  ['central',   'Central',   { marche: 6, garanti: 2.5, nonCote: 0, crypto: 0, liquidites: 0 }],
+  ['dynamique', 'Dynamique', { marche: 8, garanti: 3,   nonCote: 0, crypto: 0, liquidites: 0 }],
 ];
 const TAUX_SCENARIO = Object.fromEntries(SCENARIOS_PROJECTION.map(([c, , r]) => [c, r]));
 const SCENARIO_DEFAUT = 'central';
 
-const TAUX_PROJECTION = ['meta.projRate', 'meta.projRateAutres', 'meta.projRateGaranti'];
+const TAUX_PROJECTION = ['meta.projRate', 'meta.projRateAutres',
+                         'meta.projRateGaranti', 'meta.projRateCrypto'];
 
 const nomScenario = cle => (Object.fromEntries(
   SCENARIOS_PROJECTION.map(([c, l]) => [c, l]))[cle] || 'Personnalisé');
@@ -4281,6 +4282,12 @@ function projectionSettings() {
     rate: taux('projRate', 'marche'),
     rateAutres: taux('projRateAutres', 'nonCote'),
     rateGaranti: taux('projRateGaranti', 'garanti'),
+    /* Le taux de la crypto, zero par defaut comme le non cote. Aucune migration
+       n'est ecrite et il n'en faut pas : en scenario nomme, c'est la table qui
+       repond ; en personnalise, `num(undefined)` vaut zero. Un ancien reglage
+       ou le marche etait a 7 % garde donc ses 7 % et la crypto part de zero,
+       sans qu'aucune autre hypothese ne bouge. */
+    rateCrypto: taux('projRateCrypto', 'crypto'),
     versementVers: m.projVersementVers || 'marche',
     inflation: num(m.projInflation),
     target: num(m.projTarget),
@@ -4289,16 +4296,16 @@ function projectionSettings() {
 
 const VERSEMENT_VERS = [
   ['marche',     'Actifs de marché'],
+  ['crypto',     'Crypto'],
   ['garanti',    'Capital garanti'],
   ['nonCote',    'Non coté'],
   ['liquidites', 'Liquidités'],
 ];
 
 function repartitionVersement(s = projectionSettings()) {
-  const nul = { marche: 0, nonCote: 0, garanti: 0, liquidites: 0 };
-  const vers = s.versementVers;
-  const poche = ['liquidites', 'nonCote', 'garanti'].includes(vers) ? vers : 'marche';
-  return { ...nul, [poche]: 1 };
+  const nul = Object.fromEntries(VERSEMENT_VERS.map(([c]) => [c, 0]));
+  const connue = VERSEMENT_VERS.some(([c]) => c === s.versementVers);
+  return { ...nul, [connue ? s.versementVers : 'marche']: 1 };
 }
 
 /* Versement mensuel proposé par défaut : le cash que ton budget laisse
@@ -4368,14 +4375,16 @@ function pochesProjection(t = nowTotals()) {
     /* Chaque poche est amputee de ce qu'elle a de reserve : sans cela le total
        compterait ces euros deux fois, ici et dans `projet`. La regle de la
        maison, litteralement — un total egale la somme de ses parts. */
-    marche: num(t.bourse) + num(t.crypto)
-          - num(t.projetParPoche?.bourse) - num(t.projetParPoche?.crypto),
+    marche: num(t.bourse) - num(t.projetParPoche?.bourse),
+    crypto: num(t.crypto) - num(t.projetParPoche?.crypto),
     nonCote: num(t.pe) - num(t.projetParPoche?.nonCote),
     liquidites: num(t.cash),
     garanti: num(t.garanti) - num(t.projetParPoche?.garanti),
     projet: num(t.projet),
     /* `autres` reste rendu, somme des quatre : plusieurs appelants la lisent, et
-       un total doit continuer d'egaler la somme de ses parts. */
+       un total doit continuer d'egaler la somme de ses parts. La crypto n'y
+       entre pas -- `configProjection` repartit ce reste entre les quatre au
+       prorata, et la crypto a son propre depart, comme le marche. */
     get autres() { return this.nonCote + this.liquidites + this.garanti + this.projet; },
     plat: partPlate(t),
   };
@@ -4408,9 +4417,14 @@ function configProjection(opts = {}) {
      elle n'est pas imposee, elle se repartit entre les poches ; quand elle
      l'est, tout va au marche, ce qui reproduit l'ancien comportement. */
   const impose = opts.start != null;
-  const start = impose ? num(opts.start) : poches.marche + poches.autres;
+  const start = impose ? num(opts.start)
+                       : poches.marche + poches.crypto + poches.autres;
   const departMarche = impose ? num(opts.start) : poches.marche;
-  const resteAutres = start - departMarche;
+  /* Impose, tout va au marche : c'est l'ancien comportement, et les appelants
+     qui forcent `start` -- la fiche « horizon », `targetRequirements` -- doivent
+     continuer de le trouver. */
+  const departCrypto = impose ? 0 : poches.crypto;
+  const resteAutres = start - departMarche - departCrypto;
   const part = q => (poches.autres ? q / poches.autres : 0);
   const departNonCote = resteAutres * part(poches.nonCote);
   const departGaranti = resteAutres * part(poches.garanti);
@@ -4419,16 +4433,18 @@ function configProjection(opts = {}) {
 
   return {
     settings: s, start, plat, poches,
-    marche: departMarche, nonCote: departNonCote, garanti: departGaranti,
+    marche: departMarche, crypto: departCrypto,
+    nonCote: departNonCote, garanti: departGaranti,
     liquidites: departLiquides + departProjet,
     rate: s.rate, rateNonCote: s.rateAutres, rateGaranti: s.rateGaranti,
+    rateCrypto: s.rateCrypto,
     monthly: s.monthly, inflation: s.inflation, target: s.target,
     /* Quand `plat` ou `start` est impose, aucune dette n'est amortie : le
        patrimoine plat est alors une donnee d'entree, pas le solde d'un bien et
        d'un emprunt. */
     dettes: (impose || opts.plat != null) ? [] : dettesAmortissables(),
     fractions: impose
-      ? { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 }
+      ? { marche: 1, crypto: 0, nonCote: 0, garanti: 0, liquidites: 0 }
       : repartitionVersement(s),
     mois: Math.round((opts.years || Math.max(...PROJECTION_HORIZONS)) * 12),
   };
@@ -4466,19 +4482,23 @@ function moteurProjection(c) {
   const rMarche = parMois(c.rate);
   const rNonCote = parMois(c.rateNonCote);
   const rGaranti = parMois(c.rateGaranti);
+  const rCrypto = parMois(c.rateCrypto);
   const f = c.fractions;
   const vm = c.monthly * f.marche, vn = c.monthly * f.nonCote;
   const vg = c.monthly * f.garanti, vl = c.monthly * f.liquidites;
+  const vc = c.monthly * num(f.crypto);
 
   let marche = c.marche, nonCote = c.nonCote;
   let garanti = c.garanti, liquidites = c.liquidites;
+  let crypto = num(c.crypto);
   const dettes = c.dettes.map(d => ({ ...d }));
   let capitalRendu = 0;
 
   const aujourdhui = new Date();
   const anneeDebut = aujourdhui.getFullYear();
   const moisDebut = aujourdhui.getMonth();
-  const total0 = c.marche + c.nonCote + c.garanti + c.liquidites + c.plat;
+  const total0 = c.marche + num(c.crypto) + c.nonCote + c.garanti
+               + c.liquidites + c.plat;
   const points = [{ year: anneeDebut, label: String(anneeDebut),
                     contributed: total0, gains: 0, total: total0, real: total0 }];
   let atteinte = c.target > 0 && total0 >= c.target
@@ -4488,6 +4508,7 @@ function moteurProjection(c) {
 
   for (let mois = 1; mois <= c.mois; mois++) {
     marche = marche * (1 + rMarche) + vm;
+    crypto = crypto * (1 + rCrypto) + vc;
     nonCote = nonCote * (1 + rNonCote) + vn;
     garanti = garanti * (1 + rGaranti) + vg;
     liquidites += vl;
@@ -4499,7 +4520,7 @@ function moteurProjection(c) {
     }
 
     const plat = c.plat + capitalRendu;
-    const total = marche + nonCote + garanti + liquidites + plat;
+    const total = marche + crypto + nonCote + garanti + liquidites + plat;
     if (!atteinte && c.target > 0 && total >= c.target) {
       const date = new Date(anneeDebut, moisDebut + mois, 1);
       atteinte = { dejaAtteinte: false, monthsFromNow: mois,
@@ -4521,24 +4542,31 @@ function moteurProjection(c) {
   function pointDe(mois) {
     const an = mois / 12;
     const plat = c.plat + capitalRendu;
-    const total = marche + nonCote + garanti + liquidites + plat;
+    const total = marche + crypto + nonCote + garanti + liquidites + plat;
     const cumul = mois * c.monthly;
     const misMarche = c.marche + cumul * f.marche;
+    const misCrypto = num(c.crypto) + cumul * num(f.crypto);
     const misNonCote = c.nonCote + cumul * f.nonCote;
     const misGaranti = c.garanti + cumul * f.garanti;
     const misLiquides = c.liquidites + cumul * f.liquidites;
     return {
       year: anneeDebut + Math.round(an), label: String(anneeDebut + Math.round(an)),
       mois,
-      contributed: misMarche + misNonCote + misGaranti + misLiquides + plat,
-      gains: (marche - misMarche) + (nonCote - misNonCote)
+      contributed: misMarche + misCrypto + misNonCote + misGaranti
+                 + misLiquides + plat,
+      gains: (marche - misMarche) + (crypto - misCrypto) + (nonCote - misNonCote)
            + (garanti - misGaranti) + (liquidites - misLiquides),
       gainsMarche: marche - misMarche,
+      /* `gainsAutres` garde son perimetre : le non cote, le garanti et les
+         liquidites. La crypto a le sien, nomme, sans quoi son gain se serait
+         glisse dans une somme dont le libelle ne l'annonce pas. */
       gainsAutres: (nonCote - misNonCote) + (garanti - misGaranti)
                  + (liquidites - misLiquides),
+      gainsCrypto: crypto - misCrypto,
       gainsNonCote: nonCote - misNonCote,
       gainsLiquidites: liquidites - misLiquides,
       gainsGaranti: garanti - misGaranti,
+      poches: { marche, crypto, nonCote, garanti, liquidites, plat },
       capitalRendu, plat, total,
       real: total / Math.pow(1 + num(c.inflation) / 100, mois / 12),
     };
