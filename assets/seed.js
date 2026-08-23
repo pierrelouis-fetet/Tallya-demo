@@ -302,11 +302,10 @@ const SEED = {
        d'actions — et cette répartition est à 60 % en actions. Un mélange
        prudent décrirait autre chose que ce qu'elle porte.
 
-       Le non coté, la crypto et les liquidités restent à zéro dans les trois
-       scénarios : l'application n'affirme aucun rendement sur des parts
-       illiquides sans prix de marché, sur un actif dont l'évolution est trop
-       incertaine pour qu'une hypothèse standard veuille dire quelque chose, ni
-       sur un compte qui ne rapporte rien. */
+       Les autres actifs et les liquidités restent à zéro dans les trois
+       scénarios : l'application n'affirme aucun rendement sur ce qu'elle ne sait
+       pas projeter — crypto, métaux précieux, non coté — ni sur un compte qui ne
+       rapporte rien. */
     projInflation: 2,    // pour traduire le résultat en euros d'aujourd'hui
     projTarget: 0,       // cible long terme, optionnelle
     projHorizon: 20,     // horizon affiche par la vue Objectif

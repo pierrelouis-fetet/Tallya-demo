@@ -455,7 +455,6 @@ const I18N = {
     "Qu’ajoutes-tu ?": "What are you adding?",
     "Rembourse un crédit ?": "Repays a loan?",
     "Rendement des actifs de marché": "Return on market assets",
-    "Rendement du non coté": "Return on private assets",
     "Retirer ce placement": "Remove this investment",
     "Rythme nécessaire": "Pace needed",
     "Réparti par enveloppe": "Split by wrapper",
@@ -1060,7 +1059,6 @@ const I18N = {
     "Hypothèses équilibrées pour une projection long terme.": "Balanced assumptions for a long-term projection.",
     "Hypothèses plus favorables, mais encore plausibles.": "More favourable assumptions, still plausible.",
     "Tes propres taux, posés plus bas.": "Your own rates, set further down.",
-    "Ton non coté garde sa valeur actuelle.": "Your private assets keep their current value.",
     "Tes liquidités gardent leur valeur, le cash qui attend chez ton courtier compris.": "Your cash keeps its value, including what waits at your broker.",
     "Les rendements des scénarios sont nominaux : l’inflation se retire ensuite, une fois, sur le total. La ligne « Après inflation » donne donc le résultat en euros d’aujourd’hui, c’est-à-dire ce que cette somme permettrait d’acheter aux prix que tu connais.": "Scenario returns are nominal: inflation is taken out afterwards, once, from the total. The “After inflation” line therefore gives the result in today’s euros: what that sum would buy at the prices you know.",
     "Ces valeurs sont des hypothèses de simulation, pas des prévisions de rendement. Les marchés peuvent évoluer très différemment. Le scénario fixe un rendement par poche ; tu peux les poser toi-même plus bas.": "These are simulation assumptions, not return forecasts. Markets can behave very differently. The scenario sets one rate per pocket; you can set them yourself further down.",
@@ -1376,7 +1374,6 @@ const I18N = {
     "par an": "per year",
     "C’est une hypothèse de travail : aucun rendement n’est garanti": "It is a working assumption: no return is guaranteed",
     "aucun, porté à plat": "none, carried flat",
-    "de parts non cotées et de financement participatif. Zéro par défaut : personne ne connaît le rendement de parts non cotées, et c’est à toi de l’affirmer, pas à l’application": "in unlisted stakes and crowdlending. Zero by default: nobody knows the return of unlisted stakes, and it is yours to assert, not the app’s",
     "Rendement des liquidités": "Return on cash",
     "de liquidités,": "in cash,",
     "livret ou non, y compris le cash déjà chez ton courtier : tant qu’il n’est pas placé, il ne rapporte rien. Elles traversent donc la projection telles quelles, et il n’y a rien à régler.": "savings account or not, including the cash already sitting at your broker: as long as it is not invested, it earns nothing. It goes through the projection as is, and there is nothing to adjust.",
@@ -1409,7 +1406,6 @@ const I18N = {
     "ans, jusqu’en": "years, until",
     "Si le rendement fait deux points de plus ou de moins": "If the return comes in two points higher or lower",
     "par an sur tes actifs de marché.": "per year on your market assets.",
-    "sur ton non coté.": "on your private assets.",
     "Ton non coté est porté à plat.": "Your private assets are carried flat.",
     "Tes liquidités sont portées à plat, le cash qui attend chez ton courtier compris.": "Your cash is carried flat, including the cash waiting at your broker.",
     "Ton immobilier et tes biens sont portés à leur": "Your property and valuables are carried at their",
@@ -1589,13 +1585,18 @@ const I18N = {
     "Effet": "Impact",
 
     "Dernier relevé,": "Last statement,",
-    "Rendement de la crypto": "Crypto return",
-    "sur ta crypto.": "on your crypto.",
-    "Ta crypto garde sa valeur actuelle.": "Your crypto holds its current value.",
-    "de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour une hypothèse standard":
-      "of cryptocurrencies. Value held constant by default: its path is too uncertain for a standard assumption",
-    "d’actions, d’obligations, d’immobilier coté, de multi-actifs et de métaux précieux. La crypto a son propre taux, juste en dessous.":
-      "of equities, bonds, listed property, multi-asset funds and precious metals. Crypto has its own rate, just below.",
+    "Autres actifs": "Other assets",
+    "autres actifs": "other assets",
+    "sur tes autres actifs.": "on your other assets.",
+    "Tes autres actifs gardent leur valeur actuelle.": "Your other assets hold their current value.",
+    "selon tes hypothèses": "per your assumptions",
+    "Chaque poche capitalise à son propre taux : déplie « Personnaliser les hypothèses » pour les voir":
+      "Each pocket compounds at its own rate: open “Customise the assumptions” to see them",
+    "de crypto, de métaux précieux et de non coté. Valeur constante par défaut : trop incertains pour une hypothèse standard":
+      "of crypto, precious metals and private assets. Value held constant by default: too uncertain for a standard assumption",
+    "de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux et le non coté ont leur propre hypothèse, juste en dessous.":
+      "of listed financial portfolio, to which Tallya applies the scenario's return. Crypto, precious metals and private assets have their own assumption, just below.",
+    "Rendement des autres actifs": "Other assets return",
     "Crypto": "Crypto",
     "{n} montants déjà répartis, {v}": "{n} amounts already split, {v}",
     "{n} montant déjà réparti, {v}": "{n} amount already split, {v}",

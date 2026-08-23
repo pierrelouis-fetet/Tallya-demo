@@ -3033,8 +3033,10 @@ suite('Projection de capitalisation', () => {
        separement. */
     Fixture.poser();
     const q = pochesProjection();
-    pres(q.marche + q.autres + q.plat, patrimoine().net,
-      'marché + autres + plat = patrimoine net');
+    pres(q.placees + q.plat, patrimoine().net,
+      'ce qui capitalise, plus ce qui est porté à plat, fait le patrimoine net');
+    pres(q.placees, q.marche + q.autres + q.garanti + q.liquidites + q.projet,
+      'et « placees » est bien la somme des poches, non un second calcul');
     /* Et le cash « à investir » est du côté des liquidités, pas du marché.
 
        Cette assertion disait exactement l'inverse, et elle passait : elle
@@ -3046,8 +3048,8 @@ suite('Projection de capitalisation', () => {
        plus changer de côté sans qu'une des deux tombe. */
     pres(q.liquidites, nowTotals().cash,
       'les liquidités de la projection sont celles de l’accueil, cash à investir compris');
-    pres(q.marche, num(nowTotals().bourse) + num(nowTotals().crypto),
-      'et la poche de marché ne porte que ce qui cote');
+    pres(q.marche, num(nowTotals().bourse) - valeurMetaux(),
+      'et la poche de marché porte le portefeuille coté, les métaux mis à part');
     vrai(q.liquidites >= Fixture.CASH_A_INVESTIR,
       'le cash à investir est dans les liquidités : tant qu’il n’est pas placé, '
       + 'il ne rapporte rien');
@@ -3071,17 +3073,20 @@ suite('Projection de capitalisation', () => {
        non cote et aux liquidites, donc les porter a plat faisait baisser la
        projection de 4 402 EUR sur ce fixture. La valeur neutre n'est pas zero,
        c'est le taux du marche. */
-    /* La propriete se verifie desormais sur la seule poche qui capitalise hors
-       marche, le non cote : les liquidites sont plates par construction, donc on
-       les met de cote pour comparer ce qui est comparable. */
-    Fixture.poser(s => { s.meta.projRate = 5; s.meta.projRateAutres = 5; });
+    /* La propriete se verifie sur les deux poches qui capitalisent au meme
+       taux quand on les y met — marche et autres actifs. Le garanti a le sien,
+       les liquidites sont plates par construction : on les met de cote pour
+       comparer ce qui est comparable. */
+    Fixture.poser(s => {
+      s.meta.projRate = 5; s.meta.projRateAutres = 5; s.meta.projRateGaranti = 0;
+    });
     const q = pochesProjection();
     const deuxTaux = capitalisation({ years: 10 }).points.at(-1);
-    /* Le meme calcul en forçant marche et non cote dans une seule poche, ce qui
-       reproduit l'ancien modele a un seul taux. */
-    const unTaux = capitalisation({ years: 10, start: q.marche + q.nonCote }).points.at(-1);
-    pres(deuxTaux.total - q.liquidites, unTaux.total,
-      'même total qu’avec un taux unique, les liquidités mises à part');
+    /* Le meme calcul en forçant les deux poches dans une seule, ce qui reproduit
+       l'ancien modele a un seul taux. */
+    const unTaux = capitalisation({ years: 10, start: q.marche + q.autres }).points.at(-1);
+    pres(deuxTaux.total - q.liquidites - q.garanti - q.projet, unTaux.total,
+      'même total qu’avec un taux unique, les poches plates mises à part');
     pres(deuxTaux.gains, unTaux.gains, 'et les mêmes gains');
   });
 
@@ -3117,43 +3122,42 @@ suite('Projection de capitalisation', () => {
     pres(d.gainsLiquidites, 0,
       'un taux de marché à 20 % ne fait rien gagner au cash à investir');
 
-    /* Rien ne s'est perdu dans le deplacement : les trois poches font toujours
-       le net, et c'est ce qui garantit qu'on a deplace au lieu de retrancher. */
+    /* Rien ne s'est perdu dans le deplacement : les poches font toujours le
+       net, et c'est ce qui garantit qu'on a deplace au lieu de retrancher. */
     const r = pochesProjection();
-    pres(r.marche + r.nonCote + r.liquidites + num(r.plat), patrimoine().net,
-      'les trois poches et la part plate font le patrimoine net');
+    pres(r.placees + num(r.plat), patrimoine().net,
+      'les poches et la part plate font le patrimoine net');
   });
 
   test('les liquidités ne capitalisent jamais', () => {
-    /* Le taux « autres actifs » couvrait le non cote ET les liquidites : deux
+    /* Le taux « autres actifs » a couvert les liquidites, un temps : deux
        choses sans rapport sous un seul pourcentage, qui forcait a choisir entre
-       sous-estimer un livret et inventer un rendement au non cote.
+       sous-estimer un livret et inventer un rendement a des parts non cotees.
 
-       Un troisieme selecteur a ete essaye pour les separer. Le propriétaire l'a
+       Un troisieme selecteur a ete essaye pour les separer. Le proprietaire l'a
        refuse, et il avait raison : les liquidites ne capitalisent pas dans cette
        application, livret ou non, donc il n'y a rien a regler pour elles. Une
        constante n'a pas besoin d'un menu.
 
-       Ce que le test verrouille : le taux ne touche que le non cote, les
-       liquidites traversent la projection telles quelles, et la somme des deux
-       fait toujours `gainsAutres`. */
+       Ce que le test verrouille : le taux touche la poche des autres actifs et
+       elle seule, les liquidites traversent la projection telles quelles. */
     Fixture.poser(s => { s.meta.projRateAutres = 0; });
     const q = pochesProjection();
-    vrai(q.nonCote > 0 && q.liquidites > 0, 'le fixture porte les deux poches');
-    pres(q.nonCote + q.liquidites, q.autres, 'et leur somme fait « autres »');
+    vrai(q.autres > 0 && q.liquidites > 0, 'le fixture porte les deux poches');
+    vrai(q.autres !== q.autres + q.liquidites,
+      'et les liquidités ne sont pas dans « autres actifs »');
 
     Fixture.poser(s => { s.meta.projRateAutres = 4; });
     const d = capitalisation({ years: 10 }).points.at(-1);
-    pres(d.gainsNonCote, q.nonCote * Math.pow(1.04, 10) - q.nonCote,
-      'le non coté croît de son taux');
+    pres(d.gainsAutres, q.autres * Math.pow(1.04, 10) - q.autres,
+      'les autres actifs croissent de leur taux');
     pres(d.gainsLiquidites, 0, 'les liquidités ne bougent pas d’un centime');
-    pres(d.gainsNonCote + d.gainsLiquidites, d.gainsAutres,
-      'et les deux font exactement le gain de la poche entière');
-    pres(d.gains, d.gainsMarche + d.gainsAutres, 'le total des gains les contient tous');
+    pres(d.gains, d.gainsMarche + d.gainsAutres + d.gainsGaranti + d.gainsLiquidites,
+      'le total des gains est la somme des quatre poches, sans reste');
     pres(d.total, d.contributed + d.gains, 'total = apporté + gains, toujours');
 
-    /* Meme a taux eleve sur le non cote, les liquidites restent a leur montant :
-       le test attraperait un branchement accidentel des deux poches. */
+    /* Meme a taux eleve sur les autres actifs, les liquidites restent a leur
+       montant : le test attraperait un branchement accidentel des deux poches. */
     Fixture.poser(s => { s.meta.projRateAutres = 15; });
     pres(capitalisation({ years: 30 }).points.at(-1).gainsLiquidites, 0,
       'trente ans plus tard, toujours zéro');
@@ -3169,11 +3173,9 @@ suite('Projection de capitalisation', () => {
     const avec = capitalisation({ years: 10 }).points.at(-1);
 
     pres(avec.gainsMarche, sans.gainsMarche, 'le marché est inchangé');
-    /* Le non cote capitalise seul, sans versement : sa croissance est exactement
-       celle des interets composes sur dix ans. Le calcul portait sur `q.autres`,
-       non cote plus liquidites, du temps ou le taux couvrait les deux ; les
-       liquidites sont maintenant plates, donc seul le non cote croit. */
-    const attendu = q.nonCote * Math.pow(1.04, 10) - q.nonCote;
+    /* La poche capitalise seule, sans versement : sa croissance est exactement
+       celle des interets composes sur dix ans. */
+    const attendu = q.autres * Math.pow(1.04, 10) - q.autres;
     pres(avec.gainsAutres, attendu, 'la croissance des autres actifs est celle de son taux');
     pres(avec.total - sans.total, attendu, 'le total monte de ce seul montant');
     pres(avec.contributed, sans.contributed, 'ce qui est acquis ne change pas');
@@ -8337,7 +8339,7 @@ suite('Une ligne de projection annonce le taux qu’elle subit', () => {
   }
 
   test('les liquidités ne portent aucun taux, parce qu’elles n’en subissent aucun', () => {
-    /* Le cas signalé, au chiffre près : un rendement du non coté à 8 %. */
+    /* Le cas signalé, au chiffre près : un rendement des autres actifs à 8 %. */
     Fixture.poser(s => { s.meta.projRate = 5; s.meta.projRateAutres = 8; });
     const f = fiche();
     const liq = f.lignes.find(l => /Liquidit/.test(l.label));
@@ -8351,7 +8353,7 @@ suite('Une ligne de projection annonce le taux qu’elle subit', () => {
        rend l'assertion ci-dessus autre chose qu'une opinion. */
     const d = capitalisation({ years: 10 }).points.at(-1);
     pres(d.gainsLiquidites, 0, 'les liquidités ne produisent rien sur dix ans');
-    vrai(d.gainsNonCote > 0, 'quand le non coté, lui, capitalise bien à 8 %');
+    vrai(d.gainsAutres > 0, 'quand les autres actifs, eux, capitalisent bien à 8 %');
   });
 
   test('le taux annoncé par une ligne est celui que le calcul lui applique', () => {
@@ -8364,9 +8366,10 @@ suite('Une ligne de projection annonce le taux qu’elle subit', () => {
     const d = capitalisation({ years: 10 }).points.at(-1);
     const gainDe = {
       'Actifs de marché': d.gainsMarche,
-      'Cryptomonnaies': d.gainsMarche,
-      'Non coté': d.gainsNonCote,
+      'Autres actifs': d.gainsAutres,
+      'Capital garanti': d.gainsGaranti,
       'Liquidités': d.gainsLiquidites,
+      'Réservé à un projet': d.gainsLiquidites,
     };
     for (const l of f.lignes) {
       const gain = gainDe[l.label];
@@ -8390,7 +8393,7 @@ suite('Une ligne de projection annonce le taux qu’elle subit', () => {
     pres(f.lignes.reduce((s, l) => s + l.valeur, 0), f.total,
       'la somme des lignes de « Ce que tu as déjà » fait son total');
     const q = pochesProjection();
-    pres(f.total, q.marche + q.autres,
+    pres(f.total, q.placees,
       'et ce total est bien la base qui capitalise, immobilier à part');
   });
 });
@@ -11569,7 +11572,7 @@ suite('Un bien de valeur compte partout', () => {
     pres(partPlate(t), 120000 + MONTRE - Fixture.DETTE,
       'la part plate porte l’immobilier et la montre, nets du crédit');
     const po = pochesProjection(t);
-    pres(po.marche + po.nonCote + po.liquidites + po.plat, t.net,
+    pres(po.placees + po.plat, t.net,
       'aucun euro ne se perd ni ne se dédouble en changeant de poche');
   });
 
@@ -13375,21 +13378,23 @@ suite('Le versement mensuel dit où il va', () => {
     }
   });
 
-  test('le non coté suit son propre taux, pas celui du marché', () => {
+  test('les autres actifs suivent leur propre taux, pas celui du marché', () => {
     Fixture.poser(s => {
       s.meta.projMonthly = 300;
       s.meta.projRate = 8;
       s.meta.projRateAutres = 3;
-      s.meta.projVersementVers = 'nonCote';
+      s.meta.projVersementVers = 'autres';
     });
     const c = capitalisation({ years: 10 });
     const d = c.points[10];
-    vrai(d.gainsNonCote > 0, 'à 3 % le non coté produit quelque chose');
+    vrai(d.gainsAutres > 0, 'à 3 % les autres actifs produisent quelque chose');
     /* Et moins qu'a 8 % : le taux applique est bien le sien. */
     Fixture.poser(s => {
       s.meta.projMonthly = 300; s.meta.projRate = 8;
       s.meta.projRateAutres = 3; s.meta.projVersementVers = 'marche';
     });
+    /* Le meme versement au marche a 8 % rapporte davantage : la poche recoit
+       bien son taux et non celui d'a cote. */
     const auMarche = capitalisation({ years: 10 }).points[10];
     vrai(auMarche.gains > d.gains, 'le même versement à 8 % rapporte davantage');
   });
@@ -13414,9 +13419,13 @@ suite('Le versement mensuel dit où il va', () => {
     /* Chaque poche du moteur doit pouvoir recevoir le versement, sinon une
        allocation cible qui la nomme enverrait son argent ailleurs. */
     const offertes = VERSEMENT_VERS.map(([c]) => c);
-    for (const poche of ['marche', 'nonCote', 'garanti', 'liquidites']) {
+    for (const poche of ['marche', 'autres', 'garanti', 'liquidites']) {
       vrai(offertes.includes(poche), `« ${poche} » doit être offert comme destination`);
     }
+    /* Et rien de plus : une destination qui ne correspond a aucune poche
+       enverrait le versement dans le vide — `repartitionVersement` retombe alors
+       sur le marche, et le choix affiche ne serait pas celui qui s'applique. */
+    eq(offertes.length, 4, 'quatre destinations, une par poche du moteur');
   });
 });
 
@@ -17076,31 +17085,57 @@ suite('Un dépliant ouvert est un dépliant fermé', () => {
 });
 
 /* ------------------------------------------------------------------
-   Projection : la crypto est une poche, pas un actif de marche
+   Projection : quatre poches, et pas une hypothese par classe d'actif
    ------------------------------------------------------------------ */
-suite('La crypto se projette pour elle-même', () => {
+suite('Projection tient sur quatre hypothèses', () => {
 
-  /* Elle vivait dans « Actifs de marche » : `pochesProjection` faisait
-     `marche: bourse + crypto`, donc un bitcoin capitalisait a 8 % l'an sous le
-     scenario Dynamique, comme un ETF monde. Deux actifs dont la nature ne se
-     ressemble pas sous une meme hypothese, et l'ecran ne le disait pas.
+  /* La direction prise etait mauvaise, et vite : une hypothese par classe
+     d'actif. Actions, obligations, crypto, metaux, immobilier cote,
+     multi-actifs, non cote. Dix rendements theoriques presentes comme de la
+     finesse alors qu'aucun n'est connu, et un ecran qui demande a son lecteur
+     de devenir analyste avant de lire une courbe.
 
-     Zero par defaut, et ce n'est pas une prevision de stagnation : c'est le
-     refus d'une fausse precision, exactement la regle du non cote. */
+     Quatre poches :
 
-  /* Un patrimoine ou les deux poches sont nettes et rondes : 20 000 de titres,
-     5 000 de crypto, et rien d'autre qui capitalise. */
-  const marcheEtCrypto = e => {
-    e.positions = [];
+       Actifs de marche   le portefeuille cote, au taux du scenario
+       Autres actifs      crypto, metaux precieux, non cote -- 0 % par defaut
+       Capital garanti    son taux de scenario
+       Liquidites         0 %, sans reglage
+
+     Le taux du marche est une hypothese GLOBALE sur un portefeuille cote, et
+     l'assumer est plus honnete que de trancher sept fois au hasard. Zero sur
+     « autres actifs » ne dit pas qu'ils ne rapporteront rien : il dit que
+     l'application n'en suppose aucune revalorisation. */
+
+  /* Un patrimoine ou chaque poche est nette et ronde. Le compte de titres porte
+     un ETF et de l'or, le portefeuille porte du bitcoin, l'assurance-vie du non
+     cote : les trois familles que « autres actifs » regroupe, moins une, plus
+     celle qui reste au marche. */
+  const quatrePoches = e => {
+    /* `manual: false` : posValue() lit alors quantite x cours, et c'est ce que
+       le fixture fait. En manuel il lirait `value`, absent ici, donc zero. */
+    e.positions = [
+      { id: 'p_etf', name: 'ETF Monde', isin: '', symbol: 'EWLD', currency: 'EUR',
+        qty: 100, buyPrice: 150, price: 200, fx: 1, fxBuy: 1, account: 'c_cto',
+        manual: false, assetClass: 'actions', role: 'core' },
+      { id: 'p_or', name: 'Or physique', isin: '', symbol: 'GOLD', currency: 'EUR',
+        qty: 10, buyPrice: 180, price: 200, fx: 1, fxBuy: 1, account: 'c_cto',
+        manual: false, assetClass: 'metaux', role: 'satellite' },
+    ];
     e.comptes = [
-      { id: 'c_cto', etabId: 'e_courtier', type: 'cto', nom: 'CTO',
-        ouvertLe: '2020-01-01', cash: [],
-        lignes: [{ id: 'l_etf', classe: 'actions', libelle: 'ETF', valeur: 20000,
-                   prixDeRevient: 20000 }] },
-      { id: 'c_crypto', etabId: 'e_courtier', type: 'crypto', nom: 'Wallet',
+      { id: 'c_cto', etabId: 'e_courtier', type: 'cto', statut: 'ouvert',
+        libelle: 'CTO', court: 'CTO', numero: '', notes: '', alloc: '',
+        ouvertLe: '2020-01-01', cash: [], lignes: [] },
+      { id: 'c_wallet', etabId: 'e_courtier', type: 'crypto', statut: 'ouvert',
+        libelle: 'Wallet', court: 'Wallet', numero: '', notes: '', alloc: '',
         ouvertLe: '2021-01-01', cash: [],
-        lignes: [{ id: 'l_btc', classe: 'crypto', libelle: 'BTC', valeur: 5000,
-                   prixDeRevient: 5000 }] },
+        lignes: [{ id: 'l_btc', classe: 'crypto', libelle: 'BTC', valeur: 3000,
+                   prixDeRevient: 3000, quantite: 1, dateAcquisition: '' }] },
+      { id: 'c_av', etabId: 'e_courtier', type: 'av', statut: 'ouvert',
+        libelle: 'Assurance-vie', court: 'AV', numero: '', notes: '', alloc: '',
+        ouvertLe: '2019-01-01', cash: [],
+        lignes: [{ id: 'l_pe', classe: 'nonCote', libelle: 'Parts', valeur: 5000,
+                   prixDeRevient: 5000, quantite: 1, dateAcquisition: '' }] },
     ];
     e.etabs = [{ id: 'e_courtier', nom: 'Courtier', notes: '', dettes: [] }];
     e.monthly = [];
@@ -17110,203 +17145,300 @@ suite('La crypto se projette pour elle-même', () => {
     e.meta.projScenario = 'central';
   };
 
-  test('vingt mille de titres et cinq mille de crypto font deux poches', () => {
-    Fixture.poser(marcheEtCrypto);
-    const p = pochesProjection();
-    pres(p.marche, 20000, 'les titres restent seuls dans les actifs de marché');
-    pres(p.crypto, 5000, 'et la crypto a la sienne');
-    vrai(p.marche !== 25000, 'surtout pas 25 000 sous un seul taux');
+  test('crypto, métaux et non coté font une seule poche', () => {
+    /* Le regroupement demande, au chiffre : 3 000 de crypto, 2 000 d'or,
+       5 000 de non cote font 10 000 d'autres actifs, et le portefeuille cote
+       garde ses 20 000. */
+    Fixture.poser(quatrePoches);
+    const q = pochesProjection();
+    pres(q.marche, 20000, 'l’ETF reste seul dans les actifs de marché');
+    pres(valeurMetaux(), 2000, 'l’or se compte à part');
+    pres(q.autres, 3000 + 2000 + 5000,
+      'crypto, métaux et non coté sont ensemble dans « autres actifs »');
+    vrai(q.marche !== 22000,
+      'et l’or n’est plus dans la poche du marché, où il prenait 6 % l’an');
   });
 
-  test('la somme du patrimoine initial ne bouge pas d’un centime', () => {
-    /* Le point qui compte : la frontiere entre deux poches se deplace, le total
-       non. Ni perte, ni doublon. */
-    Fixture.poser(marcheEtCrypto);
-    const t = nowTotals();
-    const p = pochesProjection();
-    const ancienMarche = num(t.bourse) + num(t.crypto)
-      - num(t.projetParPoche?.bourse) - num(t.projetParPoche?.crypto);
-    pres(p.marche + p.crypto, ancienMarche,
-      'marché plus crypto vaut exactement l’ancienne poche fusionnée');
+  test('les métaux quittent le marché sans quitter les autres écrans', () => {
+    /* La frontiere ne bouge QUE dans la projection. `nowByGroup().bourse` range
+       toujours l'or avec les actions, parce qu'un ETC or se vend en seance comme
+       un ETF, et Allocation, l'autonomie financiere et l'historique en dependent.
+       Deplacer la classe elle-meme aurait casse ces trois ecrans. */
+    Fixture.poser(quatrePoches);
+    pres(num(nowTotals().bourse), 22000,
+      'l’accueil compte toujours l’or avec les titres cotés');
+    pres(patrimoine().classes.actions, 22000,
+      'et Allocation le classe toujours en actifs de marché');
+    const q = pochesProjection();
+    pres(q.marche + valeurMetaux(), num(nowTotals().bourse),
+      'la projection le retire, et le retire d’un seul côté');
+  });
+
+  test('le patrimoine initial ne bouge pas d’un centime', () => {
+    /* Le point qui compte : les frontieres se deplacent, le total non. Ni perte,
+       ni doublon. 20 000 + 10 000 des deux cotes. */
+    Fixture.poser(quatrePoches);
+    const q = pochesProjection();
+    pres(q.placees, 20000 + 10000, 'les poches font le patrimoine placé');
+    pres(q.placees + q.plat, patrimoine().net,
+      'et avec la part plate, le patrimoine net entier');
     const c = configProjection({ years: 10 });
-    pres(c.start, p.marche + p.crypto + p.autres,
-      'et la base qui capitalise les compte toutes');
-    pres(c.marche + c.crypto + c.nonCote + c.garanti + c.liquidites, c.start,
+    pres(c.start, q.placees, 'la base qui capitalise les compte toutes');
+    pres(c.marche + c.autres + c.garanti + c.liquidites, c.start,
       'la somme des départs égale cette base');
   });
 
-  test('scénario central : le marché monte, la crypto reste', () => {
-    Fixture.poser(marcheEtCrypto);
+  test('scénario central : 6 %, 0 %, 2,5 %, 0 %', () => {
+    /* Les quatre valeurs demandees, lues sur la table et non recopiees ici. */
+    Fixture.poser(quatrePoches);
     const c = configProjection({ years: 10 });
     pres(c.rate, 6, 'six pour cent sur les actifs de marché');
-    pres(c.rateCrypto, 0, 'zéro sur la crypto');
+    pres(c.rateAutres, 0, 'zéro sur les autres actifs');
+    pres(c.rateGaranti, 2.5, 'deux et demi sur le capital garanti');
     const m = moteurProjection(c);
     pres(m.final.poches.marche, 20000 * Math.pow(1.06, 10),
-      'les titres suivent leur taux');
-    pres(m.final.poches.crypto, 5000,
-      'la crypto reste constante nominalement, sans versement');
+      'l’ETF suit son taux');
+    pres(m.final.poches.autres, 10000,
+      'la poche des autres actifs traverse la projection telle quelle');
     pres(m.final.total,
       Object.values(m.final.poches).reduce((s, x) => s + x, 0),
       'et le total égale la somme des poches');
   });
 
-  test('les trois scénarios laissent la crypto à zéro', () => {
-    for (const [cle] of SCENARIOS_PROJECTION) {
-      Fixture.poser(e => { marcheEtCrypto(e); e.meta.projScenario = cle; });
-      pres(configProjection({ years: 5 }).rateCrypto, 0,
-        `« ${cle} » ne suppose aucune revalorisation de la crypto`);
-    }
-    /* Et la table est la seule source : un scenario ajoute demain devra porter
-       sa colonne, sinon `preset[cle]` rendrait `undefined`. */
-    for (const [cle, , taux] of SCENARIOS_PROJECTION) {
-      vrai(taux.crypto === 0, `le scénario « ${cle} » déclare crypto: 0`);
+  test('dix mille euros d’autres actifs restent dix mille euros', () => {
+    /* La propriete demandee mot pour mot, sur l'etat reel et non sur une
+       configuration forgee : sans versement, plusieurs annees plus tard, la
+       poche vaut nominalement ce qu'elle valait. Pas de derive d'arrondi. */
+    Fixture.poser(quatrePoches);
+    for (const ans of [1, 10, 30]) {
+      pres(capitalisation({ years: ans }).points[ans].poches.autres, 10000,
+        `${ans} an(s) plus tard, toujours dix mille euros`);
     }
   });
 
-  test('un taux crypto personnalisé s’applique sans toucher au marché', () => {
+  test('un taux personnalisé s’applique à toute la poche, et à elle seule', () => {
+    /* Autres actifs a 5 % : les 10 000 entiers suivent ce taux — crypto, or et
+       non cote ensemble — et le marche ne bouge pas d'un centime. */
     Fixture.poser(e => {
-      marcheEtCrypto(e);
+      quatrePoches(e);
       e.meta.projScenario = 'perso';
-      e.meta.projRate = 6; e.meta.projRateAutres = 0; e.meta.projRateGaranti = 2.5;
-      e.meta.projRateCrypto = 10;
+      e.meta.projRate = 6; e.meta.projRateAutres = 5; e.meta.projRateGaranti = 2.5;
     });
     const m = moteurProjection(configProjection({ years: 10 }));
-    pres(m.final.poches.crypto, 5000 * Math.pow(1.10, 10),
-      'la crypto suit ses dix pour cent');
+    pres(m.final.poches.autres, 10000 * Math.pow(1.05, 10),
+      'les trois familles suivent le même cinq pour cent');
     pres(m.final.poches.marche, 20000 * Math.pow(1.06, 10),
       'et le marché garde les siens');
+    pres(m.final.gainsAutres, 10000 * Math.pow(1.05, 10) - 10000,
+      'le gain de la poche est celui de son taux');
   });
 
-  test('un ancien réglage personnalisé n’hérite pas du taux du marché', () => {
-    /* La retrocompatibilite, et c'est la moitie la plus facile a rater : un etat
-       ecrit avant cette poche porte `projRate: 7` et aucun champ crypto. Rien ne
-       doit appliquer 7 % a la crypto, et aucune autre hypothese ne doit bouger.
+  test('les anciens réglages par classe rejoignent la poche unique', () => {
+    /* La migration. Un etat ecrit quand la crypto avait son propre taux porte
+       `projRateCrypto`. Il n'y a plus qu'une poche : ce taux la rejoint, et la
+       clef s'en va.
 
-       Aucune migration n'est ecrite et il n'en faut pas : en personnalise,
-       `num(undefined)` vaut zero. Un etat deduit ne peut pas se contredire avec
-       celui qu'il decrit. */
+       La regle : `projRateAutres` gagne quand il porte une valeur. Prendre le
+       plus eleve aurait releve la courbe de quelqu'un sans qu'il l'ait demande.
+
+       Et rien d'autre ne bouge : le marche, le garanti et le versement gardent
+       ce qu'ils avaient. */
     Fixture.poser(e => {
-      marcheEtCrypto(e);
+      quatrePoches(e);
       e.meta.projScenario = 'perso';
-      e.meta.projRate = 7; e.meta.projRateAutres = 3; e.meta.projRateGaranti = 2;
-      delete e.meta.projRateCrypto;
+      e.meta.projRate = 7; e.meta.projRateGaranti = 2;
+      e.meta.projRateCrypto = 10;
+      delete e.meta.projRateAutres;
     });
-    const s = projectionSettings();
-    pres(s.rateCrypto, 0, 'la crypto part de zéro');
-    pres(s.rate, 7, 'le marché garde ses sept');
-    pres(s.rateAutres, 3, 'le non coté ses trois');
-    pres(s.rateGaranti, 2, 'le garanti ses deux');
-  });
+    Store.migrate();
+    eq(Store.state.meta.projRateCrypto, undefined, 'la clef de la crypto s’en va');
+    pres(projectionSettings().rateAutres, 10,
+      'et son taux devient celui de la poche, plutôt que d’être perdu');
+    pres(projectionSettings().rate, 7, 'le marché garde ses sept');
+    pres(projectionSettings().rateGaranti, 2, 'le garanti ses deux');
 
-  test('l’inflation traite la crypto comme les autres poches', () => {
-    /* Valeur nominale constante a taux nul, et pouvoir d'achat qui baisse : la
-       convention ne change pas, c'est le meme retrait sur le total. */
-    Fixture.poser(e => { marcheEtCrypto(e); e.meta.projInflation = 2; });
-    const m = moteurProjection(configProjection({ years: 20 }));
-    pres(m.final.poches.crypto, 5000, 'nominalement, la crypto n’a pas bougé');
-    vrai(m.final.real < m.final.total,
-      'mais le total en euros d’aujourd’hui est inférieur au nominal');
-  });
-
-  test('la crypto peut recevoir le versement mensuel', () => {
-    /* Une poche qu'on projette et ou l'on ne peut rien verser serait une demi
-       poche, et acheter la meme somme chaque mois est precisement ce que font
-       ceux qui en detiennent. A taux nul, ce qu'on y verse s'accumule a plat. */
-    vrai(VERSEMENT_VERS.some(([c]) => c === 'crypto'),
-      'la crypto est une destination offerte');
+    /* Deux taux pour une poche unique : celui qui etait deja general gagne. */
     Fixture.poser(e => {
-      marcheEtCrypto(e);
-      e.meta.projVersementVers = 'crypto';
+      quatrePoches(e);
+      e.meta.projScenario = 'perso';
+      e.meta.projRateAutres = 3; e.meta.projRateCrypto = 10;
+    });
+    Store.migrate();
+    pres(projectionSettings().rateAutres, 3,
+      'le taux déjà général l’emporte : la courbe de personne ne monte toute seule');
+
+    /* Idempotente sans drapeau : la clef effacee ne peut plus se reecrire. */
+    Store.migrate();
+    pres(projectionSettings().rateAutres, 3, 'et deux passes donnent le même état');
+
+    /* Un etat qui n'a jamais connu ces champs part de zero. */
+    Fixture.poser(e => {
+      quatrePoches(e);
+      e.meta.projScenario = 'perso';
+      e.meta.projRate = 7;
+      delete e.meta.projRateAutres;
+    });
+    Store.migrate();
+    pres(projectionSettings().rateAutres, 0,
+      'sans rien d’affirmé, les autres actifs partent de zéro');
+  });
+
+  test('une destination de versement disparue rejoint la poche qui la remplace', () => {
+    /* `projVersementVers` a pu valoir « crypto » ou « nonCote ». Ces poches
+       n'existent plus : sans migration, `repartitionVersement` retombe sur le
+       marche et l'argent de quelqu'un change de destination en silence. */
+    for (const ancienne of ['crypto', 'nonCote']) {
+      Fixture.poser(e => { quatrePoches(e); e.meta.projVersementVers = ancienne; });
+      Store.migrate();
+      eq(Store.state.meta.projVersementVers, 'autres',
+        `« ${ancienne} » devient « autres »`);
+      pres(repartitionVersement().autres, 1, 'et le versement y va entier');
+    }
+    /* Une destination toujours valable ne bouge pas. */
+    Fixture.poser(e => { quatrePoches(e); e.meta.projVersementVers = 'garanti'; });
+    Store.migrate();
+    eq(Store.state.meta.projVersementVers, 'garanti', 'le garanti reste le garanti');
+  });
+
+  test('un versement vers les autres actifs s’y accumule à plat', () => {
+    Fixture.poser(e => {
+      quatrePoches(e);
+      e.meta.projVersementVers = 'autres';
       e.meta.projMonthly = 100;
     });
     const f = repartitionVersement();
-    pres(f.crypto, 1, 'tout le versement y va');
+    pres(f.autres, 1, 'tout le versement y va');
     pres(Object.values(f).reduce((s, x) => s + x, 0), 1, 'et les parts font un');
     const m = moteurProjection(configProjection({ years: 10 }));
-    pres(m.final.poches.crypto, 5000 + 100 * 120,
+    pres(m.final.poches.autres, 10000 + 100 * 120,
       'à taux nul, cent euros par mois pendant dix ans s’y accumulent à plat');
     pres(m.final.poches.marche, 20000 * Math.pow(1.06, 10),
       'et le marché ne reçoit rien');
   });
 
-  test('les cartes qui ventilent le futur font toujours leur total', () => {
-    /* Une poche qui sort d'une somme sans sortir de la liste, ou l'inverse :
-       c'est le defaut que cette separation pouvait produire, et il s'est
-       presente trois fois.
+  test('l’inflation ne change pas de comportement', () => {
+    /* Elle se retire une fois, sur le total, comme avant : la refonte des poches
+       ne la touche pas. */
+    Fixture.poser(e => { quatrePoches(e); e.meta.projInflation = 2; });
+    const m = moteurProjection(configProjection({ years: 20 }));
+    pres(m.final.poches.autres, 10000, 'nominalement, la poche n’a pas bougé');
+    pres(m.final.real, m.final.total / Math.pow(1.02, 20),
+      'et le réel vaut le nominal déflaté, sans autre correction');
+  });
 
-       - « Ce que tu as deja » totalisait `marche + autres`, et la crypto avait
-         quitte `marche` sans quitter sa ligne : six lignes pour un total qui
-         n'en comptait que cinq. La fiche avait deja paye ce defaut une fois avec
-         le capital garanti, 86 551 EUR annonces pour 76 551 affiches.
-       - « De quoi sera fait ton patrimoine » et la fiche de l'horizon replient
-         tout le rendement en une ligne quand le non cote est a zero, et
-         `gains` contient le gain de la crypto : la ligne crypto au-dessus
-         l'aurait compte deux fois.
+  test('Projection ne demande aucun rendement par classe d’actif', () => {
+    /* Le controle qui garde la direction. Trois taux reglables, et pas un de
+       plus : marche, autres actifs, garanti. Ni actions, ni obligations, ni
+       crypto, ni or, ni immobilier cote, ni REIT, ni private equity.
 
-       Le controle est textuel parce que ces trois cartes sont des vues, mais il
-       vise l'arithmetique, pas la formulation. */
-    const src = lireSource('assets/app.js');
-    const fiche = src.slice(src.indexOf('baseProjection: () =>'),
-                            src.indexOf('immobilierNet: () =>'));
-    vrai(/total: q\.marche \+ q\.crypto \+ q\.autres/.test(fiche),
-      '« Ce que tu as déjà » compte la crypto dans son total, comme dans ses lignes');
-    vrai(/valeur: q\.crypto/.test(fiche),
-      'et sa ligne lit la même poche que ce total');
-    vrai(!/trad\('Cryptomonnaies'\), meta: tauxM/.test(fiche),
-      'la ligne n’annonce plus le taux du marché, qu’elle ne reçoit plus');
-
-    /* Les deux replis agreges retranchent le gain de la crypto. A crypto nulle
-       le retrait vaut zero, donc la carte de quelqu'un qui n'en a pas est
-       exactement celle d'avant. */
-    /* Les deux endroits ou la phrase porte un montant, et non la legende du
-       graphique qui la reprend sans chiffre : ce sont ceux precedes de
-       `label:`. */
-    const morceaux = src.split("trad('Ce que le rendement ajoute')");
-    const replis = morceaux.slice(0, -1)
-      .map((avant, i) => ({ avant, apres: morceaux[i + 1] }))
-      .filter(x => /label:\s*$/.test(x.avant.slice(-40)));
-    eq(replis.length, 2, 'les deux replis agrégés sont là, la légende exclue');
-    for (const r of replis) {
-      vrai(/(dernier|j)\.gains - num\((dernier|j)\.gainsCrypto\)/.test(r.apres.slice(0, 300)),
-        'le repli retranche le gain déjà montré par la ligne crypto');
+       Allocation, elle, a le droit d'etre bien plus fine : elle repond a
+       « comment mon patrimoine est-il reparti ? », quand Projection repond a
+       « que pourrait-il devenir avec quelques hypotheses simples ? ». Deux
+       questions, deux granularites, et c'est volontaire. */
+    eq(TAUX_PROJECTION.length, 3, 'trois taux réglables, et pas un de plus');
+    for (const chemin of TAUX_PROJECTION) {
+      vrai(['meta.projRate', 'meta.projRateAutres', 'meta.projRateGaranti']
+        .includes(chemin), `« ${chemin} » n’est pas un des trois`);
+    }
+    const src = lireSource('assets/store.js') + lireSource('assets/app.js');
+    for (const interdit of ['projRateActions', 'projRateObligations', 'projRateOr',
+                            'projRateMetaux', 'projRateImmoCote', 'projRateReit',
+                            'projRatePrivateEquity', 'projRateNonCote',
+                            'projRateDiversifie']) {
+      vrai(!src.includes(interdit),
+        `« ${interdit} » : Projection ne pose pas d’hypothèse par classe d’actif`);
+    }
+    /* Et la seule survivance de l'essai par classe est sa migration, qui existe
+       pour effacer la clef. */
+    const store = lireSource('assets/store.js');
+    const mentions = (store.match(/projRateCrypto/g) || []).length;
+    vrai(mentions > 0 && mentions <= 4,
+      'projRateCrypto ne vit plus que dans la migration qui l’efface');
+    /* Chaque scenario porte exactement les quatre colonnes des quatre poches. */
+    for (const [cle, , taux] of SCENARIOS_PROJECTION) {
+      eq(Object.keys(taux).sort().join(','), 'autres,garanti,liquidites,marche',
+        `« ${cle} » déclare les quatre poches, ni plus ni moins`);
     }
   });
 
-  test('chaque destination de versement porte le taux qui lui est appliqué', () => {
-    /* `TAUX_DESTINATION` sert a la phrase « cette poche ne produit aucun
-       rendement » sous le selecteur. Une destination absente de la table retombe
-       sur le repli, donc sur le taux du marche : choisir la crypto aurait fait
-       annoncer 6 % sur une poche a zero. Deux listes pour une seule verite, et
-       c'est la seconde qui aurait menti. */
-    const src = lireSource('assets/app.js');
-    const table = src.slice(src.indexOf('const TAUX_DESTINATION = {'),
-                            src.indexOf('const tauxDeDestination'));
-    for (const [cle] of VERSEMENT_VERS) {
-      vrai(new RegExp('^\\s*' + cle + ':', 'm').test(table),
-        `« ${cle} » a son taux dans la table, pas celui du repli`);
-    }
-    vrai(/crypto: s => s\.rateCrypto/.test(table),
-      'et la crypto porte le sien, pas celui du marché');
+  test('la configuration du moteur porte exactement les clefs attendues', () => {
+    /* Une poche renommee laisse derriere elle des lecteurs qui interrogent
+       l'ancien nom. `targetRequirements` sommait `base.nonCote` : la clef
+       disparue rendait `undefined`, la somme devenait NaN, la comparaison
+       echouait, et l'ecran annonçait « cible non atteignable » a quelqu'un qui
+       l'avait deja depassee. Un NaN ne leve rien et ne se voit pas.
+
+       La liste est donc epinglee. Renommer une poche fera tomber ce controle, et
+       celui qui le repare ira relire les lecteurs un par un — c'est exactement
+       ce qu'on veut de lui. */
+    Fixture.poser();
+    const c = configProjection({ years: 10 });
+    eq(Object.keys(c).sort().join(' '),
+      ['dettes', 'fractions', 'garanti', 'inflation', 'liquidites', 'marche',
+       'mois', 'monthly', 'autres', 'plat', 'poches', 'rate', 'rateAutres',
+       'rateGaranti', 'settings', 'start', 'target'].sort().join(' '),
+      'les clefs de la configuration, une par une');
+    eq(Object.keys(c.fractions).sort().join(' '), 'autres garanti liquidites marche',
+      'une fraction de versement par poche, et pas une de plus');
+    /* Les quatre poches du moteur et celles de la table des destinations sont
+       les memes : c'est ce qui garantit qu'un versement trouve toujours sa
+       poche. */
+    eq(VERSEMENT_VERS.map(([k]) => k).sort().join(' '),
+      Object.keys(c.fractions).sort().join(' '),
+      'les destinations offertes sont les poches du moteur');
+    /* Et le point de sortie rend la valeur de chacune, plus la part plate. */
+    const j = moteurProjection(c).final;
+    eq(Object.keys(j.poches).sort().join(' '),
+      'autres garanti liquidites marche plat',
+      'chaque poche a sa valeur à l’horizon');
+    pres(Object.values(j.poches).reduce((s, x) => s + x, 0), j.total,
+      'et leur somme fait le total');
   });
 
-  test('la crypto ne se présente plus comme un actif de marché', () => {
-    /* Allocation distingue deja les deux classes. Projection suivait une autre
-       taxonomie, et son infobulle disait « et de crypto » sous le taux du
-       marche : le texte annonçait le defaut. */
-    const src = lireSource('assets/app.js').replace(/'\s*\+\s*'/g, '');
-    vrai(!/de métaux précieux et de crypto/.test(src),
-      'l’infobulle du taux du marché ne compte plus la crypto');
-    vrai(/La crypto a son propre taux/.test(src),
-      'elle dit où le régler à la place');
-    /* Le reglage vit dans le depliant, pas au premier niveau : la page garde
-       ses quatre commandes. */
+  test('le dépliant des hypothèses tient en quatre champs', () => {
+    /* Quatre reglages, et la ligne figee des liquidites, qui ne demande rien et
+       repond a « que fait la projection de mon livret ». Le premier niveau, lui,
+       garde ses quatre commandes : versement, affectation, scenario, cible. */
+    const src = lireSource('assets/app.js');
     const vue = src.slice(src.indexOf('function viewObjective'),
                           src.indexOf('function mountObjective'));
-    const i = vue.indexOf("'meta.projRateCrypto'");
-    vrai(i > 0, 'le champ existe');
-    const depliant = vue.lastIndexOf('<details', i);
-    vrai(depliant > 0 && depliant < i,
-      'et il vit dans le dépliant des hypothèses, comme le non coté');
+    /* Le depliant, borne des deux cotes : « Cible » vit APRES lui, au premier
+       niveau, donc un simple `index > pli` la comptait dedans. */
+    const pli = vue.indexOf('pli-avance');
+    const finDuPli = vue.indexOf('</details>', pli);
+    vrai(pli > 0 && finDuPli > pli, 'le dépliant doit être trouvable, et fermé');
+    const champs = [...vue.matchAll(/\$\{champ\('([^']+)'/g)].map(m => [m[1], m.index]);
+    const dansLePli = champs.filter(([, i]) => i > pli && i < finDuPli).map(([nom]) => nom);
+    eq(dansLePli.join(' | '),
+      'Rendement des actifs de marché | Rendement des autres actifs '
+      + '| Rendement du capital garanti | Inflation',
+      'quatre champs dans le dépliant, dans cet ordre');
+    /* Aucun champ de taux au premier niveau. */
+    for (const [nom, i] of champs) {
+      if (i > pli && i < finDuPli) continue;
+      vrai(!/^Rendement/.test(nom),
+        `« ${nom} » : aucun rendement ne remonte au premier niveau`);
+    }
+    /* La ligne des liquidites reste, sans devenir un menu. */
+    vrai(/Rendement des liquidités'\)\}\$\{aide\(/.test(vue.replace(/\s+/g, ''))
+      || vue.includes("trad('Rendement des liquidités')"),
+      'les liquidités se disent encore, pour que le silence ne laisse pas deviner');
+    vrai(!/champ\('Rendement des liquidités'/.test(vue),
+      'mais sans menu : zéro n’est pas une hypothèse ici, c’est ce qu’un compte non rémunéré fait');
+  });
+
+  test('l’infobulle du marché ne classe plus les actifs', () => {
+    /* Elle enumerait « actions, obligations, immobilier cote, multi-actifs,
+       metaux precieux et crypto : tout ce qui se vend sur un marche ». Elle
+       melangeait la classification du patrimoine et le decoupage de la
+       projection, et se trompait des que l'une des deux bougeait. */
+    const src = lireSource('assets/app.js');
+    vrai(!/tout ce qui se vend sur un marché/.test(src),
+      'la définition par la négociabilité s’en va');
+    vrai(/de portefeuille financier coté, auquel Tallya applique le rendement du scénario/
+      .test(src), 'la poche se dit par ce qu’elle est');
+    vrai(/de crypto, de métaux précieux et de non coté/.test(src),
+      'et l’autre poche dit ce qu’elle regroupe');
   });
 });
 
@@ -17419,7 +17551,7 @@ suite('Un réglage montre ce qu’il commande', () => {
     const src = lireSource('assets/app.js');
     for (const [champ, attendu] of [
       ["champ('Rendement des actifs de marché'", 's.rate)}'],
-      ["champ('Rendement du non coté'", 's.rateAutres)}'],
+      ["champ('Rendement des autres actifs'", 's.rateAutres)}'],
       ["champ('Rendement du capital garanti'", 's.rateGaranti)}'],
     ]) {
       const d = src.indexOf(champ);
@@ -17517,30 +17649,35 @@ suite('Projection se lit sans explication', () => {
       'la ligne signale une destination sans rendement');
   });
 
-  test('« actifs de marché » énumère ce que le moteur y met, et rien d’autre', () => {
-    /* La composition doit suivre `pochesProjection()` : `marche` vaut la poche
-       bourse plus la crypto, et la poche bourse agrege actions, obligations,
-       immobilier cote, multi-actifs et metaux precieux. Nommer autre chose --
-       un fonds euros, du non cote -- serait faux, chacun a sa poche. */
+  test('« actifs de marché » se dit sans énumérer sept classes', () => {
+    /* L'infobulle enumerait les classes : « actions, obligations, immobilier
+       cote, multi-actifs, metaux precieux et crypto ». Elle melangeait la
+       classification du patrimoine, qui est le sujet d'Allocation, et le
+       decoupage de la projection — et se trompait des que l'une des deux
+       bougeait : les metaux n'y ont jamais figure avant d'y etre ajoutes, et ils
+       en sont sortis le lendemain.
+
+       Une liste tenue a la main a cote de sa source finit toujours par ne plus
+       la decrire. La poche se dit donc par ce qu'elle EST, et le renvoi vers
+       l'autre hypothese repond a la seule question qui se pose vraiment. */
     const src = lireSource('assets/app.js');
-    const aide = (src.match(/trad\('(d’actions[^']*)'\)/) || [])[1] || '';
-    vrai(aide, 'l’aide du rendement de marché doit énumérer la poche');
-    for (const attendu of ['actions', 'obligations', 'immobilier coté',
-                           'multi-actifs', 'métaux précieux', 'crypto']) {
-      vrai(aide.includes(attendu), `la poche du marché contient ${attendu}`);
-    }
-    for (const absent of ['fonds euros', 'non coté', 'livret']) {
-      vrai(!aide.includes(absent), `${absent} a sa propre poche, il n’est pas cité ici`);
+    const aide = (src.match(/trad\('(de portefeuille financier coté[^']*)'\)/) || [])[1] || '';
+    vrai(aide, 'l’aide du rendement de marché doit décrire la poche');
+    vrai(/La crypto, les métaux précieux et le non coté ont leur propre/.test(aide),
+      'et renvoyer vers l’hypothèse séparée de ce qu’elle ne contient pas');
+    for (const absent of ['actions', 'obligations', 'multi-actifs', 'fonds euros']) {
+      vrai(!aide.includes(absent),
+        `« ${absent} » : cette infobulle n’énumère plus les classes, c’est le rôle d’Allocation`);
     }
   });
 
   test('le détail des taux par poche reste replié', () => {
-    /* Le premier niveau se limite a trois paves. Remonter le rendement du non
-       cote, du garanti et des liquidites dans l'interface principale rendrait la
-       carte illisible pour le seul cas ou l'on veut les regler. */
+    /* Le premier niveau se limite a trois paves. Remonter le rendement des
+       autres actifs, du garanti et des liquidites dans l'interface principale
+       rendrait la carte illisible pour le seul cas ou l'on veut les regler. */
     const src = lireSource('assets/app.js');
     const avance = src.indexOf('pli-avance');
-    for (const champ of ['Rendement du non coté', 'Rendement du capital garanti',
+    for (const champ of ['Rendement des autres actifs', 'Rendement du capital garanti',
                          'Rendement des liquidités', 'Inflation']) {
       vrai(src.indexOf(`trad('${champ}'`) > avance || src.indexOf(`champ('${champ}'`) > avance,
         `« ${champ} » doit vivre après l’ouverture du repli`);
@@ -17802,10 +17939,10 @@ suite('Le moteur de projection, chiffre par chiffre', () => {
      poser exactement les quatre poches, les quatre taux et la dette qu'il veut.
      C'est la seule facon de verifier une formule sans qu'un fixture s'en mele. */
   const cfg = (o = {}) => Object.assign({
-    marche: 0, nonCote: 0, garanti: 0, liquidites: 0, plat: 0,
-    rate: 0, rateNonCote: 0, rateGaranti: 0,
+    marche: 0, autres: 0, garanti: 0, liquidites: 0, plat: 0,
+    rate: 0, rateAutres: 0, rateGaranti: 0,
     monthly: 0, inflation: 0, target: 0, mois: 120, dettes: [],
-    fractions: { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 },
+    fractions: { marche: 1, autres: 0, garanti: 0, liquidites: 0 },
   }, o);
   const final = o => moteurProjection(cfg(o)).final;
 
@@ -17823,7 +17960,7 @@ suite('Le moteur de projection, chiffre par chiffre', () => {
   });
 
   test('sans versement et sans rendement, rien ne bouge', () => {
-    const r = final({ marche: 50000, nonCote: 10000, garanti: 20000,
+    const r = final({ marche: 50000, autres: 10000, garanti: 20000,
                       liquidites: 15000, plat: 60000, mois: 240 });
     pres(r.total, 155000, 'vingt ans a zero pour cent laissent le total intact');
     pres(r.gains, 0, 'et aucun gain n’apparaît');
@@ -17862,31 +17999,35 @@ suite('Le moteur de projection, chiffre par chiffre', () => {
 
   // --- les classes d'actifs -------------------------------------------
   test('chaque poche capitalise à son propre taux, et le total les somme', () => {
-    const r = final({ marche: 20000, nonCote: 10000, garanti: 20000, liquidites: 15000,
-                      rate: 6, rateNonCote: 0, rateGaranti: 2.5, mois: 120 });
+    const r = final({ marche: 20000, autres: 10000, garanti: 20000, liquidites: 15000,
+                      rate: 6, rateAutres: 0, rateGaranti: 2.5, mois: 120 });
     const attendu = 20000 * Math.pow(1.06, 10) + 10000
                   + 20000 * Math.pow(1.025, 10) + 15000;
     pres(r.total, attendu,
       'les 65 000 € ne progressent pas tous à 6 % : chacun suit sa poche');
-    pres(r.gainsNonCote, 0, 'le non coté à 0 % ne produit rien');
+    pres(r.gainsAutres, 0, 'les autres actifs à 0 % ne produisent rien');
     pres(r.gainsLiquidites, 0, 'les liquidités non plus');
     vrai(r.gainsGaranti > 0 && r.gainsGaranti < r.gainsMarche,
       'le garanti rapporte, moins que le marché');
     pres(r.total, r.contributed + r.gains, 'et le total égale versé plus gains');
   });
 
-  test('dix mille euros de non coté à 0 % valent dix mille euros dans dix ans', () => {
+  test('dix mille euros d’autres actifs à 0 % valent dix mille euros dans dix ans', () => {
     /* Zero ne veut pas dire « ca ne rapporte rien » mais « l'application ne
        suppose aucune revalorisation ». La valeur doit donc rester exactement
-       constante, et non deriver d'un arrondi a chaque mois. */
-    const r = final({ nonCote: 10000, rate: 8, mois: 120,
-                      fractions: { marche: 0, nonCote: 1, garanti: 0, liquidites: 0 } });
+       constante, et non deriver d'un arrondi a chaque mois. C'est la propriete
+       que le proprietaire a demandee mot pour mot : 10 000 EUR restent
+       10 000 EUR nominalement, plusieurs annees plus tard. */
+    const r = final({ autres: 10000, rate: 8, mois: 120,
+                      fractions: { marche: 0, autres: 1, garanti: 0, liquidites: 0 } });
     pres(r.total, 10000, 'inchangé, quel que soit le taux du marché à côté');
+    pres(final({ autres: 10000, rate: 8, mois: 360 }).total, 10000,
+      'et trente ans plus tard aussi');
   });
 
   test('un versement sur les liquidités ne rapporte rien, et reste compté', () => {
     const r = final({ liquidites: 5000, monthly: 300, rate: 8, mois: 120,
-                      fractions: { marche: 0, nonCote: 0, garanti: 0, liquidites: 1 } });
+                      fractions: { marche: 0, autres: 0, garanti: 0, liquidites: 1 } });
     pres(r.total, 5000 + 300 * 120, 'un livret non déclaré rémunéré ne rapporte rien');
     pres(r.gains, 0, 'et le versement n’est pas un gain');
   });
@@ -17950,11 +18091,11 @@ suite('Le moteur de projection, chiffre par chiffre', () => {
 
   test('le total égale la somme de ses parts à chaque point, dans tous les cas', () => {
     const cas = [
-      { marche: 20000, nonCote: 10000, garanti: 20000, liquidites: 15000, plat: 60000,
+      { marche: 20000, autres: 10000, garanti: 20000, liquidites: 15000, plat: 60000,
         rate: 6, rateGaranti: 2.5, monthly: 500, mois: 240 },
       { marche: 1000, monthly: 0, rate: 8, mois: 120 },
       { liquidites: 1000, monthly: 700, mois: 120,
-        fractions: { marche: 0, nonCote: 0, garanti: 0, liquidites: 1 } },
+        fractions: { marche: 0, autres: 0, garanti: 0, liquidites: 1 } },
       { plat: 20000, mois: 120, dettes: [{ reste: 80000, taux: 0.03 / 12, mens: 900 }] },
     ];
     for (const [i, o] of cas.entries()) {
@@ -17969,10 +18110,10 @@ suite('Le moteur de projection, chiffre par chiffre', () => {
 suite('La cible se compare au patrimoine, et se date au mois', () => {
 
   const cfg = (o = {}) => Object.assign({
-    marche: 0, nonCote: 0, garanti: 0, liquidites: 0, plat: 0,
-    rate: 0, rateNonCote: 0, rateGaranti: 0,
+    marche: 0, autres: 0, garanti: 0, liquidites: 0, plat: 0,
+    rate: 0, rateAutres: 0, rateGaranti: 0,
     monthly: 0, inflation: 0, target: 0, mois: 240, dettes: [],
-    fractions: { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 },
+    fractions: { marche: 1, autres: 0, garanti: 0, liquidites: 0 },
   }, o);
 
   test('une cible déjà atteinte aujourd’hui se dit atteinte, pas absente', () => {
@@ -18109,10 +18250,10 @@ suite('Les leviers d’une cible passent par le moteur, pas par une formule à c
        reclamait un versement nettement plus faible que celui qu'il faut. Le
        moteur, lui, ne prete le taux du marche qu'a la poche du marche. */
     const cfg = {
-      marche: 10000, nonCote: 25000, garanti: 0, liquidites: 30000, plat: 0,
-      rate: 6, rateNonCote: 0, rateGaranti: 0, monthly: 0, inflation: 0,
+      marche: 10000, autres: 25000, garanti: 0, liquidites: 30000, plat: 0,
+      rate: 6, rateAutres: 0, rateGaranti: 0, monthly: 0, inflation: 0,
       target: 0, mois: 240, dettes: [],
-      fractions: { marche: 1, nonCote: 0, garanti: 0, liquidites: 0 },
+      fractions: { marche: 1, autres: 0, garanti: 0, liquidites: 0 },
     };
     const vraiTotal = moteurProjection(cfg).final.total;
     const commeSiTout = 65000 * Math.pow(1.06, 20);
@@ -18133,14 +18274,14 @@ suite('Un scénario nommé plutôt qu’un rendement à deviner', () => {
      Un scenario nomme deplace la question de « combien ? » a « plutot prudent
      ou plutot optimiste ? ». Les taux restent poseables a la main, replies. */
 
-  test('les trois scénarios montent, et le non coté reste à zéro dans tous', () => {
+  test('les trois scénarios montent, et les autres actifs restent à zéro', () => {
     const marche = SCENARIOS_PROJECTION.map(([, , r]) => r.marche);
     eq(marche.join(' < '), '4 < 6 < 8',
       'prudent, central, dynamique : des hypothèses ordonnées');
     for (const [cle, , r] of SCENARIOS_PROJECTION) {
-      eq(r.nonCote, 0,
-        `« ${cle} » ne doit supposer aucune hausse du non coté : sa valeur ne bouge `
-        + 'qu’au prochain tour de table, date qu’aucun calcul ne connaît');
+      eq(r.autres, 0,
+        `« ${cle} » ne doit supposer aucune hausse des autres actifs : personne ne `
+        + 'connaît le rendement futur d’un bitcoin ni la date du prochain tour de table');
       eq(r.liquidites, 0, `« ${cle} » : un livret non déclaré rémunéré ne rapporte rien`);
       vrai(r.garanti > 0 && r.garanti < r.marche,
         `« ${cle} » : le capital garanti rapporte, moins que le marché`);
@@ -19685,10 +19826,10 @@ suite('Chercher un titre, c’est en ajouter un', () => {
   });
 
   test('et le panneau de la projection aussi', () => {
-    /* Le total vient de `q.marche + q.autres`, donc une poche absente de la
-       liste se compte dans le total sans apparaitre : la fenetre annonçait
-       86 551 EUR pour quatre lignes qui en faisaient 76 551, l'ecart valant
-       exactement le capital garanti. */
+    /* Le total vient de `q.placees`, donc une poche absente de la liste se
+       compte dans le total sans apparaitre : la fenetre annonçait 86 551 EUR
+       pour quatre lignes qui en faisaient 76 551, l'ecart valant exactement le
+       capital garanti. */
     Fixture.poser(s => {
       s.etabs.push({ id: 'e_av', nom: 'Assureur', notes: '', dettes: [] });
       s.comptes.push({ id: 'c_av', etabId: 'e_av', type: 'av', statut: 'actif',
@@ -19703,12 +19844,13 @@ suite('Chercher un titre, c’est en ajouter un', () => {
                               src.indexOf('immobilierNet: () => {'));
     for (const [poche, motif] of [['marche', /trad\('Actifs de marché'\)/],
                                   ['garanti', /trad\('Capital garanti'\)/],
-                                  ['nonCote', /trad\('Non coté'\)/],
-                                  ['liquidites', /trad\('Liquidités'\)/]]) {
+                                  ['autres', /trad\('Autres actifs'\)/],
+                                  ['liquidites', /trad\('Liquidités'\)/],
+                                  ['projet', /trad\('Réservé à un projet'\)/]]) {
       vrai(motif.test(panneau), `la poche ${poche} a sa ligne dans le panneau`);
     }
-    pres(q.marche + q.autres,
-      q.marche + q.nonCote + q.liquidites + q.garanti + q.projet,
+    pres(q.placees,
+      q.marche + q.autres + q.liquidites + q.garanti + q.projet,
       'le total du panneau est bien la somme des poches qu’il liste');
     /* Et avec une ligne reservee, la ou le double comptage guettait : ces euros
        doivent quitter leur poche d'origine, sinon ils figurent deux fois. */
@@ -19721,12 +19863,11 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     });
     const t2 = nowTotals(), q2 = pochesProjection(t2);
     eq(Math.round(q2.projet), 40000, 'la poche du réservé porte les 40 000 €');
-    /* Les lignes du panneau, reconstituees comme la vue les calcule. */
-    const lignes = [num(t2.bourse) - num(t2.projetParPoche.bourse),
-                    q2.garanti,
-                    num(t2.crypto) - num(t2.projetParPoche.crypto),
-                    q2.nonCote, q2.liquidites, q2.projet];
-    pres(lignes.reduce((a, b) => a + b, 0), q2.marche + q2.autres,
+    /* Les lignes du panneau, reconstituees comme la vue les calcule : elles
+       lisent toutes `pochesProjection`, ce qui est le point — une ligne qui
+       refait sa soustraction a cote finit par ne plus dire la meme chose. */
+    const lignes = [q2.marche, q2.garanti, q2.autres, q2.liquidites, q2.projet];
+    pres(lignes.reduce((a, b) => a + b, 0), q2.placees,
       'la somme des lignes fait le total, même avec un montant réservé');
   });
 
@@ -19811,7 +19952,7 @@ suite('Chercher un titre, c’est en ajouter un', () => {
        la base de la projection vaut toujours le brut moins ce qui est porte a
        plat par ailleurs, l'immobilier et les biens. */
     const t = nowTotals();
-    pres(q.marche + q.autres, num(t.brut) - num(t.immo) - num(t.biens),
+    pres(q.placees, num(t.brut) - num(t.immo) - num(t.biens),
       'la base de la projection ne double ni ne perd rien');
     const promis = capitalisation({ years: 10 }).points[10];
     /* Portes a plat : dix ans plus tard, toujours 40 000 de cette ligne. */
