@@ -1346,6 +1346,34 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
 }
 .ml-chiffres b { font-size: 14px; }
 .ml-chiffres span { font-size: 12px; font-weight: 600; }
+/* La jauge de variation du journal des releves : elle occupe l'espace laisse
+   libre entre le nom du mois et les montants, et elle n'en prend jamais plus.
+
+   `flex: 0 1` et non `1 1` : le nom du mois porte deja la croissance, et deux
+   elements qui poussent se disputeraient la place -- une note un peu longue
+   ecrasait alors la jauge, ou l'inverse. Elle a une largeur souhaitee et cede
+   quand la ligne se serre.
+
+   Trois pixels de haut, les couleurs deja au vocabulaire de l'application, et
+   aucun axe dessine : les barres partent toutes du meme milieu, ce qui suffit a
+   le faire voir. */
+.ml-jauge {
+  flex: 0 1 88px; width: 88px; min-width: 0; position: relative; height: 3px;
+}
+.ml-jauge i {
+  position: absolute; top: 0; height: 100%; border-radius: 2px; min-width: 2px;
+}
+.ml-jauge i.up { background: var(--good); }
+.ml-jauge i.down { background: var(--critical); }
+.ml-jauge i.plat {
+  left: 50%; width: 3px; margin-left: -1.5px; background: var(--muted); opacity: .55;
+}
+@media (max-width: 767px) {
+  .ml-jauge { flex: 0 1 52px; width: 52px; }
+}
+@media (max-width: 359px) {
+  .ml-jauge { display: none; }
+}
 .ml-chev { flex: none; color: var(--muted); font-size: 18px; line-height: 1; }
 
 @media (max-width: 767px) {
@@ -1581,11 +1609,6 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 
 .sticky-col { position: sticky; left: 0; background: var(--surface-1); z-index: 2; }
 @media (hover: hover) { tbody tr:hover .sticky-col { background: color-mix(in oklab, var(--surface-2) 92%, var(--surface-1)); } }
-.sticky-fin {
-  position: sticky; right: 0; background: var(--surface-1); z-index: 2;
-  box-shadow: inset 1px 0 0 var(--grid);
-}
-@media (hover: hover) { tbody tr:hover .sticky-fin { background: color-mix(in oklab, var(--surface-2) 92%, var(--surface-1)); } }
 
 .chart { position: relative; width: 100%; }
 /* `overflow: visible` laisse les etiquettes d'axe deborder du viewBox, ce

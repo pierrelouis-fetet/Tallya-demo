@@ -569,25 +569,7 @@ function pointsEvolution() {
   });
 }
 
-/* La carte d'evolution, ecrite une seule fois pour les deux ecrans qui la
-   montrent, la vue d'ensemble et les relevés.
-
-   Elles avaient chacune la leur, et elles avaient donc divergé : l'accueil
-   passait par pointsEvolution(), avec sa bascule Net / Brut, tandis que les
-   relevés appelaient historySeries() sans elle et tracaient toujours le brut.
-   Deux cartes de meme titre montrant deux chiffres differents, c'est exactement
-   ce que ce projet s'interdit — et la cause n'etait pas un calcul, c'etait un
-   balisage recopie. Un seul exemplaire, et la question ne peut plus se poser.
-
-   Elles partagent aussi leur plage : deux fenetres temporelles reglees
-   separement redonneraient deux cartes differentes a l'ecran, ce qui etait le
-   reproche de depart.
-
-   `avecDetail` est la seule chose qui les separe. Le depliant « Voir les
-   donnees » a sa place sur l'accueil, ou le tableau n'existe nulle part
-   ailleurs ; sur les relevés il doublerait le tableau qui suit
-   immediatement. */
-function carteEvolution(avecDetail = false) {
+function carteEvolution() {
   const pts = limitRange(pointsEvolution(), evoRange);
   return `
     <div class="card">
@@ -602,38 +584,19 @@ function carteEvolution(avecDetail = false) {
       <div class="chart" id="chartEvo"></div>
       ${invitePremierPas('releves')}
       <div class="legend">${legendeSeries(seriesUtiles(pts), true)}</div>
-      ${avecDetail ? detailEvolution() : ''}
     </div>`;
 }
 
-function detailEvolution() {
-  const tous = pointsEvolution();
-  const annees = [...new Set(tous.map(p => String(p.date).slice(0, 4)))].sort();
-  const courante = todayISO().slice(0, 4);
-  if (evoYear === 'all') evoYear = null;   // le cran a quitte le selecteur
-  const an = evoYear ?? (annees.includes(courante) ? courante : annees[annees.length - 1]);
-  const pts = an === 'all' ? tous : tous.filter(p => String(p.date).startsWith(an));
-  const cols = seriesUtiles(pts);
-  return `
-    <details class="data-view" ${evoDetailOuvert ? 'open' : ''} id="evoDetail">
-      <summary>${trad('Voir les données')}</summary>
-      <div class="row" style="margin:10px 0 6px">
-        <span class="hint">${pts.length} point${pts.length > 1 ? 's' : ''}</span>
-        <span class="spacer"></span>
-        ${yearControl('evo-year', annees, an)}
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th class="sticky-col">${trad('Mois')}</th>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th class="sticky-fin">Total</th></tr></thead>
-          <tbody>${pts.map(p => `<tr><td class="name sticky-col">${esc(p.label)}</td>${
-            cols.map(c => `<td>${fmtEUR0(Number(p[c.key]) || 0)}</td>`).join('')
-          }<td class="sticky-fin"><b>${fmtEUR0(p.total)}</b></td></tr>`).join('')
-            || `<tr><td colspan="${cols.length + 2}" class="empty">${trad('Aucun relevé sur cette année.')}</td></tr>`}</tbody>
-        </table>
-      </div>
-    </details>`;
-}
+/* Le depliant « Voir les donnees » sous la courbe est parti. Il rendait le
+   tableau des points par annee : les memes nombres que la courbe trace juste
+   au-dessus, sous une autre forme, derriere un pli que personne n'ouvrait. Le
+   journal des releves donne deja mois par mois ce qu'il montrait, avec la porte
+   pour corriger chaque ligne -- ce que le tableau n'avait pas.
 
+   Sont partis avec lui : son selecteur d'annee (`evo-year`), les deux drapeaux
+   de session qui portaient son annee et son ouverture, et son ecouteur de pli.
+   Un depliant sans lecteur est du poids mort, et son etat en memoire vive
+   l'etait deux fois. */
 function monterEvolution() {
   const pts = limitRange(pointsEvolution(), evoRange);
   const cible = $('#chartEvo');
@@ -784,7 +747,7 @@ function viewOverview() {
   </div>`
   : `
   <div class="grid">
-    ${carteEvolution(true)}
+    ${carteEvolution()}
   </div>
 
   <div class="grid g-2-1">
@@ -928,8 +891,6 @@ function mountOverview() {
     average: moyenne,
   });
 
-  const det = $('#evoDetail');
-  if (det) det.addEventListener('toggle', () => { evoDetailOuvert = det.open; });
 }
 
 /* `goto` = "vue:ancre", rend la tuile cliquable et emmène à l'endroit
@@ -1803,8 +1764,6 @@ const currencySign = c => CURRENCY_SIGNS[c] || c || '€';
 let evoRange = '1y';
 let evoNet = true;    // évolution du patrimoine, vue d'ensemble
 let paceRange = '1y';        // rythme d'accumulation
-let evoYear = null;          // null = année en cours · 'all' = toute la série
-let evoDetailOuvert = false;
 let journalOuvert = false;
 /* La ligne « Revenus » de la carte « Ou va ce que tu gagnes » ouvre ses sources.
    L'etat vit ici, comme les autres replis de vue : un `details` natif se
@@ -1883,11 +1842,30 @@ function sortPositions(entries) {
    dont l'immobilier occupe les quatre cinquiemes se ressemblent toutes, et la
    composition d'un mois se lit dans la fenetre de ce mois. Un parametre sans
    appelant est la moitie qu'on oublie : il part avec ses trois regles CSS. */
-function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe }) {
+/* `jauge` : une part signee entre -1 et +1, ou `null`. Elle vit dans l'espace
+   laisse libre entre le nom du mois et les montants, et elle ne dit rien de plus
+   que la variation deja ecrite a droite -- d'ou `aria-hidden` : un lecteur
+   d'ecran lit le nombre, il n'a que faire du dessin.
+
+   Le centre vaut zero, la longueur vaut l'amplitude, le cote vaut le signe. Un
+   mois sans variation -- ou le premier de la serie, qui n'a rien avant lui --
+   pose un point neutre au centre plutot que rien : une case vide se lit comme une
+   donnee manquante, un point se lit comme un mois plat.
+
+   L'appelant fournit la part, jamais le montant : l'echelle est commune aux
+   lignes affichees, et une ligne ne peut pas la calculer pour elle seule. */
+function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, jauge }) {
+  const part = jauge == null ? null : Math.max(-1, Math.min(1, num(jauge)));
   return `
   <button type="button" class="mlist${classe ? ` ${classe}` : ''}"
           data-action="${action}" data-i="${index}"${ancre ? ` data-anchor="${esc(ancre)}"` : ''}>
     <span class="ml-nom">${esc(titre)}${marque || ''}${sous ? `<span class="sub">${esc(sous)}</span>` : ''}</span>
+    ${part == null ? '' : `<span class="ml-jauge" aria-hidden="true">${
+      Math.abs(part) < 0.005
+        ? '<i class="plat"></i>'
+        : `<i class="${part > 0 ? 'up' : 'down'}" style="${
+            part > 0 ? 'left' : 'right'}:50%; width:${(Math.abs(part) * 50).toFixed(1)}%"></i>`
+    }</span>`}
     <span class="ml-chiffres">
       <b>${valeur}</b>
       ${second ? `<span class="${classeSecond || 'muted'}">${second}</span>` : ''}
@@ -3307,6 +3285,16 @@ function viewHistory() {
   const annee = historyYear ?? (annees.includes(anneeDernier) ? anneeDernier : anneeCourante);
 
   const lignes = tous.filter(x => String(x.r.date).startsWith(annee)).reverse();
+
+  const amplitudes = lignes.map(x => Math.abs(x.dlt)).filter(v => v > 0.005).sort((a, b) => a - b);
+  const mediane = amplitudes.length
+    ? (amplitudes.length % 2
+        ? amplitudes[(amplitudes.length - 1) / 2]
+        : (amplitudes[amplitudes.length / 2 - 1] + amplitudes[amplitudes.length / 2]) / 2)
+    : 0;
+  const echelleJauge = amplitudes.length
+    ? Math.min(amplitudes[amplitudes.length - 1], 3 * mediane) : 0;
+  const jaugeDe = dlt => (echelleJauge > 0 ? num(dlt) / echelleJauge : 0);
   const attente = currentMonthPending();
 
   return `
@@ -3363,6 +3351,7 @@ function viewHistory() {
         sous: r.comment || '',
         valeur: fmtEUR0(net),
         second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
+        jauge: jaugeDe(dlt),
       })).join('')}
     </div>`}
   </div>
@@ -7267,7 +7256,6 @@ const ACTIONS = {
     fenetreRevenus();
     render();
   },
-  'evo-year'(btn) { evoYear = btn.dataset.year; evoDetailOuvert = true; render(); },
   /* Le journal n'a plus de borne propre : elle est celle de la page, et le menu
      des annees a rejoint les crans de la plage. `sales-year` est parti avec. */
   'open-sale'(btn) { openApercu('vente', btn.dataset.i); },

@@ -11699,7 +11699,9 @@ suite('Budget : le pourcentage dit sa base, l annee reste une annee', () => {
        cours, pour chacun des quatre etats d annee. */
     /* `salesYear` a quitte cette liste avec le selecteur du journal : sa borne
        est celle de la page, et `rangeControl` n'offre pas de cran « toutes ». */
-    for (const etat of ['budgetYear', 'evoYear', 'historyYear']) {
+    /* `evoYear` a quitte cette liste avec le depliant « Voir les donnees » de la
+       courbe : son selecteur d'annee est parti avec le tableau qu'il filtrait. */
+    for (const etat of ['budgetYear', 'historyYear']) {
       vrai(new RegExp(`if \\(${etat} === 'all'\\) ${etat} = null;`).test(src),
         `${etat} doit absorber l’ancienne valeur « all »`);
     }
@@ -15532,22 +15534,11 @@ suite('L’interface tient ses seuils', () => {
 
   /* -- Un total ne sort pas de l'ecran ------------------------------ */
 
-  test('le total d’un tableau large reste visible', () => {
-    /* Six colonnes pour 311 px de carte : la colonne « Total » etait hors de
-       l'ecran a l'ouverture, le seul chiffre que la courbe au-dessus raconte.
-       Epinglee a droite, elle y reste pendant que ses parts defilent. */
-    const src = lireSource('assets/app.js');
-    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
-    const i = src.indexOf('function detailEvolution');
-    const bloc = src.slice(i, src.indexOf('function monterEvolution'));
-    vrai(/<th class="sticky-fin">Total<\/th>/.test(bloc), 'l’en-tête du total est épinglée');
-    vrai(/<td class="sticky-fin"><b>\$\{fmtEUR0\(p\.total\)\}/.test(bloc), 'et la cellule aussi');
-    const regle = (css.match(/\.sticky-fin \{[^}]*\}/) || [''])[0];
-    vrai(/position: sticky/.test(regle) && /right: 0/.test(regle),
-      'la règle épingle par le bord droit');
-    vrai(/background: var\(--surface-1\)/.test(regle),
-      'avec un fond, sinon les parts défilent sous le total et on lit deux chiffres l’un sur l’autre');
-  });
+  /* Le controle du total epingle a droite est parti avec son sujet : le tableau
+     « Voir les donnees » de la courbe n'existe plus, et `.sticky-fin` etait sa
+     seule cliente -- la regle CSS est partie avec. La lecon qu'il portait, elle,
+     vaut toujours pour les autres tableaux larges, et `.sticky-col` la garde :
+     voir « la colonne des noms ne s'epingle pas sous 768 px ». */
 
   /* -- Un chiffre dit sur quelle base il se calcule ------------------ */
 
@@ -18059,6 +18050,171 @@ suite('Un crédit ne s’amortit que d’une seule façon', () => {
     const cf = cashFlowBien(Store.state.comptes[0]);
     pres(cf.charges, 200, 'les trois charges du bien, et elles seules');
     pres(cf.cashFlow, 800, 'donc 800 € de cash-flow, sans crédit');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La jauge de variation du journal
+   ------------------------------------------------------------------ */
+suite('Une jauge dit le rythme sans rien ajouter au chiffre', () => {
+
+  /* L'espace entre le mois et les montants etait vide. Il porte une barre fine :
+     centre a zero, longueur proportionnelle a la variation du mois, cote selon le
+     signe. Elle ne dit rien de plus que le nombre deja ecrit a droite -- c'est
+     pour ca qu'elle est `aria-hidden` et qu'elle n'a ni axe, ni etiquette, ni
+     infobulle. */
+
+  /* L'echelle, rejouee : c'est la regle de `viewHistory`, et le test la garde
+     ici pour pouvoir la verifier sur des nombres choisis. */
+  const echelleDe = variations => {
+    const amp = variations.map(Math.abs).filter(v => v > 0.005).sort((a, b) => a - b);
+    if (!amp.length) return 0;
+    const med = amp.length % 2 ? amp[(amp.length - 1) / 2]
+              : (amp[amp.length / 2 - 1] + amp[amp.length / 2]) / 2;
+    return Math.min(amp[amp.length - 1], 3 * med);
+  };
+  const partDe = (v, variations) => {
+    const e = echelleDe(variations);
+    return e > 0 ? Math.max(-1, Math.min(1, v / e)) : 0;
+  };
+
+  test('la jauge sort du même calcul que le nombre affiché', () => {
+    /* Une seule source : la vue passe `jauge: jaugeDe(dlt)`, et `dlt` est
+       exactement la variation ecrite dans la colonne de droite. Aucun second
+       calcul, aucune performance recalculee. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewHistory('),
+                          src.indexOf('function mountHistory('));
+    vrai(/second: dlt \? fmtSigned\(dlt\) : ''/.test(vue),
+      'la colonne de droite affiche dlt');
+    vrai(/jauge: jaugeDe\(dlt\)/.test(vue), 'et la jauge dessine le même dlt');
+    vrai(/const jaugeDe = dlt =>/.test(vue), 'l’échelle se traduit en part une seule fois');
+    /* Et l'echelle est commune aux lignes affichees, non recalculee par ligne. */
+    vrai(/const amplitudes = lignes\.map/.test(vue),
+      'l’échelle se construit sur les lignes affichées');
+  });
+
+  test('positif à droite, négatif à gauche, plat au centre', () => {
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function ligneListe('), src.indexOf('\n}',
+      src.indexOf('function ligneListe(')));
+    vrai(/part > 0 \? 'up' : 'down'/.test(fn), 'le signe décide de la couleur');
+    vrai(/part > 0 \? 'left' : 'right'\}:50%/.test(fn),
+      'et du côté : la barre part du milieu, à droite ou à gauche');
+    vrai(/Math\.abs\(part\) < 0\.005/.test(fn), 'un mois plat est reconnu');
+    vrai(/'<i class="plat"><\/i>'/.test(fn),
+      'et pose un point neutre plutôt qu’un vide, qui se lirait comme une donnée manquante');
+    /* La largeur est la moitie de la piste au maximum : la barre part du centre. */
+    vrai(/Math\.abs\(part\) \* 50/.test(fn),
+      'une part pleine occupe la moitié de la piste, du centre au bord');
+  });
+
+  test('l’échelle est commune, donc les longueurs se comparent', () => {
+    /* L'exemple donne : +6 215, +2 848, +715, -512. Le plus gros mois fait la
+       barre la plus longue, et les autres gardent des longueurs distinctes. */
+    const v = [6215, 2848, 715, -512];
+    const parts = v.map(x => partDe(x, v));
+    eq(parts[0], 1, '+6 215 € sature la barre');
+    vrai(parts[1] > parts[2] && parts[2] > 0,
+      '+2 848 € fait plus long que +715 €, et les deux se voient');
+    vrai(parts[3] < 0, '−512 € part de l’autre côté');
+    vrai(Math.abs(parts[3]) > 0.05, 'et reste visible malgré sa petitesse');
+    /* Aucune normalisation par ligne : deux mois differents ne peuvent pas
+       donner la meme longueur. */
+    vrai(parts[1] !== parts[2], 'deux mois différents donnent deux longueurs');
+  });
+
+  test('un mois exceptionnel n’écrase pas les autres', () => {
+    /* Le cas nomme : +50 000 EUR au milieu de mois a 500 - 2 000. Avec le maximum
+       pour echelle, +500 ferait un pour cent de la barre -- invisible. La mediane
+       ignore l'exception. */
+    const v = [50000, 2000, 1500, 900, 500];
+    const parts = v.map(x => partDe(x, v));
+    eq(parts[0], 1, 'le mois exceptionnel sature');
+    vrai(parts[1] > 0.3, 'et +2 000 € garde une barre franche');
+    vrai(parts[4] > 0.08, 'même +500 € reste visible');
+    /* Contre-epreuve : avec le maximum seul, le plus petit serait invisible. */
+    vrai(500 / 50000 < 0.02, 'là où l’échelle par le maximum le rendrait invisible');
+  });
+
+  test('un seul relevé, ou un mois plat, ne casse pas l’échelle', () => {
+    eq(partDe(3000, [3000]), 1, 'un mois seul occupe la barre entière');
+    eq(partDe(0, [0]), 0, 'un mois plat ne divise par rien');
+    eq(partDe(0, []), 0, 'et une liste vide non plus');
+    /* Le premier releve de la serie n'a pas de variation : la vue lui passe
+       zero, donc l'etat neutre, et non une barre inventee. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewHistory('),
+                          src.indexOf('function mountHistory('));
+    vrai(/dlt: avant \? net - avant\.net : 0/.test(vue),
+      'le premier relevé a une variation nulle, donc une jauge neutre');
+  });
+
+  test('la jauge est décorative, et la ligne reste un seul bouton', () => {
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function ligneListe('), src.indexOf('\n}',
+      src.indexOf('function ligneListe(')));
+    vrai(/class="ml-jauge" aria-hidden="true"/.test(fn),
+      'un lecteur d’écran l’ignore : le nombre est déjà lu');
+    /* Aucun controle dans la jauge : pas de bouton, pas de lien, pas de title. */
+    const i = fn.indexOf('ml-jauge');
+    const bloc = fn.slice(i, fn.indexOf('</span>`}', i));
+    vrai(!/<button|<a |title=|data-action/.test(bloc),
+      'elle ne devient pas un contrôle : la ligne entière ouvre le relevé');
+    /* Et la ligne est toujours un seul bouton. */
+    eq((fn.match(/<button/g) || []).length, 1, 'un seul bouton par ligne');
+  });
+
+  test('la jauge cède la place au texte, jamais l’inverse', () => {
+    /* Elle vit dans l'espace laisse libre : `flex: 0 1` et non `1 1`, sinon elle
+       se disputerait la croissance avec le nom du mois -- une note un peu longue
+       ecrasait alors l'une ou l'autre. Sous 360 px elle disparait : le mois, le
+       montant et la variation passent avant. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const regle = (css.match(/\.ml-jauge \{[^}]*\}/) || [''])[0];
+    vrai(/flex: 0 1/.test(regle), 'elle ne pousse pas, elle cède');
+    vrai(/min-width: 0/.test(regle), 'et se laisse comprimer sans déborder');
+    vrai(/height: 3px/.test(regle), 'trois pixels de haut : discrète');
+    /* Le nom du mois garde la croissance, les montants gardent leur place. */
+    vrai(/\.ml-nom \{[^}]*flex: 1 1 auto/.test(css), 'le nom du mois pousse');
+    vrai(/\.ml-chiffres \{[^}]*flex: none/.test(css), 'les montants ne se compriment pas');
+    const petit = css.slice(css.indexOf('@media (max-width: 359px)'));
+    vrai(/\.ml-jauge \{ display: none; \}/.test(petit),
+      'sous 360 px, le texte passe avant');
+  });
+
+  test('aucune couleur nouvelle, aucune légende', () => {
+    /* Les teintes sont celles de l'application : `--good`, `--critical`,
+       `--muted`. Pas de palette de plus, pas d'axe, pas d'etiquette. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const bloc = css.slice(css.indexOf('.ml-jauge'), css.indexOf('.ml-chev'));
+    for (const teinte of ['var(--good)', 'var(--critical)', 'var(--muted)']) {
+      vrai(bloc.includes(teinte), `${teinte} vient du thème`);
+    }
+    vrai(!/#[0-9a-fA-F]{3,6}/.test(bloc), 'aucune couleur écrite en dur');
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function ligneListe('), src.indexOf('\n}',
+      src.indexOf('function ligneListe(')));
+    vrai(!/legend|trad\(/.test(fn.slice(fn.indexOf('ml-jauge'))),
+      'et aucun texte : rien à traduire, rien à lire');
+  });
+
+  test('le dépliant « Voir les données » de la courbe est parti, et son attirail', () => {
+    /* Il rendait les memes nombres que la courbe trace juste au-dessus, sous une
+       autre forme, derriere un pli. Le journal des releves donne deja mois par
+       mois ce qu'il montrait, avec la porte pour corriger chaque ligne. */
+    const src = lireSource('assets/app.js');
+    const sansCom = src.replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const mort of ['detailEvolution', 'evoDetail', 'evoYear', 'evo-year']) {
+      vrai(!sansCom.includes(mort), `« ${mort} » est parti avec le dépliant`);
+    }
+    /* Les deux ecrans rendent donc la meme carte, sans drapeau. */
+    vrai(/function carteEvolution\(\) \{/.test(src),
+      'carteEvolution n’a plus de paramètre');
+    /* Et la classe CSS qui n'avait que ce tableau pour cliente. */
+    const css = lireSource('assets/styles.css') || '';
+    vrai(!css.includes('sticky-fin'), 'la règle qui épinglait son total est partie avec');
+    vrai(css.includes('sticky-col'), 'celle des autres tableaux reste');
   });
 });
 
