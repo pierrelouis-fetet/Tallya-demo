@@ -1979,7 +1979,14 @@ const moisRevolu = (date, aujourdhui = todayISO()) =>
   String(date || '').slice(0, 7) <= String(aujourdhui).slice(0, 7);
 
 function historyYears() {
-  return [...new Set(Store.state.monthly.map(r => r.date.slice(0, 4)))].sort();
+  const ans = new Set([todayISO().slice(0, 4)]);
+  for (const r of Store.state.monthly || []) {
+    if (!rowIsEmpty(r)) ans.add(String(r.date).slice(0, 4));
+  }
+  for (const a of apportsTries()) {
+    if (a.date) ans.add(String(a.date).slice(0, 4));
+  }
+  return [...ans].sort();
 }
 
 const HISTORY_RANGES = [
@@ -3626,7 +3633,7 @@ const PREMIERS_PAS = [
     quoi: 'Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à '
         + 'une date. Il en faut deux pour que la courbe et le rythme d’accumulation '
         + 'aient une pente à montrer.',
-    bouton: 'Enregistrer un relevé', action: 'go-snapshot',
+    bouton: 'Enregistrer un relevé', action: 'ajouter-releve',
     fait: () => !aUnComptePropre() || aDejaServi() },
   { cle: 'depenses',
     quoi: 'Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident '

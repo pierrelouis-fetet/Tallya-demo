@@ -2247,8 +2247,12 @@ suite('Pièges de source', () => {
        aussi, sur une série qui n'a rien à voir. */
     eq((source.match(/#chartEvo/g) || []).length, 1,
       'une seule fabrique de courbe d’évolution, sinon deux appels divergent');
-    eq((source.match(/monterEvolution\(\)/g) || []).length, 3,
-      'sa définition et ses deux appelants, l’Aperçu et le Budget');
+    /* Deux appels avant, un seul depuis que le journal patrimonial ne trace plus
+       rien : la courbe d'evolution vit sur Aujourd'hui, et Historique n'avait
+       plus de conteneur a remplir — `monterEvolution()` y sortait en silence,
+       ce qui est le pire des etats, celui qui ne se signale pas. */
+    eq((source.match(/monterEvolution\(\)/g) || []).length, 2,
+      'sa définition et son seul appelant, l’Aperçu');
     /* La barre du hero et la liste en dessous descendent de la même source :
        une seule liste, donc les couleurs et les parts ne peuvent pas différer.
 
@@ -7524,12 +7528,16 @@ suite('Les classes posées par le JavaScript existent', () => {
       ['.toast-action', 'toast-action'],
       ['.f-etab',       'f-etab'],
       ['.avert',        'class="avert"'],
-      ['.th-etab',      'th-etab'],
+      /* `.th-etab` et `.snap-avenir` sont parties avec le tableau de correction
+         du journal patrimonial : la premiere posait l'etablissement sous
+         l'intitule d'une colonne, la seconde eteignait le ⤒ d'un mois a venir.
+         Retirees de la feuille en meme temps que leur balisage, elles ont quitte
+         cette liste par le meme geste : c'est exactement ce que ce controle
+         garde, dans les deux sens. */
       ['.f-etab',        'f-etab'],
       ['.champ-lecture', 'champ-lecture'],
       ['.lien-nu',       'lien-nu'],
       ['.btn.pleine',   'btn pleine'],
-      ['.snap-avenir',  'snap-avenir'],
     ];
     for (const [enCss, enJs] of paires) {
       vrai(css.includes(enCss), `${enCss} doit être définie dans styles.css`);
@@ -11924,7 +11932,8 @@ suite('Enregistrer : une règle, deux familles', () => {
     const src = lireSource('assets/app.js');
     eq((src.match(/appliquerReleve\(/g) || []).length, 2,
       'une définition, un appelant : la fenêtre, et personne d’autre');
-    const action = src.slice(src.indexOf("async 'edit-month'"), src.indexOf("'go-snapshot'"));
+    const action = src.slice(src.indexOf("async 'edit-month'"), src.indexOf("async 'ajouter-releve'"));
+    vrai(action.length > 40, 'les deux actions du relevé doivent être trouvables');
     vrai(!/row\.v = /.test(action),
       'l’action d’ouverture n’écrit plus rien elle-même');
   });
@@ -14716,16 +14725,34 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
       `la largeur, elle, garde le sien ; règle lue : « ${regle || 'aucune'} »`);
   });
 
-  test('le tableau de correction ne se propose plus sous 767 px', () => {
-    /* Quinze colonnes dans un conteneur qui defile, quand la liste juste au-dessus
-       ouvre le meme mois dans une fenetre qui tient dans l'ecran : deux surfaces
-       pour la meme saisie, dont une inutilisable au doigt. */
+  test('le tableau de correction n’existe plus du tout', () => {
+    /* Il ne se proposait deja plus sous 767 px : quinze colonnes dans un
+       conteneur qui defile, quand la liste juste au-dessus ouvrait le meme mois
+       dans une fenetre qui tient dans l'ecran. Deux surfaces pour la meme
+       saisie, dont une inutilisable au doigt.
+
+       Le reserver aux grands ecrans etait un demi-geste. La fenetre du mois
+       fait tout ce que le tableau faisait — la reprise des montants actuels, la
+       correction compte par compte, la note, l'effacement — et elle le fait
+       partout. Ce qui reste doit donc etre parti : le depliant, ses deux
+       actions et le ⤒ de chaque ligne. */
     const src = lireSource('assets/app.js');
-    const i = src.indexOf("trad('Corriger mois par mois");
-    vrai(i > 0, 'le dépliant existe');
-    const ouverture = src.lastIndexOf('<details', i);
-    vrai(/large-seulement/.test(src.slice(ouverture, i)),
-      'le dépliant est réservé aux grands écrans');
+    const vue = src.slice(src.indexOf('function viewHistory('),
+                          src.indexOf('function mountHistory('));
+    vrai(vue.length > 500, 'la vue doit être trouvable');
+    vrai(!/<table/.test(vue),
+      'plus un seul tableau dans le journal : la liste EST l’affichage');
+    vrai(!/large-seulement/.test(vue),
+      'et donc plus de bloc réservé aux grands écrans');
+    for (const mort of ["'snapshot-row'", "'add-month'", "'del-month'"]) {
+      vrai(!src.includes('  ' + mort + '('),
+        `l’action ${mort} n’a plus de bouton pour l’appeler : elle doit partir`);
+    }
+    /* Ce que la fenetre doit porter en echange, sans quoi la suppression aurait
+       retire des fonctions au lieu d'en deplacer. */
+    vrai(/id="relPhoto"/.test(src), 'la reprise des montants actuels vit dans la fenêtre');
+    vrai(/id="relVider"/.test(src), 'l’effacement du mois aussi');
+    vrai(/id="relCloture"/.test(src), 'et l’option des comptes clôturés');
   });
 
   test('rien ne devient inatteignable : la fenêtre du mois efface aussi', () => {
@@ -14741,10 +14768,14 @@ suite('Un mois se corrige au doigt, ou dans un tableau', () => {
     /* La question se regle a un seul endroit : deux portes, un seul texte. */
     eq((src.match(/trad\('Effacer les montants de \{m\} \?'\)/g) || []).length, 1,
       'la question ne s’écrit qu’une fois');
-    const j = src.indexOf("async 'del-month'(btn)");
-    const action = src.slice(j, src.indexOf('},', j));
-    vrai(/viderOuSupprimerMois/.test(action), 'le ✕ du tableau appelle la même fonction');
-    vrai(!/askConfirm/.test(action), 'et ne repose pas la question à sa façon');
+    /* Le ✕ du tableau de correction appelait la meme fonction. Le tableau est
+       parti, donc il ne reste qu'une porte, et c'est le bouton rouge de la
+       fenetre : une definition, un appelant. Le compte le garde — un second
+       exemplaire de la question reviendrait par la. */
+    eq((src.match(/viderOuSupprimerMois\(/g) || []).length, 2,
+      'une définition et un seul appelant : le bouton rouge de la fenêtre');
+    vrai(!/'del-month'/.test(src),
+      'l’action du ✕ est partie avec son bouton, pas gardée au cas où');
   });
 
   test('« Ligne supprimée » ne dit pas « Holding deleted » pour un mois', () => {
@@ -15010,14 +15041,20 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
       `l’ordre attendu est contrôles, état, transferts… puis la remise à zéro : ${l.join(' < ')}`);
   });
 
-  test('Relevés : le calendrier qu’on vient remplir ouvre la page', () => {
+  test('Relevés : le journal qu’on vient remplir ouvre la page', () => {
+    /* La carte « Notes de marche » reprenait, pour l'annee choisie, les
+       commentaires des mois qui en portent un. Chaque ligne du journal affiche
+       desormais sa note sous le mois, dans le meme ordre et sur la meme carte :
+       la troisieme carte ne faisait plus que redire ce qui est a l'ecran, sans
+       les montants qui donnent son sens a une note. */
     const src = lireSource('assets/app.js');
     const vue = src.slice(src.indexOf('function viewHistory('), src.indexOf('function viewAccounts('));
     const l = positions(vue,
       "trad('Relevé mensuel du patrimoine')",
-      "trad('Entrées et sorties exceptionnelles')",
-      "trad('Notes de marché')");
-    vrai(croissant(l), `l’ordre attendu est relevé, apports, notes : ${l.join(' < ')}`);
+      "trad('Entrées et sorties exceptionnelles')");
+    vrai(croissant(l), `l’ordre attendu est relevé puis apports : ${l.join(' < ')}`);
+    vrai(!vue.includes('Notes de marché'),
+      'et la carte des notes est partie : le journal les porte, ligne par ligne');
   });
 
   test('Allocation : ce que c’est, où c’est posé, puis en combien de temps', () => {
@@ -15804,6 +15841,234 @@ suite('La graine de la démonstration parle une seule langue', () => {
     eq(fautifs.length, 0,
       'libellé(s) français dans la graine d’une démonstration anglaise : '
       + fautifs.join(' | '));
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le journal patrimonial
+   ------------------------------------------------------------------ */
+suite('Le journal patrimonial ne montre que des relevés', () => {
+
+  /* La page etait un calendrier : douze lignes existaient des le premier
+     lancement, chacune surmontee d'une barre de composition, et un tableau de
+     quinze colonnes se depliait dessous pour la correction. Un journal ne
+     s'ouvre pas sur onze mois qui n'ont pas eu lieu. */
+
+  test('les années proposées sont celles où quelque chose s’est passé', () => {
+    /* `historyYears()` listait les annees PRESENTES dans la table, et le
+       calendrier en ouvre douze mois d'avance : une annee existait des qu'on
+       l'avait ouverte, sans porter un seul releve, et le selecteur proposait de
+       consulter du vide. */
+    auJour('2026-08-10', () => {
+      Fixture.poser(s => {
+        s.monthly = [
+          { date: '2024-06-01', comment: '', v: { c_courant: 3000 } },
+          { date: '2027-01-01', comment: '', v: {} },
+          { date: '2027-02-01', comment: '', v: {} },
+        ];
+        s.budget.apports = [{ date: '2021-05-04', montant: 12000, libelle: 'Prime' }];
+      });
+      const ans = historyYears();
+      vrai(ans.includes('2024'), 'l’année d’un relevé renseigné y est');
+      vrai(ans.includes('2026'), 'l’année en cours y est toujours : elle doit pouvoir recevoir le relevé du mois');
+      vrai(ans.includes('2021'), 'et celle d’un mouvement exceptionnel, qui partage ce sélecteur');
+      vrai(!ans.includes('2027'),
+        'mais pas une année dont les douze lignes sont vides : le menu proposerait du vide');
+      /* Triee, et c'est ce que le selecteur affiche de haut en bas. */
+      eq(ans.join(','), [...ans].sort().join(','), 'la liste est triée');
+    });
+  });
+
+  test('une année entièrement vide disparaît du sélecteur', () => {
+    /* Le cas exact de « + Ouvrir l'annee suivante », dont les lignes survivent
+       dans le localStorage de qui a appuye dessus. */
+    auJour('2026-08-10', () => {
+      Fixture.poser(s => {
+        s.monthly = [{ date: '2026-08-01', comment: '', v: { c_courant: 3000 } }];
+        s.apports = [];
+      });
+      eq(historyYears().join(','), '2026', 'une seule année, celle du relevé');
+    });
+  });
+
+  test('la vue ne garde que les mois renseignés, du plus récent au plus ancien', () => {
+    const vue = lireSource('assets/app.js');
+    const bloc = vue.slice(vue.indexOf('function viewHistory('),
+                           vue.indexOf('function mountHistory('));
+    vrai(bloc.length > 500, 'la vue doit être trouvable');
+    vrai(/if \(rowIsEmpty\(r\)\) continue;/.test(bloc),
+      'un mois sans montant ne fait pas une ligne de journal');
+    vrai(/\.reverse\(\)/.test(bloc),
+      'du plus récent au plus ancien : c’est la dernière entrée qu’on vient lire');
+    vrai(/action: 'voir-releve'/.test(bloc),
+      'et la ligne entière ouvre le détail du mois');
+  });
+
+  test('la variation se compte depuis le relevé précédent, pas depuis la ligne du dessus', () => {
+    /* Le calendrier ouvrait douze mois d'avance : la ligne au-dessus de
+       septembre etait presque toujours un aout vide, donc l'ecart valait zero et
+       la colonne se taisait. La fenetre du mois, elle, cherchait deja le dernier
+       mois RENSEIGNE — deux facons de dire « le releve d'avant » dans une meme
+       page, et c'est celle qui s'affichait qui avait tort. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function viewHistory('),
+                           src.indexOf('function mountHistory('));
+    vrai(!/monthly\[i - 1\]/.test(bloc),
+      'la ligne du dessus n’est plus la référence');
+    vrai(/avant \? total - avant\.total : 0/.test(bloc),
+      'c’est le relevé renseigné juste avant qui l’est');
+    /* Et la fenetre de detail dit la meme chose, par le meme chemin : trois
+       endroits, une seule definition. */
+    for (const ou of ['releveMois: (arg)', 'function askMonthlySnapshot']) {
+      const i = src.indexOf(ou);
+      vrai(i > 0, `${ou} doit être trouvable`);
+      vrai(/filter\(x => !rowIsEmpty\(x\)\)\.pop\(\)/.test(src.slice(i, i + 1600)),
+        `${ou} cherche aussi le dernier mois renseigné`);
+    }
+  });
+
+  test('les grosses barres de composition sont parties, et leur CSS avec', () => {
+    /* Douze barres dont l'immobilier occupe les quatre cinquiemes se ressemblent
+       toutes : on lisait la repartition, jamais la taille, sur un ecran et demi
+       de defilement. Une regle CSS morte est l'autre moitie du meme defaut. */
+    const src = lireSource('assets/app.js');
+    const css = lireSource('assets/styles.css');
+    for (const mort of ['ml-poches', 'ml-part', 'mlist-empile', 'ml-haut']) {
+      vrai(!src.includes(mort), `${mort} n’est plus posé dans app.js`);
+      vrai(!css.includes(mort), `ni défini dans styles.css`);
+    }
+    /* Et le parametre de `ligneListe` qui les portait : un parametre sans
+       appelant est la moitie qu'on oublie. */
+    const i = src.indexOf('function ligneListe(');
+    vrai(i > 0, 'ligneListe doit être trouvable');
+    vrai(!/barre/.test(src.slice(i, src.indexOf('\n}', i))),
+      'ligneListe n’a plus de paramètre « barre »');
+  });
+
+  test('le compte parle de relevés, pas de mois du calendrier', () => {
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function viewHistory('),
+                           src.indexOf('function mountHistory('));
+    vrai(/\{n\} relevés en \{a\}/.test(bloc) && /\{n\} relevé en \{a\}/.test(bloc),
+      '« 12 mois affichés » comptait les lignes du calendrier, remplies ou non');
+    vrai(!/mois affich/.test(bloc), 'et cette formule a quitté le journal');
+  });
+
+  test('trois états vides, et ils ne disent pas la même chose', () => {
+    /* Aucun releve du tout, aucun releve dans l'annee regardee, ou un mois en
+       cours qui attend le sien : « rien pour l'instant » devant douze releves
+       ranges dans l'annee d'a cote serait faux, et enverrait chercher un
+       defaut. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function viewHistory('),
+                           src.indexOf('function mountHistory('));
+    for (const phrase of ['Aucun relevé mensuel pour le moment.',
+                          'Aucun relevé en {a}.',
+                          'Aucun relevé pour {m}.']) {
+      vrai(bloc.includes(phrase), `l’état vide « ${phrase} » doit exister`);
+    }
+    /* Le mois en cours se tait quand le bandeau du haut porte deja le rappel :
+       le meme fait annonce deux fois sur un ecran, c'est un de trop. */
+    vrai(/attente\.vide && !attente\.missing/.test(bloc),
+      'l’invitation du mois en cours cède le pas au bandeau de rappel');
+  });
+
+  test('« Ajouter un relevé » ouvre la saisie du mois en cours', () => {
+    /* L'action posait une ancre et faisait defiler la page jusqu'a la ligne du
+       mois, ou un ⤒ attendait un second clic. Le journal n'a plus de ligne pour
+       un mois vide, donc plus d'ancre a viser — et la jumelle des depenses ouvre
+       depuis toujours sa fenetre directement. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("async 'ajouter-releve'()");
+    vrai(i > 0, 'l’action doit exister');
+    const action = src.slice(i, src.indexOf('},', i));
+    vrai(/askMonthlySnapshot\(indexReleve\(currentMonthKey\(\)\)\)/.test(action),
+      'le mois en cours par défaut, sa ligne créée si elle manque, et la fenêtre s’ouvre');
+    vrai(!/pendingAnchor/.test(action), 'plus d’ancre à viser');
+    vrai(!src.includes("'go-snapshot'"), 'l’ancien nom ne survit nulle part');
+    /* Les quatre portes du meme geste pointent sur la meme action. */
+    vrai((src.match(/data-action="ajouter-releve"/g) || []).length >= 3,
+      'les bandeaux et la carte appellent tous cette action');
+    vrai(lireSource('assets/store.js').includes("action: 'ajouter-releve'"),
+      'et le premier pas aussi');
+  });
+
+  test('la ligne du mois se crée triée, à un seul endroit', () => {
+    /* Une ligne poussee en fin de table fausserait la variation de son voisin :
+       le journal lit le releve d'avant dans l'ordre de la table. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('function indexReleve(');
+    vrai(i > 0, 'indexReleve doit être trouvable');
+    const f = src.slice(i, src.indexOf('\n}', i));
+    vrai(/\.sort\(\(a, b\) => String\(a\.date\)\.localeCompare\(String\(b\.date\)\)\)/.test(f),
+      'la table reste triée par date');
+    /* Deux endroits creaient cette ligne, avec deux tris ecrits a la main.
+       Un fait se regle a un seul endroit. */
+    eq((src.match(/monthly\.push\(\{ date:/g) || []).length, 1,
+      'une seule fabrique de ligne de relevé');
+  });
+
+  test('le détail du mois porte la composition, et elle fait le total', () => {
+    /* La liste ne porte que trois chiffres : la composition se lit dans la
+       fenetre du mois. Les poches nulles en sortent, donc la somme des lignes
+       affichees egale le total en tete — la regle de la maison. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('releveMois: (arg)');
+    vrai(i > 0, 'le panneau doit exister');
+    const panneau = src.slice(i, src.indexOf('\n  },', i));
+    vrai(/rowGroups\(r\)/.test(panneau) && /rowTotal\(r\)/.test(panneau),
+      'les poches et le total viennent des mêmes fonctions que la courbe');
+    vrai(/seriesUtiles\(\[g\]\)/.test(panneau),
+      'mêmes libellés et même ordre que la légende du graphique d’évolution');
+    vrai(/Math\.abs\(num\(g\[p\.key\]\)\) > 0\.005/.test(panneau),
+      'une poche nulle ne prend pas de ligne : le total doit égaler la somme des parts');
+    vrai(/trad\('Compte par compte'\)/.test(panneau),
+      'et les montants compte par compte y sont');
+    vrai(/data-action="edit-month"/.test(panneau),
+      'un clic montre, un second modifie');
+    /* La note par defaut compare la ligne au patrimoine d'aujourd'hui, ce qui ne
+       veut rien dire pour un mois passe. */
+    vrai(/totalNote:/.test(panneau),
+      'le panneau donne sa propre note : « % de tes avoirs » daterait d’aujourd’hui');
+  });
+
+  test('la fenêtre du relevé laisse choisir son mois', () => {
+    /* « Ajouter un releve » propose le mois en cours, et le choix sert aux trois
+       usages nommes : rattraper un mois oublie, importer un ancien historique,
+       corriger une periode passee. Il vit DANS la fenetre : une etape avant elle
+       aurait fait payer un clic au cas courant. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('function askMonthlySnapshot(');
+    const f = src.slice(i, src.indexOf('\n/* ====', i));
+    vrai(/id="relMois"/.test(f) && /id="relAn"/.test(f), 'deux menus, mois et année');
+    vrai(!/type="month"/.test(f),
+      'et non un champ natif « month », que Safari de bureau rend en texte libre');
+    vrai(/const choixMois = isCalendarMonth\(r\.date\)/.test(f),
+      'une ligne de clôture hors calendrier n’a pas de mois à choisir');
+    vrai(/async function allerAuMois\(\)/.test(f),
+      'une fonction déclarée : le câblage la nomme plus bas, une const y serait dans sa zone morte');
+    vrai(/if \(sale\)/.test(f.slice(f.indexOf('async function allerAuMois'))),
+      'changer de mois avec une saisie non enregistrée pose la question');
+  });
+
+  test('les comptes clôturés se révèlent sans perdre la saisie', () => {
+    /* L'option vivait en tete de la page des releves, ou elle elargissait le
+       tableau de correction. Le tableau est parti : une case qui ne change rien
+       a l'ecran se lit comme une panne. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('function askMonthlySnapshot(');
+    const f = src.slice(i, src.indexOf('\n/* ====', i));
+    vrai(/const comptes = ACCOUNTS\.slice\(\);/.test(f),
+      'tous les champs sont rendus, puis masqués : les reconstruire jetterait la saisie');
+    vrai(/data-cloture/.test(f), 'les champs masqués sont marqués');
+    vrai(/style="display:none"/.test(f),
+      'style en ligne, parce que .field déclare son display et l’emporterait sur « hidden »');
+    vrai(/const masque = a => a\.legacy && !num\(r\.v\?\.\[a\.id\]\)/.test(f),
+      'un compte clôturé qui portait un montant ce mois-là reste visible');
+    /* Et la photo ne cache pas un euro : elle parcourt tous les comptes, et le
+       grand total les compte. */
+    vrai(/closest\('\[data-cloture\]'\)/.test(f),
+      'un champ masqué qui reçoit un montant se montre');
   });
 });
 

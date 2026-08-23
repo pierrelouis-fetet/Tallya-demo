@@ -656,7 +656,7 @@ function viewOverview() {
 
   ${moisEnAttente.missing ? `
   <div class="rappel card-cliquable">
-    <button type="button" class="card-couvre" data-action="go-snapshot"
+    <button type="button" class="card-couvre" data-action="ajouter-releve"
             aria-label="${trad('Prendre le snapshot de')} ${esc(moisEnAttente.label)}"></button>
     <span class="rappel-pastille"></span>
     <span class="rappel-texte"><b>${trad('Prendre le snapshot de')} ${esc(moisEnAttente.label)} ›</b><br>
@@ -1825,27 +1825,21 @@ function sortPositions(entries) {
 /* `ancre` et `classe` : la liste doit pouvoir porter les memes reperes que la
    ligne de tableau qu'elle remplace — l'ancre visee par « Aller a la ligne »,
    et le fond du mois en cours. */
-/* `barre` : un dessin pose sous la ligne, facultatif.
-
-   La ligne restait a trois cases — nom, chiffres, chevron — ce qui suffit
-   partout sauf la ou le montant se decompose. Un releve mensuel a un total ET
-   des poches, et la liste n'avait pas d'endroit pour dire les secondes.
-
-   Le balisage ne change que dans ce cas : sans `barre`, c'est exactement la
-   ligne d'avant. Une ligne qui porterait un conteneur vide partout aurait
-   ajoute un niveau de DOM a douze mois de releves pour rien. */
-function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, barre }) {
-  const corps = `
+/* `barre` a vecu ici : un dessin pose sous la ligne, qui empilait les poches du
+   mois sous chaque releve. Le journal patrimonial n'en veut plus — douze barres
+   dont l'immobilier occupe les quatre cinquiemes se ressemblent toutes, et la
+   composition d'un mois se lit dans la fenetre de ce mois. Un parametre sans
+   appelant est la moitie qu'on oublie : il part avec ses trois regles CSS. */
+function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe }) {
+  return `
+  <button type="button" class="mlist${classe ? ` ${classe}` : ''}"
+          data-action="${action}" data-i="${index}"${ancre ? ` data-anchor="${esc(ancre)}"` : ''}>
     <span class="ml-nom">${esc(titre)}${marque || ''}${sous ? `<span class="sub">${esc(sous)}</span>` : ''}</span>
     <span class="ml-chiffres">
       <b>${valeur}</b>
       ${second ? `<span class="${classeSecond || 'muted'}">${second}</span>` : ''}
     </span>
-    <span class="ml-chev" aria-hidden="true">›</span>`;
-  return `
-  <button type="button" class="mlist${barre ? ' mlist-empile' : ''}${classe ? ` ${classe}` : ''}"
-          data-action="${action}" data-i="${index}"${ancre ? ` data-anchor="${esc(ancre)}"` : ''}>
-    ${barre ? `<span class="ml-haut">${corps}</span>${barre}` : corps}
+    <span class="ml-chev" aria-hidden="true">›</span>
   </button>`;
 }
 
@@ -3220,170 +3214,98 @@ function mountRebalance() {
 }
 
 let historyShowLegacy = false;
-let historyYear = null;      // null = année en cours
+let historyYear = null;      // null = l'annee du dernier releve
 
 function viewHistory() {
-  const cols = ACCOUNTS.filter(a => historyShowLegacy || !a.legacy);
   const annees = historyYears();
   const anneeCourante = todayISO().slice(0, 4);
   if (historyYear === 'all') historyYear = null;   // le cran a quitte le selecteur
-  const annee = historyYear ?? (annees.includes(anneeCourante) ? anneeCourante : annees[annees.length - 1]);
 
-  /* On garde l'index réel de chaque ligne : les champs de saisie pointent
-     dessus. Total et variation se calculent une fois pour les deux rendus, le
-     tableau et la liste de telephone — deux calculs paralleles finissent
-     toujours par diverger.
+  const tous = [];
+  for (let i = 0; i < Store.state.monthly.length; i++) {
+    const r = Store.state.monthly[i];
+    if (rowIsEmpty(r)) continue;
+    const total = rowTotal(r);
+    const avant = tous[tous.length - 1];
+    tous.push({ r, i, total, dlt: avant ? total - avant.total : 0 });
+  }
 
-     Le total est celui de `rowTotal`. La somme des trois poches affichees en
-     oubliait deux depuis que la crypto et l'immobilier ont la leur : la
-     colonne Total sous-estimait le patrimoine d'un portefeuille de
-     cryptomonnaies entier, pendant que la colonne Δ, elle, comparait deja des
-     totaux complets. */
-  const lignes = Store.state.monthly
-    .map((r, i) => ({ r, i }))
-    .filter(({ r }) => annee === 'all' || r.date.startsWith(annee))
-    .map(({ r, i }) => {
-      const total = rowTotal(r);
-      const prev = i > 0 ? rowTotal(Store.state.monthly[i - 1]) : 0;
-      return { r, i, g: rowGroups(r), total, dlt: prev && total ? total - prev : 0 };
-    });
+  const anneeDernier = tous.length
+    ? String(tous[tous.length - 1].r.date).slice(0, 4) : anneeCourante;
+  const annee = historyYear ?? (annees.includes(anneeDernier) ? anneeDernier : anneeCourante);
 
-  const poches = seriesUtiles(lignes.map(({ g }) => g));
-  const maxTotal = Math.max(0, ...lignes.map(({ total }) => Math.abs(num(total))));
-
-  const rows = lignes.map(({ r, i, g, total, dlt }) => {
-    const estMoisCourant = r.date === currentMonthKey();
-    const attendSaPhoto = estMoisCourant && rowIsEmpty(r);
-    const aVenir = !moisRevolu(r.date);
-    return `<tr ${estMoisCourant ? 'data-anchor="mois-courant" class="mois-courant"' : ''}>
-      <td class="snap-cell">
-        <button class="btn icon snap${attendSaPhoto ? ' snap-attendu' : ''}${aVenir ? ' snap-avenir' : ''}"
-                data-action="snapshot-row" data-i="${i}"
-                title="${aVenir
-                  ? `${esc(fmtMonth(r.date))} ${trad('n’a pas encore eu lieu')}`
-                  : attendSaPhoto
-                  ? `${trad('Enregistrer le relevé de')} ${esc(fmtMonth(r.date))}${deuxPoints()} ${trad('reprend tous les montants actuels')}`
-                  : trad('Reprendre tous les montants actuels dans cette ligne')}">⤒</button>
-      </td>
-      <td class="name sticky-col"><input type="date" data-path="monthly.${i}.date" value="${r.date}" style="min-width:130px"></td>
-      <td><b>${total ? fmtEUR0(total) : ''}</b></td>
-      <td class="${cls(dlt)}">${dlt ? fmtSigned(dlt) : ''}</td>
-      ${poches.map(p => `<td>${g[p.key] ? fmtEUR0(g[p.key]) : ''}</td>`).join('')}
-      ${cols.map(a => `<td><input type="number" step="any" data-path="monthly.${i}.v.${a.id}" value="${r.v[a.id] ?? ''}" placeholder=""></td>`).join('')}
-      <td style="min-width:260px"><input data-path="monthly.${i}.comment" value="${esc(r.comment || '')}" placeholder="${trad('Note du mois…')}" style="text-align:left"></td>
-      <td><button class="btn icon" data-action="del-month" data-i="${i}" title="${trad('Supprimer la ligne')}">✕</button></td>
-    </tr>`;
-  }).join('');
+  const lignes = tous.filter(x => String(x.r.date).startsWith(annee)).reverse();
+  const attente = currentMonthPending();
 
   return `
   ${(() => {
-    /* Le rappel passe tout en haut : il etait sous le graphique, donc apres
-       un ecran de defilement, alors qu'il porte le seul geste qu'on vient
-       faire ici. Un rappel qu'on decouvre apres avoir lu la page arrive trop
-       tard.
-       Il se tait aussi : attendre une rentree d'argent est une raison suffisante,
-       maintenant » est une raison legitime, et les deux sorties sont les memes
-       que sur les autres bandeaux : `sortiesRappel` les rend une seule fois.
-       Ce bouton disait « Plus tard » en taisant le mois entier, quand celui de
-       l'accueil ne repoussait que d'une semaine — deux gestes, un seul mot. */
-    const p = currentMonthPending();
-    if (!p.missing) return '';
-    return `<div class="note">⤒ <span><b>${esc(p.label)} ${trad('n’est pas encore enregistré.')}</b>
-      ${trad('Depuis sa ligne, reprendre d’un coup tous les montants actuels')}
-      (${fmtEUR0(nowTotals().total)}) ${trad('tient en un geste.')}</span>
-      ${sortiesRappel('releve', p.label,
-        `<button class="btn sm" data-action="go-snapshot">${trad('Aller à la ligne')}</button>`)}</div>`;
+    if (!attente.missing) return '';
+    return `<div class="note">⤒ <span><b>${esc(attente.label)} ${trad('n’est pas encore enregistré.')}</b>
+      ${trad('Un relevé reprend d’un coup tous les montants actuels ({v}), et tient en un geste.')
+        .replace('{v}', fmtEUR0(nowTotals().total))}</span>
+      ${sortiesRappel('releve', attente.label,
+        `<button class="btn sm" data-action="ajouter-releve">${trad('Enregistrer le relevé')}</button>`)}</div>`;
   })()}
 
   <div class="card">
     <div class="card-head">
       <h2>${trad('Relevé mensuel du patrimoine')}</h2>
-      ${yearControl('history-year', annees, annee)}
-    </div>
-    <div class="row" style="margin:-4px 0 12px">
-      <span class="hint">${lignes.length} ${lignes.length > 1 ? trad('mois affichés') : trad('mois affiché')}</span>
-      <span class="spacer"></span>
-      <label class="small row" style="gap:6px"><input type="checkbox" id="toggleLegacy" ${historyShowLegacy ? 'checked' : ''} style="width:auto">${trad(' Comptes clôturés')}</label>
-      <button class="btn sm ghost" data-action="add-month">${trad('+ Ouvrir l’année suivante')}</button>
+      ${lignes.length ? `<span class="hint">${
+        (lignes.length > 1 ? trad('{n} relevés en {a}') : trad('{n} relevé en {a}'))
+          .replace('{n}', lignes.length).replace('{a}', esc(String(annee)))}</span>` : ''}
+      ${annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
+      <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter un relevé')}</button>
     </div>
     ${pasAFaire('comptes') ? `
     <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
       + 'à une date : leur montant, mois par mois. C’est lui qui donne la courbe de ton '
       + 'patrimoine et ton rythme d’accumulation. Il attend donc un compte.')}</p>
     ${invitePremierPas('comptes')}`
-    : invitePremierPas('releves')}
+    : !tous.length ? `
+    <p class="empty" style="margin:0 0 10px">${trad('Aucun relevé mensuel pour le moment.')}
+      ${trad('Un relevé est la photo de tes comptes à une date. C’est lui qui donne la courbe '
+      + 'de ton patrimoine et ton rythme d’accumulation, et il en faut deux pour qu’ils aient '
+      + 'une pente à montrer.')}</p>
+    <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter ton premier relevé')}</button>`
+    : !lignes.length ? `
+    <p class="empty" style="margin:0 0 10px">${trad('Aucun relevé en {a}.')
+      .replace('{a}', esc(String(annee)))}
+      ${trad('Le journal en compte {n} au total, sur les autres années.')
+        .replace('{n}', tous.length)}</p>
+    <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter un relevé')}</button>`
+    : `
+    ${annee === anneeCourante && attente.vide && !attente.missing ? `
+    <p class="hint" style="margin:0 0 10px">${trad('Aucun relevé pour {m}.')
+      .replace('{m}', esc(attente.label))}
+      <button type="button" class="lien-nu" data-action="ajouter-releve"
+              >${trad('+ Ajouter le relevé')}</button></p>` : ''}
     <div class="liste-principale">
-      ${lignes.map(({ r, i, g, total, dlt }) => {
-        const courant = r.date === currentMonthKey();
-        const barre = total ? `<span class="ml-poches" aria-hidden="true">
-          <span class="ml-part" style="width:${(total / maxTotal * 100).toFixed(2)}%">${
-          poches.map(p => {
-            const v = Math.abs(num(g[p.key]));
-            if (!v) return '';
-            return `<i style="width:${(v / total * 100).toFixed(2)}%;background:${p.color}"
-                       title="${esc(p.label)}"></i>`;
-          }).join('')}</span></span>` : '';
-        return ligneListe({
-          action: 'edit-month', index: i,
-          ancre: courant ? 'mois-courant' : '',
-          classe: courant ? 'mois-courant' : '',
-          titre: fmtMonth(r.date),
-          sous: r.comment || '',
-          marque: courant && rowIsEmpty(r)
-            ? `<span class="marque-attendu" title="${trad('Le relevé de ce mois n\'est pas encore pris')}">⤒</span>` : '',
-          valeur: total ? fmtEUR0(total) : '',
-          second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
-          barre,
-        });
-      }).join('') || `<p class="empty">${trad('Aucun mois sur cette année.')}</p>`}
-    </div>
-    ${poches.length ? `<div class="legend">${legendeSeries(poches)}</div>` : ''}
-
-    <details class="data-view large-seulement" style="margin-top:12px">
-      <summary>${trad('Corriger mois par mois, compte par compte')}</summary>
-      <p class="hint" style="margin:12px 0 0">${trad('Le ⤒ d’une ligne y reprend tous les '
-        + 'montants actuels d’un clic. La saisie case par case ne sert qu’à corriger un mois passé.')}</p>
-    <div class="table-wrap" style="max-height:70vh; overflow-y:auto">
-      <table class="editable">
-        <thead><tr>
-          <th title="${trad('Reprendre les montants actuels dans la ligne')}">⤒</th>
-          <th class="sticky-col">Date</th><th>Total</th><th>Δ</th>
-          ${poches.map(p => `<th>${esc(p.label)}</th>`).join('')}
-          ${cols.map(a => `<th title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
-            >${esc(a.short)}<span class="th-etab">${esc(a.broker || '')}</span></th>`).join('')}
-          <th>Commentaire</th><th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    </details>
+      ${lignes.map(({ r, i, total, dlt }) => ligneListe({
+        action: 'voir-releve', index: i,
+        classe: r.date === attente.key ? 'mois-courant' : '',
+        titre: fmtMonth(r.date),
+        sous: r.comment || '',
+        valeur: fmtEUR0(total),
+        second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
+      })).join('')}
+    </div>`}
   </div>
 
   ${(() => {
-    /* Le journal suit l'annee choisie en tete de page, comme « Notes de marche »
-       deux cartes plus bas. C'est la reponse a « si j'ai 300 lignes on va
-       derouler une liste de 300 ? » : le depliant seul ne bornait rien, il
-       cachait. Dix ans de mouvements exceptionnels tiennent dans un menu qui
-       existe deja, et aucun controle nouveau n'apparaît sur la carte.
-
-       Les bornes sont les deux bouts de l'annee, et `apportsDetail()` les prend
-       telles quelles. « Toutes les annees » retire les bornes : c'est la seule
-       vue qui peut etre longue, et c'est celle qu'on demande expressement. */
     const tout = apportsTries();
-    const bornes = annee === 'all' ? [null, null] : [`${annee}-01-01`, `${annee}-12-31`];
-    const liste = annee === 'all' ? tout
-      : tout.filter(a => String(a.date || '').startsWith(String(annee)));
+    const bornes = [`${annee}-01-01`, `${annee}-12-31`];
+    const liste = tout.filter(a => String(a.date || '').startsWith(String(annee)));
     const d = apportsDetail(...bornes);
     return `
   <div class="card">
     <div class="card-head"><h2>${trad('Entrées et sorties exceptionnelles')}</h2>
       <span class="hint">${liste.length
         ? `${liste.length} ligne${liste.length > 1 ? 's' : ''} · ${
-            annee === 'all' ? 'toutes années' : esc(String(annee))} · ${fmtSigned(d.net)} net`
+            esc(String(annee))} · ${fmtSigned(d.net)} net`
         : tout.length
-          ? `aucune en ${annee === 'all' ? 'mémoire' : esc(String(annee))} · ${tout.length} au total`
+          ? `aucune en ${esc(String(annee))} · ${tout.length} au total`
           : trad('héritage, prime, vente d’un bien, ou une grosse dépense')}</span>
-      ${tout.length ? yearControl('history-year', annees, annee) : ''}
+      ${tout.length && annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
       <span class="paire-btn">
         <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
         <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button>
@@ -3395,23 +3317,6 @@ function viewHistory() {
     : !liste.length ? `
     <p class="small muted" style="margin:0">Aucune ligne en ${esc(String(annee))}.
       Le journal en compte ${tout.length} au total : change l’année en tête de page.</p>`
-    /* La liste est repliee, et c'est une decision : personne ne veut d'une
-       liste d'une annee tout le temps, peut-etre un bouton voir liste, sinon
-       rien ». Un journal ne se vide jamais — il doit rester lisible aussi
-       longtemps que le graphique peut remonter jusqu'a lui, sinon le rythme
-       d'accumulation recompterait une voiture de 2026 comme de l'epargne en
-       2029. Mais ce qui ne se vide pas s'allonge.
-
-       Deux bornes, donc, et elles ne font pas double emploi : l'annee borne
-       **combien** de lignes existent, le depliant borne **quand** on les voit.
-       L'annee seule aurait montre douze mois de lignes en permanence ; le
-       depliant seul aurait cache trois cents lignes derriere un bouton sans en
-       reduire une.
-
-       `details` natif plutot qu'une classe et un ecouteur : le contenu reste
-       dans le document, donc les lignes gardent leur clic d'edition — ce qu'un
-       apercu en fenetre aurait perdu, `APERCUS` ne rendant que de la lecture.
-       Le drapeau survit au re-rendu, comme `evoDetailOuvert`. */
     : `<details class="data-view" id="journalApports" ${journalOuvert ? 'open' : ''}>
       <summary>${trad('Voir le journal')}</summary>
       <div class="mlist-groupe" style="margin-top:12px">
@@ -3433,25 +3338,10 @@ function viewHistory() {
         <dd class="${cls(d.net)}">${fmtSigned(d.net)}</dd>
     </dl>`}
   </div>`;
-  })()}
-
-  <div class="card">
-    <div class="card-head"><h2>${trad('Notes de marché')}</h2>
-      <span class="hint">${annee === 'all' ? 'toutes années' : esc(annee)}</span></div>
-    <ul class="small" style="line-height:1.75; margin:0; padding-left:18px; color:var(--text-secondary)">
-      ${lignes.filter(({ r }) => r.comment).map(({ r }) =>
-        `<li><b>${esc(fmtMonth(r.date))}</b>, ${esc(r.comment)}</li>`).join('') || '<li class="muted">Aucune note</li>'}
-    </ul>
-  </div>`;
+  })()}`;
 }
 
 function mountHistory() {
-  monterEvolution();
-  const cb = $('#toggleLegacy');
-  if (cb) cb.addEventListener('change', () => { historyShowLegacy = cb.checked; render(); });
-  /* Le depliant du journal retient son etat, comme celui des donnees d'evolution
-     juste au-dessus. Sans ce cablage il se refermerait au premier enregistrement :
-     `render()` reconstruit le balisage, et un `details` neuf naît plie. */
   const j = $('#journalApports');
   if (j) j.addEventListener('toggle', () => { journalOuvert = j.open; });
 }
@@ -7720,21 +7610,12 @@ const ACTIONS = {
      mort, et le balayage de verification cherche justement des `data-action`
      qui ne mènent à rien : autant ne pas lui laisser l'inverse a trouver. */
 
-  'add-month'() {
-    const rows = Store.state.monthly;
-    const derniere = Math.max(...rows.map(r => +String(r.date).slice(0, 4)), new Date().getFullYear());
-    const an = derniere + 1;
-    for (let m = 1; m <= 12; m++) {
-      rows.push({ date: `${an}-${String(m).padStart(2, '0')}-01`, comment: '', v: {} });
-    }
-    rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    historyYear = String(an);
-    Store.save(); render();
-    toast(`${trad('Année')} ${an} ${trad('ouverte, 12 mois à remplir')}`);
-  },
-  async 'del-month'(btn) {
-    if (await viderOuSupprimerMois(+btn.dataset.i)) render();
-  },
+  /* « add-month » est partie avec le calendrier : elle ouvrait douze lignes
+     vides pour l'année suivante, ce qui n'a plus de sens depuis que le journal
+     n'affiche que les relevés renseignés — elle n'aurait plus rien ajouté de
+     visible. Rien n'en dépendait : `ensureCalendarMonths()` ouvre l'année en
+     cours à chaque migration, et « Ajouter un relevé » crée la ligne du mois
+     demandé, quelle que soit son année. */
   async 'resolve-row'(btn) {
     const p = Store.state.positions[+btn.dataset.i];
     if (!p) return;
@@ -7880,50 +7761,17 @@ const ACTIONS = {
     refreshAccounts();
     render(); toast(trad('Données effacées'));
   },
-  async 'snapshot-row'(btn) {
-    const i = +btn.dataset.i;
-    const row = Store.state.monthly[i];
-    if (!row) return;
-    if (!moisRevolu(row.date)) {
-      toast(`${fmtMonth(row.date)} ${trad('n’a pas encore eu lieu')}`);
-      return;
-    }
-    const t = nowTotals();
-    const vide = rowIsEmpty(row);
-    if (!await askConfirm(vide
-      ? trad('Enregistrer le relevé de {m} ?').replace('{m}', fmtMonth(row.date)) + '\n\n'
-        + trad('La photo du jour, {v}, sera écrite dans cette ligne, compte par compte.')
-            .replace('{v}', fmtEUR0(t.total))
-      : trad('Remplacer les montants de {m} par la photo actuelle ?').replace('{m}', fmtMonth(row.date))
-        + '\n\n' + `${trad('Actuellement :')} ${fmtEUR0(rowTotal(row))}\n`
-        + `${trad('Photo du jour :')} ${fmtEUR0(t.total)}\n\n`
-        + trad('Annulable juste après, et une sauvegarde est prise avant.'),
-      vide ? { danger: false, ok: 'Enregistrer' } : {})) return;
 
-    sauvegardeAvantEcrasement(row);
-    const values = {};
-    for (const a of ACCOUNTS) { const v = nowValue(a.id); if (v) values[a.id] = round2(v); }
-    row.v = values;
-    row.dettes = round2(patrimoine().dettes);
-    Store.save(); render();
-    toast(`${fmtMonth(row.date)} · ${fmtEUR0(t.total)} ${trad('enregistré')}`, porteDeSortie());
+  'voir-releve'(btn) {
+    openApercu('releveMois', btn.dataset.i);
   },
 
   async 'edit-month'(btn) {
     await askMonthlySnapshot(+btn.dataset.i);
   },
 
-  'go-snapshot'() {
-    const p = currentMonthPending();
-    if (p.index < 0) {
-      Store.state.monthly.push({ date: p.key, comment: '', v: {} });
-      Store.state.monthly.sort((a, b) => a.date.localeCompare(b.date));
-      Store.save();
-    }
-    historyYear = p.key.slice(0, 4);      // sinon la ligne visée serait filtrée
-    pendingAnchor = 'mois-courant';
-    if (location.hash === '#/history') render();
-    else location.hash = '#/history';
+  async 'ajouter-releve'() {
+    await askMonthlySnapshot(indexReleve(currentMonthKey()));
   },
 };
 
@@ -9151,6 +8999,26 @@ function askExpenseMonth(index) {
   });
 }
 
+/* La ligne d'un mois, creee si elle manque, et son index dans `monthly`.
+
+   Le calendrier ouvre les douze mois de l'annee en cours et de chaque annee
+   deja presente, mais pas ceux d'une annee qu'on n'a jamais touchee : rattraper
+   un mois de 2019 ou preparer janvier prochain demande donc une ligne. Un seul
+   endroit la cree, et il garde la table triee — la variation d'un mois se lit
+   sur son voisin de gauche, un releve insere a la fin la fausserait.
+
+   La cle est celle des lignes du releve, le premier du mois. */
+function indexReleve(cle) {
+  let i = Store.state.monthly.findIndex(r => r.date === cle);
+  if (i < 0) {
+    Store.state.monthly.push({ date: cle, comment: '', v: {} });
+    Store.state.monthly.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    Store.save();
+    i = Store.state.monthly.findIndex(r => r.date === cle);
+  }
+  return i;
+}
+
 function appliquerReleve(index, saisi) {
   const row = Store.state.monthly[index];
   if (!row) return false;
@@ -9158,6 +9026,7 @@ function appliquerReleve(index, saisi) {
   row.v = saisi.v;
   row.comment = saisi.comment;
   row.dettes = round2(num(saisi.dettes));
+  historyYear = String(row.date).slice(0, 4);
   Store.save(); render();
   return true;
 }
@@ -9168,10 +9037,11 @@ async function viderOuSupprimerMois(index) {
   const calendrier = isCalendarMonth(r.date);
   if (!await askConfirm(calendrier
     ? trad('Effacer les montants de {m} ?').replace('{m}', fmtMonth(r.date)) + '\n\n'
-      + trad("La ligne reste dans le tableau, vide, les douze mois de l'année restent affichés.")
+      + trad('Ce mois quittera le journal : il ne porte plus de relevé. Le rajouter le '
+           + 'remettra à sa place, dans l’ordre des dates.')
       + '\n\n' + trad('Réversible avec Ctrl+Z.')
     : trad('Supprimer la ligne du {d} ?').replace('{d}', fmtDate(r.date)) + '\n\n'
-      + trad("Ce n'est pas un mois du calendrier : la ligne disparaîtra du tableau.")
+      + trad("Ce n'est pas un mois du calendrier : la ligne disparaîtra du journal.")
       + '\n\n' + trad('Réversible avec Ctrl+Z.'))) return false;
   if (calendrier) clearMonthRow(r, 'comment');
   else Store.state.monthly.splice(index, 1);
@@ -9185,14 +9055,20 @@ function askMonthlySnapshot(index) {
   return new Promise(resolve => {
     const r = Store.state.monthly[index];
     if (!r) { resolve(null); return; }
-    const visibles = ACCOUNTS.filter(a => historyShowLegacy || !a.legacy);
-    const vus = new Set(visibles.map(a => a.id));
-    const comptes = [...visibles, ...ACCOUNTS.filter(a => !vus.has(a.id) && num(r.v?.[a.id]))];
+    const comptes = ACCOUNTS.slice();
     const montres = new Set(comptes.map(a => a.id));
+    const masque = a => a.legacy && !num(r.v?.[a.id]);
+    const masques = comptes.filter(masque).length;
     const avant = Store.state.monthly.slice(0, index).filter(x => !rowIsEmpty(x)).pop();
     const precedent = avant ? rowTotal(avant) : 0;
     const photo = nowTotals().total;
     const revolu = moisRevolu(r.date);
+    const anCourant = +todayISO().slice(0, 4);
+    const anMin = Math.min(anCourant,
+      ...Store.state.monthly.map(x => +String(x.date).slice(0, 4))) - 10;
+    const listeAnnees = [];
+    for (let a = anMin; a <= anCourant + 1; a++) listeAnnees.push(a);
+    const choixMois = isCalendarMonth(r.date);
     const m = $('#modal');
     apercuOuvert = null;
 
@@ -9201,6 +9077,30 @@ function askMonthlySnapshot(index) {
       ? `${trad('Dernier relevé,')} ${fmtMonth(avant.date)}${deuxPoints()} ${fmtEUR0(precedent)}`
       : trad('Aucun relevé avant celui-ci')) + ` · ${trad('valeurs brutes, crédits à part')}`);
     $('#modalBody').innerHTML = `
+      ${/* Le mois du releve, et il se change ici.
+
+            « Ajouter un relevé » propose le mois en cours : c'est le cas
+            quatre-vingt-dix-neuf fois sur cent. Le choix sert aux trois autres,
+            tous nommes — rattraper un mois oublie, importer un ancien
+            historique, corriger une periode passee. Il vit donc DANS la fenetre
+            plutot que dans une etape avant elle : une etape de plus aurait fait
+            payer un clic au cas courant pour un choix qu'il ne fait pas.
+
+            Deux menus et non un champ de type « month » : Safari de bureau ne
+            le connait pas et y rend une zone de texte libre, dans laquelle on
+            peut ecrire n'importe quoi. */''}
+      ${choixMois ? `
+      <div class="row" style="gap:8px; margin:0 0 14px">
+        <span class="hint">${trad('Mois du relevé')}</span>
+        <select id="relMois" class="annee" title="${trad('Mois du relevé')}">
+          ${moisCourts().map((nom, k) => `<option value="${String(k + 1).padStart(2, '0')}"${
+            k + 1 === +String(r.date).slice(5, 7) ? ' selected' : ''}>${esc(nom)}</option>`).join('')}
+        </select>
+        <select id="relAn" class="annee" title="${trad('Année du relevé')}">
+          ${listeAnnees.map(a => `<option value="${a}"${
+            a === +String(r.date).slice(0, 4) ? ' selected' : ''}>${a}</option>`).join('')}
+        </select>
+      </div>` : ''}
       <div class="dep-total" id="relTotal"></div>
       ${/* Sans avoirs saisis, la photo vaut zero : proposer d'ecraser douze
             champs avec des zeros n'aiderait personne. */''}
@@ -9225,7 +9125,9 @@ function askMonthlySnapshot(index) {
         + 'reprendre, et ce que tu saisirais ici serait lu comme un relevé passé.')}</p>`}
       <div class="dep-grille">
         ${comptes.map(a => `
-          <div class="field">
+          <div class="field"${masque(a) && !historyShowLegacy
+            ? ' data-cloture="1" style="display:none"'
+            : masque(a) ? ' data-cloture="1"' : ''}>
             <label title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
               >${esc(a.label)}${a.fantome ? ' <span class="muted">(ancien modèle)</span>'
               : a.legacy ? ' <span class="muted">(clôturé)</span>' : ''}<span
@@ -9234,6 +9136,11 @@ function askMonthlySnapshot(index) {
                    value="${r.v?.[a.id] ?? ''}" placeholder="">
           </div>`).join('')}
       </div>
+      ${masques ? `
+      <label class="small row" style="gap:6px; margin-top:10px">
+        <input type="checkbox" id="relCloture" ${historyShowLegacy ? 'checked' : ''} style="width:auto">
+        ${trad('Afficher les comptes clôturés')} (${masques})
+      </label>` : ''}
       <div class="field" style="margin-top:12px">
         <label>${trad('Crédits en cours ce mois-là (€)')}${aide(trad("Le total du capital restant dû à cette date. Il ne se soustrait pas des champs ci-dessus (ceux-ci portent la valeur brute de chaque compte), mais il fait monter la part nette de tes biens, mois après mois, à mesure que tu rembourses."))}</label>
         <input type="number" step="any" inputmode="decimal" id="relDettes"
@@ -9288,6 +9195,8 @@ function askMonthlySnapshot(index) {
       for (const c of champs) {
         const v = nowValue(c.dataset.compte);
         c.value = v ? round2(v) : '';
+        const boite = v ? c.closest('[data-cloture]') : null;
+        if (boite) boite.style.display = '';
       }
       const detteJour = round2(patrimoine().dettes);
       $('#relDettes').value = detteJour || '';
@@ -9338,6 +9247,33 @@ function askMonthlySnapshot(index) {
     };
     $('#relFermer').onclick = quitter;
     $('#modalClose').onclick = quitter;
+    if ($('#relCloture')) $('#relCloture').onchange = () => {
+      historyShowLegacy = $('#relCloture').checked;
+      for (const b of $$('#modalBody [data-cloture]')) {
+        b.style.display = historyShowLegacy ? '' : 'none';
+      }
+    };
+    async function allerAuMois() {
+      const cle = `${$('#relAn').value}-${$('#relMois').value}-01`;
+      const remettre = () => {
+        $('#relMois').value = String(r.date).slice(5, 7);
+        $('#relAn').value = String(r.date).slice(0, 4);
+      };
+      if (cle === r.date) return;
+      if (sale) {
+        const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
+          + trad('Ce relevé porte des montants qui ne sont pas encore dans tes données.'),
+          { ok: 'Enregistrer puis changer', refus: 'Changer sans garder', danger: false });
+        if (garder && !await enregistrer()) { remettre(); return; }
+      }
+      const j = indexReleve(cle);
+      fermer(null);
+      askMonthlySnapshot(j);
+    }
+    if ($('#relMois')) {
+      $('#relMois').onchange = allerAuMois;
+      $('#relAn').onchange = allerAuMois;
+    }
     $('#relVider').onclick = async () => {
       if (!await viderOuSupprimerMois(index)) return;
       fermer(null);
@@ -9924,6 +9860,49 @@ const APERCUS = {
           valeur: tout.realised },
       ],
       vue: 'positions', ancre: '', cta: trad('Rester ici'),
+    };
+  },
+
+  releveMois: (arg) => {
+    const i = +arg;
+    const r = Store.state.monthly?.[i];
+    if (!r) return null;
+    const g = rowGroups(r);
+    const total = rowTotal(r);
+    const avant = Store.state.monthly.slice(0, i).filter(x => !rowIsEmpty(x)).pop();
+    const dlt = avant ? total - rowTotal(avant) : 0;
+    const dettes = num(r.dettes);
+    const poches = seriesUtiles([g]).filter(p => Math.abs(num(g[p.key])) > 0.005);
+    const comptes = Object.entries(r.v || {})
+      .map(([id, v]) => ({ id, v: num(v), a: ACC[id] }))
+      .filter(x => Math.abs(x.v) > 0.005)
+      .sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+    return {
+      titre: `${trad('Relevé de')} ${fmtMonth(r.date)}`,
+      sous: avant
+        ? `${fmtSigned(dlt)} ${trad('depuis')} ${fmtMonth(avant.date)}`
+        : trad('le premier relevé de la série'),
+      total,
+      totalNote: dettes
+        ? `${trad('net de crédits')}${deuxPoints()} ${fmtEUR0(total - dettes)}`
+        : trad('valeurs brutes, crédits à part'),
+      html: `
+        ${r.comment ? `<p class="hint" style="margin:0 0 12px">${esc(r.comment)}</p>` : ''}
+        <table><tbody>${poches.map(p => `<tr>
+          <td class="name">${esc(p.label)}</td>
+          <td class="muted">${total ? fmtPct(num(g[p.key]) / total * 100, 0) : ''}</td>
+          <td><b>${fmtEUR0(num(g[p.key]))}</b></td>
+        </tr>`).join('')}</tbody></table>
+        ${comptes.length ? `
+        <p class="hint" style="margin:14px 0 2px">${trad('Compte par compte')}</p>
+        <table><tbody>${comptes.map(c => `<tr>
+          <td class="name">${esc(c.a ? c.a.label : c.id)}${c.a && c.a.broker
+            ? `<span class="sub">${esc(c.a.broker)}</span>` : ''}</td>
+          <td class="muted"></td>
+          <td><b>${fmtEUR0(c.v)}</b></td>
+        </tr>`).join('')}</tbody></table>` : ''}
+        <button class="btn pleine" style="margin-top:12px" type="button"
+                data-action="edit-month" data-i="${i}">${trad('Modifier le relevé')}</button>`,
     };
   },
 
