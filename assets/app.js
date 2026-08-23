@@ -1466,15 +1466,17 @@ function viewObjective() {
                              data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>`
                   : `${trad('Valeur figée. Ta capacité d’épargne est de')} ${fmtEUR0(suggestedMonthly())}
                      <button type="button" class="mois-lien" data-action="apercu"
-                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>`)}
+                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>
+                     <button type="button" class="mois-lien" data-action="proj-use-budget"
+                             >${trad('Reprendre ce montant')}</button>`)}
         ${champText('Affectation des versements', 'meta.projVersementVers', VERSEMENT_VERS,
                 s.versementVers,
                 trad('Ces euros capitalisent au taux de la poche que tu choisis. '
                   + 'Sur les liquidités, ils s’accumulent sans rendement : c’est ce que fait '
                   + 'un livret que tu n’as pas déclaré rémunéré, et c’est le seul réglage '
                   + 'honnête si tu épargnes sans investir. '
-                  + 'Si tu partages ton versement, garde un seul choix et ajuste le taux : '
-                  + 'moitié à 8 %, moitié sans rendement, cela fait 4 % sur le tout.'),
+                  + 'Un seul choix à la fois : la projection verse tout dans la poche '
+                  + 'sélectionnée, elle ne répartit pas un versement entre plusieurs.'),
                 trad('Où va ton épargne future.')
                   + (num(tauxDeDestination(s)) ? ''
                     : ' ' + trad('Cette poche ne produit aucun rendement dans les scénarios : '
@@ -1540,9 +1542,6 @@ function viewObjective() {
                   + 'La cible se lit en euros courants, comme le total : elle se compare '
                   + 'au montant nominal, pas à sa valeur après inflation.'))}
       </div>
-      ${!s.monthlyAuto ? `
-      <button class="btn sm ghost" data-action="proj-use-budget" style="margin-top:12px">
-        ${trad('Reprendre')} ${fmtEUR0(suggestedMonthly())} ${trad('/ mois')} ${trad('depuis le budget')}</button>` : ''}
       </details>
 
       ${s.target && !anneeAtteinte ? `<div class="note" style="margin-top:12px">
@@ -1600,23 +1599,35 @@ function viewObjective() {
                     : trad('Ton immobilier est porté à sa');
         if (!plat && !dettes) return '';
         const note = txt => `<p class="small muted" style="margin:12px 0 0">${txt}</p>`;
-        if (plat > 0) return note(dettes
-          ? `${sujet} ${trad('valeur d’aujourd’hui,')} ${fmtEUR0(plat)} ${trad('nets, du '
-             + 'premier point au dernier. Ni le prix, ni le capital que tes mensualités '
-             + 'remboursent chaque mois, ni la fin du prêt ne sont projetés : la courbe '
-             + 'sous-estime cette part, elle ne la surestime jamais.')}`
-          : `${sujet} ${trad('valeur d’aujourd’hui,')} ${fmtEUR0(plat)}${trad(', du '
-             + 'premier point au dernier : la courbe ne prête à cette part ni hausse ni baisse.')}`);
-        if (!plat) return note(
-          trad('Le capital que tes mensualités remboursent chaque mois n’est pas projeté : '
-           + 'la courbe sous-estime ton patrimoine, elle ne le surestime jamais.'));
+        /* La note affirmait que « le capital que tes mensualites remboursent
+           chaque mois » n'est pas projete. C'etait vrai d'une version anterieure
+           du moteur, et c'est faux depuis : `moteurProjection` amortit les
+           credits mois par mois et ajoute le capital rendu a la part plate, qui
+           monte donc toute seule. Un texte qui dit le contraire de ce que le
+           calcul fait est pire qu'un texte absent : il fait douter du chiffre
+           juste.
+
+           `dettesAmortissables()` decide, et il ne prend pas tout : un credit
+           sans taux ni mensualite declares, ou dont la mensualite ne couvre pas
+           ses interets, reste constant. La phrase suit donc ce que le moteur
+           amortit reellement, et non ce qu'on aimerait qu'il amortisse. */
+        const amortis = dettesAmortissables().length;
+        const dette = !dettes ? ''
+          : amortis
+            ? ' ' + trad('Le capital que tes mensualités remboursent est projeté : cette part '
+                + 'monte mois après mois, à mesure que la dette baisse. La mensualité libérée '
+                + 'à la fin du prêt, elle, n’est pas réinvestie.')
+            : ' ' + trad('Tes crédits restent à leur montant d’aujourd’hui : sans taux ni '
+                + 'mensualité déclarés, leur remboursement ne peut pas être projeté, et la '
+                + 'courbe sous-estime donc ton patrimoine.');
+        if (plat > 0) return note(`${sujet} ${trad('valeur d’aujourd’hui,')} ${fmtEUR0(plat)}${
+          dettes ? ' ' + trad('nets,') : ''}${trad(' du premier point au dernier : son prix '
+          + 'ne monte ni ne baisse.')}${dette}`);
+        if (!plat) return note((dette || ' ').slice(1));
         return note(bien
           ? `${trad('Tes crédits dépassent aujourd’hui la valeur de ton bien : cette part nette,')}
-             ${fmtEUR0(plat)}${trad(', est portée telle quelle. Son remboursement n’est pas '
-             + 'projeté : la courbe sous-estime ton patrimoine, elle ne le surestime jamais.')}`
-          : `${trad('Tes crédits sont portés à leur montant d’aujourd’hui,')} ${fmtEUR0(Math.abs(plat))}${trad(', '
-             + 'du premier point au dernier. Leur remboursement n’est pas projeté : la courbe '
-             + 'sous-estime ton patrimoine, elle ne le surestime jamais.')}`);
+             ${fmtEUR0(plat)}${trad(', est portée telle quelle, le prix du bien ne bougeant pas.')}${dette}`
+          : `${trad('Tes crédits sont portés à leur montant d’aujourd’hui,')} ${fmtEUR0(Math.abs(plat))}.${dette}`);
       })()}
     </div>
   </div>
@@ -1956,11 +1967,11 @@ function viewPositions() {
   <div class="card">
     <div class="card-head"><h2>${trad('Aucun titre coté')}</h2>
       <span class="hint">${trad('actions, ETF, obligations, crypto')}</span></div>
-    <p class="empty" style="margin:0 0 12px">Cette page suit les placements dont le
-      cours arrive tout seul, du marché. Tes placements non cotés, ton immobilier et
-      tes liquidités se déclarent dans Actifs, où c'est toi qui en donnes la valeur :
-      ils comptent dans ton patrimoine, ta répartition et ton autonomie exactement
-      comme le reste.</p>
+    <p class="empty" style="margin:0 0 12px">${trad('Cette page suit les placements '
+      + 'dont le cours arrive tout seul, du marché. Tes placements non cotés, ton '
+      + 'immobilier et tes liquidités se déclarent dans Actifs, où c’est toi qui en '
+      + 'donnes la valeur : ils comptent dans ton patrimoine, ta répartition et ton '
+      + 'autonomie exactement comme le reste.')}</p>
     ${(() => {
       const porteurs = TYPES_COMPTE.filter(t =>
         (t.classes || []).some(c => ['actions', 'obligations', 'crypto'].includes(c)));
@@ -1991,17 +2002,13 @@ function viewPositions() {
   return `
   ${barreEtatCours()}
 
-  <div class="reperes-familles" id="reperesFamilles" role="tablist"
-       aria-label="${trad('Familles de repères')}" hidden></div>
-  <div class="reperes" id="reperes" aria-label="${trad('Marchés')}" hidden></div>
-
   ${(() => {
     const j = dayPerformance();
     if (!j.lignes.length) {
       return `<div class="card">
         <div class="card-head"><h2>${trad('Aujourd\'hui')}</h2></div>
-        <p class="empty">Pas encore de clôture de la veille en mémoire.
-          Actualise les cours pour que la performance du jour apparaisse.</p>
+        <p class="empty">${trad('Pas encore de clôture de la veille en mémoire. '
+          + 'Actualise les cours pour que la performance du jour apparaisse.')}</p>
       </div>`;
     }
     const positif = j.eur >= 0;
@@ -2111,6 +2118,10 @@ function viewPositions() {
     </dl>
   </div>`;
   })()}
+
+  <div class="reperes-familles" id="reperesFamilles" role="tablist"
+       aria-label="${trad('Familles de repères')}" hidden></div>
+  <div class="reperes" id="reperes" aria-label="${trad('Marchés')}" hidden></div>
 
   <div class="card" data-anchor="titres">
     <div class="card-head">
@@ -2478,21 +2489,21 @@ function majEtatCours(etat) {
 
   if (etat === 'encours') {
     btn.classList.add('encours');
-    quand.textContent = 'Cours…';
-    btn.title = 'Récupération en cours';
+    quand.textContent = trad('Cours…');
+    btn.title = trad('Récupération en cours');
     return;
   }
   if (on === false) {
     btn.classList.add('hs');
     btn.disabled = true;
-    quand.textContent = 'Hors ligne';
-    btn.title = 'Passerelle non détectée : lance « python serve.py »';
+    quand.textContent = trad('Hors ligne');
+    btn.title = trad('Impossible de mettre à jour les cours pour le moment');
     return;
   }
   btn.disabled = false;
   if (!Quotes.plan().symbols.length) {
-    quand.textContent = 'Cours';
-    btn.title = 'Aucun symbole suivi pour l’instant';
+    quand.textContent = trad('Cours');
+    btn.title = trad('Aucun symbole suivi pour l’instant');
     return;
   }
   /* Ce que la pastille date, c'est le PRIX, pas la requete.
@@ -2601,7 +2612,10 @@ function mountSymbolSearch() {
 
   async function run() {
     const q = input.value.trim();
-    if (q.length < 2) { out.innerHTML = '<p class="muted">Tape au moins deux caractères.</p>'; return; }
+    if (q.length < 2) {
+      out.innerHTML = `<p class="muted">${trad('Tape au moins deux caractères.')}</p>`;
+      return;
+    }
 
     const asIsin = looksLikeIsin(q) ? q.replace(/\s/g, '').toUpperCase() : null;
     if (asIsin && !isinIsValid(asIsin)) {
@@ -2610,7 +2624,7 @@ function mountSymbolSearch() {
       return;
     }
 
-    out.innerHTML = '<p class="muted">Recherche…</p>';
+    out.innerHTML = `<p class="muted">${trad('Recherche…')}</p>`;
     try {
       let res, isinCode = null, bestSymbol = null;
       if (asIsin) {
@@ -2622,7 +2636,10 @@ function mountSymbolSearch() {
       } else {
         res = await Quotes.search(q);
       }
-      if (!res.length) { out.innerHTML = '<p class="muted">Aucun résultat.</p>'; return; }
+      if (!res.length) {
+        out.innerHTML = `<p class="muted">${trad('Aucun résultat.')}</p>`;
+        return;
+      }
 
       out.innerHTML = `
         ${isinCode ? `<p class="small muted" style="margin:0 0 8px">${trad(res.length > 1
@@ -2886,7 +2903,7 @@ function viewAllocation() {
   <div class="card">
     <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2>
       <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
-    <h3 class="sous-titre-carte">${trad('Par enveloppe')}</h3>
+    <h3 class="sous-titre-carte">${trad('Par type de détention')}</h3>
     <div class="chart" id="aType"></div>
     ${tbl(byType, baseAlloc().nom, byType.reduce((s, i) => s + i.value, 0))}
     <h3 class="sous-titre-carte">${trad('Par compte')}</h3>
@@ -3138,10 +3155,10 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
          background:color-mix(in oklab, var(--warning) 12%, var(--surface-1));
          border-color:color-mix(in oklab, var(--warning) 40%, transparent)">⚠ <span>
       <b>${per.horsAtteinte.map(h => esc(h.label)).join(' et ')}${deuxPoints()}
-      cible impossible à atteindre ici.</b>
-      Tu en détiens ${per.horsAtteinte.map(h => fmtEUR0(h.montant)).join(' et ')},
-      mais sur un compte hors de cette base. La jauge restera à zéro
-      quoi que tu achètes. Mets sa cible à 0, ou suis cette classe depuis Allocation.
+      ${trad('cible impossible à atteindre ici.')}</b>
+      ${trad('Tu en détiens')} ${per.horsAtteinte.map(h => fmtEUR0(h.montant)).join(' et ')},
+      ${trad('mais sur un compte hors de cette base. La jauge restera à zéro quoi que '
+        + 'tu achètes. Mets sa cible à 0, ou suis cette classe depuis Allocation.')}
     </span></div>` : ''}
     <ul class="reeq">
       <li class="reeq-groupe">${trad('Classes d’actif')}</li>
@@ -4020,8 +4037,9 @@ function espaceBien(c, idx, t) {
       <button class="btn sm ghost" data-action="ajouter-credit" data-id="${esc(c.etabId)}">${trad('+ Crédit')}</button></div>
     ${!dettes.length ? `
       <div class="empty">
-        <p style="margin:0 0 12px">Aucun crédit déclaré : le bien est compté en entier dans
-          ton patrimoine, et sa valeur nette est donc sa valeur tout court.</p>
+        <p style="margin:0 0 12px">${trad('Aucun crédit déclaré : le bien est compté '
+          + 'en entier dans ton patrimoine, et sa valeur nette est donc sa valeur tout '
+          + 'court.')}</p>
         <button class="btn sm" data-action="ajouter-credit" data-id="${esc(c.etabId)}">
           ${trad('+ Déclarer un crédit sur ce bien')}</button>
       </div>` : dettes.map(({ d, i }) => {
@@ -4203,7 +4221,7 @@ function viewFicheCompte(id) {
   const lignes = lignesDe(c);
   const parClasse = new Map();
   for (const e of (c.cash || [])) parClasse.set('liquidites', (parClasse.get('liquidites') || 0) + num(e.montant));
-  for (const l of lignes) if (!l.marche || true) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
+  for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
 
   return `
   <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
@@ -4708,7 +4726,13 @@ function viewBudget(section = 'depenses') {
         const parts = [
           [trad('Charges fixes'), f.fixed, 'var(--series-2)', f.fixedPct, 'ancre'],
           [trad('Objectif dépenses'), f.target, 'var(--series-4)', f.targetPct, 'objectif'],
-          [trad('Reste à investir / épargner'), f.investTarget, 'var(--series-1)', f.investTargetPct],
+          /* L'aide vit dans sa propre case, et non collee au libelle : celui-ci
+             sert aussi a l'etiquette d'accessibilite de la barre, ou un
+             `<span>` se lirait a voix haute. */
+          [trad('Objectif d’investissement'), f.investTarget, 'var(--series-1)',
+            f.investTargetPct, '', trad('Revenus moins charges fixes moins ton objectif de '
+            + 'dépenses. C’est le montant que tu vises, là où la capacité d’épargne est ce '
+            + 'que tes dépenses réelles laissent.')],
         ];
         /* Le motif vient de `PREMIERS_PAS` : il est ne ici, et les deux autres
            invites le reprennent depuis la meme table plutot que de le recopier. */
@@ -4724,15 +4748,16 @@ function viewBudget(section = 'depenses') {
           <span class="flux-chev" aria-hidden="true">›</span>
         </button>
         <div class="hero-barre" role="img"
-             aria-label="Partage : ${parts.map(([l, , , pct]) => `${l} ${fmtPct(pct, 0)}`).join(', ')}">
+             aria-label="${trad('Partage')}${deuxPoints()} ${parts.map(([l, , , pct]) =>
+               `${esc(l)} ${fmtPct(pct, 0)}`).join(', ')}">
           ${parts.map(([, , couleur, pct]) => `<i style="width:${Math.max(0, Math.min(100, pct)).toFixed(2)}%;
             background:${couleur}"></i>`).join('')}
         </div>
         <div class="flux-legende">
-          ${parts.map(([label, val, couleur, pct, ouvrable]) => {
+          ${parts.map(([label, val, couleur, pct, ouvrable, aideTexte]) => {
             const corps = `
               <span class="dot" style="background:${couleur}"></span>
-              <span class="repart-nom">${label}</span>
+              <span class="repart-nom">${esc(label)}${aideTexte ? aide(aideTexte) : ''}</span>
               <b>${fmtEUR0(val)}</b>
               <span class="repart-pct">${fmtPct(pct, 1)}</span>`;
             /* Deux lignes menent quelque part, et pas au meme endroit : les
@@ -4928,7 +4953,8 @@ function viewBudget(section = 'depenses') {
               title="${trad('Saisir les dépenses de')} ${esc(fmtMonth(r.month))}"${
               estMoisCourant ? ' data-anchor="mois-courant"' : ''}${estAttendu ? ' data-anchor="mois-attendu"' : ''}>
             <td class="name sticky-col"><span class="mois-lien">${esc(fmtMonth(r.month))}</span>${
-              estAttendu ? '<span class="marque-attendu" title="Le mois que la relance attend">⚠</span>' : ''}</td>
+              estAttendu ? `<span class="marque-attendu" title="${
+                trad('Le mois que la relance attend')}">⚠</span>` : ''}</td>
             <td><b>${tot ? fmtEUR0(tot) : ''}</b></td>
             <td class="${classeDepassement(tot, f.target)}">${tot ? fmtSigned(diff) : ''}</td>
             ${expenseCategories().map(c => `<td>${r.v[c] != null && r.v[c] !== ''
@@ -5149,13 +5175,20 @@ function viewBudget(section = 'depenses') {
           ${rec.capitalRembourse > 0.005 ? `
           <dt>${trad('+ Capital de crédit remboursé')}${aide(trad("La part de tes mensualités de crédit qui rembourse le capital, intérêts et assurance exclus. Elle augmente ton patrimoine net (le bien ne bouge pas, la dette baisse) mais elle n'arrive sur aucun compte : elle est déjà partie avec la mensualité. Projection ne la traite donc jamais comme un versement à investir."))}</dt><dd>+${fmtEUR0(rec.capitalRembourse)}</dd>
           <dt><b>${trad('= Accumulation patrimoniale')}</b>${aide(trad('Progression théorique de ton patrimoine net : ta capacité d’épargne, plus le capital de crédit remboursé. Ce n’est pas un montant disponible.'))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>` : ''}
-          <dt>${trad('Taux d’accumulation')}${aide(trad('Part de tes revenus que cette accumulation représente, capital de crédit remboursé compris. Au-dessus de 20 %, tu mets de côté nettement plus que la moyenne.'))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+          <dt>${trad('Taux d’accumulation')}${aide(trad('Part de tes revenus qui contribue à '
+            + 'l’augmentation de ton patrimoine : ta capacité d’épargne, plus le capital de '
+            + 'crédit remboursé.'))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
           <dt>${trad('Objectif d’investissement')}${aide(trad('Revenus moins charges fixes moins ton objectif de dépenses. C’est le montant que tu vises, là où la capacité d’épargne est ce que tes dépenses réelles laissent.'))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
         </dl>
         ${rec.realPerMonth != null ? `
           <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
           <dl class="kv">
-            <dt>${trad('Croissance réelle du patrimoine')}${aide(trad('Moyenne des variations du patrimoine net d’un mois sur l’autre, sur tes relevés. Elle comprend les mouvements de marché et tout apport extérieur, pas seulement ton épargne. C’est le même chiffre que le rythme observé dans Aperçu > Aujourd’hui.'))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
+            <dt>${trad('Croissance observée du patrimoine')}${aide(trad('Moyenne des '
+              + 'variations du patrimoine net d’un mois sur l’autre, telle que tes relevés '
+              + 'la montrent. Elle comprend les mouvements de marché et tout apport '
+              + 'extérieur, pas seulement ton épargne, et elle n’est pas corrigée de '
+              + 'l’inflation. C’est le même chiffre que le rythme observé dans '
+              + 'Aperçu > Aujourd’hui.'))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
             <dt>${trad('Ce qui ne vient pas du budget')}${aide(trad("Ce qui sépare la croissance de ton patrimoine de l'épargne que ton budget dégage : les marchés, un apport extérieur, le capital d'un crédit que tu rembourses. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n'est une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
           </dl>
           <p class="small muted" style="margin:12px 0 0">
@@ -5221,18 +5254,6 @@ function viewData() {
         <a href="#/${c.view}" class="btn ghost sm">${trad('Voir')}</a>
       </li>`).join('')}</ul>`
       : `<p class="empty">${trad('✓ Aucune incohérence détectée.')}</p>`}
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>${trad('État')}</h2></div>
-    <dl class="kv">
-      <dt>Positions</dt><dd>${Store.state.positions.length}</dd>
-      <dt>${trad('Lignes d\'historique')}</dt><dd>${Store.state.monthly.length}</dd>
-      <dt>${trad('Comptes suivis')}</dt><dd>${ACCOUNTS.length}</dd>
-      <dt>${trad('Taille du stockage')}</dt><dd>${(JSON.stringify(Store.state).length / 1024).toFixed(1)} Ko</dd>
-      <dt>${trad('Version')}${aide(trad("La version du code que tu es en train d’exécuter, lue sur la balise du script. Si elle ne change pas après un déploiement, c’est que le navigateur ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple rechargement ne suffit pas toujours."))}</dt>
-        <dd style="font-family:var(--font-nb)">${esc(VERSION_APP)}</dd>
-    </dl>
   </div>
 
   <div class="note">
@@ -5360,6 +5381,19 @@ function viewData() {
       </p>`
       : `<p class="empty">${trad('Aucune sauvegarde pour l\'instant.')}</p>`}
   </div>
+
+  <details class="data-view" style="margin-top:12px">
+    <summary>${trad('Diagnostic')}</summary>
+    <dl class="kv" style="margin-top:12px">
+      <dt>Positions</dt><dd>${Store.state.positions.length}</dd>
+      <dt>${trad('Relevés enregistrés')}</dt>
+        <dd>${Store.state.monthly.filter(r => !rowIsEmpty(r)).length}</dd>
+      <dt>${trad('Comptes suivis')}</dt><dd>${ACCOUNTS.length}</dd>
+      <dt>${trad('Taille du stockage')}</dt><dd>${(JSON.stringify(Store.state).length / 1024).toFixed(1)} Ko</dd>
+      <dt>${trad('Version')}${aide(trad("La version du code que tu es en train d’exécuter, lue sur la balise du script. Si elle ne change pas après un déploiement, c’est que le navigateur ressert l’ancienne : ferme complètement l’application et rouvre-la, un simple rechargement ne suffit pas toujours."))}</dt>
+        <dd style="font-family:var(--font-nb)">${esc(VERSION_APP)}</dd>
+    </dl>
+  </details>
 
   <div class="card">
     <div class="card-head"><h2>${trad('Repartir de zéro')}</h2>
@@ -7620,7 +7654,10 @@ const ACTIONS = {
     const p = Store.state.positions[+btn.dataset.i];
     if (!p) return;
     if (Quotes.isOnline() === null) await Quotes.health();
-    if (Quotes.isOnline() === false) { toast(trad('Passerelle non détectée')); return; }
+    if (Quotes.isOnline() === false) {
+      toast(trad('Impossible de mettre à jour les cours pour le moment'));
+      return;
+    }
     if (!isinIsValid(p.isin)) { toast(`${trad('ISIN invalide pour')} ${guill(p.name)}`); return; }
     btn.disabled = true;
     try {
@@ -7643,18 +7680,14 @@ const ACTIONS = {
   async 'refresh-quotes'(btn) {
     if (Quotes.isOnline() === null) await Quotes.health();
     if (Quotes.isOnline() === false) {
-      /* La demonstration se lance par `python serve.py`, jamais par le script
-         Windows du depot prive : c'est un depot qu'on clone, pas une machine
-         qu'on a deja installee. La clef lui appartient donc, et vit dans son
-         propre i18n. */
-      toast(trad('Passerelle non détectée : lance « python serve.py »'));
+      toast(trad('Impossible de mettre à jour les cours pour le moment'));
       return;
     }
     const chip = btn && btn.classList.contains('etat-cours');
     const label = btn && !chip ? btn.textContent : null;
     if (btn) { btn.disabled = true; }
     if (chip) majEtatCours('encours');
-    else if (btn) btn.textContent = '↻ Récupération…';
+    else if (btn) btn.textContent = `↻ ${trad('Récupération…')}`;
     try {
       const { changes, empty } = await Quotes.refresh();
       /* Les lignes dont le cours a REELLEMENT bouge, avant le rendu qui les
@@ -8243,10 +8276,10 @@ function askSale(indexInitial) {
     const sansLigne = !ps.length;
 
     $('#modalTitle').textContent = trad('Vendre une ligne');
-    $('#modalSub').textContent = 'La plus-value est calculée sur ton prix de revient';
+    $('#modalSub').textContent = trad('La plus-value est calculée sur ton prix de revient');
     $('#modalBody').innerHTML = `
       <div class="modal-champs">
-        <div class="field"><label>Ligne</label>
+        <div class="field"><label>${trad('Ligne')}</label>
           <select id="vePos">${ps.map((p, i) =>
             `<option value="${i}" ${!sansLigne && i === (indexInitial ?? 0) ? 'selected' : ''}>${esc(p.name)}, ${num(p.qty)} × ${fmtCur(num(p.price), p.currency)}</option>`).join('')}<option
             value="passee" ${sansLigne ? 'selected' : ''}>${trad('Une vente passée, pour mémoire')}</option></select></div>
@@ -9129,8 +9162,8 @@ function askMonthlySnapshot(index) {
             ? ' data-cloture="1" style="display:none"'
             : masque(a) ? ' data-cloture="1"' : ''}>
             <label title="${esc([a.label, a.broker].filter(Boolean).join(' · '))}"
-              >${esc(a.label)}${a.fantome ? ' <span class="muted">(ancien modèle)</span>'
-              : a.legacy ? ' <span class="muted">(clôturé)</span>' : ''}<span
+              >${esc(a.label)}${a.fantome ? ` <span class="muted">(${trad('ancien modèle')})</span>`
+              : a.legacy ? ` <span class="muted">(${trad('clôturé')})</span>` : ''}<span
                 class="f-etab">${esc(a.broker || '')}</span></label>
             <input type="number" step="any" inputmode="decimal" data-compte="${esc(a.id)}"
                    value="${r.v?.[a.id] ?? ''}" placeholder="">

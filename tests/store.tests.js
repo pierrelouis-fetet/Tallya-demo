@@ -15026,19 +15026,34 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
     vrai(croissant(l), `l’ordre attendu est répartition, graphique, catégories, détail : ${l.join(' < ')}`);
   });
 
-  test('Données : le diagnostic ensemble, la destruction en dernier', () => {
-    /* « État » fermait la page, coince entre les sauvegardes et la remise a zero :
-       un encart de lecture au milieu de deux actes, alors qu'il repond a la meme
-       question que les controles de coherence — comment va l'application. */
+  test('Données : ce qu’on vient y faire d’abord, le diagnostic replié, la destruction en dernier', () => {
+    /* « Etat » comptait des lignes internes, des kilo-octets et un numero de
+       version, au meme poids visuel que « Exporter » et « Sauvegardes » : ce sont
+       des chiffres precieux le jour ou quelque chose cloche, et sans usage le
+       reste du temps. Le premier niveau d'une page nommee « Donnees » appartient
+       a ce qu'on vient y faire.
+
+       L'ordre reste celui de la maison : ce qui fait lire, ce qui agit, puis ce
+       qui detruit. Le diagnostic est passe derriere les actes, mais devant la
+       remise a zero. */
     const src = lireSource('assets/app.js');
     const vue = src.slice(src.indexOf('function viewData('), src.indexOf('function mountData('));
     const l = positions(vue,
       "trad('Contrôles de cohérence')",
-      "trad('État')",
       "trad('Exporter')",
+      "trad('Sauvegardes automatiques')",
+      "trad('Diagnostic')",
       'data-action="start-blank"');
     vrai(croissant(l),
-      `l’ordre attendu est contrôles, état, transferts… puis la remise à zéro : ${l.join(' < ')}`);
+      `l’ordre attendu est contrôles, transferts, sauvegardes, diagnostic, remise à zéro : ${l.join(' < ')}`);
+    /* Et il est bien replie : une carte de plus l'aurait remis au premier plan
+       sous un autre nom. */
+    const i = vue.indexOf("trad('Diagnostic')");
+    const ouverture = vue.lastIndexOf('<details', i);
+    vrai(ouverture > 0 && i - ouverture < 200,
+      'le diagnostic vit dans un dépliant, pas dans une carte');
+    vrai(!/<h2>\$\{trad\('État'\)\}<\/h2>/.test(vue),
+      'et la carte « État » n’existe plus sous ce nom');
   });
 
   test('Relevés : le journal qu’on vient remplir ouvre la page', () => {
@@ -16069,6 +16084,282 @@ suite('Le journal patrimonial ne montre que des relevés', () => {
        grand total les compte. */
     vrai(/closest\('\[data-cloture\]'\)/.test(f),
       'un champ masqué qui reçoit un montant se montre');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La passe corrective : vocabulaire, langues, textes de developpement
+   ------------------------------------------------------------------ */
+suite('Rien de ce qui s’affiche n’échappe au dictionnaire', () => {
+
+  /* `trad()` rend sa clef inchangee quand le dictionnaire ne la connait pas :
+     une chaine oubliee s'affiche donc en francais a qui a choisi l'anglais, et
+     rien ne le signale. Le defaut a deux moities, et il faut les deux tests. */
+
+  test('aucun puits du DOM ne reçoit du français en dur', () => {
+    /* La premiere moitie : une chaine ecrite directement dans un `textContent`
+       ou un `title`, donc invisible au dictionnaire. Sept l'etaient, dont trois
+       sur la pastille des cours. */
+    const src = lireSource('assets/app.js');
+    const accents = /[àâéèêëîïôöùûüç]/;
+    const trouves = [];
+    const motif = /\.(?:textContent|title|placeholder)\s*=\s*'([^'\\\n]{6,})'/g;
+    for (const m of src.matchAll(motif)) {
+      if (accents.test(m[1]) && / /.test(m[1])) trouves.push(m[1]);
+    }
+    eq(trouves.join(' | '), '',
+      'ces textes s’affichent sans passer par trad(), donc en français en anglais');
+  });
+
+  test('les états vides des graphiques passent par le dictionnaire', () => {
+    /* charts.js posait « Pas de donnees » deux fois en clair, et l'etiquette
+       d'accessibilite du graphique reel/cible avec. */
+    const src = lireSource('assets/charts.js');
+    vrai(!/'<p class="empty">Pas de données<\/p>'/.test(src),
+      'l’état vide d’un graphique se traduit comme le reste');
+    vrai(/trad\('Pas de données'\)/.test(src), 'et il passe bien par trad()');
+    vrai(!/aria-label="Réel contre cible"/.test(src),
+      'l’étiquette d’accessibilité aussi : elle est lue à voix haute');
+  });
+
+  test('aucune consigne de développement dans un texte affiché', () => {
+    /* Une infobulle et un toast disaient « lance Lancer-Dashboard.cmd » : le nom
+       d'un fichier a lancer, dans une application. Ce que l'utilisateur a besoin
+       de savoir tient dans le fait, pas dans la manoeuvre.
+
+       Le bandeau du mode fichier garde son nom de lanceur, et c'est le seul :
+       il ne parait que si l'application est ouverte comme un document local,
+       ou nommer le raccourci EST la reponse utile. */
+    const src = lireSource('assets/app.js');
+    for (const mot of ['serve.py', 'localhost', '127.0.0.1', 'console.log', 'DevTools']) {
+      const dans = [...src.matchAll(/trad\(\s*['"]([^'"]{4,})['"]/g)]
+        .map(m => m[1]).filter(s => s.includes(mot));
+      eq(dans.join(' | '), '', `« ${mot} » n’a rien à faire dans un texte affiché`);
+    }
+    /* Un seul message pour un seul fait : les deux exemplaires disaient la meme
+       chose de deux facons, dont une qui donnait une consigne. */
+    vrai(!/Passerelle non détectée/.test(src),
+      'le mot « passerelle » est du vocabulaire d’implémentation');
+    eq((src.match(/trad\('Impossible de mettre à jour les cours pour le moment'\)/g) || []).length, 3,
+      'un seul texte, à ses trois portes : les deux toasts et l’infobulle de la pastille');
+    /* Le bandeau du mode fichier est l'exception, et elle est assumee : il ne
+       parait que si l'application est ouverte comme un document local, ou
+       nommer le raccourci EST la reponse utile. Chaque depot nomme le sien --
+       un script Windows ici, une commande Python la -- donc le controle porte
+       sur la PLACE, pas sur le nom : toute mention d'un lanceur doit vivre dans
+       ce bandeau, et nulle part ailleurs. */
+    const banniere = src.indexOf("el.className = 'file-banner'");
+    vrai(banniere > 0, 'le bandeau du mode fichier doit être trouvable');
+    for (const m of src.matchAll(/Lancer-Dashboard\.cmd|python serve\.py/g)) {
+      vrai(m.index > banniere && m.index - banniere < 900,
+        `un lanceur est nommé hors du bandeau du mode fichier : « ${m[0]} »`);
+    }
+  });
+});
+
+suite('Un montant, un nom, partout', () => {
+
+  test('« capacité d’épargne » et « objectif d’investissement » ne se confondent plus', () => {
+    /* Deux montants differents que l'utilisateur lisait tous les deux comme
+       « combien je peux investir » : l'un se calcule sur l'OBJECTIF de depenses,
+       l'autre sur les depenses constatees, et c'est le second que Projection
+       reprend. La barre du budget nommait le premier « Reste a investir /
+       epargner », un troisieme nom pour un chiffre qui en avait deja un. */
+    const src = lireSource('assets/app.js');
+    vrai(!/Reste à investir/.test(src),
+      'ce libellé entrait en concurrence avec « Capacité d’épargne »');
+    /* Le meme chiffre, le meme nom, aux deux endroits qui l'affichent. */
+    eq((src.match(/trad\('Objectif d’investissement'\)/g) || []).length, 2,
+      'la barre du budget et la carte « Épargne et croissance » le nomment pareil');
+    /* Et les deux grandeurs viennent bien de deux sources distinctes. */
+    Fixture.poser();
+    const rec = savingsReconciliation();
+    vrai(rec.investable !== undefined && rec.targetSaving !== undefined,
+      'les deux montants existent séparément dans le modèle');
+    const f = budgetFrame();
+    pres(rec.targetSaving, f.investTarget, 'l’objectif suit l’objectif de dépenses');
+    pres(rec.investable, rec.income - rec.fixed - rec.spend,
+      'la capacité d’épargne suit les dépenses constatées');
+  });
+
+  test('« croissance observée » et non « réelle »', () => {
+    /* « Reel » veut dire « corrige de l'inflation » en finance, et Projection
+       emploie deja cette notion sous le nom d'euros d'aujourd'hui. Ce chiffre-ci
+       est ce que les releves montrent, inflation comprise. */
+    const src = lireSource('assets/app.js');
+    vrai(!/Croissance réelle du patrimoine/.test(src),
+      'le mot « réelle » promettait une correction de l’inflation qui n’a pas lieu');
+    vrai(/trad\('Croissance observée du patrimoine'\)/.test(src),
+      'et le nom dit d’où vient le chiffre : des relevés');
+    /* Les longues aides sont concatenees sur plusieurs lignes : on recolle la
+       colle avant de chercher, sinon le test depend de la mise en page. */
+    const recolle = s => s.replace(/'\s*\+\s*'/g, '');
+    const i = src.indexOf("trad('Croissance observée du patrimoine')");
+    vrai(i > 0 && /n’est pas corrigée de l’inflation/.test(recolle(src.slice(i, i + 1600))),
+      'l’aide lève l’ambiguïté au lieu de la laisser');
+  });
+
+  test('aucune comparaison à une moyenne sans base', () => {
+    /* « Au-dessus de 20 %, tu mets de cote nettement plus que la moyenne » : la
+       moyenne de quel pays, a quel age, a quels revenus, mesuree comment ? Une
+       comparaison sans base n'informe pas, elle rassure au hasard. */
+    const src = lireSource('assets/app.js') + lireSource('assets/i18n.js');
+    for (const motif of ['que la moyenne', 'Au-dessus de 20', 'above 20', 'Above 20']) {
+      vrai(!src.includes(motif),
+        `« ${motif} » compare à une moyenne que rien ne définit`);
+    }
+  });
+});
+
+suite('Projection dit ce que son moteur fait', () => {
+
+  test('l’aide n’apprend plus à maquiller un taux', () => {
+    /* « Garde un seul choix et ajuste le taux : moitie a 8 %, moitie sans
+       rendement, cela fait 4 % sur le tout. » L'approximation tient dans un cas
+       simplifie, se defait des qu'une autre poche porte quelque chose, et surtout
+       melange allocation et rendement. Une V1 assume sa limite. */
+    const src = lireSource('assets/app.js') + lireSource('assets/i18n.js');
+    for (const m of ['cela fait 4 %', 'moitié à 8 %', 'half at 8%']) {
+      vrai(!src.includes(m), `« ${m} » invite à bricoler le modèle`);
+    }
+    const app = lireSource('assets/app.js').replace(/'\s*\+\s*'/g, '');
+    vrai(/la projection verse tout dans la poche sélectionnée/.test(app),
+      'la limite est dite à la place, là où le choix se fait');
+  });
+
+  test('la note sous la courbe ne contredit pas l’amortissement', () => {
+    /* La note affirmait que le capital rembourse chaque mois « n'est pas
+       projete ». C'etait vrai d'une version anterieure du moteur : depuis,
+       `moteurProjection` amortit les credits et ajoute le capital rendu a la part
+       plate. Un texte qui dit le contraire du calcul fait douter du chiffre
+       juste, et c'est le pire des deux defauts. */
+    const store = lireSource('assets/store.js');
+    vrai(/dettes: \(impose \|\| opts\.plat != null\) \? \[\] : dettesAmortissables\(\)/.test(store),
+      'le moteur reçoit bien les dettes amortissables');
+    vrai(/d\.reste -= capital;/.test(store), 'et il les amortit mois par mois');
+    vrai(/const plat = c\.plat \+ capitalRendu;/.test(store),
+      'le capital rendu rejoint la part plate, qui monte donc');
+
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const amortis = dettesAmortissables().length;');
+    vrai(i > 0, 'la note interroge le moteur au lieu de supposer');
+    const note = app.slice(i, i + 1400);
+    vrai(/Le capital que tes mensualités remboursent est projeté/.test(note),
+      'et elle le dit quand il l’est');
+    vrai(/leur remboursement ne peut pas être projeté/.test(note),
+      'et dit l’inverse quand aucun crédit n’est amortissable, ce qui arrive');
+    vrai(!/le capital que tes mensualités remboursent chaque mois, ni la fin du prêt ne sont projetés/.test(app),
+      'l’ancienne phrase, qui contredisait le calcul, est partie');
+
+    /* La preuve par le calcul : deux horizons, et la part plate monte. */
+    Fixture.poser(s => {
+      s.etabs = (s.etabs || []).map(e => ({ ...e }));
+      const e = s.etabs[0];
+      if (e) e.dettes = [{ montant: 100000, taux: 2, mensualite: 600, initial: 120000 }];
+    });
+    if (dettesAmortissables().length) {
+      const a = moteurProjection(configProjection({ years: 1 }));
+      const b = moteurProjection(configProjection({ years: 5 }));
+      vrai(b.final.plat > a.final.plat,
+        'la part plate monte avec le temps : c’est le capital remboursé');
+    }
+  });
+
+  test('« Reprendre depuis le budget » vit sous le champ qu’il change', () => {
+    /* Le bouton concernait « Versement mensuel » et vivait au bas du depliant,
+       apres les trois taux, l'inflation et la cible : une action a six reglages
+       du seul champ qu'elle modifie. */
+    const src = lireSource('assets/app.js');
+    vrai(/trad\('Reprendre ce montant'\)/.test(src), 'le bouton existe');
+    const iBouton = src.indexOf("data-action=\"proj-use-budget\"");
+    const iChamp = src.indexOf("trad('Valeur figée. Ta capacité d’épargne est de')");
+    vrai(iChamp > 0 && iBouton > iChamp && iBouton - iChamp < 700,
+      'il suit immédiatement la ligne qui annonce la capacité d’épargne');
+    vrai(!/Reprendre'\)\} \$\{fmtEUR0\(suggestedMonthly\(\)\)\} \$\{trad\('\/ mois'\)/.test(src),
+      'et l’ancien bouton du bas de page est parti, pas dupliqué');
+  });
+});
+
+suite('Un intitulé dit exactement ce qu’il regroupe', () => {
+
+  test('« Par enveloppe » regroupait aussi ce qui n’en est pas une', () => {
+    /* Le regroupement part de la table des types de compte, qui porte un bien
+       immobilier, une SCPI, un bien de valeur et des especes. Une enveloppe est
+       un contenant fiscal ; un appartement n'en est pas un. */
+    const src = lireSource('assets/app.js');
+    vrai(!/trad\('Par enveloppe'\)/.test(src),
+      'le libellé promettait des enveloppes et livrait des murs');
+    vrai(/trad\('Par type de détention'\)/.test(src),
+      'et le nouveau est vrai de chaque ligne du groupe');
+    /* La preuve par les donnees : le groupement porte bien des types qui ne sont
+       pas des enveloppes. */
+    Fixture.poser();
+    const ids = new Set(TYPES_COMPTE.map(x => x.id));
+    for (const horsEnveloppe of ['immo', 'bienValeur', 'especes']) {
+      vrai(ids.has(horsEnveloppe),
+        `${horsEnveloppe} est un type de compte, donc un groupe possible`);
+    }
+  });
+
+  test('Données garde le diagnostic, sans l’imposer', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewData('), src.indexOf('function mountData('));
+    /* Rien n'est retire : les cinq mesures sont toutes la, dans le depliant. */
+    for (const mesure of ['Positions', "trad('Relevés enregistrés')", "trad('Comptes suivis')",
+                          "trad('Taille du stockage')", "trad('Version')"]) {
+      vrai(vue.includes(mesure), `${mesure} reste disponible`);
+    }
+    /* Et le compte des releves ne compte plus les mois vides du calendrier :
+       « 25 » pour huit releves n'apprenait rien a personne. */
+    vrai(/monthly\.filter\(r => !rowIsEmpty\(r\)\)\.length/.test(vue),
+      'le compte porte sur les relevés renseignés');
+    /* Le sous-titre de la page decrit la page. */
+    const dico = lireSource('assets/i18n.js');
+    vrai(!/'view\.data\.sub': 'Export, import/.test(dico),
+      'le sous-titre ne se limite plus à trois des sept gestes');
+    vrai(/'view\.data\.sub': 'Sauvegarde, import, export et synchronisation'/.test(dico)
+      && /'view\.data\.sub': 'Backup, import, export and sync'/.test(dico),
+      'et il est traduit dans les deux langues');
+  });
+
+  test('Positions ouvre sur le portefeuille, pas sur le marché', () => {
+    /* La barre des reperes ouvrait la page : l'ecran commencait par le marche en
+       general, avant les chiffres du detenteur. Rien n'est retire, l'ordre
+       change. La carte du jour reste la premiere, ce qui est la decision
+       explicite du detenteur : « c'est ca qui nous interesse ». */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    const ou = r => vue.indexOf(r);
+    const l = ['class="card jour"', 'id="reperesFamilles"', 'id="reperes"'].map(ou);
+    vrai(l.every((n, k) => n > 0 && (k === 0 || n > l[k - 1])),
+      `la carte du jour vient avant les repères de marché : ${l.join(' < ')}`);
+    /* Et les deux conteneurs existent toujours : le montage les remplit par
+       identifiant, donc les perdre serait un ruban vide et muet. */
+    vrai(/\$\('#reperes'\)/.test(src), 'le ruban est toujours monté');
+  });
+});
+
+suite('Aucune branche morte gardée à côté de celle qui décide', () => {
+
+  test('aucune condition toujours vraie ni toujours fausse', () => {
+    /* `if (!l.marche || true)` : une moitie morte a cote de celle qui decidait,
+       et le lecteur suivant aurait cherche ce que `!l.marche` filtre. */
+    for (const f of ['assets/app.js', 'assets/store.js', 'assets/charts.js']) {
+      const src = lireSource(f);
+      for (const motif of ['|| true', '&& false', 'if (true)', 'if (false)']) {
+        vrai(!src.includes(motif), `${f} porte « ${motif} », une branche morte`);
+      }
+    }
+  });
+
+  test('la décomposition d’un compte compte toutes ses lignes', () => {
+    /* Ce que la moitie morte proposait d'ecarter : les lignes cotees. Un
+       compte-titres se serait decompose en rien du tout, sous sa propre valeur.
+       Un total egale la somme de ses parts. */
+    const src = lireSource('assets/app.js');
+    vrai(/for \(const l of lignes\) parClasse\.set\(l\.classe/.test(src),
+      'toutes les lignes entrent dans la décomposition par classe');
   });
 });
 

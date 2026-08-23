@@ -1052,7 +1052,7 @@ const SIGNES = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF', JPY: '¥' };
 const symboleDevise = devise => SIGNES[devise || 'EUR']
   || String(devise ?? '').replace(/[&<>"']/g, '');
 const OEIL_MASQUE = '<svg class="oeil-masque" viewBox="0 0 24 24" role="img"'
-  + ' aria-label="montant masqué">'
+  + ` aria-label="${trad('montant masqué')}">`
   + '<path d="M1.9 12S5.9 5.6 12 5.6 22.1 12 22.1 12 18.1 18.4 12 18.4 1.9 12 1.9 12Z"/>'
   + '<line x1="4.5" y1="19.5" x2="19.5" y2="4.5"/></svg>';
 const masque = devise => `${OEIL_MASQUE} ${symboleDevise(devise)}`;

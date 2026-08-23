@@ -221,7 +221,7 @@ const Charts = (() => {
       const H = opts.height || 300;
       const m = { t: 14, r: 16, b: 30, l: 54 };
       const iw = W - m.l - m.r, ih = H - m.t - m.b;
-      if (!points.length) { el.innerHTML = '<p class="empty">Pas de données</p>'; return; }
+      if (!points.length) { el.innerHTML = `<p class="empty">${trad('Pas de données')}</p>`; return; }
 
       const totals = points.map(p => series.reduce((s, sr) => s + (p[sr.key] || 0), 0));
       const maxV = Math.max(...totals, guide ? guide.value : 0,
@@ -538,7 +538,7 @@ const Charts = (() => {
       const cA = cssv('--series-1'), cB = cssv('--series-2');
 
       el.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Réel contre cible">
+        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Réel contre cible')}">
           ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${c.grid}"/>
             <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" class="tick">${kEur(t)}</text>`).join('')}
           ${items.map((it, i) => {
@@ -570,8 +570,8 @@ const Charts = (() => {
           tip.innerHTML = `<div class="tt-head">${esc(it.label)}</div>
             <div class="tt-row"><span class="sw" style="background:${cA}"></span>${esc(seriesLabels[0])}<b>${fmtEUR0(it.a)}</b></div>
             <div class="tt-row"><span class="sw" style="background:${cB}"></span>${esc(seriesLabels[1])}<b>${fmtEUR0(it.b)}</b></div>
-            <div class="tt-row tt-total">Écart<b>${it.delta >= 0 ? '+' : '−'}${fmtEUR0(Math.abs(it.delta))}</b></div>
-            ${opts.onPick ? '<div class="tt-row tt-hint">Clique pour changer la cible</div>' : ''}`;
+            <div class="tt-row tt-total">${trad('Écart')}<b>${it.delta >= 0 ? '+' : '−'}${fmtEUR0(Math.abs(it.delta))}</b></div>
+            ${opts.onPick ? `<div class="tt-row tt-hint">${trad('Clique pour changer la cible')}</div>` : ''}`;
           tip.style.left = Math.max(4, Math.min(W - tip.offsetWidth - 4, m.l + bandW * (+node.dataset.i) + bandW / 2 - tip.offsetWidth / 2)) + 'px';
           tip.style.top = '6px';
         });
@@ -595,7 +595,7 @@ const Charts = (() => {
       const H = opts.height || 280;
       const m = { t: 16, r: 14, b: 34, l: 56 };
       const iw = W - m.l - m.r, ih = H - m.t - m.b;
-      if (!items.length) { el.innerHTML = '<p class="empty">Pas de données</p>'; return; }
+      if (!items.length) { el.innerHTML = `<p class="empty">${trad('Pas de données')}</p>`; return; }
 
       const max = Math.max(...items.map(i => i.value), target || 0, 1);
       const ticks = niceTicks(max);
