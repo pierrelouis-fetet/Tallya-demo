@@ -16777,9 +16777,32 @@ suite('Deux états, et l’affichage suit la saisie', () => {
     vrai(i > 0, 'la carte doit exister dans la source');
     vrai(/\$\{sansDistinction\(\) \? '' : `/.test(vue.slice(Math.max(0, i - 900), i)),
       'elle ne se rend que si les catégories sont actives');
-    eq((vue.match(/sansDistinction\(\)/g) || []).length, 6,
-      'la carte, ses trois rangées de colonnes, le compte de l’en-tête, et le '
-      + 'commentaire qui dit pourquoi il n’y a pas de réglage de plus');
+    eq((vue.match(/sansDistinction\(\)/g) || []).length, 7,
+      'la carte, ses trois rangées de colonnes, le compte de l’en-tête, la fiche '
+      + 'de la tuile de la moyenne, et le commentaire qui dit pourquoi il n’y a '
+      + 'pas de réglage de plus');
+  });
+
+  test('aucune ventilation par catégorie ne survit, tuiles et fiches comprises', () => {
+    /* La carte et les colonnes avaient ete conditionnees, la FICHE d'une tuile
+       non : « Moyenne par mois » ouvrait encore la moyenne ventilee sur neuf
+       categories. Un balayage vaut mieux qu'un souvenir -- on liste les surfaces
+       qui appellent `expenseByCategory` et on exige que chacune soit gardee. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    /* La tuile n'ouvre sa fiche que si les categories servent encore. */
+    vrai(/sansDistinction\(\) \? null : 'depensesCategories'/.test(vue),
+      'la tuile de la moyenne n’ouvre plus la ventilation par catégorie');
+    /* Le montage verifie que son conteneur existe : la carte peut ne pas etre
+       rendue du tout. */
+    const mont = src.slice(src.indexOf('function mountBudget('));
+    vrai(/if \(\$\('#bCats'\)\) Charts\.rankedBars/.test(mont),
+      'et le graphique ne se monte que si sa carte est là');
+    /* Toutes les surfaces qui ventilent sont recensees : trois, et chacune est
+       gardee. Une quatrieme qui apparaitrait ferait tomber ce compte. */
+    eq((src.match(/expenseByCategory\(/g) || []).length, 3,
+      'la carte, son graphique et la fiche de la tuile : pas une de plus');
   });
 
   test('catégories désactivées : rien n’est affiché, rien n’est perdu', () => {

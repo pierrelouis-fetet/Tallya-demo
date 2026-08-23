@@ -4811,7 +4811,13 @@ function viewBudget(section = 'depenses') {
     ${tile('Moyenne par mois', stats.average, null, 'var(--series-4)',
            `${trad('sur')} ${stats.moisRetenus} ${trad('mois clos, hors charges fixes')}`
              + (stats.moisEnCoursExclu ? ' ' + trad('et hors mois en cours') : ''),
-           'depensesCategories')}
+           /* Sa fiche ventile la moyenne par categorie : elle n'a plus de
+              question a laquelle repondre quand on a demande a ne plus les
+              detailler. Sans apercu, `tile()` rend une tuile simple et non
+              cliquable -- le chiffre reste, il est global, c'est sa
+              DECOMPOSITION qui s'en va. Ouvrir la liste des mois a la place
+              aurait double la fiche de la tuile voisine, qui la porte deja. */
+           sansDistinction() ? null : 'depensesCategories')}
     <button type="button" class="tile tile-link" style="--tile-color:var(--good)"
             data-action="apercu" data-apercu="moisObjectif" data-arg="sous">
       <span class="t-label">${trad('Mois sous objectif')}</span>
