@@ -1707,10 +1707,12 @@ function focusChamp(el) {
 const OPTIONS_CLASSE = Object.entries(ASSET_CLASSES);
 const OPTIONS_ROLE = Object.entries(ROLES);
 
-function poidsLigne(ligne) {
-  const total = Store.state.positions.reduce((s, p) => s + posValue(p), 0);
-  return total ? num(ligne.value) / total * 100 : 0;
-}
+/* `poidsLigne` a vecu ici : elle divisait par la somme des titres cotes seuls,
+   quand les quatre autres surfaces divisaient par le portefeuille Marches
+   entier. Une meme ligne valait donc 66,8 % dans le tableau du jour et 53,89 %
+   sur sa fiche. `poidsPortefeuille()`, dans store.js, porte la seule
+   definition ; la ligne recue porte deja sa valeur, calculee par
+   dayPerformance, donc rien ne se cherche par nom. */
 
 const classeDuType = t => {
   const s = String(t || '').toLowerCase();
@@ -1875,9 +1877,13 @@ function triJourTh(key, label, explication = '') {
    `dayPerformance()`, qui est deja celui de l'ampleur du mouvement. */
 function trierJour(lignes) {
   if (!jourSort) return lignes;
+  /* La base, lue une fois : la passer au comparateur plutot que de la laisser
+     au parametre par defaut evite un `stockTotals()` par comparaison, donc des
+     dizaines de parcours des positions pour un chiffre qui ne bouge pas. */
+  const base = basePortefeuilleMarches();
   const cle = {
     nom: l => String(l.name || '').toLowerCase(),
-    poids: l => poidsLigne(l),
+    poids: l => poidsPortefeuille(l.value, base),
     pct: l => (l.horsSeance ? -Infinity : num(l.pct)),
     eur: l => (l.horsSeance ? -Infinity : num(l.eur)),
   }[jourSort.key];
@@ -1958,7 +1964,7 @@ function viewPositions() {
             : fmtEUR(inv)}</td>
       <td class="${cls(pe)}">${fmtSigned(pe)}</td>
       <td class="${cls(pp)}">${arrow(pp)} ${fmtSignedPct(pp)}</td>
-      <td class="muted">${fmtPct(stockBase ? v / stockBase * 100 : 0)}</td>
+      <td class="muted">${fmtPct(poidsPortefeuille(v, stockBase))}</td>
     </tr>`;
   }).join('');
 
@@ -2012,6 +2018,10 @@ function viewPositions() {
       </div>`;
     }
     const positif = j.eur >= 0;
+    /* La base des poids, lue une fois pour toute la carte : `stockTotals()`
+       reparcourt les positions, et l'appeler par ligne puis par comparaison de
+       tri le ferait des dizaines de fois pour un chiffre qui ne bouge pas. */
+    const poidsBase = basePortefeuilleMarches();
     return `
     <div class="card jour" data-anchor="jour">
       <div class="card-head">
@@ -2037,7 +2047,7 @@ function viewPositions() {
       <div class="jour-lignes">
         <div class="jour-ligne entete">
           ${triJourTh('nom', 'Ligne')}
-          ${triJourTh('poids', 'Poids', 'La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}
+          ${triJourTh('poids', 'Poids', 'Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à investir inclus. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse la moitié du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}
           ${triJourTh('pct', 'Var.', 'La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd’hui se compare à ton prix d’achat, et le dit sous son nom : tu ne la détenais pas hier soir.')}
           ${triJourTh('eur', 'Effet', 'Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage.')}
         </div>
@@ -2047,7 +2057,7 @@ function viewPositions() {
               data-action="open-position" data-i="${l.index}"
               title="${esc(l.name)} · ${trad('voir la fiche complète')}">${
                 esc(l.name)}</button></span>
-            <span class="jl-poids muted">${fmtPct(poidsLigne(l), 1)}</span>
+            <span class="jl-poids muted">${fmtPct(poidsPortefeuille(l.value, poidsBase), 1)}</span>
             <span class="jl-pct ${l.horsSeance ? '' : cls(l.pct)}">${
               l.horsSeance ? '' : fmtSignedPct(l.pct, 2)}</span>
             <span class="jl-eur ${l.horsSeance ? '' : cls(l.eur)}">${
@@ -2178,8 +2188,9 @@ function viewPositions() {
           ${sortableTh('value', 'Valeur €')}${sortableTh('invested', 'Investi €')}
           ${sortableTh('perfEur', 'Perf €')}${sortableTh('perfPct', 'Perf %')}
           ${sortableTh('poids', '% portef.', '',
-            'La part de cette ligne dans le portefeuille de titres, pas dans tes avoirs. '
-            + 'Le classement est celui de la valeur : le dénominateur est le même pour toutes.')}
+            'Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à '
+            + 'investir inclus. Le même calcul que la colonne « Poids » de la carte du jour '
+            + 'et que la fiche de la ligne.')}
         </tr></thead>
         <tbody>${rows || `<tr><td colspan="9" class="empty">Aucune position</td></tr>`}</tbody>
         <tfoot><tr>
@@ -3266,12 +3277,16 @@ function viewHistory() {
 
   <div class="card">
     <div class="card-head">
-      <h2>${trad('Relevé mensuel du patrimoine')}</h2>
-      ${lignes.length ? `<span class="hint">${
-        (lignes.length > 1 ? trad('{n} relevés en {a}') : trad('{n} relevé en {a}'))
-          .replace('{n}', lignes.length).replace('{a}', esc(String(annee)))}</span>` : ''}
-      ${annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
-      <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter un relevé')}</button>
+      <div class="tete-titre">
+        <h2>${trad('Relevé mensuel du patrimoine')}</h2>
+        ${lignes.length ? `<span class="hint">${
+          (lignes.length > 1 ? trad('{n} relevés en {a}') : trad('{n} relevé en {a}'))
+            .replace('{n}', lignes.length).replace('{a}', esc(String(annee)))}</span>` : ''}
+      </div>
+      <div class="row">
+        ${annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
+        <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter un relevé')}</button>
+      </div>
     </div>
     ${pasAFaire('comptes') ? `
     <p class="empty" style="margin:0 0 12px">${trad('Un relevé est la photo de tes comptes '
@@ -5478,11 +5493,11 @@ function sheetPositions() {
       ASSET_CLASSES[assetClassDe(p)], ROLES[roleDe(p)],
       num(p.qty), num(p.buyPrice), num(p.price), p.currency || 'EUR', num(p.fx || 1),
       round2(posValue(p)), round2(posInvested(p)), round2(posPerfEur(p)),
-      posPerfPct(p) / 100, base ? posValue(p) / base : 0,
+      posPerfPct(p) / 100, poidsPortefeuille(posValue(p), base) / 100,
     ]),
     total: ['Total', '', '', '', '', null, null, null, '', null,
       round2(pnl.value), round2(pnl.invested), round2(pnl.pnl),
-      pnl.pct == null ? null : pnl.pct / 100, base ? pnl.value / base : 0],
+      pnl.pct == null ? null : pnl.pct / 100, poidsPortefeuille(pnl.value, base) / 100],
   };
 }
 
@@ -7418,8 +7433,9 @@ const ACTIONS = {
         { cle: 'libelle', label: trad('De quoi s’agit-il ?'), type: 'texte', requis: true,
           exemple: sortie ? 'ex. Voiture' : 'ex. Succession' },
         { cle: 'montant', label: sortie ? 'Montant dépensé (€)' : 'Montant reçu (€)',
-          type: 'nombre', exemple: '0' },
+          type: 'nombre', requis: true, exemple: '0' },
         { cle: 'date', label: 'Date', type: 'date', valeur: todayISO(),
+          requis: true, mois: true,
           aide: sortie ? 'elle situe la dépense dans ton historique'
                        : 'elle situe la rentrée dans ton historique' },
         { cle: 'note', label: 'Note', type: 'texte', exemple: trad('facultatif') },
@@ -7448,8 +7464,10 @@ const ACTIONS = {
         { cle: 'sens', label: 'Nature', type: 'liste',
           options: [['entree', 'Rentrée, de l’argent reçu'], ['sortie', 'Dépense, de l’argent parti']],
           valeur: etaitSortie ? 'sortie' : 'entree' },
-        { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', valeur: Math.abs(num(a.montant)) },
-        { cle: 'date', label: 'Date', type: 'date', valeur: a.date || '' },
+        { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', requis: true,
+          valeur: Math.abs(num(a.montant)) },
+        { cle: 'date', label: 'Date', type: 'date', requis: true, mois: true,
+          valeur: a.date || '' },
         { cle: 'note', label: 'Note', type: 'texte', valeur: a.note || '' },
         { cle: 'supprimer', label: trad('Supprimer cette ligne'), type: 'case',
           aide: trad('La ligne disparaît en validant. Réversible avec Ctrl+Z') },
@@ -8092,9 +8110,16 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
               value="${esc(String(c.valeur ?? ''))}" placeholder="${esc(trad(c.exemple || ''))}">
            ${dl ? `<datalist id="${dl}">${c.suggestions.map(s =>
               `<option value="${esc(s)}"></option>`).join('')}</datalist>` : ''}`;
+      /* `mois` : sous un champ de date, le mois ecrit en lettres, tenu a jour.
+         Une date au format du navigateur ne dit pas a quel mois elle appartient
+         sans un calcul de tete, et c'est pourtant la question qu'on se pose en
+         datant un mouvement : « ça compte dans quel mois ». Le drapeau est
+         explicite, champ par champ : toutes les dates de l'application n'ont
+         pas cette question. */
       return `<div class="field">
         <label for="${id}">${esc(trad(c.label))}${c.aide ? `<span class="sub">${esc(trad(c.aide))}</span>` : ''}</label>
         ${saisie}
+        ${c.mois ? `<span class="hint" id="${id}_mois"></span>` : ''}
       </div>`;
     };
 
@@ -8122,6 +8147,19 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       };
       source.addEventListener('change', majCible);
       majCible();
+    }
+
+    for (const c of champs.filter(x => x.mois && x.type === 'date')) {
+      const champ = $(`#f_${c.cle}`), miroir = $(`#f_${c.cle}_mois`);
+      if (!champ || !miroir) continue;
+      const maj = () => {
+        miroir.textContent = champ.value
+          ? `${trad('Compté dans')} ${fmtMoisAn(champ.value)}`
+          : trad('Sans date, ce mouvement ne compte dans aucun mois.');
+      };
+      champ.addEventListener('input', maj);
+      champ.addEventListener('change', maj);
+      maj();
     }
 
     const premier = $('#modalBody').querySelector('input, select');
@@ -8154,7 +8192,18 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
          portent cette case lisent toutes `v.supprimer`, ce nom est donc deja le
          contrat entre elles et `askForm`. La quatrieme l'aurait oublie. */
       const efface = champs.some(c => c.type === 'case' && c.cle === 'supprimer') && out.supprimer;
-      const manquant = efface ? null : champs.find(c => c.requis && !String(out[c.cle]).trim());
+      /* Ce qu'est un champ vide, par type. `String(0).trim()` vaut « 0 », donc
+         non vide : un montant declare obligatoire passait la garde a zero, et
+         la ligne s'enregistrait sans montant. Zero reste une valeur legitime
+         partout ailleurs -- un versement mensuel a zero est un choix -- c'est
+         `requis` qui decide, jamais le type tout seul. */
+      const vide = c => {
+        const v = out[c.cle];
+        if (c.type === 'nombre') return !num(v);
+        if (c.type === 'case') return !v;
+        return !String(v ?? '').trim();
+      };
+      const manquant = efface ? null : champs.find(c => c.requis && vide(c));
       if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label}${deuxPoints()} ${trad('à remplir')}`); return; }
       if (suite) out.__encore = true;
       fermer(out);
@@ -8542,8 +8591,8 @@ function askPosition(index) {
         ${num(p.dayLow) && num(p.dayHigh)
           ? ligne(trad('Séance'), `${fmtCur(p.dayLow, dev)} <span class="muted">${trad('à')}</span> ${fmtCur(p.dayHigh, dev)}`) : ''}
         ${num(p.volume) ? ligne(trad('Volume du jour'), num(p.volume).toLocaleString(locale()) + ' ' + trad('titres')) : ''}
-        ${ligne(`${trad('Part du portefeuille')}${aide(trad("Sur tes comptes d’investissement, titres et trésorerie qui y attend d’être placée : la même base que tes cibles de répartition. La colonne « Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour une même ligne, et tous les deux justes."))}`,
-            fmtPct(stockTotals().balance ? posValue(p) / stockTotals().balance * 100 : 0))}
+        ${ligne(`${trad('Part du portefeuille')}${aide(trad('Calculé sur la valeur totale de ton portefeuille Marchés, cash à investir inclus. Le même calcul que la colonne « Poids » de la carte du jour et que le tableau des lignes.'))}`,
+            fmtPct(poidsPortefeuille(posValue(p)), 2))}
       </dl>
 
       <dl class="kv" style="margin-top:12px">
@@ -10114,7 +10163,7 @@ const APERCUS = {
   cashInvestir: () => ({
     titre: BASES.cashPlacer.nom, sous: trad('Liquidités posées chez tes courtiers'),
     total: stockTotals().cashToInvest,
-    totalNote: `${fmtPct(stockTotals().balance ? stockTotals().cashToInvest / stockTotals().balance * 100 : 0)} ${trad('du portefeuille')}`,
+    totalNote: `${fmtPct(poidsPortefeuille(stockTotals().cashToInvest))} ${trad('du portefeuille')}`,
     lignes: entreesInvestir().map(({ compte, idxCompte, idxCash }) => ({
       label: nomCompteV2(compte),
       meta: [nomEtabDe(compte), trad(typeCompte(compte.type).label)].filter(Boolean).join(' · '),

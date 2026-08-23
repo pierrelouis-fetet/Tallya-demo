@@ -2475,6 +2475,33 @@ function stockTotals() {
            cashToInvest, invested, balance, parClasseRole, parClasse };
 }
 
+/* La base des poids du portefeuille Marchés, et le poids lui-même.
+
+   Il y en avait deux, et la fiche d'une ligne le disait en toutes lettres :
+   « d'où deux pourcentages différents pour une même ligne, et tous les deux
+   justes ». Chacun se défendait — l'un pour savoir si une variation du jour
+   pèse, l'autre pour situer la ligne dans ce qu'on pilote — mais la même
+   position s'affichait à 66,8 % dans le tableau du jour et à 53,89 % sur sa
+   fiche, à un clic d'écart. Deux nombres justes qui se contredisent à l'écran
+   ne renseignent pas : ils font douter des deux.
+
+   Une seule convention, donc, celle qui répond à la question qu'on se pose
+   devant un portefeuille : quelle part de l'argent que j'ai ici. Le
+   dénominateur est `balance` — les titres, la trésorerie qui attend d'être
+   placée, et les lignes manuelles des comptes de marché. La somme des poids
+   des positions fait alors la part des titres, et le cash à investir complète
+   à 100 %.
+
+   Une fonction et non un calcul recopié : il l'était à cinq endroits, et c'est
+   le quatrième qui a divergé. `base` se passe en argument quand l'appelant en
+   affiche plusieurs, pour ne pas rappeler `stockTotals()` par ligne. */
+const basePortefeuilleMarches = () => stockTotals().balance;
+
+function poidsPortefeuille(valeur, base = basePortefeuilleMarches()) {
+  const b = num(base);
+  return b ? num(valeur) / b * 100 : 0;
+}
+
 function perimetreReequilibrage() {
   const r = rebalanceRows();
   const dedans = r.base;

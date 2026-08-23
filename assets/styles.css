@@ -888,6 +888,19 @@ table .field :is(input, select) { max-width: none; }
   color: var(--text-primary);
 }
 .card-head .hint { font-size: 12px; color: var(--muted); }
+/* Un intitule et sa precision, empiles dans l'en-tete.
+
+   Un compte pose a cote du titre, avant les commandes, n'appartient ni a l'un ni
+   aux autres : il flotte, et l'oeil le prend pour une troisieme commande. Sous
+   le titre, il se lit comme ce qu'il est.
+
+   `align-items: baseline` sur l'en-tete aligne les commandes sur la premiere
+   ligne de ce bloc, donc sur le titre : la geometrie ne change pas pour les
+   voisins. `min-width: 0` pour qu'un titre long se tronque au lieu de pousser
+   les commandes hors de la carte. */
+.card-head .tete-titre {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
 
 /* Deux boutons du meme geste passent a la ligne ensemble, ou pas du tout, et
    mesurent pareil.

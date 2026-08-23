@@ -70,7 +70,7 @@ const I18N = {
     'view.allocation.reel.sub': 'How your wealth is split.',
     'view.allocation.cible.sub': 'What you aim for on the part you can steer',
     'view.overview.historique': 'History',
-    'view.overview.historique.sub': 'Month by month, account by account',
+    'view.overview.historique.sub': 'Your wealth, month after month',
     'view.overview.projection': 'Projection',
     'view.overview.projection.sub': "Where your assumptions take your wealth",
     'view.overview.aujourdhui': 'Overview',
@@ -428,7 +428,6 @@ const I18N = {
        certains, et l'entree existe quand meme : sans elle, rien ne distingue
        « traduit a l'identique » de « traduction oubliee ». */
     "actions.fiche": "Actions",
-    "La part de cette ligne dans le portefeuille de titres, pas dans tes avoirs. Le classement est celui de la valeur : le dénominateur est le même pour toutes.": "This holding’s share of the securities portfolio, not of your total assets. The ranking is by value: the denominator is the same for all of them.",
     "Facultative, mais deux chiffres en dépendent. Le rendement par an, qui ramène « +36 % » à une échelle comparable, car sans date il ne dit pas s’il a fallu un an ou cinq. Et l’effet du jour : une ligne achetée aujourd’hui se compare à ton prix d’achat, pas à la clôture d’hier, que tu n’as pas vécue. Pour une ligne renforcée plusieurs fois, mets la date du premier achat.": "Optional, but two figures depend on it. The yearly return, which brings “+36%” to a comparable scale, because without a date it does not say whether it took one year or five. And today’s move: a holding bought today is compared with your purchase price, not with yesterday’s close, which you did not live through. For a holding topped up several times, use the date of the first purchase.",
     ", sans établissement": ", with no institution",
     "Les espèces n’ont pas d’établissement : personne ne les tient pour toi. Ce compte existe une fois, il ne se choisit pas dans la liste et ne se supprime pas. S’il n’y a plus de billets, mets-le à 0.": "Cash in hand has no institution: nobody holds it for you. This account exists once, it is not picked from the list and cannot be deleted. If there are no notes left, set it to 0.",
@@ -622,7 +621,6 @@ const I18N = {
     "Pourquoi cette vente ?": "Why this sale?",
     "Prix de vente unitaire": "Unit sale price",
     "Rechercher un compte ou un placement": "Search an account or investment",
-    "Relevé mensuel du patrimoine": "Monthly wealth statement",
     "Remplacer": "Replace",
     "Remplacer le symbole par celui que désigne l'ISIN": "Replace the symbol with the one the ISIN designates",
     "Renommer ce compte, le nom suit partout": "Rename this account, the name follows everywhere",
@@ -889,8 +887,6 @@ const I18N = {
     "Le cash-flow annuel rapporté à ce que tu as vraiment mis : le prix payé moins le capital qu’il te reste à rembourser. C’est le seul chiffre qui réponde à « ce montage vaut-il mieux qu’un livret », parce qu’il tient compte du levier du crédit.": "The annual cash flow relative to what you actually put in: the price paid minus the capital still owed. It is the only figure that answers “is this setup better than a savings account”, because it accounts for the loan's leverage.",
     "Le même total, vu à l’année. Un abonnement de 30 € par mois coûte 360 € par an : c’est à cette échelle qu’on décide de le garder ou non.": "The same total, seen over a year. A €30-a-month subscription costs €360 a year: that is the scale at which you decide to keep it or not.",
     "PEA, compte-titres, assurance-vie, PER, portefeuille de cryptomonnaies, avec leurs lignes et l’argent qui y attend d’être placé. Ton cash du quotidien, ton épargne de précaution, ton immobilier et ton non coté n’en font pas partie : ils ne s’arbitrent pas d’un clic, et les mélanger donnerait des pourcentages qu’aucune décision ne peut suivre. Allocation, elle, montre tout ton patrimoine.": "PEA, brokerage account, life insurance, PER, cryptocurrency portfolio, with their holdings and the money waiting there to be invested. Your day-to-day cash, your emergency fund, your property and your private assets are not part of it: they cannot be traded in one click, and mixing them would give percentages no decision can follow. Allocation shows all of your wealth.",
-    "Sur tes comptes d’investissement, titres et trésorerie qui y attend d’être placée : la même base que tes cibles de répartition. La colonne « Poids » de l’accueil ne compte, elle, que les titres cotés, parce qu’elle sert à dire si une variation du jour pèse ou non. D’où deux pourcentages différents pour une même ligne, et tous les deux justes.": "On your investment accounts, securities and cash waiting there to be invested: the same basis as your allocation targets. The “Weight” column on the home screen counts only listed securities, because its job is to say whether a day's move matters. Hence two different percentages for the same holding, both correct.",
-    "Taxe foncière, copropriété, assurance propriétaire non occupant : les charges fixes que tu as rattachées à ce bien, ramenées au mois.": "Property tax, service charges, landlord insurance: the fixed costs you linked to this asset, brought back to a month.",
     "Un crédit pèse en négatif sur le patrimoine net : patrimoine net = total de tes avoirs moins tes crédits.": "A loan weighs negatively on net worth: net worth = total holdings minus your loans.",
     "Une recherche par nom donne le nom, le symbole, la devise et le cours, mais pas l’ISIN : aucune source gratuite ne le retrouve à partir d’un symbole. Partir de l’ISIN est le seul chemin qui remplit tout.": "A search by name gives the name, symbol, currency and price, but not the ISIN: no free source recovers it from a symbol. Starting from the ISIN is the only path that fills everything.",
     "Ici,": "Here,",
@@ -1590,7 +1586,6 @@ const I18N = {
     "lignes n’ont pas de date d’achat : leur écart du jour suppose que tu les détenais hier soir. La date se renseigne dans la fiche de la ligne.": "holdings have no purchase date: their daily move assumes you held them last night. The date is set in the holding’s sheet.",
     "ligne n’a pas de date d’achat : son écart du jour suppose que tu la détenais hier soir. La date se renseigne dans la fiche de la ligne.": "holding has no purchase date: its daily move assumes you held it last night. The date is set in the holding’s sheet.",
 
-    "La part de cette ligne dans tes titres cotés. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse 70 % du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.": "This holding's share of your listed securities. It says which one truly matters when it moves: 1% on a holding that weighs 70% of the portfolio moves more money than 10% on one at 3%.",
     "La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd’hui se compare à ton prix d’achat, et le dit sous son nom : tu ne la détenais pas hier soir.": "The security's change since yesterday's close, in its own currency: the move shown is the security's, not the exchange rate's. The two prices that produce it are written under the holding's name, yesterday's close then today's price. A holding bought today compares to your purchase price, and says so under its name: you did not hold it last night.",
     "Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage.": "What this change weighs on your wealth, converted at today's rate. It is the column that says how much you gained or lost, where the change only gives a percentage.",
     "Poids": "Weight",
@@ -1598,6 +1593,15 @@ const I18N = {
     "Effet": "Impact",
 
     "Dernier relevé,": "Last statement,",
+    "Relevé mensuel du patrimoine": "Monthly wealth statement",
+    "Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à investir inclus. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse la moitié du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.":
+      "Share of this holding in your total Markets portfolio, uninvested cash included. It tells you which one really matters when it moves: 1% on a holding worth half the portfolio shifts more money than 10% on one worth 3%.",
+    "Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à investir inclus. Le même calcul que la colonne « Poids » de la carte du jour et que la fiche de la ligne.":
+      "Share of this holding in your total Markets portfolio, uninvested cash included. The same calculation as the “Weight” column on the day card and as the holding's own page.",
+    "Calculé sur la valeur totale de ton portefeuille Marchés, cash à investir inclus. Le même calcul que la colonne « Poids » de la carte du jour et que le tableau des lignes.":
+      "Computed on the total value of your Markets portfolio, uninvested cash included. The same calculation as the “Weight” column on the day card and as the holdings table.",
+    "Compté dans": "Counted in",
+    "Sans date, ce mouvement ne compte dans aucun mois.": "With no date, this movement counts in no month.",
     "Ces euros capitalisent au taux de la poche que tu choisis. Sur les liquidités, ils s’accumulent sans rendement : c’est ce que fait un livret que tu n’as pas déclaré rémunéré, et c’est le seul réglage honnête si tu épargnes sans investir. Un seul choix à la fois : la projection verse tout dans la poche sélectionnée, elle ne répartit pas un versement entre plusieurs.":
       "These euros compound at the rate of the pocket you pick. On cash they simply pile up with no return: that is what a savings account you have not declared as paying does, and it is the only honest setting if you save without investing. One choice at a time: the projection puts the whole contribution into the selected pocket, it does not split one contribution across several.",
     "déjà atteinte": "already reached",
@@ -2139,7 +2143,7 @@ const FR = {
   'view.allocation.reel.sub': 'Comment ton patrimoine est réparti.',
   'view.allocation.cible.sub': 'Ce que tu vises sur la part que tu peux arbitrer',
   'view.overview.historique': 'Historique',
-  'view.overview.historique.sub': 'Mois par mois, compte par compte',
+  'view.overview.historique.sub': 'Ton patrimoine, mois après mois',
   'view.overview.projection': 'Projection',
   'view.overview.projection.sub': "Où tes hypothèses mènent ton patrimoine",
   'view.overview.aujourdhui': "Vue d'ensemble",

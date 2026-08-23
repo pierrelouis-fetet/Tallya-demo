@@ -3758,9 +3758,12 @@ suite('Une sortie exceptionnelle n’est pas une épargne ratée', () => {
       vrai(new RegExp(`data-action="ajouter-apport" data-sens="${sens}"`).test(src),
         `le journal doit offrir un bouton « ${sens} »`);
     }
+    /* Les bornes sont les actions voisines, jamais un nombre de caracteres :
+       un commentaire ajoute dans la fonction faisait sortir la ligne cherchee
+       d'une fenetre fixe, et le test tombait sur un changement de prose. */
     const ajout = src.indexOf(`async 'ajouter-apport'`);
     vrai(ajout > 0, 'l’action d’ajout doit être trouvable');
-    const fnAjout = src.slice(ajout, ajout + 1600);
+    const fnAjout = src.slice(ajout, src.indexOf(`async 'editer-apport'`));
     vrai(/btn\?\.dataset\.sens === 'sortie'/.test(fnAjout),
       'elle prend son sens du bouton, pas d’une question posée deux fois');
     vrai(/-Math\.abs\(num\(v\.montant\)\)/.test(fnAjout),
@@ -3768,7 +3771,7 @@ suite('Une sortie exceptionnelle n’est pas une épargne ratée', () => {
 
     const edit = src.indexOf(`async 'editer-apport'`);
     vrai(edit > 0, 'l’action de modification doit être trouvable');
-    const fnEdit = src.slice(edit, edit + 2200);
+    const fnEdit = src.slice(edit, src.indexOf(`async 'add-charge'`, edit));
     vrai(/cle: 'sens'/.test(fnEdit),
       'la modification propose la nature : c’est le seul endroit où l’on peut s’être '
       + 'trompé de bouton');
@@ -16360,6 +16363,372 @@ suite('Aucune branche morte gardée à côté de celle qui décide', () => {
     const src = lireSource('assets/app.js');
     vrai(/for \(const l of lignes\) parClasse\.set\(l\.classe/.test(src),
       'toutes les lignes entrent dans la décomposition par classe');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le poids d'une position : une seule convention
+   ------------------------------------------------------------------ */
+suite('Un poids de portefeuille, une seule définition', () => {
+
+  /* Il y en avait deux, et la fiche d'une ligne le disait en toutes lettres :
+     « d'ou deux pourcentages differents pour une meme ligne, et tous les deux
+     justes ». Chacun se defendait, mais la meme position s'affichait a 66,8 %
+     dans le tableau du jour et a 53,89 % sur sa fiche, a un clic d'ecart. Deux
+     nombres justes qui se contredisent a l'ecran font douter des deux.
+
+     Le fixture porte 9 000 EUR d'ETF, 750 d'or et 1 500 de cash a investir :
+     11 250 de base, donc des parts rondes a verifier de tete. */
+
+  test('le poids se calcule sur les titres ET le cash à investir', () => {
+    Fixture.poser();
+    const st = stockTotals();
+    pres(st.balance, 11250, 'la base : 9 000 d’ETF + 750 d’or + 1 500 de cash');
+    const etf = Store.state.positions.find(p => p.symbol === 'IWDA');
+    pres(poidsPortefeuille(posValue(etf)), 80,
+      '9 000 sur 11 250 font 80 %, et non 92,3 % sur les titres seuls');
+  });
+
+  test('sans cash, le résultat retombe sur l’ancien calcul', () => {
+    /* La convention n'invente rien quand il n'y a pas de tresorerie : elle
+       redonne exactement la part dans les titres. C'est ce qui rend le
+       changement lisible pour qui place tout le jour meme. */
+    Fixture.poser(s => {
+      const pea = s.comptes.find(c => c.id === 'c_pea');
+      pea.cash = [];
+    });
+    const st = stockTotals();
+    pres(st.cashToInvest, 0, 'plus de cash à investir');
+    pres(st.balance, st.invested, 'la base se réduit aux titres');
+    const etf = Store.state.positions.find(p => p.symbol === 'IWDA');
+    const surTitresSeuls = posValue(etf) / st.invested * 100;
+    pres(poidsPortefeuille(posValue(etf)), surTitresSeuls,
+      'les deux formules coïncident dès que le cash vaut zéro');
+  });
+
+  test('la somme des positions fait la part des titres', () => {
+    /* C'est l'invariant qui rend la colonne lisible : les poids ne totalisent
+       pas 100 %, ils totalisent la part investie, et le cash complete. */
+    Fixture.poser();
+    const st = stockTotals();
+    const base = basePortefeuilleMarches();
+    const somme = Store.state.positions
+      .reduce((s, p) => s + poidsPortefeuille(posValue(p), base), 0);
+    pres(somme, st.invested / st.balance * 100,
+      'la somme des poids EST la part des titres');
+    pres(somme, 86.6667, 'soit 9 750 sur 11 250');
+  });
+
+  test('positions et cash font 100 %', () => {
+    Fixture.poser();
+    const base = basePortefeuilleMarches();
+    const somme = Store.state.positions
+      .reduce((s, p) => s + poidsPortefeuille(posValue(p), base), 0);
+    const cash = poidsPortefeuille(stockTotals().cashToInvest, base);
+    pres(somme + cash, 100, 'aux arrondis près, le portefeuille est entier');
+    pres(cash, 13.3333, 'et le cash pèse 1 500 sur 11 250');
+  });
+
+  test('un portefeuille vide ne rend ni NaN ni Infinity', () => {
+    /* Une division par zero affichee est un defaut ; « 0 % » est la reponse
+       juste quand il n'y a rien a repartir. Deux cas : rien du tout, et du cash
+       sans une seule position. */
+    Fixture.poser(s => { s.positions = []; s.comptes.find(c => c.id === 'c_pea').cash = []; });
+    eq(poidsPortefeuille(0), 0, 'portefeuille entièrement vide');
+    vrai(Number.isFinite(poidsPortefeuille(1000)), 'et jamais Infinity');
+
+    Fixture.poser(s => { s.positions = []; });
+    const st = stockTotals();
+    vrai(st.cashToInvest > 0 && st.invested === 0, 'du cash, aucune position');
+    eq(poidsPortefeuille(0), 0, 'aucun poids de position à donner');
+    pres(poidsPortefeuille(st.cashToInvest), 100, 'le cash fait tout le portefeuille');
+  });
+
+  test('tableau, fiche et export passent par la même fonction', () => {
+    /* Le calcul etait recopie a cinq endroits, et c'est le quatrieme qui a
+       diverge. Une fonction, cinq appelants : la prochaine divergence demande
+       de modifier la fonction, donc de le voir. */
+    const src = lireSource('assets/app.js');
+    const store = lireSource('assets/store.js');
+    vrai(/function poidsPortefeuille\(valeur, base = basePortefeuilleMarches\(\)\)/.test(store),
+      'la définition vit dans store.js, avec la base');
+    vrai(!/poidsLigne\(/.test(src),
+      'l’ancienne fonction, qui divisait par les titres seuls, n’a plus d’appelant');
+    /* Aucun calcul de poids ecrit a la main ne subsiste : ni sur `balance`, ni
+       sur une somme de positions refaite sur place. */
+    for (const motif of [
+      /stockTotals\(\)\.balance \? /,
+      /\/ stockTotals\(\)\.balance \* 100/,
+      /positions\.reduce\(\(s, p\) => s \+ posValue\(p\)\)/,
+    ]) {
+      vrai(!motif.test(src),
+        `un poids se calcule encore à la main dans app.js : ${motif}`);
+    }
+    /* Et les cinq surfaces l'appellent bien. */
+    /* Un argument, donc un appel : la mention `poidsPortefeuille()` du
+       commentaire qui raconte la fusion ne compte pas. */
+    eq((src.match(/poidsPortefeuille\([^)]/g) || []).length, 7,
+      'la carte du jour (cellule et tri), le tableau des lignes, la fiche, '
+      + 'les deux cellules de l’export et l’aperçu du cash');
+  });
+
+  test('les trois libellés disent la même base', () => {
+    const src = lireSource('assets/app.js').replace(/'\s*\+\s*'/g, '');
+    for (const ou of ["triJourTh('poids', 'Poids'", "sortableTh('poids', '% portef.'"]) {
+      const i = src.indexOf(ou);
+      vrai(i > 0, `${ou} doit être trouvable`);
+      vrai(/cash à investir inclus/.test(src.slice(i, i + 500)),
+        `l’aide de ${ou} nomme la base`);
+    }
+    const j = src.indexOf("trad('Part du portefeuille')");
+    vrai(j > 0 && /cash à investir inclus/.test(src.slice(j, j + 400)),
+      'et la fiche aussi, avec les mêmes mots');
+    vrai(!/tous les deux justes/.test(src),
+      'la phrase qui expliquait la divergence n’a plus rien à expliquer');
+
+    /* Et les trois textes ont leur clef anglaise. Ils passent par un helper qui
+       les traduit lui-meme, donc le balayage des `trad('...')` litteraux ne les
+       voit pas : ils s'epinglent ici, ou l'on sait lequel est un libelle. */
+    for (const s of [
+      'Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à investir '
+        + 'inclus. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne '
+        + 'qui pèse la moitié du portefeuille déplace plus d’argent que 10 % sur une ligne '
+        + 'à 3 %.',
+      'Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à investir '
+        + 'inclus. Le même calcul que la colonne « Poids » de la carte du jour et que la '
+        + 'fiche de la ligne.',
+      'Calculé sur la valeur totale de ton portefeuille Marchés, cash à investir inclus. '
+        + 'Le même calcul que la colonne « Poids » de la carte du jour et que le tableau '
+        + 'des lignes.',
+    ]) {
+      vrai(I18N.en[s] !== undefined,
+        `cette aide s’afficherait en français en anglais : « ${s.slice(0, 50)}… »`);
+    }
+  });
+
+  test('Cible garde sa base, et elle la nomme', () => {
+    /* Cible pouvait demander un autre denominateur : verification faite, elle
+       raisonne deja sur titres + tresorerie, donc la meme convention. Ce qui
+       lui est propre, c'est qu'une classe peut etre mise hors jeu : sa base
+       tombe alors d'autant, les pourcentages continuent de totaliser 100 %, et
+       le retrait est annonce. Une exception declaree n'est pas une divergence. */
+    Fixture.poser(s => { s.targets = { ...(s.targets || {}), exclues: [] }; });
+    const r = rebalanceRows();
+    pres(r.base, stockTotals().balance,
+      'sans exclusion, Cible et Positions partagent exactement la base');
+
+    Fixture.poser(s => {
+      s.targets = { ...(s.targets || {}), exclues: [CLE_TRESORERIE] };
+    });
+    const r2 = rebalanceRows();
+    pres(r2.base, stockTotals().balance - stockTotals().cashToInvest,
+      'la trésorerie retirée quitte la base, comme une classe sortie');
+    vrai(r2.cashSorti, 'et la page le sait, pour le dire');
+
+    /* Le perimetre est ecrit a l'ecran, ce qui est la condition pour que la
+       difference ne soit pas une contradiction. */
+    const src = lireSource('assets/app.js');
+    vrai(/trad\('Ces cibles ne portent que sur'\)/.test(src),
+      'la carte nomme son périmètre en tête');
+    vrai(/base des pourcentages ci-dessus/.test(src),
+      'et son pied nomme la base des pourcentages');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un mouvement exceptionnel appartient a une date
+   ------------------------------------------------------------------ */
+suite('Un mouvement exceptionnel dit à quel mois il appartient', () => {
+
+  test('un champ obligatoire vide n’est plus « zéro »', () => {
+    /* `String(0).trim()` vaut « 0 », donc non vide : un montant declare
+       obligatoire passait la garde a zero, et la ligne s'enregistrait sans
+       montant. La regle vit dans askForm, une fois, parce qu'une dizaine de
+       fenetres en dependent et que la onzieme l'aurait oubliee. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('const vide = c => {');
+    vrai(i > 0, 'askForm doit dire ce qu’est un champ vide, par type');
+    const bloc = src.slice(i, i + 320);
+    vrai(/if \(c\.type === 'nombre'\) return !num\(v\);/.test(bloc),
+      'un nombre obligatoire à zéro est vide');
+    vrai(/champs\.find\(c => c\.requis && vide\(c\)\)/.test(src),
+      'et la garde passe par cette définition, pas par String()');
+  });
+
+  test('date, montant et motif sont obligatoires, à la création comme à la correction', () => {
+    /* Un mouvement sans motif est une ligne muette dans un journal dont tout
+       l'objet est de dire d'ou vient l'argent ; sans montant il ne corrige rien
+       au rythme d'accumulation, la seule chose qu'il alimente ; sans date il
+       n'appartient a aucun mois, donc n'ecarte aucun mois du calcul. */
+    const src = lireSource('assets/app.js');
+    const bornes = [
+      ["async 'ajouter-apport'", "async 'editer-apport'"],
+      ["async 'editer-apport'", "async 'add-charge'"],
+    ];
+    for (const [debut, fin] of bornes) {
+      const i = src.indexOf(debut);
+      vrai(i > 0, `${debut} doit être trouvable`);
+      const bloc = src.slice(i, src.indexOf(fin, i + 5));
+      for (const cle of ['libelle', 'montant', 'date']) {
+        const champ = bloc.slice(bloc.indexOf(`cle: '${cle}'`));
+        vrai(/requis: true/.test(champ.slice(0, 200)),
+          `${debut} : le champ « ${cle} » doit être obligatoire`);
+      }
+      vrai(/cle: 'date'[\s\S]{0,200}mois: true/.test(bloc),
+        `${debut} : la date doit nommer son mois`);
+    }
+  });
+
+  test('le mois écrit sous la date suit la frappe', () => {
+    /* Ecrit une fois a l'ouverture, il aurait menti des la premiere correction :
+       c'est justement en changeant la date qu'on se demande dans quel mois ça
+       tombe. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("for (const c of champs.filter(x => x.mois && x.type === 'date'))");
+    vrai(i > 0, 'le câblage du miroir doit être trouvable');
+    const bloc = src.slice(i, i + 700);
+    vrai(/addEventListener\('input', maj\)/.test(bloc)
+      && /addEventListener\('change', maj\)/.test(bloc),
+      'la frappe et le calendrier mettent tous deux le mois à jour');
+    vrai(/maj\(\);/.test(bloc), 'et il est juste dès l’ouverture');
+    vrai(/fmtMoisAn\(champ\.value\)/.test(bloc),
+      'le mois s’écrit en lettres, avec son année entière');
+    vrai(/Sans date, ce mouvement ne compte dans aucun mois/.test(bloc),
+      'une date effacée le dit, au lieu d’afficher un mois faux');
+  });
+});
+
+suite('Un en-tête de carte ne laisse pas flotter son compte', () => {
+
+  test('le compte des relevés se lit sous le titre', () => {
+    /* Entre le titre et les commandes, il n'appartenait ni a l'un ni aux autres,
+       et l'oeil le prenait pour une troisieme commande. */
+    const src = lireSource('assets/app.js');
+    const css = lireSource('assets/styles.css');
+    const vue = src.slice(src.indexOf('function viewHistory('),
+                          src.indexOf('function mountHistory('));
+    const i = vue.indexOf('<div class="tete-titre">');
+    vrai(i > 0, 'le titre et son compte vivent dans un même bloc');
+    const bloc = vue.slice(i, vue.indexOf('</div>', i));
+    vrai(/<h2>/.test(bloc) && /\{n\} relevés en \{a\}/.test(bloc),
+      'le titre puis le compte, dans cet ordre');
+    /* Les commandes restent a droite, donc apres le bloc. On cherche a partir
+       du bloc et non depuis le debut de la vue : le bandeau de rappel, tout en
+       haut, porte deja un bouton « ajouter un releve », et c'est lui que la
+       recherche trouvait. */
+    const apres = vue.slice(i);
+    const l = ["yearControl('history-year'", 'data-action="ajouter-releve"']
+      .map(r => apres.indexOf(r));
+    vrai(l.every((n, k) => n > 0 && (k === 0 || n > l[k - 1])),
+      `après le titre viennent l’année puis le bouton : ${l.join(' < ')}`);
+    vrai(/\.card-head \.tete-titre \{/.test(css),
+      'et la classe est définie dans la feuille');
+  });
+
+  test('le sous-titre d’Historique dit ce que la page raconte', () => {
+    /* « Mois par mois, compte par compte » decrivait l'editeur que la page
+       etait : un tableau de quinze colonnes. Elle raconte maintenant une suite
+       de releves. */
+    const dico = lireSource('assets/i18n.js');
+    vrai(!/'view\.overview\.historique\.sub': 'Mois par mois/.test(dico),
+      'l’ancien sous-titre décrivait un tableau qui n’existe plus');
+    vrai(/'view\.overview\.historique\.sub': 'Ton patrimoine, mois après mois'/.test(dico)
+      && /'view\.overview\.historique\.sub': 'Your wealth, month after month'/.test(dico),
+      'et le nouveau est traduit dans les deux langues');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le dictionnaire couvre tout ce qui s'affiche
+   ------------------------------------------------------------------ */
+suite('Chaque chaîne affichée a sa clef anglaise', () => {
+
+  /* `trad()` rend sa clef inchangee quand le dictionnaire ne la connait pas.
+     Une chaine sans clef s'affiche donc en francais a qui a choisi l'anglais,
+     et rien ne le signale : ni erreur, ni trace, ni difference visible pour qui
+     travaille en francais. C'est le defaut le plus discret de cette base.
+
+     Le controle vivait dans un script lance a la main. Un script qu'on oublie
+     de lancer ne proteste pas, et c'est exactement ce qui est arrive : un motif
+     de suppression trop large a emporte la voisine de la clef visee, deux fois,
+     et il a fallu un rejet de portage pour le voir. La verification est donc
+     ici, avec celles qui tournent a chaque fois. */
+
+  /* Un appel a trad(), avec ses concatenations et les commentaires qui peuvent
+     s'y glisser : les longues aides s'ecrivent sur plusieurs lignes, parfois
+     coupees par un bloc de prose qui explique le choix des mots. Reconstruire
+     la chaine entiere est la seule facon de la chercher dans le dictionnaire. */
+  /* Un litteral, jamais `new RegExp` depuis une chaine : ce depot y a deja
+     perdu une demi-journee, une classe de caracteres etant arrivee amputee d'un
+     niveau d'echappement. Elle excluait alors la lettre « s » au lieu des
+     espaces, sans erreur ni message, et trente-six badges d'aide ne se
+     collaient plus. Un niveau d'echappement, pas trois. */
+  const APPEL = /trad\(\s*((?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")(?:\s*(?:\/\*[\s\S]*?\*\/)?\s*\+\s*(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"))*)/g;
+
+  /* Les litteraux d'une concatenation, recolles et desechappes. */
+  const recoller = (bout) => {
+    const morceaux = bout.match(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g) || [];
+    return morceaux
+      .map(s => s.slice(1, -1))
+      .join('')
+      .replace(/\\'/g, "'").replace(/\\"/g, '"')
+      .replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+  };
+
+  const FICHIERS = ['assets/app.js', 'assets/store.js', 'assets/charts.js',
+                    'assets/quotes.js', 'assets/cloudsync.js'];
+
+  test('aucune chaîne ne s’affiche sans traduction', () => {
+    const manquantes = [];
+    let vues = 0;
+    for (const f of FICHIERS) {
+      const src = lireSource(f);
+      if (!src) continue;
+      for (const m of src.matchAll(APPEL)) {
+        const s = recoller(m[1]);
+        if (!s) continue;
+        vues++;
+        /* Le dictionnaire est charge : on l'interroge, plutot que de reparser
+           le fichier et de risquer un motif qui mente. */
+        if (I18N.en[s] === undefined) manquantes.push(`${f} — ${s.slice(0, 70)}`);
+      }
+    }
+    vrai(vues > 1200, `les appels doivent être trouvables (${vues} vus)`);
+    eq(manquantes.slice(0, 6).join('\n'), '',
+      `${manquantes.length} chaîne(s) s’afficheraient en français en anglais`);
+  });
+
+  /* Un controle general des libelles passes par un helper a ete essaye, puis
+     retire. `sortableTh(cle, libelle, classe, explication, suffixe)` porte cinq
+     arguments dont deux ne sont pas du texte affiche : sans recopier sa
+     signature dans le test, on ne sait pas lequel est lequel, et le controle
+     criait sur une classe CSS et sur un suffixe de colonne. Recopier une
+     signature, c'est en tenir deux d'accord.
+
+     Ce qui garde ce terrain : les libelles des colonnes dont la base a change
+     sont epingles nommement, dans la suite du poids de portefeuille, et le
+     rendu anglais des onze ecrans a ete releve a la main. Le trou automatique
+     restant est nomme : un libelle passe par un helper et jamais par un
+     `trad('...')` litteral n'est pas balaye. */
+
+  test('une clef ne se déclare qu’une fois par langue', () => {
+    /* Deux declarations, et la derniere gagne, en silence. Le cas se presente
+       quand on ajoute une clef qui existait sous une autre traduction : quatre
+       l'ont fait lors d'un portage. */
+    const src = lireSource('assets/i18n.js');
+    const debut = src.indexOf('const I18N = {');
+    /* Le bloc anglais seul : le bloc francais porte les memes clefs pointees,
+       et une clef presente dans les deux n'est pas un doublon. */
+    const bloc = src.slice(debut, src.indexOf('\n  },', debut));
+    const CLEF = /^\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*:\s*['"]/gm;
+    const vues = new Set(), doubles = [];
+    for (const m of bloc.matchAll(CLEF)) {
+      const k = (m[1] !== undefined ? m[1] : m[2]);
+      if (vues.has(k)) doubles.push(k.slice(0, 60));
+      vues.add(k);
+    }
+    vrai(vues.size > 1500, `le dictionnaire doit être lisible (${vues.size} clefs)`);
+    eq(doubles.join(' | '), '', 'une clef déclarée deux fois : la dernière gagnerait');
   });
 });
 
