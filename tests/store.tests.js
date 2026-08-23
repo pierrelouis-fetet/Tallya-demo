@@ -17355,7 +17355,11 @@ suite('Personnalisé est une case, pas un quatrième scénario', () => {
       'la rotation porte sur le sommaire du dépliant lui-même');
 
     const style = document.createElement('style');
-    style.textContent = css;
+    /* La transition est neutralisee : `getComputedStyle` rendue pendant les
+       150 ms d'animation donne la valeur interpolee, soit la matrice identite au
+       premier instant. Un controle qui se contente de « different de none »
+       passerait donc sans qu'aucune rotation n'ait lieu -- il l'a fait. */
+    style.textContent = css + ' .pli-action::after { transition: none !important; }';
     const boite = document.createElement('div');
     boite.innerHTML = `
       <details class="pli-reglages" open>
@@ -17371,8 +17375,9 @@ suite('Personnalisé est une case, pas un quatrième scénario', () => {
     try {
       const rotation = id => getComputedStyle(boite.querySelector('#' + id), '::after').transform;
       /* La carte est ouverte : son chevron pointe vers le haut. */
-      vrai(rotation('chevDehors') !== 'none',
-        'le chevron de la carte ouverte est retourné');
+      const RETOURNE = 'matrix(-1, 0, 0, -1, 0, 0)';
+      eq(rotation('chevDehors'), RETOURNE,
+        'le chevron de la carte ouverte est retourné d’un demi-tour');
       /* Le pli interieur est ferme : le sien pointe vers le bas, donc aucune
          rotation. */
       eq(rotation('chevDedans'), 'none',
@@ -17380,8 +17385,8 @@ suite('Personnalisé est une case, pas un quatrième scénario', () => {
         + 'vers le bas, comme ce que son clic va faire');
       /* Et il se retourne quand c'est LUI qu'on ouvre. */
       boite.querySelector('.pli-avance').open = true;
-      vrai(rotation('chevDedans') !== 'none',
-        'ouvert à son tour, il se retourne');
+      eq(rotation('chevDedans'), RETOURNE,
+        'ouvert à son tour, il se retourne du même demi-tour');
     } finally {
       style.remove();
       boite.remove();
