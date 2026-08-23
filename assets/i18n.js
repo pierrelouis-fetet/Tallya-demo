@@ -1592,8 +1592,8 @@ const I18N = {
     "Rendement de la crypto": "Crypto return",
     "sur ta crypto.": "on your crypto.",
     "Ta crypto garde sa valeur actuelle.": "Your crypto holds its current value.",
-    "de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour qu’une hypothèse standard veuille dire quelque chose":
-      "of cryptocurrencies. Value held constant by default: its path is too uncertain for a standard assumption to mean anything",
+    "de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour une hypothèse standard":
+      "of cryptocurrencies. Value held constant by default: its path is too uncertain for a standard assumption",
     "d’actions, d’obligations, d’immobilier coté, de multi-actifs et de métaux précieux. La crypto a son propre taux, juste en dessous.":
       "of equities, bonds, listed property, multi-asset funds and precious metals. Crypto has its own rate, just below.",
     "Crypto": "Crypto",

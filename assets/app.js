@@ -1527,7 +1527,7 @@ function viewObjective() {
                 s.rateGaranti)}
         ${champ('Rendement de la crypto', 'meta.projRateCrypto', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.crypto)} ${trad('de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour qu’une hypothèse standard veuille dire quelque chose')}`,
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.crypto)} ${trad('de cryptomonnaies. Valeur constante par défaut : son évolution est trop incertaine pour une hypothèse standard')}`,
                 s.rateCrypto)}
         <div class="field">
           <label>${trad('Rendement des liquidités')}${aide(
