@@ -787,8 +787,7 @@ function projectionCredit(d) {
      ne se rembourse pas par echeances et grossit tout seul. Le meme piege que le
      rappel du releve mensuel : le chiffre le plus faux est celui qu'on croit
      stable. */
-  const assurance = num(d.tauxAssurance)
-    ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
+  const assurance = assuranceMensuelleCredit(d);
   const rembourse = Math.max(0, mens - assurance);
   let capital = reste;
   for (let i = 0; i < mois && capital > 0; i++) {
@@ -798,28 +797,100 @@ function projectionCredit(d) {
            sens: capital > reste ? 'monte' : capital < reste ? 'baisse' : 'stable' };
 }
 
-function finCredit(d) {
+function assuranceMensuelleCredit(d) {
+  return num(d.tauxAssurance)
+    ? (num(d.initial) || num(d.montant)) * num(d.tauxAssurance) / 100 / 12 : 0;
+}
+
+/* L'echeancier d'un credit : LA source, et la seule.
+
+   Deux moteurs vivaient cote a cote. `finCredit` bouclait mois par mois en
+   amortissant avec la mensualite ENTIERE, donc en comptant l'assurance comme du
+   remboursement ; `resteAPayer` appliquait une formule fermee apres l'avoir
+   retranchee. Sur un pret de 157 362 EUR a 1,45 % avec 59,50 EUR d'assurance,
+   l'une amortit 894,44 par mois et l'autre 834,94 : plus d'un an d'ecart sur la
+   date de fin, et les deux dates s'affichaient sur la meme fiche.
+
+   La convention, une fois pour toutes :
+
+     mensualite totale = capital + interets + assurance
+
+   Ce qui rembourse est donc `mensualite - assurance - interets`. C'est ce que
+   Budget comptait deja ; la fiche du bien et la carte des credits l'oubliaient,
+   et annonçaient 704,29 EUR la ou Budget disait 644,79.
+
+   Une boucle et non une formule fermee : elle traverse le taux zero sans
+   logarithme, elle donne la derniere echeance reduite sans arrondi a rattraper,
+   et elle est le tableau d'amortissement lui-meme -- ce qui rend la verification
+   possible ligne par ligne.
+
+   `amortissable: false` quand ce qui reste apres l'assurance ne couvre pas les
+   interets du mois : la dette ne s'eteint jamais, et annoncer une date de fin
+   serait mentir. La decomposition du mois reste rendue -- elle est vraie, elle. */
+function echeancierCredit(d) {
   const reste = num(d.montant);
+  if (!(reste > 0)) return null;
   const mens = mensualiteCredit(d);
+  const assurance = assuranceMensuelleCredit(d);
+  /* Un taux ABSENT n'est pas un taux nul. Sans taux on ne sait pas departager le
+     capital des interets, et annoncer « zero de capital » sur une mensualite de
+     620 EUR serait faux dans l'autre sens : `capitalDuMois` vaut alors `null`,
+     et les lecteurs se taisent plutot que d'inventer.
+
+     Un taux DECLARE a zero, lui, s'amortit tout droit : c'est le pret familial ou
+     le differe sans interets. L'ancienne formule fermee rendait `null` des que le
+     taux valait zero -- un logarithme n'aime pas ce cas -- et privait de reponse
+     le pret le plus simple. La boucle le traverse sans y penser. */
+  const declare = d.taux !== undefined && d.taux !== null && d.taux !== '';
   const taux = num(d.taux) / 100 / 12;
-  if (!(reste > 0) || !(mens > 0)) return null;
-  if (mens <= reste * taux) return null;
+  const interetsDuMois = declare ? reste * taux : null;
+  const dispo = mens - assurance;
+  const mois0 = {
+    assuranceDuMois: assurance, interetsDuMois,
+    capitalDuMois: (declare && mens > 0) ? Math.max(0, dispo - interetsDuMois) : null,
+    amortissable: false,
+    mois: null, fin: null, finLe: null, interets: null,
+    assurance: null, derniere: null,
+  };
+  if (!declare || !(mens > 0) || dispo <= interetsDuMois) return mois0;
+
   let capital = reste, mois = 0, interets = 0;
-  while (capital > 0 && mois < 1200) {
+  while (capital > 0.005 && mois < 1200) {
     const i = capital * taux;
     interets += i;
-    capital = capital + i - mens;
+    capital = capital + i - dispo;
     mois++;
   }
-  if (capital > 0) return null;
+  if (capital > 0.005) return mois0;
+
+  /* Le premier du mois avant d'ajouter les mois : `setMonth` sur un 31 janvier
+     saute en mars. L'un des deux moteurs le faisait, l'autre non -- une
+     troisieme facon de ne pas tomber sur la meme date. */
   const fin = new Date();
   fin.setDate(1);
   fin.setMonth(fin.getMonth() + mois);
+  const cle = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`;
   return {
+    ...mois0,
+    amortissable: true,
     mois, interets,
+    assurance: assurance * mois,
+    /* La derniere echeance solde le reliquat : `capital` est negatif ou nul en
+       sortie de boucle, donc elle est plus petite que les autres. */
     derniere: mens + capital,
-    finLe: `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`,
+    fin: cle, finLe: cle,
   };
+}
+
+/* Deux noms, un seul calcul. `finCredit` et `resteAPayer` avaient chacun le
+   leur et ne tombaient pas sur la meme date ; ils delegent desormais, et leur
+   contrat ne change pas -- `null` quand le credit ne s'amortit pas, pour que les
+   vues qui testent `if (!f)` continuent de se taire. */
+function finCredit(d) {
+  const e = echeancierCredit(d);
+  if (!e || !e.amortissable) return null;
+  const { mois, interets, derniere, finLe } = e;
+  return { mois, interets, derniere, finLe };
 }
 
 /* --- les crédits, tous ensemble ----------------------------------------
@@ -856,9 +927,9 @@ function creditsEnCours() {
         })(),
         rembourse: initial > 0 ? Math.max(0, initial - reste) : null,
         part: initial > 0 ? Math.min(100, Math.max(0, (initial - reste) / initial * 100)) : null,
-        interets: (num(d.taux) && reste) ? reste * num(d.taux) / 100 / 12 : null,
+        interets: (num(d.taux) && reste) ? echeancierCredit(d)?.interetsDuMois ?? null : null,
         capital: (num(d.taux) && mensualiteCredit(d))
-          ? Math.max(0, mensualiteCredit(d) - reste * num(d.taux) / 100 / 12) : null,
+          ? echeancierCredit(d)?.capitalDuMois ?? null : null,
         verifieLe: d.verifieLe || null,
         ...projectionCredit(d),
         fin: finCredit(d),
@@ -1348,6 +1419,24 @@ const Store = {
     if (!s.meta.projMonthlyZeroLu) {
       if (num(s.meta.projMonthly) === 0) delete s.meta.projMonthly;
       s.meta.projMonthlyZeroLu = true;
+    }
+
+    /* La banque d'un credit : une seule clef.
+
+       `preteur` est la clef que la fenetre de creation ecrit et que la carte des
+       credits, la fiche et l'export lisent. La fiche d'un etablissement, elle,
+       editait `organisme` -- donc taper le nom de la banque depuis cet ecran
+       partait dans une clef que personne ne relisait.
+
+       La regle : `preteur` gagne quand il porte quelque chose, sinon `organisme`
+       la prend. Aucune valeur inventee, aucune ecrasee. Idempotente sans
+       drapeau -- la clef effacee ne peut plus se reecrire. */
+    for (const e of (s.etabs || [])) {
+      for (const d of (e.dettes || [])) {
+        if (d.organisme === undefined) continue;
+        if (!d.preteur && d.organisme) d.preteur = d.organisme;
+        delete d.organisme;
+      }
     }
 
     if (s.meta.projRateCrypto !== undefined) {
@@ -3485,13 +3574,12 @@ function currentExpenseMonth() {
 
 function capitalRembourseParMois() {
   return ETABS().reduce((total, e) => total + (e.dettes || []).reduce((s, d) => {
-    const taux = num(d.taux) / 100 / 12;
-    const mens = mensualiteCredit(d);
-    if (!taux || !mens) return s;
-    const assurance = num(d.tauxAssurance)
-      ? (num(d.initial) || num(d.montant)) * num(d.tauxAssurance) / 100 / 12 : 0;
-    const interets = num(d.montant) * taux;
-    return s + Math.max(0, mens - assurance - interets);
+    /* Le taux doit etre connu : sans lui on ne sait pas departager le capital
+       des interets, et compter la mensualite entiere comme du remboursement
+       gonflerait l'accumulation. L'echeancier, lui, rend `capitalDuMois: 0`
+       quand la mensualite ne couvre pas les interets -- jamais de negatif. */
+    const e2 = echeancierCredit(d);
+    return s + (e2 && e2.capitalDuMois != null ? e2.capitalDuMois : 0);
   }, 0), 0);
 }
 
@@ -3511,39 +3599,12 @@ function capitalRembourseParMois() {
    s'eteint jamais, et annoncer une date de fin serait mentir. C'est le cas d'un
    levier de courtier, qui grossit tout seul. */
 function resteAPayer(d) {
-  const reste = num(d.montant);
-  const taux = num(d.taux) / 100 / 12;
-  const mens = mensualiteCredit(d);
-  if (!reste || !taux || !mens) return null;
-  const assurance = num(d.tauxAssurance)
-    ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
-  const capitalEtInterets = mens - assurance;
-  const interetsDuMois = reste * taux;
-  if (capitalEtInterets <= interetsDuMois) return null;
-  /* Deux nombres, et ils ne servent pas a la meme chose.
-
-     `exact` est fractionnaire : la derniere echeance est toujours plus petite que
-     les autres. C'est lui qui donne l'argent — multiplier la mensualite entiere
-     par un nombre arrondi au superieur ajoutait une echeance jamais payee, soit
-     834 EUR d'interets inventes sur un pret de 157 000. Trouve par le controle
-     qui rejoue l'amortissement mois par mois.
-
-     `n` est entier, arrondi au superieur, parce qu'on compte des echeances : la
-     derniere existe meme reduite, et l'arrondir vers le bas ferait finir le pret
-     un mois trop tot. */
-  const exact = -Math.log(1 - reste * taux / capitalEtInterets) / Math.log(1 + taux);
-  const n = Math.ceil(exact);
-  const fin = new Date();
-  fin.setMonth(fin.getMonth() + n);
-  return {
-    mois: n,
-    fin: `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`,
-    interets: Math.max(0, capitalEtInterets * exact - reste),
-    assurance: assurance * exact,
-    capitalDuMois: capitalEtInterets - interetsDuMois,
-    interetsDuMois,
-    assuranceDuMois: assurance,
-  };
+  const e = echeancierCredit(d);
+  if (!e || !e.amortissable) return null;
+  const { mois, fin, interets, assurance,
+          capitalDuMois, interetsDuMois, assuranceDuMois } = e;
+  return { mois, fin, interets, assurance,
+           capitalDuMois, interetsDuMois, assuranceDuMois };
 }
 
 /* Deux grandeurs que rien ne separait, et elles ne veulent pas dire la meme
@@ -3698,9 +3759,12 @@ function cashFlowBien(compte) {
   /* `null` et non zero quand aucun taux n'est connu : sans taux on ne sait pas
      departager le capital des interets, et annoncer « zero de capital » sur une
      mensualite de 620 EUR serait faux dans l'autre sens. */
-  const amortis = credits.filter(d => mensualiteCredit(d) && num(d.taux));
+  /* `capitalDuMois != null` plutot que `num(d.taux)` : un pret declare a 0 %
+     rembourse bien du capital, et le filtre par le taux l'ecartait. L'echeancier
+     porte la regle -- sans taux DECLARE, il rend `null`. */
+  const amortis = credits.filter(d => echeancierCredit(d)?.capitalDuMois != null);
   const capitalMois = amortis.length ? amortis.reduce((s, d) =>
-    s + Math.max(0, mensualiteCredit(d) - num(d.montant) * num(d.taux) / 100 / 12), 0) : null;
+    s + (echeancierCredit(d)?.capitalDuMois || 0), 0) : null;
 
   const valeur = valeurCompte(compte);
   const achat = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
@@ -4573,8 +4637,7 @@ function dettesAmortissables() {
       const taux = num(d.taux) / 100 / 12;
       const mens = mensualiteCredit(d);
       if (!reste || !taux || !mens) continue;
-      const assurance = num(d.tauxAssurance)
-        ? (num(d.initial) || reste) * num(d.tauxAssurance) / 100 / 12 : 0;
+      const assurance = assuranceMensuelleCredit(d);
       if (mens - assurance <= reste * taux) continue;
       out.push({ reste, taux, mens: mens - assurance });
     }

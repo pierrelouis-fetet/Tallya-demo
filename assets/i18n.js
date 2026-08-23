@@ -201,7 +201,6 @@ const I18N = {
     "La ligne disparaît en validant, et son montant quitte ton patrimoine. ": "The line disappears on confirmation, and its amount leaves your wealth. ",
     "La ligne disparaît en validant. Réversible avec Ctrl+Z": "The line disappears on confirmation. Reversible with Ctrl+Z",
     "Latent et encaissé depuis le début": "Unrealised and realised since inception",
-    "Le montant net perçu chaque mois, charges déduites si tu les paies": "The net amount received each month, costs deducted if you pay them",
     "Le montant se saisit tel qu’il est facturé, le budget ramène au mois": "Enter the amount as billed, the budget brings it back to a month",
     "Le même compte, un autre usage": "The same account, another purpose",
     "Liquidités posées chez tes courtiers": "Cash sitting with your brokers",
@@ -216,7 +215,6 @@ const I18N = {
     "Montant investi": "Amount invested",
     "Montant investi (€)": "Amount invested (€)",
     "Montant mensuel (€)": "Monthly amount (€)",
-    "Montant net perçu chaque mois": "Net amount received each month",
     "Nom du bien": "Asset name",
     "Nom du compte": "Account name",
     "Nouvelle charge fixe": "New fixed cost",
@@ -1584,6 +1582,10 @@ const I18N = {
     "{n} ligne": "{n} entry",
     "{n} lignes": "{n} entries",
     "net": "net",
+    "Banque / prêteur": "Bank / lender",
+    "Le loyer hors charges récupérables. Les charges du propriétaire se déclarent séparément et sont déduites une seule fois":
+      "The rent excluding recoverable charges. Owner costs are declared separately and deducted only once",
+    "Le montant perçu chaque mois, avant les charges que tu déclares à part": "The amount received each month, before the costs you declare separately",
     "{n} ligne sans clôture de référence n’y est pas comptée":
       "{n} holding without a reference close is not counted in it",
     "{n} lignes sans clôture de référence n’y sont pas comptées":

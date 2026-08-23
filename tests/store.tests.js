@@ -17683,6 +17683,323 @@ suite('Les textes de Projection suivent les presets', () => {
 /* ------------------------------------------------------------------
    Un patrimoine net peut etre negatif
    ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Un seul echeancier de credit
+   ------------------------------------------------------------------ */
+suite('Un crédit ne s’amortit que d’une seule façon', () => {
+
+  /* Deux moteurs vivaient cote a cote. `finCredit` bouclait mois par mois en
+     amortissant avec la mensualite ENTIERE, donc en comptant l'assurance comme
+     du remboursement ; `resteAPayer` appliquait une formule fermee apres l'avoir
+     retranchee. La meme fiche affichait les deux dates.
+
+     La convention, une fois pour toutes :
+       mensualite totale = capital + interets + assurance */
+
+  /* Le pret de reference : 157 362 EUR a 1,45 %, mensualite totale 894,44 EUR,
+     assurance 59,50 EUR par mois -- soit 0,34 % l'an sur 210 000 EUR empruntes. */
+  const PRET = { id: 'd_ref', libelle: 'Prêt immobilier', montant: 157362,
+                 taux: 1.45, mensualite: 894.44, tauxAssurance: 0.34, initial: 210000 };
+  const poserPret = (modif = {}) => Fixture.poser(e => {
+    e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '',
+                 dettes: [{ ...PRET, ...modif }] }];
+    e.comptes = [];
+    e.monthly = [];
+    e.budget.fixedCharges = [];
+  });
+
+  test('l’assurance se calcule une fois, sur le capital emprunté', () => {
+    poserPret();
+    const d = Store.state.etabs[0].dettes[0];
+    pres(assuranceMensuelleCredit(d), 210000 * 0.34 / 100 / 12,
+      'la prime porte sur le capital emprunté, pas sur le restant dû');
+    pres(assuranceMensuelleCredit(d), 59.5, 'soit 59,50 € par mois');
+    /* Sans capital initial connu, le restant du sert de base : la prime est
+       sous-estimee, ce qui est le bon sens de l'erreur. */
+    pres(assuranceMensuelleCredit({ montant: 157362, tauxAssurance: 0.34 }),
+      157362 * 0.34 / 100 / 12, 'à défaut, le restant dû sert de base');
+    pres(assuranceMensuelleCredit({ montant: 157362 }), 0, 'et sans taux, aucune prime');
+  });
+
+  test('capital + intérêts + assurance font la mensualité totale', () => {
+    /* La convention, verifiee au centime sur le mois en cours. */
+    poserPret();
+    const d = Store.state.etabs[0].dettes[0];
+    const e = echeancierCredit(d);
+    pres(e.interetsDuMois, 157362 * 1.45 / 100 / 12, 'les intérêts du mois');
+    pres(e.assuranceDuMois, 59.5, 'l’assurance du mois');
+    pres(e.capitalDuMois, 894.44 - 59.5 - 157362 * 1.45 / 100 / 12,
+      'et le capital, soit ce qui reste');
+    pres(e.capitalDuMois + e.interetsDuMois + e.assuranceDuMois, 894.44,
+      'les trois font la mensualité totale, au centime');
+    /* Les chiffres attendus, arrondis comme l'ecran les montre. */
+    eq(Math.round(e.interetsDuMois * 100) / 100, 190.15, '190,15 € d’intérêts');
+    eq(Math.round(e.capitalDuMois * 100) / 100, 644.79, '644,79 € de capital');
+  });
+
+  test('une seule durée, une seule date, un seul total d’intérêts', () => {
+    /* Le defaut : `finCredit` amortissait avec 894,44 par mois et `resteAPayer`
+       avec 834,94. Plus d'un an d'ecart, et les deux dates s'affichaient. */
+    poserPret();
+    const d = Store.state.etabs[0].dettes[0];
+    const e = echeancierCredit(d), f = finCredit(d), r = resteAPayer(d);
+    vrai(e.amortissable, 'le prêt s’amortit');
+    eq(f.mois, e.mois, 'finCredit rend la durée de l’échéancier');
+    eq(r.mois, e.mois, 'resteAPayer aussi');
+    eq(f.finLe, e.finLe, 'et la même date de fin');
+    eq(r.fin, e.finLe, 'des deux côtés');
+    pres(f.interets, e.interets, 'les mêmes intérêts restants');
+    pres(r.interets, e.interets, 'sans exception');
+    /* La duree se verifie a la main : l'amortissement porte sur 834,94 EUR par
+       mois, assurance retiree. */
+    const dispo = 894.44 - 59.5, taux = 1.45 / 100 / 12;
+    let capital = 157362, mois = 0;
+    while (capital > 0.005 && mois < 1200) { capital += capital * taux - dispo; mois++; }
+    eq(e.mois, mois, 'la durée est celle qu’on obtient en rejouant le tableau');
+    vrai(e.mois > 200, 'soit plus de dix-sept ans, et non les seize d’avant');
+  });
+
+  test('la dernière mensualité solde le reliquat', () => {
+    poserPret();
+    const e = echeancierCredit(Store.state.etabs[0].dettes[0]);
+    vrai(e.derniere > 0, 'elle existe');
+    vrai(e.derniere <= 894.44 + 0.005, 'elle n’est jamais plus grosse que les autres');
+    /* Et l'assurance comptee est celle des echeances reellement payees. */
+    pres(e.assurance, 59.5 * e.mois, 'une prime par échéance');
+  });
+
+  test('un taux à zéro s’amortit tout droit', () => {
+    /* La formule fermee rendait `null` : un logarithme n'aime pas ce cas, et le
+       pret le plus simple restait sans reponse. */
+    poserPret({ montant: 12000, taux: 0, mensualite: 1000, tauxAssurance: null, initial: null });
+    const d = Store.state.etabs[0].dettes[0];
+    const e = echeancierCredit(d);
+    vrai(e.amortissable, 'douze mille à mille euros par mois s’amortissent');
+    eq(e.mois, 12, 'douze échéances, pas une de plus');
+    pres(e.interets, 0, 'aucun intérêt');
+    pres(e.capitalDuMois, 1000, 'et tout le versement rembourse');
+    vrai(resteAPayer(d) !== null, 'les deux lecteurs répondent');
+    vrai(finCredit(d) !== null, 'et non plus null parce que le taux vaut zéro');
+  });
+
+  test('un taux absent n’est pas un taux nul', () => {
+    /* Sans taux on ne sait pas departager capital et interets : annoncer « zero
+       de capital » sur une mensualite de 900 EUR serait faux dans l'autre sens,
+       et l'annoncer entier le serait aussi. On se tait. */
+    poserPret({ taux: undefined, tauxAssurance: null, initial: null });
+    const d = Store.state.etabs[0].dettes[0];
+    const e = echeancierCredit(d);
+    vrai(!e.amortissable, 'aucune date de fin');
+    eq(e.capitalDuMois, null, 'aucune part de capital annoncée');
+    eq(e.interetsDuMois, null, 'aucune part d’intérêts non plus');
+    eq(resteAPayer(d), null, 'et les deux lecteurs se taisent');
+    eq(finCredit(d), null, 'des deux côtés');
+  });
+
+  test('une mensualité insuffisante ne promet aucune fin', () => {
+    /* Le levier d'un courtier : il grossit tout seul. Et le seuil tient compte
+       de l'assurance -- 500 EUR d'interets plus 60 d'assurance ne se couvrent
+       pas avec 540. */
+    poserPret({ montant: 100000, taux: 6, mensualite: 400, tauxAssurance: null, initial: null });
+    let d = Store.state.etabs[0].dettes[0];
+    eq(finCredit(d), null, '400 € ne remboursent pas 500 € d’intérêts');
+    eq(resteAPayer(d), null, 'les deux se taisent');
+    vrai(!echeancierCredit(d).amortissable, 'et l’échéancier le dit');
+    pres(echeancierCredit(d).capitalDuMois, 0, 'aucun capital remboursé, jamais négatif');
+
+    /* Le cas que l'assurance seule fait basculer : 540 EUR couvriraient les
+       interets, mais 60 EUR partent en prime. */
+    poserPret({ montant: 100000, taux: 6, mensualite: 540,
+                tauxAssurance: 0.72, initial: 100000 });
+    d = Store.state.etabs[0].dettes[0];
+    pres(assuranceMensuelleCredit(d), 60, 'soixante euros de prime');
+    eq(finCredit(d), null, 'donc 480 € face à 500 € d’intérêts : rien ne s’amortit');
+  });
+
+  test('une dette soldée n’invente aucune échéance', () => {
+    poserPret({ montant: 0 });
+    const d = Store.state.etabs[0].dettes[0];
+    eq(echeancierCredit(d), null, 'plus rien à amortir');
+    eq(finCredit(d), null, 'aucune date');
+    eq(resteAPayer(d), null, 'aucune échéance');
+    pres(capitalRembourseParMois(), 0, 'et aucun capital remboursé ce mois-ci');
+  });
+
+  test('une dette sans mensualité garde ses intérêts', () => {
+    /* Le levier d'un courtier : aucun remboursement, mais les interets courent.
+       Les deux faits sont rendus, et ils ne se confondent pas. */
+    poserPret({ montant: 2000, taux: 5.8, mensualite: 0,
+                tauxAssurance: null, initial: null });
+    const d = Store.state.etabs[0].dettes[0];
+    const e = echeancierCredit(d);
+    pres(e.interetsDuMois, 2000 * 5.8 / 100 / 12, 'les intérêts du mois existent');
+    eq(e.capitalDuMois, null, 'aucun capital remboursé : il n’y a pas de mensualité');
+    vrai(!e.amortissable, 'et aucune fin promise');
+    pres(capitalRembourseParMois(), 0, 'Budget ne compte rien pour cette dette');
+  });
+
+  test('le même capital remboursé, dans les trois écrans', () => {
+    /* Le defaut : Budget comptait 644,79 EUR, la carte des credits et la fiche du
+       bien 704,29 -- toutes deux oubliaient l'assurance. */
+    Fixture.poser(e => {
+      e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ ...PRET }] }];
+      e.comptes = [{ id: 'c_appt', etabId: 'e_bq', type: 'immobilier', statut: 'ouvert',
+        libelle: 'Appartement', court: 'Appt', numero: '', notes: '', alloc: '',
+        ouvertLe: '2019-01-01', cash: [],
+        lignes: [{ id: 'l_appt', classe: 'immobilier', libelle: 'Appartement',
+                   valeur: 288000, prixDeRevient: 280000, quantite: 1,
+                   dateAcquisition: '2019-01-01' }] }];
+      e.monthly = [];
+      e.budget.fixedCharges = [];
+    });
+    const d = Store.state.etabs[0].dettes[0];
+    const attendu = echeancierCredit(d).capitalDuMois;
+    eq(Math.round(attendu * 100) / 100, 644.79, 'le moteur dit 644,79 €');
+    pres(capitalRembourseParMois(), attendu, 'Budget compte le même');
+    const carte = creditsEnCours().lignes.find(l => l.libelle === 'Prêt immobilier');
+    pres(carte.capital, attendu, 'la carte des crédits aussi');
+    pres(carte.interets, echeancierCredit(d).interetsDuMois, 'et les mêmes intérêts');
+    const cf = cashFlowBien(Store.state.comptes[0]);
+    pres(cf.capitalMois, attendu, 'et la fiche du bien, qui l’oubliait');
+  });
+
+  test('la projection du capital restant dû suit les mêmes règles', () => {
+    /* Elle propose une mise a jour du solde depuis la derniere verification, et
+       elle doit rembourser exactement ce que l'echeancier rembourse. */
+    auJour('2026-07-15', () => {
+      poserPret({ verifieLe: '2026-01-15' });
+      const d = Store.state.etabs[0].dettes[0];
+      const p = projectionCredit(d);
+      eq(p.moisDepuis, 6, 'six mois écoulés');
+      /* Six mois de l'echeancier, rejoues : le meme disponible, la meme
+         assurance. */
+      const dispo = 894.44 - assuranceMensuelleCredit(d), taux = 1.45 / 100 / 12;
+      let capital = 157362;
+      for (let i = 0; i < 6; i++) capital = Math.max(0, capital + capital * taux - dispo);
+      pres(p.projete, capital, 'et le solde projeté est celui du tableau');
+      vrai(p.projete < 157362, 'la dette a baissé');
+    });
+  });
+
+  test('les deux anciens moteurs délèguent, ils ne calculent plus', () => {
+    /* Si l'un des deux reprend un calcul a lui, les dates se remettront a
+       diverger sans qu'un ecran le signale. */
+    const src = lireSource('assets/store.js');
+    for (const nom of ['finCredit', 'resteAPayer']) {
+      const i = src.indexOf(`function ${nom}(d) {`);
+      vrai(i > 0, `${nom} doit être trouvable`);
+      const corps = src.slice(i, src.indexOf('\n}', i));
+      vrai(/echeancierCredit\(d\)/.test(corps), `${nom} passe par l’échéancier`);
+      vrai(!/Math\.log|while \(/.test(corps), `${nom} ne calcule plus rien lui-même`);
+    }
+    /* Et une seule boucle d'amortissement dans tout le fichier. */
+    eq((src.match(/function echeancierCredit/g) || []).length, 1,
+      'un seul échéancier');
+    /* Le taux d'assurance d'un credit ne se lit plus que dans la definition :
+       les quatre copies sont parties. Le controle compte les lectures HORS de
+       cette fonction, pour ne pas dependre du nombre de fois qu'elle s'y
+       reference elle-meme. */
+    const iA = src.indexOf('function assuranceMensuelleCredit');
+    const defA = src.slice(iA, src.indexOf('\n}', iA));
+    const dehors = src.replace(defA, '');
+    eq((dehors.match(/num\(d\.tauxAssurance\)/g) || []).length, 0,
+      'aucune lecture du taux d’assurance en dehors de sa définition');
+    eq((src.match(/function assuranceMensuelleCredit/g) || []).length, 1,
+      'elle a une définition, et une seule');
+  });
+
+  test('la banque du crédit vit dans une seule propriété', () => {
+    /* La fiche d'un etablissement editait « organisme » quand tout le reste lit
+       « preteur » : taper le nom de la banque depuis cet ecran partait dans une
+       clef que personne ne relisait. */
+    const src = lireSource('assets/app.js');
+    vrai(!/dettes\.\$\{i\}\.organisme/.test(src),
+      'aucun champ n’écrit plus la clef abandonnée');
+    vrai(/dettes\.\$\{i\}\.preteur/.test(src), 'le champ écrit la clef canonique');
+    vrai(!/d\.organisme/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
+      'et plus personne ne la lit');
+
+    /* La migration : `preteur` gagne, sinon `organisme` la prend. Idempotente. */
+    Fixture.poser(e => {
+      e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [
+        { id: 'd1', libelle: 'A', montant: 1000, organisme: 'Crédit Agricole' },
+        { id: 'd2', libelle: 'B', montant: 1000, preteur: 'BNP', organisme: 'Autre' },
+        { id: 'd3', libelle: 'C', montant: 1000, organisme: '' },
+      ] }];
+    });
+    Store.migrate();
+    const [a, b, c] = Store.state.etabs.find(x => x.id === 'e_bq').dettes;
+    eq(a.preteur, 'Crédit Agricole', 'la valeur orpheline devient le prêteur');
+    eq(b.preteur, 'BNP', 'un prêteur déjà là n’est pas écrasé');
+    eq(c.preteur, undefined, 'une valeur vide n’invente rien');
+    for (const d of [a, b, c]) {
+      eq(d.organisme, undefined, 'et la clef abandonnée disparaît');
+    }
+    Store.migrate();
+    eq(Store.state.etabs.find(x => x.id === 'e_bq').dettes[0].preteur, 'Crédit Agricole',
+      'deux passes donnent le même état');
+  });
+
+  test('le loyer se déclare avant les charges du propriétaire', () => {
+    /* Le texte disait « charges deduites si tu les paies », et `cashFlowBien`
+       retranche ensuite les charges rattachees : qui avait compris « net de
+       charges » les voyait retirees deux fois. Le libelle change, les montants
+       deja saisis ne bougent pas -- personne ne peut savoir comment un ancien
+       texte a ete lu. */
+    const src = lireSource('assets/app.js');
+    vrai(!/charges déduites si tu les paies/.test(src),
+      'la formulation qui invitait au double comptage est partie');
+    vrai(/hors charges récupérables/.test(src), 'la convention est nommée');
+    vrai(/déduites une seule fois/.test(src), 'et l’aide dit qu’elles ne le sont qu’une fois');
+
+    /* La preuve par les chiffres : loyer 1 000, charge 100, mensualite 700. */
+    Fixture.poser(e => {
+      e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [
+        { id: 'd_loc', libelle: 'Prêt locatif', montant: 100000, taux: 2,
+          mensualite: 700 }] }];
+      e.comptes = [{ id: 'c_loc', etabId: 'e_bq', type: 'immobilier', statut: 'ouvert',
+        libelle: 'Studio', court: 'Studio', numero: '', notes: '', alloc: '',
+        ouvertLe: '2020-01-01', cash: [], moisLoues: 12, tauxImpot: 0,
+        lignes: [{ id: 'l_loc', classe: 'immobilier', libelle: 'Studio',
+                   valeur: 150000, prixDeRevient: 140000, quantite: 1,
+                   dateAcquisition: '2020-01-01' }] }];
+      e.monthly = [];
+      e.budget.income = [{ label: 'Loyer Studio', amount: 1000, period: 'mois',
+                            bienId: 'c_loc' }];
+      e.budget.fixedCharges = [{ label: 'Taxe foncière', amount: 100, period: 'mois',
+                                 bienId: 'c_loc' }];
+    });
+    const cf = cashFlowBien(Store.state.comptes[0]);
+    pres(cf.loyers, 1000, 'le loyer est celui du budget');
+    pres(cf.charges, 100, 'la charge est comptée une fois');
+    pres(cf.loyers - cf.charges, 900, 'avant crédit, le bien dégage 900 €');
+    pres(cf.cashFlow, 200, 'et 200 € après la mensualité, jamais 800 ni 100');
+  });
+
+  test('plusieurs charges se soustraient chacune une fois', () => {
+    Fixture.poser(e => {
+      e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [] }];
+      e.comptes = [{ id: 'c_loc', etabId: 'e_bq', type: 'immobilier', statut: 'ouvert',
+        libelle: 'Studio', court: 'Studio', numero: '', notes: '', alloc: '',
+        ouvertLe: '2020-01-01', cash: [], moisLoues: 12, tauxImpot: 0,
+        lignes: [{ id: 'l_loc', classe: 'immobilier', libelle: 'Studio',
+                   valeur: 150000, prixDeRevient: 140000, quantite: 1,
+                   dateAcquisition: '2020-01-01' }] }];
+      e.monthly = [];
+      e.budget.income = [{ label: 'Loyer', amount: 1000, period: 'mois', bienId: 'c_loc' }];
+      e.budget.fixedCharges = [
+        { label: 'Taxe foncière', amount: 100, period: 'mois', bienId: 'c_loc' },
+        { label: 'Copropriété', amount: 80, period: 'mois', bienId: 'c_loc' },
+        { label: 'PNO', amount: 20, period: 'mois', bienId: 'c_loc' },
+        { label: 'Sans rapport', amount: 500, period: 'mois' },
+      ];
+    });
+    const cf = cashFlowBien(Store.state.comptes[0]);
+    pres(cf.charges, 200, 'les trois charges du bien, et elles seules');
+    pres(cf.cashFlow, 800, 'donc 800 € de cash-flow, sans crédit');
+  });
+});
+
 suite('Le net dit la vérité, même sous zéro', () => {
 
   const releve = (avoirs, dettes, mois) => ({

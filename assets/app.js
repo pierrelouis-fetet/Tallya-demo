@@ -4116,8 +4116,13 @@ function espaceBien(c, idx, t) {
                   title="${trad('Renommer, corriger ou supprimer')}">${esc(d.libelle)}</button>
             ${(() => {
               const bits = [
-                d.organisme ? esc(d.organisme) : '',
-                d.mensualite ? `${fmtEUR0(num(d.mensualite))} par mois` : '',
+                d.preteur ? esc(d.preteur) : '',
+                /* `mensualiteCredit` et non `d.mensualite` : quand une charge
+                   fixe porte la mensualite, le champ du credit est vide et cette
+                   ligne se taisait sur un pret qui coute pourtant 894 EUR par
+                   mois. La charge est la source, le credit la lit. */
+                mensualiteCredit(d)
+                  ? `${fmtEUR0(mensualiteCredit(d))} ${trad('par mois')}` : '',
               ].filter(Boolean);
               return bits.length ? `<span class="sub">${bits.join(' · ')}</span>` : '';
             })()}</span>
@@ -4189,10 +4194,10 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Taux annuel (%)')}${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.taux" value="${num(d.taux) || ''}"></div>
-          <div class="field"><label>Organisme</label>
+          <div class="field"><label>${trad('Banque / prêteur')}</label>
             <input class="champ-large" style="text-align:left"
-                   data-path="etabs.${idxEtab}.dettes.${i}.organisme"
-                   value="${esc(d.organisme || '')}" placeholder="${trad('ex. Crédit Agricole')}"></div>
+                   data-path="etabs.${idxEtab}.dettes.${i}.preteur"
+                   value="${esc(d.preteur || '')}" placeholder="${trad('ex. Crédit Agricole')}"></div>
         </div>
       </div>`;
     }).join('')}
@@ -6982,7 +6987,16 @@ const ACTIONS = {
     if (!c) return;
     const v = await askForm({
       titre: `Loyer de ${nomCompteV2(c)}`,
-      sous: trad('Le montant net perçu chaque mois, charges déduites si tu les paies'),
+      /* La convention du loyer, et il n'y en a qu'une : le loyer du logement
+         AVANT les depenses du proprietaire. Le texte disait « charges deduites si
+         tu les paies », or `cashFlowBien()` retranche ensuite les charges
+         rattachees au bien : qui avait compris « net de charges » les voyait
+         retirees deux fois, et son cash-flow tombait de 900 a 800 EUR.
+
+         Les montants deja saisis ne sont pas touches : personne ne peut savoir
+         comment un ancien texte a ete lu. Seule la convention des saisies a venir
+         change, et l'aide le dit. */
+      sous: trad('Le loyer hors charges récupérables. Les charges du propriétaire se déclarent séparément et sont déduites une seule fois'),
       ok: 'Ajouter',
       champs: [
         { cle: 'label', label: 'Source', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
@@ -7662,7 +7676,7 @@ const ACTIONS = {
   async 'add-income'() {
     const v = await askForm({
       titre: trad('Nouvelle source de revenu'),
-      sous: trad('Montant net perçu chaque mois'),
+      sous: trad('Le montant perçu chaque mois, avant les charges que tu déclares à part'),
       champs: [
         { cle: 'label', label: 'Source', type: 'texte', requis: true, exemple: 'ex. Salaire',
           suggestions: valeursConnues('source') },
