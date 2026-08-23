@@ -3275,6 +3275,58 @@ function sansDistinction() {
   return categoriesSaisie().length === 1;
 }
 
+/* Le niveau de détail de Budget : une préférence d'AFFICHAGE, et une seule.
+
+   Deux choses portaient le mot « détail » et ne faisaient pas la même. Celle-ci
+   décide ce que la page montre. L'autre, `sansDistinction()`, décrit une saisie
+   réduite à une seule case, ce qui est une opération sur les données : elle
+   retire des catégories de ce qu'on propose de remplir, et ne touche à aucun
+   montant — les mois passés gardent leur découpage, le tableau et les exports
+   continuent de le montrer. C'est délibéré, sans quoi un total cesserait
+   d'égaler la somme de ses parts.
+
+   Le résultat, lui, ne l'était pas : « Ne plus détailler » promettait une page
+   simple et rendait une page identique, ses 880 px de tableau par catégorie
+   compris. Le réglage existait, son effet non.
+
+   Aucune migration écrite : le défaut se DÉDUIT. Quelqu'un qui a déjà réduit sa
+   saisie à une case voulait bien une page simple, il arrive donc en synthèse ;
+   les autres ne voient rien changer. Un état déduit ne peut pas se contredire
+   avec celui qu'il décrit, et rejouer la lecture donne toujours le même
+   résultat. Choisir explicitement écrit `meta.budgetDetail`, et ce choix gagne. */
+const BUDGET_DETAIL = ['synthese', 'detail'];
+
+function budgetDetail() {
+  const v = Store.state.meta?.budgetDetail;
+  return BUDGET_DETAIL.includes(v) ? v : (sansDistinction() ? 'synthese' : 'detail');
+}
+const budgetSynthese = () => budgetDetail() === 'synthese';
+
+/* Les mois d'une année qu'il y a lieu de montrer.
+
+   Un mois à venir n'est pas un mois à zéro euro : il n'a pas eu lieu. Le
+   calendrier ouvre les douze mois dès le premier lancement, donc le graphique
+   annonçait « déc. 0 € » au mois d'août, et quatre barres plates se lisaient
+   comme quatre mois sans dépenses.
+
+   Une année passée garde ses douze mois : un mois vide y est un vrai zéro, et
+   c'est une information. Une année à venir ne montre que ce qui est déjà saisi —
+   quelqu'un peut préparer janvier en décembre, et cacher une saisie serait pire
+   que montrer un vide.
+
+   Les statistiques, elles, n'ont jamais eu besoin de cette fonction :
+   `expenseYearStats` écarte déjà tout mois à zéro, et le mois en cours de ses
+   comparaisons. */
+function expenseSeriesVisible(year) {
+  const s = expenseSeries(year);
+  if (!year || year === 'all') return s;
+  const encours = currentMonthKey();
+  const an = String(year), anCourant = encours.slice(0, 4);
+  if (an < anCourant) return s;
+  if (an > anCourant) return s.filter(r => r.total);
+  return s.filter(r => r.month <= encours || r.total);
+}
+
 /* Garde une seule case et retire les autres. Rend le nom de celle qui reste.
 
    Rien n'est efface : `retirerCategorie` ne touche a aucun montant, les mois

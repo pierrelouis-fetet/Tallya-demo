@@ -5552,32 +5552,39 @@ suite('Retirer une catégorie n’efface rien', () => {
       'les deux etats se decident sur sansDistinction(), pas sur un drapeau');
   });
 
-  test('le réglage du détail vit au bord de sa carte, pas après ses données', () => {
-    /* Trois places en deux jours, et les deux premieres etaient fausses.
+  test('le niveau de détail est un réglage de page, en tête', () => {
+    /* Quatre places en tout, et les trois premieres etaient fausses.
 
        Dans le pli du tableau : le pli sert aux donnees et se fait discret par
-       construction, un chevron gris. Il a fallu lire la source pour retrouver le
-       bouton.
+       construction, un chevron gris. Il fallait lire la source pour le trouver.
 
        Sous le tableau, hors du pli : il devenait le dernier element de la page,
-       mesure a 2 704 px sur une page de 2 855. Sorti d'un pli, tombe dans le
-       vide.
+       mesure a 2 704 px sur 2 855. Sorti d'un pli, tombe dans le vide.
 
-       En tete de la carte, avec les deux autres commandes de categories : en
-       ajouter une, ne plus les detailler, ouvrir l'annee suivante. Trois gestes
-       de meme nature, une seule rangee, et la hauteur de la rangee ne bouge pas
-       -- mesure a 375 px, 99 px avant comme apres. */
+       Au bord de la carte du detail, avec les commandes de categories : trouvable,
+       mais il gouverne toute la page et se presentait comme une commande de cette
+       carte-la. Et son nom niait -- « Ne plus detailler » dit ce qu'on cesse de
+       faire, pas ce qu'on obtient.
+
+       En tete de page, deux crans nommes : c'est le commutateur d'Allocation,
+       meme composant, meme place, et le libelle dit le resultat. */
     const src = lireSource('assets/app.js');
-    const carte = src.slice(src.indexOf("data-anchor=\"detail-mensuel\""),
-                            src.indexOf("trad('Détail mensuel')") + 40000);
-    const bouton = carte.indexOf('data-action="sans-distinction"');
-    const table = carte.indexOf('<details');
-    vrai(bouton > 0, 'le réglage doit exister dans la carte');
-    vrai(bouton < table,
-      'et se lire AVANT le pli du tableau : un réglage posé après les données '
-      + 'devient le dernier élément de la page');
-    /* Les trois commandes de categories dans la meme rangee : c'est ce qui rend
-       le geste trouvable, puisqu'on vient y chercher les categories. */
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    const commutateur = vue.indexOf("'budget-detail', 'niveau'");
+    vrai(commutateur > 0, 'le commutateur de niveau doit exister');
+    vrai(commutateur < vue.indexOf('class="grid g-hero"'),
+      'et se lire avant la première carte : c’est un réglage de page');
+    for (const cran of ['Synthétique', 'Détaillé']) {
+      vrai(vue.includes(`'${cran}'`), `le cran « ${cran} » doit être offert`);
+    }
+    vrai(!/Ne plus détailler/.test(vue),
+      'le libellé qui niait a quitté la page : il promettait une page simple '
+      + 'et ne changeait que la saisie');
+
+    /* Les commandes de categories restent dans la carte du detail : elles
+       agissent sur les categories, pas sur la page. */
+    const carte = vue.slice(vue.indexOf('data-anchor="detail-mensuel"'));
     const rangee = carte.slice(carte.indexOf('<div class="row"'),
                                carte.indexOf('</div>', carte.indexOf('add-expense-month')));
     for (const action of ['sans-distinction', 'add-category', 'add-expense-month']) {
@@ -16729,6 +16736,239 @@ suite('Chaque chaîne affichée a sa clef anglaise', () => {
     }
     vrai(vues.size > 1500, `le dictionnaire doit être lisible (${vues.size} clefs)`);
     eq(doubles.join(' | '), '', 'une clef déclarée deux fois : la dernière gagnerait');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Budget : le niveau de detail, le mois courant, les mois futurs
+   ------------------------------------------------------------------ */
+suite('Le niveau de détail de Budget est respecté', () => {
+
+  /* « Ne plus detailler » promettait une page simple et rendait une page
+     identique : le reglage ne touchait que la SAISIE. C'est delibere du cote des
+     donnees -- retirer un montant ferait qu'un total cesserait d'egaler la somme
+     de ses parts -- mais l'ecran annonçait autre chose que ce qu'il faisait. */
+
+  test('le niveau se déduit tant qu’il n’est pas choisi', () => {
+    /* Aucune migration ecrite : le defaut se deduit de la saisie. Quelqu'un qui
+       a deja reduit sa saisie a une case voulait bien une page simple, les autres
+       ne voient rien changer. Un etat deduit ne peut pas contredire celui qu'il
+       decrit, et le relire donne toujours le meme resultat. */
+    Fixture.poser();
+    delete Store.state.meta.budgetDetail;
+    vrai(!sansDistinction(), 'le fixture détaille ses dépenses');
+    eq(budgetDetail(), 'detail', 'donc la page reste détaillée');
+
+    neePlusDetailler();
+    vrai(sansDistinction(), 'la saisie tient maintenant dans une case');
+    eq(budgetDetail(), 'synthese', 'et la page se met en synthèse d’elle-même');
+
+    /* Un choix explicite gagne sur la deduction, dans les deux sens. */
+    Store.state.meta.budgetDetail = 'detail';
+    eq(budgetDetail(), 'detail', 'le choix écrit gagne');
+    Store.state.meta.budgetDetail = 'nimportequoi';
+    eq(budgetDetail(), 'synthese', 'une valeur inconnue retombe sur la déduction');
+  });
+
+  test('la lecture du niveau est idempotente et ne touche à rien', () => {
+    Fixture.poser();
+    const avant = JSON.stringify(Store.state);
+    for (let i = 0; i < 3; i++) { budgetDetail(); budgetSynthese(); }
+    eq(JSON.stringify(Store.state), avant,
+      'lire le niveau n’écrit rien : c’est un getter, pas une migration');
+  });
+
+  test('la synthèse replie le détail, elle ne l’efface pas', () => {
+    /* Le point le plus important de tout ce lot : masquer n'est pas supprimer.
+       Les deux plis restent DANS le document, avec leurs colonnes et leurs
+       montants, donc un clic les rend sans changer la preference. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    for (const pli of ['pliCats', 'pliDetailMois']) {
+      const i = vue.indexOf(`id="${pli}"`);
+      vrai(i > 0, `le dépliant ${pli} doit exister`);
+      const balise = vue.slice(i, vue.indexOf('>', i));
+      vrai(/budgetSynthese\(\)/.test(balise),
+        `${pli} doit suivre le niveau de détail`);
+    }
+    /* Rien n'est retire du rendu : les colonnes se derivent toujours de la liste
+       complete, jamais des categories encore proposees a la saisie. */
+    vrai(/expenseCategories\(\)\.map\(c => th\(/.test(vue),
+      'le tableau garde une colonne par catégorie, quelle que soit la vue');
+    vrai(!/categoriesSaisie\(\)/.test(vue),
+      'la vue ne filtre pas sur la saisie : ce serait perdre l’historique à l’écran');
+    /* Et le pli s'ouvre sans toucher a la preference. */
+    /* La fonction seule, bornee a son accolade fermante : sans borne, la tranche
+       atteignait l'action du commutateur, qui ecrit legitimement la preference. */
+    const debutMont = src.indexOf('function mountBudget(');
+    const mont = src.slice(debutMont, src.indexOf('\n}', debutMont));
+    vrai(/addEventListener\('toggle'/.test(mont),
+      'ouvrir un pli est retenu pour le rendu suivant');
+    vrai(!/budgetDetail = /.test(mont),
+      'mais n’écrit pas la préférence : lire simplement aujourd’hui n’est pas un choix définitif');
+  });
+
+  test('changer de niveau ne perd aucune donnée', () => {
+    Fixture.poser(s => { s.meta.budgetDetail = 'detail'; });
+    const empreinte = () => JSON.stringify({
+      categories: expenseCategories(),
+      mois: Store.state.budget.expenses.map(r => [r.month, r.v, r.note]),
+    });
+    const avant = empreinte();
+    Store.state.meta.budgetDetail = 'synthese';
+    eq(empreinte(), avant, 'passer en synthèse ne touche ni aux catégories ni aux montants');
+    Store.state.meta.budgetDetail = 'detail';
+    eq(empreinte(), avant, 'et revenir non plus');
+  });
+});
+
+suite('Le mois en cours dit ce qui reste, pas ce qui est gagné', () => {
+
+  test('la carte du mois annonce le reste, sans couleur de performance', () => {
+    /* « Ecart ▼ -755 EUR » en vert, au 12 du mois : le mois n'est pas fini, et
+       755 EUR ne sont pas gagnes, ils sont disponibles. La couleur d'alerte ne
+       reste que sur la moitie qui alerte vraiment, le depassement. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    vrai(/const resteObjectif = f\.target - \(cur \? cur\.total : 0\)/.test(vue),
+      'le reste se calcule sur l’objectif et le dépensé du mois');
+    vrai(/trad\('Reste sur l’objectif'\)/.test(vue) && /trad\('Dépassement'\)/.test(vue),
+      'le libellé change avec le signe');
+    const i = vue.indexOf("trad('Reste sur l’objectif')");
+    const bloc = vue.slice(i, i + 400);
+    vrai(/resteObjectif >= 0 \? '' : classeDepassement/.test(bloc),
+      'sous l’objectif, aucune classe : la couleur ne promet pas une performance');
+    vrai(!/curDiff/.test(vue),
+      'l’ancien écart du mois en cours n’a plus d’appelant');
+    /* « Budget consomme » reste : c'est lui qui repond a « ou j'en suis du
+       chemin », et il est juste en cours de mois. */
+    vrai(/trad\('Budget consommé'\)/.test(vue), 'le pourcentage consommé est conservé');
+  });
+
+  test('un mois clos garde son écart final', () => {
+    /* Les deux notions ne se melangent pas : le mois en cours dit un reste, un
+       mois clos dit un ecart. Le tableau et le pied du graphique le portent. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    eq((vue.match(/trad\('vs objectif'\)/g) || []).length, 2,
+      'le pied du graphique et le tableau des mois gardent l’écart');
+    vrai(/classeDepassement\(r\.total, f\.target\)/.test(vue),
+      'et sa couleur, qui a un sens sur un mois terminé');
+  });
+});
+
+suite('Un mois à venir n’est pas un mois à zéro euro', () => {
+
+  test('l’année en cours s’arrête au mois courant', () => {
+    auJour('2026-08-12', () => {
+      Fixture.poser(s => {
+        s.budget.expenses = [];
+        for (let m = 1; m <= 12; m++) {
+          s.budget.expenses.push({ month: `2026-${String(m).padStart(2, '0')}-01`,
+            note: '', v: m <= 8 ? { Courses: 100 * m } : {} });
+        }
+      });
+      eq(expenseSeries('2026').length, 12, 'la table porte bien les douze mois');
+      const vus = expenseSeriesVisible('2026').map(r => r.month);
+      eq(vus.length, 8, 'seuls janvier à août se montrent');
+      eq(vus[vus.length - 1], '2026-08-01', 'et le dernier est le mois en cours');
+    });
+  });
+
+  test('une année passée garde ses douze mois, un vide y étant un vrai zéro', () => {
+    auJour('2026-08-12', () => {
+      Fixture.poser(s => {
+        s.budget.expenses = [];
+        for (let m = 1; m <= 12; m++) {
+          s.budget.expenses.push({ month: `2025-${String(m).padStart(2, '0')}-01`,
+            note: '', v: m === 7 ? {} : { Courses: 200 } });
+        }
+      });
+      eq(expenseSeriesVisible('2025').length, 12,
+        'juillet 2025 sans dépense est une information, pas un mois à venir');
+    });
+  });
+
+  test('une année à venir ne montre que ce qui est déjà saisi', () => {
+    auJour('2026-08-12', () => {
+      Fixture.poser(s => {
+        s.budget.expenses = [
+          { month: '2027-01-01', note: '', v: { Courses: 300 } },
+          { month: '2027-02-01', note: '', v: {} },
+        ];
+      });
+      const vus = expenseSeriesVisible('2027').map(r => r.month);
+      eq(vus.join(','), '2027-01-01',
+        'janvier préparé d’avance se montre, février vide non');
+    });
+  });
+
+  test('le graphique et son tableau lisent la même série', () => {
+    /* Deux appels paralleles, un dans la vue et un dans le montage, avaient deja
+       diverge ailleurs sur cette base de code. */
+    const src = lireSource('assets/app.js');
+    eq((src.match(/expenseSeriesVisible\(year\)/g) || []).length, 2,
+      'le graphique et le tableau replié, et personne d’autre');
+    vrai(!/expenseSeries\(year\)/.test(src),
+      'plus aucun appel direct qui rendrait les mois à venir');
+  });
+
+  test('les statistiques ignoraient déjà les mois vides', () => {
+    /* Verification et non correction : `expenseYearStats` filtre sur
+       `total > 0`, donc « 9 mois sous objectif sur 12 » ne peut pas se produire.
+       Le mois en cours quitte en plus les comparaisons, sa moyenne plongeant le
+       2 du mois pour remonter jusqu'au 31. */
+    auJour('2026-08-12', () => {
+      Fixture.poser(s => {
+        s.budget.monthlyTarget = 1000;
+        s.budget.expenses = [];
+        for (let m = 1; m <= 12; m++) {
+          s.budget.expenses.push({ month: `2026-${String(m).padStart(2, '0')}-01`,
+            note: '', v: m <= 7 ? { Courses: 800 } : {} });
+        }
+      });
+      const st = expenseYearStats('2026');
+      eq(st.months, 7, 'sept mois portent une saisie');
+      eq(st.under + st.over, 7, 'et les comparaisons ne portent que sur eux');
+      eq(st.under, 7, 'les sept sont sous l’objectif');
+      pres(st.average, 800, 'la moyenne ne se dilue pas dans cinq zéros');
+    });
+  });
+});
+
+suite('Un dépliant ouvert est un dépliant fermé', () => {
+
+  test('chaque vue équilibre ses balises <details>', () => {
+    /* Le navigateur repare en silence un `<details>` jamais ferme : il ferme la
+       balise au parent, donc le pli avale ce qui suit ou s'arrete trop tot. Rien
+       ne leve d'erreur, le JavaScript reste valide -- une balise HTML dans un
+       litteral de gabarit n'est qu'une chaine -- et la suite passe au vert.
+
+       C'est arrive au portage du niveau de detail de Budget : la balise de
+       fermeture etait le seul hunk rejete du lot, et dix-sept tests de Budget
+       sont restes verts au-dessus d'une carte dont la moitie vivait dans un pli
+       qu'on n'avait pas demande.
+
+       Les commentaires sont retires avant de compter : ils citent des balises. */
+    const src = lireSource('assets/app.js');
+    const propre = src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const bornes = [...propre.matchAll(/\nfunction (view[A-Za-z]\w*|[a-z]\w*Card)\(/g)]
+      .map(m => ({ nom: m[1], i: m.index }));
+    vrai(bornes.length > 10, `les vues doivent être trouvables (${bornes.length} vues)`);
+    bornes.push({ nom: '(fin)', i: propre.length });
+
+    const boiteux = [];
+    for (let k = 0; k < bornes.length - 1; k++) {
+      const bloc = propre.slice(bornes[k].i, bornes[k + 1].i);
+      const o = (bloc.match(/<details\b/g) || []).length;
+      const f = (bloc.match(/<\/details>/g) || []).length;
+      if (o !== f) boiteux.push(`${bornes[k].nom} : ${o} ouverte(s), ${f} fermée(s)`);
+    }
+    eq(boiteux.join(' | '), '',
+      'un dépliant non fermé avale le reste de sa carte, sans qu’aucune erreur ne le dise');
   });
 });
 
