@@ -1853,11 +1853,15 @@ function sortPositions(entries) {
    donnee manquante, un point se lit comme un mois plat.
 
    L'appelant fournit la part, jamais le montant : l'echelle est commune aux
-   lignes affichees, et une ligne ne peut pas la calculer pour elle seule. */
+   lignes affichees, et une ligne ne peut pas la calculer pour elle seule.
+
+   La ligne porte `avec-jauge` : c'est cette classe qui deplace la croissance du
+   nom du mois vers la piste, et elle seule. `ligneListe` sert a six ecrans, et
+   les cinq autres gardent leur mise en page. */
 function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, jauge }) {
   const part = jauge == null ? null : Math.max(-1, Math.min(1, num(jauge)));
   return `
-  <button type="button" class="mlist${classe ? ` ${classe}` : ''}"
+  <button type="button" class="mlist${part == null ? '' : ' avec-jauge'}${classe ? ` ${classe}` : ''}"
           data-action="${action}" data-i="${index}"${ancre ? ` data-anchor="${esc(ancre)}"` : ''}>
     <span class="ml-nom">${esc(titre)}${marque || ''}${sous ? `<span class="sub">${esc(sous)}</span>` : ''}</span>
     ${part == null ? '' : `<span class="ml-jauge" aria-hidden="true">${

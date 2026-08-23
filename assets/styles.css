@@ -1358,8 +1358,24 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
    aucun axe dessine : les barres partent toutes du meme milieu, ce qui suffit a
    le faire voir. */
 .ml-jauge {
-  flex: 0 1 88px; width: 88px; min-width: 0; position: relative; height: 3px;
+  flex: 1 1 auto; min-width: 24px; max-width: 260px; position: relative; height: 3px;
 }
+/* Le nom du mois prend une colonne stable au lieu de toute la place restante.
+
+   Deux raisons, et la seconde decide : sans largeur fixe, « avr. 26 » et
+   « mars 26 » donnent deux colonnes de largeurs differentes, donc deux pistes
+   qui ne commencent pas au meme endroit -- et le zero implicite, qui est tout ce
+   qui rend ces barres lisibles ensemble, disparait. Les centres doivent
+   s'aligner d'une ligne a l'autre.
+
+   `flex: 0 0` et non `0 1` : la colonne ne se comprime pas, sinon un mois plus
+   long la retrecirait pour lui seul. Le texte qui depasse s'ellipse -- une note
+   utilisateur peut etre longue, et elle a deja sa propre regle pour ca. */
+.mlist.avec-jauge .ml-nom {
+  flex: 0 0 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mlist.avec-jauge .ml-chiffres { margin-left: auto; }
+.mlist.avec-jauge .ml-jauge { margin: 0 auto; }
 .ml-jauge i {
   position: absolute; top: 0; height: 100%; border-radius: 2px; min-width: 2px;
 }
@@ -1369,7 +1385,8 @@ tr.ligne-ouvre .mois-lien { pointer-events: none; }
   left: 50%; width: 3px; margin-left: -1.5px; background: var(--muted); opacity: .55;
 }
 @media (max-width: 767px) {
-  .ml-jauge { flex: 0 1 52px; width: 52px; }
+  .mlist.avec-jauge .ml-nom { flex: 0 0 6em; }
+  .ml-jauge { min-width: 16px; }
 }
 @media (max-width: 359px) {
   .ml-jauge { display: none; }

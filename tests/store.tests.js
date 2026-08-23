@@ -18172,12 +18172,22 @@ suite('Une jauge dit le rythme sans rien ajouter au chiffre', () => {
        montant et la variation passent avant. */
     const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
     const regle = (css.match(/\.ml-jauge \{[^}]*\}/) || [''])[0];
-    vrai(/flex: 0 1/.test(regle), 'elle ne pousse pas, elle cède');
-    vrai(/min-width: 0/.test(regle), 'et se laisse comprimer sans déborder');
+    /* C'est la piste qui prend le vide : elle faisait 88 px collee aux montants
+       pendant que l'espace du milieu restait entier, ce qui etait exactement
+       l'inverse du but. */
+    vrai(/flex: 1 1 auto/.test(regle), 'la piste prend l’espace laissé libre');
+    vrai(/min-width: 24px/.test(regle), 'sans jamais disparaître tout à fait');
     vrai(/height: 3px/.test(regle), 'trois pixels de haut : discrète');
-    /* Le nom du mois garde la croissance, les montants gardent leur place. */
-    vrai(/\.ml-nom \{[^}]*flex: 1 1 auto/.test(css), 'le nom du mois pousse');
+    /* La colonne du mois est FIXE sur ces lignes, et c'est ce qui aligne les
+       axes : deux largeurs de colonne donneraient deux pistes qui ne commencent
+       pas au meme endroit, et le zero implicite disparaitrait. */
+    vrai(/\.mlist\.avec-jauge \.ml-nom \{[^}]*flex: 0 0 6\.5em/.test(css),
+      'la colonne du mois est fixe, donc les axes s’alignent d’une ligne à l’autre');
     vrai(/\.ml-chiffres \{[^}]*flex: none/.test(css), 'les montants ne se compriment pas');
+    /* Et les cinq autres ecrans qui utilisent `ligneListe` gardent leur mise en
+       page : la regle porte sur `.avec-jauge`, jamais sur `.mlist` en general. */
+    vrai(/\.ml-nom \{[^}]*flex: 1 1 auto/.test(css),
+      'ailleurs, le nom garde la croissance');
     const petit = css.slice(css.indexOf('@media (max-width: 359px)'));
     vrai(/\.ml-jauge \{ display: none; \}/.test(petit),
       'sous 360 px, le texte passe avant');
