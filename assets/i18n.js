@@ -1590,6 +1590,8 @@ const I18N = {
     "Effet": "Impact",
 
     "Dernier relevé,": "Last statement,",
+    "{n} montants déjà répartis, {v}": "{n} amounts already split, {v}",
+    "{n} montant déjà réparti, {v}": "{n} amount already split, {v}",
     "Reste sur l’objectif": "Left on the target",
     "Dépassement": "Over target",
     "Une seule case à remplir": "A single box to fill in",

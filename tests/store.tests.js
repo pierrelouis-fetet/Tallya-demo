@@ -16801,6 +16801,49 @@ suite('Deux états, et l’affichage suit la saisie', () => {
       'les catégories restent dans le stockage, pour l’export et le retour');
   });
 
+  test('dans un mois déjà réparti, les cases retirées se replient', () => {
+    /* Le mode « une seule case » ne changeait rien a la fenetre d'un mois passe :
+       sept cases s'y presentaient encore, parce qu'une categorie retiree garde la
+       sienne des qu'elle porte un montant. La raison etait bonne -- sans elle, le
+       total du mois n'aurait aucune part visible et deviendrait incorrigible --
+       mais en ouvrir sept sur un mois deja reparti ne respecte pas le geste.
+
+       Elles passent derriere un pli. Rien ne quitte le document, donc
+       l'enregistrement les relit comme avant : c'est le motif des comptes
+       clotures dans la fenetre d'un releve. */
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf('function askExpenseMonth'), src.indexOf('id="depNote"'));
+    vrai(/const repliees = sansDistinction\(\)/.test(f),
+      'le pli ne se forme que si les catégories sont désactivées');
+    vrai(/categorieRetiree\(c\) && num\(r\.v\?\.\[c\]\)/.test(f),
+      'et ne prend que les catégories retirées qui portent un montant');
+    vrai(/const ouvertes = cats\.filter\(c => !repliees\.includes\(c\)\)/.test(f),
+      'les autres restent ouvertes : les deux listes partagent une seule source');
+    /* Le sommaire dit ce qu'il contient : un pli muet se lit comme une option,
+       pas comme un montant. Compte ET somme, pour que le total du mois se
+       retrouve a l'oeil -- la case ouverte plus le pli. */
+    vrai(/\{n\} montants déjà répartis, \{v\}/.test(f)
+      && /\{n\} montant déjà réparti, \{v\}/.test(f),
+      'le sommaire porte le compte et la somme, au singulier comme au pluriel');
+    vrai(/const somme = repliees\.reduce/.test(f),
+      'et cette somme est celle des cases repliées');
+    /* Aucun pave de texte : cette fenetre a deja paye une fois le champ de note
+       repousse hors du cadre sur telephone. */
+    eq((f.match(/class="hint"/g) || []).length, 0,
+      'le sommaire suffit, aucun paragraphe de plus');
+
+    /* Et la preuve par les donnees : replier ne retire aucun montant, donc le
+       total du mois ne bouge pas. */
+    Fixture.poser(troisMoisRepartis);
+    const totaux = Store.state.budget.expenses.map(expenseRowTotal);
+    neePlusDetailler();
+    vrai(sansDistinction(), 'les catégories sont désactivées');
+    const apres = Store.state.budget.expenses.map(expenseRowTotal);
+    for (let i = 0; i < totaux.length; i++) {
+      pres(apres[i], totaux[i], `le total du mois ${i + 1} n’a pas bougé`);
+    }
+  });
+
   test('la fenêtre du mois montre encore une case retirée qui porte un montant', () => {
     /* Sans cela, un mois deja reparti deviendrait incorrigible : le total
        resterait, ses parts seraient invisibles. */

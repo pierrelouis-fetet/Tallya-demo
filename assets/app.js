@@ -8919,6 +8919,10 @@ function askExpenseMonth(index) {
     if (!r) { resolve(null); return; }
     const cats = expenseCategories()
       .filter(c => !categorieRetiree(c) || num(r.v?.[c]));
+    const repliees = sansDistinction()
+      ? cats.filter(c => categorieRetiree(c) && num(r.v?.[c]))
+      : [];
+    const ouvertes = cats.filter(c => !repliees.includes(c));
     const cible = num(Store.state.budget.monthlyTarget);
     const m = $('#modal');
     apercuOuvert = null;
@@ -8927,14 +8931,27 @@ function askExpenseMonth(index) {
     $('#modalSub').innerHTML = cible ? `${trad('Objectif mensuel :')} ${fmtEUR0(cible)}` : '';
     $('#modalBody').innerHTML = `
       <div class="dep-total" id="depTotal"></div>
+      ${(() => {
+        const grille = liste => `
       <div class="dep-grille">
-        ${cats.map(c => `
+        ${liste.map(c => `
           <div class="field dep-champ" data-champ="${esc(c)}">
             <label class="dep-lab"><span>${esc(c)}</span></label>
             ${champSomme(`<input type="text" inputmode="decimal" data-cat="${esc(c)}"
                    value="${r.v?.[c] ?? ''}" placeholder="" autocomplete="off">`)}
           </div>`).join('')}
-      </div>
+      </div>`;
+        if (!repliees.length) return grille(ouvertes);
+        const somme = repliees.reduce((s, c) => s + num(r.v?.[c]), 0);
+        return grille(ouvertes) + `
+      <details class="data-view" style="margin-top:12px">
+        <summary>${(repliees.length > 1
+            ? trad('{n} montants déjà répartis, {v}')
+            : trad('{n} montant déjà réparti, {v}'))
+          .replace('{n}', repliees.length).replace('{v}', fmtEUR0(somme))}</summary>
+        ${grille(repliees)}
+      </details>`;
+      })()}
       <div class="row" style="margin-top:12px">
         <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
         ${sansDistinction()
