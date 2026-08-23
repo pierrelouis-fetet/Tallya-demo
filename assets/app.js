@@ -367,7 +367,7 @@ const SOUS_ONGLETS = {
      adresse de Cible reste servie par REDIRECTIONS, qui la mene desormais a
      Marches : un signet pose du temps d'Allocation continue d'ouvrir la bonne
      page. */
-  allocation: [['reel', 'Patrimoine', 'patrimoine']],
+  allocation: [['reel', 'Allocation', 'patrimoine']],
   /* « Depenses » en premier : l'entree du menu s'appelle Budget, et c'est la
      qu'on arrive en la touchant. `currentView()` remet toujours l'adresse de
      base sur le premier onglet de cette liste, c'est donc l'ordre qui decide
@@ -1530,7 +1530,7 @@ function viewObjective() {
         <div class="modal-champs" style="margin-top:8px">
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux et le non coté ont leur propre hypothèse, juste en dessous.')} `
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux et le non coté sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'),
                 /* Le taux EN VIGUEUR, et non celui qui dort dans l'etat.
                    Ces trois champs lisaient `meta.projRate` et compagnie, alors
@@ -1545,7 +1545,7 @@ function viewObjective() {
                 s.rateAutres)}
         ${champ('Rendement du capital garanti', 'meta.projRateGaranti', paliers(8, 0.5),
                 v => `${fmtPct(v, 1)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Zéro par défaut : le taux d’une année n’est annoncé qu’en janvier suivant, donc c’est à toi de l’affirmer')}`,
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.garanti)} ${trad('de fonds euros et de supports garantis. Le scénario y applique une hypothèse prudente, que tu peux changer ici')}`,
                 s.rateGaranti)}
 
         <div class="field">
@@ -1581,8 +1581,13 @@ function viewObjective() {
               + `(${trad('soit')} ${new Date().getFullYear() + Math.ceil(req.years)}) ${trad('sans rien changer')}`);
             if (req.monthly != null) lignes.push(`${trad('passer à')} <b>${fmtEUR0(req.monthly)} ${trad('par mois')}</b> `
               + `${trad('au lieu de')} ${fmtEUR0(s.monthly)}`);
+            /* Le levier ne touche QUE le taux des actifs de marche :
+               `targetRequirements` rejoue le moteur avec `rate` modifie et laisse
+               les autres poches telles quelles. Sans le dire, « obtenir 8,4 %
+               par an » se lisait comme un rendement du patrimoine entier, et
+               personne n'aurait su quel reglage bouger. */
             if (req.rate != null) lignes.push(`${trad('obtenir')} <b>${fmtPct(req.rate, 1)} ${trad('par an')}</b> `
-              + `${trad('au lieu de')} ${fmtPct(s.rate, 1)}`);
+              + `${trad('sur les actifs de marché, au lieu de')} ${fmtPct(s.rate, 1)}`);
             return `⚠ <span>${trad('Avec ces hypothèses, la cible de')} <b>${fmtEUR0(s.target)}</b>
               ${trad('n’est pas atteinte en')} ${projHorizon} ${trad('ans : tu arrives à')} ${fmtEUR0(dernier.total)}.<br>
               ${trad('Pour y parvenir, il faudrait')} ${lignes.length ? '' : trad('revoir les hypothèses')}
@@ -1610,7 +1615,7 @@ function viewObjective() {
       <div class="legend">
         <span><i style="background:${S1()}"></i>${trad('Ce que tu as déjà et ce que tu verses')}</span>
         <span><i style="background:${S2()}"></i>${trad('Ce que le rendement ajoute')}</span>
-        <span><i class="legend-bande"></i>${trad('Si le rendement fait deux points de plus ou de moins')}</span>
+        <span><i class="legend-bande"></i>${trad('Avec ±2 points sur le rendement des actifs de marché')}</span>
       </div>
       <p class="small muted" style="margin:12px 0 0">
         ${fmtPct(s.rate)} ${trad('par an sur tes actifs de marché.')}
@@ -1666,8 +1671,8 @@ function viewObjective() {
   <div class="card">
     <div class="card-head">
       <h2>${trad('Par horizon')}</h2>
-      <span class="hint">${fmtEUR0(s.monthly)} ${trad('/ mois')} ${trad('à')} ${fmtPct(s.rate)} ${trad('par an')}${
-        num(s.rateAutres) ? trad(', et le détail au-dessus') : ''}</span>
+      <span class="hint">${fmtEUR0(s.monthly)} ${trad('/ mois')} ·
+        ${trad('scénario')} ${trad(nomScenario(s.scenario)).toLowerCase()}</span>
     </div>
     <div class="table-wrap">
       <table>
@@ -2073,7 +2078,7 @@ function viewPositions() {
       <div class="jour-total ${positif ? 'up' : 'down'}">
         <span class="jour-eur">${fmtSigned(j.eur)}</span>
         <span class="jour-pct">${arrow(j.pct)} ${fmtSignedPct(j.pct)}</span>
-        <span class="jour-note">${trad('sur tes lignes de titres depuis la clôture d’hier')}${
+        <span class="jour-note">${trad('sur ton portefeuille Marchés depuis la clôture d’hier')}${
           j.lignes.some(l => l.depuisAchat) ? `, ${trad('ou depuis ton achat du jour')}` : ''}</span>
       </div>`}
 
@@ -3286,9 +3291,9 @@ function viewHistory() {
   for (let i = 0; i < Store.state.monthly.length; i++) {
     const r = Store.state.monthly[i];
     if (rowIsEmpty(r)) continue;
-    const total = rowTotal(r);
+    const net = rowNet(r), total = rowTotal(r);
     const avant = tous[tous.length - 1];
-    tous.push({ r, i, total, dlt: avant ? total - avant.total : 0 });
+    tous.push({ r, i, net, total, dlt: avant ? net - avant.net : 0 });
   }
 
   const anneeDernier = tous.length
@@ -3345,12 +3350,12 @@ function viewHistory() {
       <button type="button" class="lien-nu" data-action="ajouter-releve"
               >${trad('+ Ajouter le relevé')}</button></p>` : ''}
     <div class="liste-principale">
-      ${lignes.map(({ r, i, total, dlt }) => ligneListe({
+      ${lignes.map(({ r, i, net, dlt }) => ligneListe({
         action: 'voir-releve', index: i,
         classe: r.date === attente.key ? 'mois-courant' : '',
         titre: fmtMonth(r.date),
         sous: r.comment || '',
-        valeur: fmtEUR0(total),
+        valeur: fmtEUR0(net),
         second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
       })).join('')}
     </div>`}
@@ -3365,14 +3370,16 @@ function viewHistory() {
   <div class="card">
     <div class="card-head"><h2>${trad('Entrées et sorties exceptionnelles')}</h2>
       <span class="hint">${liste.length
-        ? `${liste.length} ligne${liste.length > 1 ? 's' : ''} · ${
-            esc(String(annee))} · ${fmtSigned(d.net)} net`
+        ? `${(liste.length > 1 ? trad('{n} lignes') : trad('{n} ligne'))
+              .replace('{n}', liste.length)} · ${esc(String(annee))} · ${
+            fmtSigned(d.net)} ${trad('net')}`
         : tout.length
-          ? `aucune en ${esc(String(annee))} · ${tout.length} au total`
+          ? `${trad('aucune en')} ${esc(String(annee))} · ${
+              trad('{n} au total').replace('{n}', tout.length)}`
           : trad('héritage, prime, vente d’un bien, ou une grosse dépense')}</span>
       ${tout.length && annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
       <span class="paire-btn">
-        <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Rentrée')}</button>
+        <button class="btn sm ghost" data-action="ajouter-apport" data-sens="entree">${trad('+ Entrée')}</button>
         <button class="btn sm ghost" data-action="ajouter-apport" data-sens="sortie">${trad('+ Dépense')}</button>
       </span></div>
     ${!liste.length && !tout.length ? `
@@ -3388,7 +3395,7 @@ function viewHistory() {
       ${liste.map(a => `
         <button type="button" class="mlist" data-action="editer-apport" data-i="${a.index}"
                 title="${trad('Modifier cette ligne')}">
-          <span class="ml-nom">${esc(a.libelle || (a.montant < 0 ? 'Dépense' : 'Rentrée'))}
+          <span class="ml-nom">${esc(a.libelle || trad(a.montant < 0 ? 'Dépense' : 'Entrée'))}
             <span class="sub">${esc([fmtJourMois(a.date) || a.date || 'sans date',
               a.note || ''].filter(Boolean).join(' · '))}</span></span>
           <span class="ml-chiffres"><b class="${cls(a.montant)}">${fmtSigned(a.montant)}</b></span>
@@ -3399,7 +3406,7 @@ function viewHistory() {
     <dl class="kv" style="margin-top:12px">
       ${d.entrees ? `<dt>${trad('Entrées')}</dt><dd class="up">${fmtSigned(d.entrees)}</dd>` : ''}
       ${d.sorties ? `<dt>${trad('Sorties')}</dt><dd class="down">${fmtSigned(d.sorties)}</dd>` : ''}
-      <dt>Net${aide(trad("La somme de tes entrées et de tes sorties exceptionnelles, toutes dates confondues. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution."))}</dt>
+      <dt>Net${aide(trad("La somme de tes entrées et de tes sorties exceptionnelles sur l’année affichée. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution."))}</dt>
         <dd class="${cls(d.net)}">${fmtSigned(d.net)}</dd>
     </dl>`}
   </div>`;
@@ -4937,8 +4944,9 @@ function viewBudget(section = 'depenses') {
         : `<button class="btn sm ghost" data-action="sans-distinction" type="button"
                    title="${esc(trad('Pour qui ne veut pas ventiler ses dépenses : une seule catégorie reste proposée à la saisie du mois, les autres sont retirées. Rien n’est effacé, les mois déjà détaillés gardent leur découpage dans le tableau, les graphiques et les exports. Réversible, et Ctrl+Z annule.'))}"
              >${trad('Une seule case à remplir')}</button>`}
-      <button class="btn sm ghost" data-action="add-category">${trad('+ Ajouter une catégorie')}</button>
-      <button class="btn sm ghost" data-action="add-expense-month">${trad('+ Ouvrir l’année suivante')}</button>
+      ${sansDistinction() ? ''
+        : `<button class="btn sm ghost" data-action="add-category"
+             >${trad('+ Ajouter une catégorie')}</button>`}
     </div>
     ${(() => {
       const att = depensesEnAttente();
@@ -5282,7 +5290,7 @@ function mountBudget() {
     height: 300,
     items: rows.map(r => ({ label: r.label, value: r.total, note: r.note })),
     target: num(Store.state.budget.monthlyTarget),
-    targetLabel: 'Objectif',
+    targetLabel: trad('Objectif'),
   });
   /* Le conteneur n'existe pas quand les categories sont desactivees : la carte
      entiere ne se rend plus. `mount()` sort en silence dans ce cas, mais on ne
@@ -7460,18 +7468,13 @@ const ACTIONS = {
     Store.save(); render();
     toast(`${trad('Colonne')} ${guill(cat)} ${trad('supprimée')}`);
   },
-  'add-expense-month'() {
-    const list = Store.state.budget.expenses;
-    const derniere = Math.max(...list.map(r => +String(r.month).slice(0, 4)), new Date().getFullYear());
-    const an = derniere + 1;
-    for (let m = 1; m <= 12; m++) {
-      list.push({ month: `${an}-${String(m).padStart(2, '0')}-01`, note: '', v: {} });
-    }
-    list.sort((a, b) => String(a.month).localeCompare(String(b.month)));
-    budgetYear = String(an);
-    Store.save(); render();
-    toast(`${trad('Année')} ${an} ${trad('ouverte, 12 mois à remplir')}`);
-  },
+  /* « add-expense-month » est partie avec son bouton : elle ouvrait douze lignes
+     vides pour l'annee suivante, et une annee doit apparaitre quand des donnees
+     existent, non parce qu'on a appuye. Les mois se creent a la demande, la ou
+     l'on saisit -- « saisir-mois-courant » et « saisir-mois-en-attente » posent
+     la ligne du mois vise si le calendrier ne la porte pas.
+     Une action sans bouton pour l'appeler est du code mort, et le balayage de
+     verification cherche justement les `data-action` qui ne menent a rien. */
   async 'del-expense-month'(btn) {
     const i = +btn.dataset.i, r = Store.state.budget.expenses[i];
     if (!r) return;
@@ -7490,7 +7493,7 @@ const ACTIONS = {
   async 'ajouter-apport'(btn) {
     const sortie = btn?.dataset.sens === 'sortie';
     const v = await askForm({
-      titre: sortie ? 'Dépense exceptionnelle' : 'Rentrée exceptionnelle',
+      titre: sortie ? 'Dépense exceptionnelle' : 'Entrée exceptionnelle',
       sous: sortie
         ? 'De l’argent parti une fois : une voiture, des travaux, un voyage'
         : 'De l’argent reçu une fois : héritage, prime, vente d’un bien',
@@ -7502,7 +7505,7 @@ const ACTIONS = {
         { cle: 'date', label: 'Date', type: 'date', valeur: todayISO(),
           requis: true, mois: true,
           aide: sortie ? 'elle situe la dépense dans ton historique'
-                       : 'elle situe la rentrée dans ton historique' },
+                       : 'elle situe l’entrée dans ton historique' },
         { cle: 'note', label: 'Note', type: 'texte', exemple: trad('facultatif') },
       ],
     });
@@ -7520,14 +7523,14 @@ const ACTIONS = {
     if (!a) return;
     const etaitSortie = num(a.montant) < 0;
     const v = await askForm({
-      titre: a.libelle || (etaitSortie ? 'Dépense exceptionnelle' : 'Rentrée exceptionnelle'),
+      titre: a.libelle || (etaitSortie ? 'Dépense exceptionnelle' : 'Entrée exceptionnelle'),
       sous: trad('Ces montants ne bougent aucun solde : ils disent d’où vient l’argent, ou où il est parti'),
       ok: 'Enregistrer',
       champs: [
         { cle: 'libelle', label: trad('De quoi s’agit-il ?'), type: 'texte', requis: true,
           valeur: a.libelle || '' },
         { cle: 'sens', label: 'Nature', type: 'liste',
-          options: [['entree', 'Rentrée, de l’argent reçu'], ['sortie', 'Dépense, de l’argent parti']],
+          options: [['entree', 'Entrée, de l’argent reçu'], ['sortie', 'Dépense, de l’argent parti']],
           valeur: etaitSortie ? 'sortie' : 'entree' },
         { cle: 'montant', label: trad('Montant (€)'), type: 'nombre', requis: true,
           valeur: Math.abs(num(a.montant)) },
@@ -9010,7 +9013,9 @@ function askExpenseMonth(index) {
       </details>`;
       })()}
       <div class="row" style="margin-top:12px">
-        <button class="btn sm ghost" id="depNouvelleCat" type="button">${trad('+ Nouvelle catégorie')}</button>
+        ${sansDistinction() ? ''
+          : `<button class="btn sm ghost" id="depNouvelleCat" type="button"
+              >${trad('+ Nouvelle catégorie')}</button>`}
         ${sansDistinction()
           ? `<button class="btn sm ghost" id="depRemettreDetail" type="button"
               >${trad('Remettre toutes les catégories')}</button>`
@@ -9068,7 +9073,10 @@ function askExpenseMonth(index) {
 
     if ($('#depSansDetail')) $('#depSansDetail').onclick = regrouperCeMois;
     if ($('#depRemettreDetail')) $('#depRemettreDetail').onclick = remettreDetailIci;
-    $('#depNouvelleCat').onclick = async () => {
+    /* Le bouton n'existe pas quand les categories sont desactivees : le garder
+       cable sans garde aurait leve sur un `null` au premier rendu du mode
+       « une seule case ». Ses deux voisins portaient deja ce garde. */
+    if ($('#depNouvelleCat')) $('#depNouvelleCat').onclick = async () => {
       /* La saisie se relève **avant** d'ouvrir la question par-dessus : les
          deux fenêtres partagent le même corps, et `saisie()` cherchait le
          champ de note dans un panneau qu'`askText` venait de remplacer. Elle
@@ -10036,8 +10044,9 @@ const APERCUS = {
     const g = rowGroups(r);
     const total = rowTotal(r);
     const avant = Store.state.monthly.slice(0, i).filter(x => !rowIsEmpty(x)).pop();
-    const dlt = avant ? total - rowTotal(avant) : 0;
     const dettes = num(r.dettes);
+    const net = rowNet(r);
+    const dlt = avant ? net - rowNet(avant) : 0;
     const poches = seriesUtiles([g]).filter(p => Math.abs(num(g[p.key])) > 0.005);
     const comptes = Object.entries(r.v || {})
       .map(([id, v]) => ({ id, v: num(v), a: ACC[id] }))
@@ -10048,17 +10057,21 @@ const APERCUS = {
       sous: avant
         ? `${fmtSigned(dlt)} ${trad('depuis')} ${fmtMonth(avant.date)}`
         : trad('le premier relevé de la série'),
-      total,
+      total: net,
       totalNote: dettes
-        ? `${trad('net de crédits')}${deuxPoints()} ${fmtEUR0(total - dettes)}`
-        : trad('valeurs brutes, crédits à part'),
+        ? `${trad('avoirs')} ${fmtEUR0(total)} ${trad('moins')} ${fmtEUR0(dettes)} ${trad('de crédits')}`
+        : trad('aucun crédit ce mois-là : net et brut se confondent'),
       html: `
         ${r.comment ? `<p class="hint" style="margin:0 0 12px">${esc(r.comment)}</p>` : ''}
         <table><tbody>${poches.map(p => `<tr>
           <td class="name">${esc(p.label)}</td>
           <td class="muted">${total ? fmtPct(num(g[p.key]) / total * 100, 0) : ''}</td>
           <td><b>${fmtEUR0(num(g[p.key]))}</b></td>
-        </tr>`).join('')}</tbody></table>
+        </tr>`).join('')}${dettes ? `<tr>
+          <td class="name">${trad('Crédits restants')}</td>
+          <td class="muted"></td>
+          <td><b>${fmtEUR0(-dettes)}</b></td>
+        </tr>` : ''}</tbody></table>
         ${comptes.length ? `
         <p class="hint" style="margin:14px 0 2px">${trad('Compte par compte')}</p>
         <table><tbody>${comptes.map(c => `<tr>

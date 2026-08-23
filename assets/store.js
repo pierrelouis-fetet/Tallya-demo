@@ -1300,7 +1300,22 @@ const Store = {
     if (!Array.isArray(s.budget.categories) || !s.budget.categories.length) {
       s.budget.categories = [...EXPENSE_CATEGORIES];
     }
-    ensureCalendarMonths(s.monthly, 'date', 'comment');
+    /* Le calendrier des DÉPENSES, et lui seul.
+
+       Il reste parce qu'il est la seule porte vers un mois passé : le tableau du
+       détail mensuel affiche ses douze lignes, et c'est en cliquant l'une d'elles
+       qu'on saisit février de l'an dernier. Le retirer sans lui donner un
+       remplaçant — un sélecteur de mois dans la fenêtre de saisie, comme celui du
+       relevé — fermerait cette porte.
+
+       Les RELEVÉS n'en ont plus besoin : le journal n'affiche que les mois
+       renseignés, et « Ajouter un relevé » choisit son mois et son année, en
+       créant la ligne à la demande (`indexReleve`). Douze lignes vides par an
+       dans le stockage ne servaient plus rien, et le point 19 les refuse.
+
+       Les lignes vides déjà créées restent : elles ne portent aucun montant,
+       mais elles peuvent porter une note, et rien ici ne supprime ce que
+       quelqu'un a écrit. */
     ensureCalendarMonths(s.budget.expenses, 'month', 'note');
     s.accountTypes = s.accountTypes || structuredClone(SEED.accountTypes);
     s.accounts = s.accounts || structuredClone(SEED.accounts);
@@ -1855,12 +1870,12 @@ function coursAsOf() {
 
 function dayPerformance() {
   const lignes = [];
-  let eur = 0, base = 0, sansDonnee = 0;
+  let eur = 0, baseCotees = 0, sansDonnee = 0;
   for (const p of Store.state.positions) {
     const d = posDayChange(p);
     if (!d) { sansDonnee++; continue; }
     eur += d.eur;
-    base += posValue(p) - d.eur;          // valeur d'hier, au change du jour
+    baseCotees += posValue(p) - d.eur;    // valeur d'hier, au change du jour
     lignes.push({
       index: Store.state.positions.indexOf(p),
       name: p.name, currency: p.currency || 'EUR', value: posValue(p),
@@ -1876,8 +1891,10 @@ function dayPerformance() {
      La seconde est dans la liste, avec un ecart nul — d'ou l'obligation de
      l'annoncer, faute de quoi elle se lit comme une seance atone. */
   const horsSeance = lignes.filter(l => l.horsSeance).length;
+  const base = basePortefeuilleMarches() - eur;
   return {
     lignes, eur, sansDonnee, horsSeance,
+    base, baseCotees,
     pct: base ? eur / base * 100 : 0,
     hausse: lignes.filter(l => l.eur > 0).length,
     baisse: lignes.filter(l => l.eur < 0).length,
@@ -1982,6 +1999,9 @@ function rowTotal(row) {
      ecrite a la main a laisse `biens` dehors une fois deja. */
   return Object.values(rowGroups(row)).reduce((s, v) => s + v, 0);
 }
+function rowNet(row) {
+  return rowTotal(row) - num(row.dettes);
+}
 function rowIsEmpty(row) {
   return Object.values(row.v || {}).every(x => !num(x));
 }
@@ -2066,8 +2086,12 @@ function historySeries({ includeNow = true } = {}) {
        Sans lui, la courbe nette ne pouvait déduire les crédits que du dernier
        point — le patrimoine net semblait plat pendant des années puis
        chutait d'un coup au bout. */
+    /* `net` est rendu a cote du brut : les deux se lisent, et aucun appelant
+       n'a plus a refaire la soustraction -- c'est en la refaisant que le journal
+       avait fini par ne plus la faire du tout. */
     .map(r => ({ label: fmtMonth(r.date), date: r.date, ...rowGroups(r),
-                 total: rowTotal(r), dettes: num(r.dettes), comment: r.comment }));
+                 total: rowTotal(r), dettes: num(r.dettes), net: rowNet(r),
+                 comment: r.comment }));
   if (includeNow) {
     const t = nowTotals();
     /* `total` doit egaler la somme des trois poches, comme pour un releve
@@ -2985,7 +3009,7 @@ function deltas() {
      donnees de demonstration, portant un pret, qui l'a fait apparaitre. */
   const d = (from) => {
     if (!from) return null;
-    const base = num(from.total) - num(from.dettes);
+    const base = num(from.net);
     /*       On rend donc `pct: null` dans ces cas, et l'affichage se contente de
        l'euro, qui reste exact. Trois situations : base nulle, base negative, et
        changement de signe entre les deux bornes. */
@@ -3889,12 +3913,11 @@ function monthlyPace() {
   const brut = historySeries({ includeNow: false });
   const pts = brut.filter(p => !(Number(String(p.date).slice(8, 10)) > 20
     && brut.some(q => q !== p && String(q.date).slice(0, 7) === String(p.date).slice(0, 7))));
-  const net = p => num(p.total) - num(p.dettes);
   const out = [];
   for (let i = 1; i < pts.length; i++) {
     out.push({ label: pts[i].label, date: pts[i].date, note: pts[i].comment,
                depuis: prochainJour(pts[i - 1].date),
-               delta: net(pts[i]) - net(pts[i - 1]), total: pts[i].total });
+               delta: num(pts[i].net) - num(pts[i - 1].net), total: pts[i].total });
   }
   return statsRythme(out);
 }

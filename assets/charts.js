@@ -632,7 +632,7 @@ const Charts = (() => {
             <line x1="${m.l}" x2="${W - m.r}" y1="${y(target)}" y2="${y(target)}"
                   stroke="${c.text}" stroke-width="2" stroke-dasharray="5 4" stroke-opacity=".65"/>
             <text x="${W - m.r}" y="${y(target) - 6}" text-anchor="end" class="tick tick-strong">
-              ${esc(targetLabel || 'Objectif')} ${kEur(target)}</text>` : ''}
+              ${esc(targetLabel || trad('Objectif'))} ${kEur(target)}</text>` : ''}
         </svg>`;
 
       const tip = ensureTip(el);

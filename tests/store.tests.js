@@ -5584,11 +5584,21 @@ suite('Retirer une catégorie n’efface rien', () => {
        agissent sur les categories, pas sur la page. */
     const carte = src.slice(src.indexOf('data-anchor="detail-mensuel"'));
     const rangee = carte.slice(carte.indexOf('<div class="row"'),
-                               carte.indexOf('</div>', carte.indexOf('add-expense-month')));
-    for (const action of ['sans-distinction', 'add-category', 'add-expense-month']) {
+                               carte.indexOf('${(() => {'));
+    for (const action of ['sans-distinction', 'add-category']) {
       vrai(rangee.includes(action),
         `« ${action} » appartient à la rangée des commandes de catégories`);
     }
+    /* « + Ouvrir l'annee suivante » n'y est plus, et son action non plus : une
+       annee apparait quand des donnees existent, pas parce qu'on a appuye.
+       Douze lignes vides precreees n'etaient pas une annee ouverte, c'etaient
+       douze mois a zero euro dans le tableau et dans le store. */
+    /* Commentaires retires : celui qui dit pourquoi l'action n'est plus la
+       nomme forcement, comme celui de « add-month » a cote. */
+    vrai(!src.replace(/\/\*[\s\S]*?\*\//g, '').includes('add-expense-month'),
+      'ni le bouton qui ouvrait douze mois vides, ni son action');
+    vrai(!(lireSource('assets/i18n.js') || '').includes('Ouvrir l’année suivante'),
+      'et sa clef de traduction est partie avec');
   });
 
   test('ne plus détailler ne laisse qu’une case, et n’efface rien', () => {
@@ -15945,8 +15955,8 @@ suite('Le journal patrimonial ne montre que des relevés', () => {
                            src.indexOf('function mountHistory('));
     vrai(!/monthly\[i - 1\]/.test(bloc),
       'la ligne du dessus n’est plus la référence');
-    vrai(/avant \? total - avant\.total : 0/.test(bloc),
-      'c’est le relevé renseigné juste avant qui l’est');
+    vrai(/avant \? net - avant\.net : 0/.test(bloc),
+      'c’est le relevé renseigné juste avant qui l’est, et de net à net');
     /* Et la fenetre de detail dit la meme chose, par le meme chemin : trois
        endroits, une seule definition. */
     for (const ou of ['releveMois: (arg)', 'function askMonthlySnapshot']) {
@@ -16786,10 +16796,10 @@ suite('Deux états, et l’affichage suit la saisie', () => {
     vrai(i > 0, 'la carte doit exister dans la source');
     vrai(/\$\{sansDistinction\(\) \? '' : `/.test(vue.slice(Math.max(0, i - 900), i)),
       'elle ne se rend que si les catégories sont actives');
-    eq((vue.match(/sansDistinction\(\)/g) || []).length, 7,
+    eq((vue.match(/sansDistinction\(\)/g) || []).length, 8,
       'la carte, ses trois rangées de colonnes, le compte de l’en-tête, la fiche '
-      + 'de la tuile de la moyenne, et le commentaire qui dit pourquoi il n’y a '
-      + 'pas de réglage de plus');
+      + 'de la tuile de la moyenne, le bouton qui ajoute une catégorie, et le '
+      + 'commentaire qui dit pourquoi il n’y a pas de réglage de plus');
   });
 
   test('aucune ventilation par catégorie ne survit, tuiles et fiches comprises', () => {
@@ -17417,6 +17427,509 @@ suite('Personnalisé est une case, pas un quatrième scénario', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Une seule convention : le patrimoine NET
+   ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Budget : l'interface suit le mode choisi
+   ------------------------------------------------------------------ */
+suite('Sans catégories, aucune commande de catégorie', () => {
+
+  /* Trois postes et trois mois : le fixture de cette suite, pose ici pour
+     qu'elle ne depende pas de celui d'une autre. */
+  const troisPostes = e => {
+    e.budget.categories = ['Courses', 'Sport', 'Transports'];
+    e.budget.retirees = [];
+    e.budget.expenses = [
+      { month: '2026-01-01', v: { Courses: 400, Sport: 60, Transports: 40 }, note: '' },
+      { month: '2026-02-01', v: { Courses: 500, Sport: 60 }, note: '' },
+      { month: '2026-03-01', v: { Courses: 300, Transports: 90 }, note: '' },
+    ];
+  };
+
+  test('les gestes qui créent une catégorie disparaissent avec elles', () => {
+    /* Le geste et son inverse cote a cote : « Une seule case a remplir » et
+       « + Ajouter une categorie ». Le second defaisait le premier en silence --
+       une categorie ajoutee est une categorie active, donc la page repassait en
+       saisie detaillee sans qu'un mot le dise.
+
+       Le seul retour offert est celui qui l'annonce : « Remettre toutes les
+       categories ». */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewBudget(section'),
+                          src.indexOf('function mountBudget('));
+    const i = vue.indexOf("data-action=\"add-category\"");
+    vrai(i > 0, 'le bouton existe encore, pour qui détaille');
+    vrai(/\$\{sansDistinction\(\) \? ''\s*$/m.test(vue.slice(Math.max(0, i - 420), i))
+      || /sansDistinction\(\) \? ''/.test(vue.slice(Math.max(0, i - 420), i)),
+      'et il ne se rend que si les catégories servent encore');
+    /* La fenetre du mois porte le meme geste, et la meme garde. */
+    const fen = src.slice(src.indexOf('function askExpenseMonth'), src.indexOf('id="depNote"'));
+    const j = fen.indexOf('id="depNouvelleCat"');
+    vrai(j > 0, 'la fenêtre a son bouton');
+    vrai(/sansDistinction\(\) \? ''/.test(fen.slice(Math.max(0, j - 400), j)),
+      'gardé de la même façon : créer une case pendant qu’on en demande une seule '
+      + 'ferait repasser la fenêtre en douze cases au rendu suivant');
+    /* Et son cablage se garde aussi : sans quoi le premier rendu du mode
+       « une seule case » levait sur un `null`. */
+    vrai(/if \(\$\('#depNouvelleCat'\)\) \$\('#depNouvelleCat'\)\.onclick/.test(src),
+      'le câblage vérifie que le bouton est là');
+  });
+
+  test('le retour au détail fait revenir les commandes', () => {
+    /* Binaire, et rien d'autre : la liste des categories de saisie decide. */
+    Fixture.poser(troisPostes);
+    vrai(!sansDistinction(), 'on part en saisie détaillée');
+    vrai(categoriesSaisie().length > 1, 'plusieurs cases à remplir');
+    neePlusDetailler();
+    vrai(sansDistinction(), 'une seule case, et l’état se lit sur la liste');
+    /* Le geste inverse existe et se nomme : c'est lui qui rallume tout. */
+    const src = lireSource('assets/app.js');
+    vrai(/data-action="reprendre-detail"/.test(src)
+      && /trad\('Remettre toutes les catégories'\)/.test(src),
+      'le retour est offert, et il dit ce qu’il fait');
+    reprendreLeDetail();
+    vrai(!sansDistinction(), 'les catégories reviennent');
+    vrai(categoriesSaisie().length > 1, 'et la saisie redevient détaillée');
+  });
+
+  test('les anciennes données catégorisées survivent au mode', () => {
+    /* Le point qui compte : l'interface suit le choix courant, le stockage garde
+       l'histoire. Retirer les categories ne touche aucun montant. */
+    Fixture.poser(troisPostes);
+    const avant = Store.state.budget.expenses.map(r => JSON.stringify(r.v));
+    const totaux = Store.state.budget.expenses.map(expenseRowTotal);
+    const cats = expenseCategories().join('|');
+    neePlusDetailler();
+    Store.state.budget.expenses.forEach((r, i) => {
+      eq(JSON.stringify(r.v), avant[i], `le mois ${i + 1} garde sa ventilation, à l’octet`);
+      pres(expenseRowTotal(r), totaux[i], 'et son total');
+    });
+    /* Aucune ne disparait. Le regroupement peut en AJOUTER une -- la case
+       unique porte un nom -- et c'est la disparition qu'on interdit, pas
+       l'ajout : treize endroits parcourent cette liste pour sommer. */
+    for (const c of cats.split('|')) {
+      vrai(expenseCategories().includes(c),
+        `« ${c} » est toujours dans la liste qui sert aux totaux et aux exports`);
+    }
+    /* Et les retrouver suffit a les revoir. */
+    reprendreLeDetail();
+    for (const c of cats.split('|')) {
+      vrai(categoriesSaisie().includes(c), `« ${c} » revient à la saisie`);
+    }
+  });
+
+  test('aucun mois futur n’entre dans une statistique', () => {
+    /* Un mois a venir n'est pas un mois a zero euro. Il ne doit peser ni sur la
+       moyenne, ni sur le compte des mois sous ou au-dessus de l'objectif, ni sur
+       le meilleur et le pire -- et le mois EN COURS non plus, qui n'est pas
+       fini. */
+    auJour('2026-06-15', () => {
+      Fixture.poser(e => {
+        e.budget.monthlyTarget = 1000;
+        e.budget.categories = ['Tout confondu'];
+        e.budget.expenses = [
+          { month: '2026-04-01', note: '', v: { 'Tout confondu': 900 } },
+          { month: '2026-05-01', note: '', v: { 'Tout confondu': 1100 } },
+          { month: '2026-06-01', note: '', v: { 'Tout confondu': 200 } },
+          { month: '2026-07-01', note: '', v: {} },
+          { month: '2026-12-01', note: '', v: {} },
+        ];
+      });
+      const st = expenseYearStats('2026');
+      pres(st.average, (900 + 1100) / 2,
+        'la moyenne ne retient qu’avril et mai : juin court, juillet et décembre n’existent pas encore');
+      eq(st.under, 1, 'un seul mois sous l’objectif');
+      eq(st.over, 1, 'un seul au-dessus');
+      eq(st.moisRetenus, 2, 'deux mois comparables');
+      pres(st.total, 900 + 1100 + 200, 'le total de l’année compte ce qui a été dépensé');
+      /* Et le graphique ne trace pas les mois vides a venir. */
+      const vus = expenseSeriesVisible('2026').map(r => r.month);
+      vrai(!vus.includes('2026-07-01') && !vus.includes('2026-12-01'),
+        'les mois à venir ne sont pas des barres à zéro');
+      vrai(vus.includes('2026-06-01'), 'le mois en cours, lui, se trace');
+    });
+  });
+
+  test('aucune année de relevés ne se précrée', () => {
+    /* Douze lignes vides par an dans le stockage : ce n'etait pas une annee
+       ouverte, c'etaient douze mois a zero. Le journal n'affiche que les mois
+       renseignes, et « Ajouter un releve » cree la ligne du mois demande.
+
+       Le calendrier des DEPENSES reste : le tableau du detail mensuel est la
+       seule porte vers un mois passe, et le retirer sans lui donner un
+       remplaçant fermerait cette porte. */
+    const src = lireSource('assets/store.js');
+    const mig = src.slice(src.indexOf('ensureCalendarMonths(s.budget.expenses') - 1200,
+                          src.indexOf('ensureCalendarMonths(s.budget.expenses') + 80);
+    vrai(!/ensureCalendarMonths\(s\.monthly/.test(src),
+      'les relevés ne se précréent plus');
+    vrai(/ensureCalendarMonths\(s\.budget\.expenses/.test(mig),
+      'les dépenses gardent leur calendrier, seule porte vers un mois passé');
+
+    /* La preuve par les donnees : un etat sans releve reste sans releve apres
+       migration, et le mois demande se cree a la demande. */
+    Fixture.poser(e => { e.monthly = []; });
+    Store.migrate();
+    eq(Store.state.monthly.length, 0, 'aucune ligne inventée au chargement');
+    const i = indexReleveTest('2026-03-01');
+    eq(Store.state.monthly.length, 1, 'et une seule quand on en demande une');
+    eq(Store.state.monthly[i].date, '2026-03-01', 'celle du mois visé');
+  });
+
+  /* `indexReleve` vit dans app.js, que le harnais ne charge pas : on rejoue sa
+     regle, qui est d'ajouter la ligne manquante et de rendre son rang. */
+  function indexReleveTest(cle) {
+    let i = Store.state.monthly.findIndex(r => r.date === cle);
+    if (i < 0) {
+      Store.state.monthly.push({ date: cle, comment: '', v: {} });
+      Store.state.monthly.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      i = Store.state.monthly.findIndex(r => r.date === cle);
+    }
+    return i;
+  }
+});
+
+/* ------------------------------------------------------------------
+   Projection : les textes disent ce que le moteur fait
+   ------------------------------------------------------------------ */
+suite('Les textes de Projection suivent les presets', () => {
+
+  test('le capital garanti n’est plus annoncé à zéro par défaut', () => {
+    /* Les trois scenarios lui donnent 2, 2,5 ou 3 %, et l'infobulle disait
+       encore « zero par defaut, c'est a toi de l'affirmer ». Un texte qui
+       decrit un etat du moteur disparu fait douter d'un chiffre juste. */
+    for (const [cle, , taux] of SCENARIOS_PROJECTION) {
+      vrai(taux.garanti > 0, `« ${cle} » applique bien un taux au capital garanti`);
+    }
+    const src = lireSource('assets/app.js');
+    const champ = src.slice(src.indexOf("champ('Rendement du capital garanti'"),
+                            src.indexOf("champ('Rendement du capital garanti'") + 700);
+    vrai(!/Zéro par défaut/.test(champ), 'l’infobulle ne l’annonce plus à zéro');
+    vrai(!/c’est à toi de l’affirmer/.test(champ),
+      'ni ne renvoie l’hypothèse à l’utilisateur, puisque le scénario en pose une');
+    vrai(/hypothèse prudente/.test(champ), 'elle dit ce que le scénario applique');
+    vrai(/que tu peux changer ici/.test(champ), 'et qu’elle reste modifiable');
+  });
+
+  test('la bande de la courbe nomme le taux qu’elle fait varier', () => {
+    /* Les deux courbes pointillees sont `capitalisation({ rate: s.rate ± 2 })` :
+       seul le taux des actifs de marche bouge, le garanti et les autres actifs
+       gardent le leur. « Si le rendement fait deux points de plus ou de moins »
+       ne designait plus rien de precis depuis que chaque poche a le sien. */
+    const src = lireSource('assets/app.js');
+    vrai(/rate: num\(s\.rate\) - 2/.test(src) && /rate: num\(s\.rate\) \+ 2/.test(src),
+      'les deux bandes ne font varier que le taux du marché');
+    vrai(/Avec ±2 points sur le rendement des actifs de marché/.test(src),
+      'et la légende le dit');
+    vrai(!/Si le rendement fait deux points/.test(src), 'l’ancienne formulation est partie');
+  });
+
+  test('« Par horizon » annonce un scénario, pas un taux global', () => {
+    /* L'en-tete disait « 652 EUR / mois a 6,00 % par an », ce qui se lit « tout
+       mon patrimoine progresse de 6 % ». Faux depuis que les poches ont chacune
+       leur hypothese : le garanti suit la sienne, les autres actifs et les
+       liquidites ne bougent pas, l'immobilier est porte a plat. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("trad('Par horizon')");
+    vrai(i > 0, 'la carte doit être trouvable');
+    const tete = src.slice(i, src.indexOf('</div>', i));
+    vrai(!/fmtPct\(s\.rate\)/.test(tete), 'aucun taux global dans l’en-tête');
+    vrai(/trad\(nomScenario\(s\.scenario\)\)/.test(tete),
+      'elle nomme le scénario, qui vaut « personnalisé » hors preset');
+    /* Et le resume replie de la carte des hypotheses dit la meme chose : une
+       seule facon de nommer l'etat. */
+    eq((src.match(/trad\(nomScenario\(s\.scenario\)\)\.toLowerCase\(\)/g) || []).length, 2,
+      'le résumé replié et cet en-tête, par le même chemin');
+  });
+
+  test('le levier du rendement nomme la poche qu’il fait bouger', () => {
+    /* `targetRequirements` rejoue le moteur avec `rate` modifie, et lui seul :
+       « obtenir 8,4 % par an » se lisait comme un rendement du patrimoine
+       entier, et personne ne savait quel réglage bouger. */
+    const store = lireSource('assets/store.js');
+    /* La borne haute est la fonction SUIVANTE : `capitalisation` vit plus haut
+       dans le fichier, donc s'y fier rendait une tranche vide -- et un controle
+       sur une chaine vide passe pour de mauvaises raisons. */
+    const iT = store.indexOf('function targetRequirements');
+    const fn = store.slice(iT, store.indexOf('function monthsToObjective', iT));
+    vrai(fn.length > 500, 'targetRequirements doit être trouvable');
+    vrai(/atteint\(\{ rate: /.test(fn),
+      'le levier ne modifie que `rate`, le taux des actifs de marché');
+    vrai(!/rateAutres:|rateGaranti:/.test(fn),
+      'et laisse les autres poches telles quelles');
+    const app = lireSource('assets/app.js');
+    vrai(/sur les actifs de marché, au lieu de/.test(app),
+      'la phrase nomme donc les actifs de marché');
+  });
+
+  test('aucun texte de Projection ne décrit une poche disparue', () => {
+    /* Le balayage : les mots des moteurs precedents, dans ce que l'ecran
+       affiche. Les commentaires sont ecartes -- ils ont le droit de raconter ce
+       qui n'est plus, c'est meme leur usage ici. */
+    const src = (lireSource('assets/app.js') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const vue = src.slice(src.indexOf('function viewObjective'),
+                          src.indexOf('function mountObjective'));
+    for (const mort of ['Rendement du non coté', 'Rendement de la crypto',
+                        'tout ce qui se vend sur un marché',
+                        'ont leur propre hypothèse',
+                        'Si le rendement fait deux points']) {
+      vrai(!vue.includes(mort), `« ${mort} » ne décrit plus le moteur`);
+    }
+  });
+});
+
+suite('Un relevé se lit en net, partout', () => {
+
+  /* « Aujourd'hui » annonce un net, les variations se comptent en net, le rythme
+     d'accumulation aussi -- et le journal des releves montrait le brut. Le meme
+     mois valait donc deux montants selon la carte qui le lisait, et l'ecart
+     valait un pret immobilier entier. */
+
+  /* Un patrimoine rond : un compte courant, et une dette qu'on fait varier. */
+  const releve = (avoirs, dettes, mois) => ({
+    date: mois, comment: '', dettes, v: { c_courant: avoirs },
+  });
+  const poserReleves = (...lignes) => Fixture.poser(e => {
+    e.comptes = [{ id: 'c_courant', etabId: 'e_b', type: 'courant', statut: 'ouvert',
+      libelle: 'Courant', court: 'Courant', numero: '', notes: '', alloc: '',
+      ouvertLe: '2019-01-01', cash: [{ montant: 0, affectation: 'courant' }], lignes: [] }];
+    e.etabs = [{ id: 'e_b', nom: 'Banque', notes: '', dettes: [] }];
+    e.monthly = lignes;
+  });
+
+  test('sans dette, le net vaut le brut', () => {
+    poserReleves(releve(100000, 0, '2026-01-31'));
+    const r = Store.state.monthly[0];
+    pres(rowTotal(r), 100000, 'les avoirs font cent mille');
+    pres(rowNet(r), 100000, 'et le net les vaut, faute de dette à retirer');
+  });
+
+  test('avec dette, le net retire le capital restant dû', () => {
+    poserReleves(releve(300000, 150000, '2026-01-31'));
+    const r = Store.state.monthly[0];
+    pres(rowTotal(r), 300000, 'les avoirs restent les avoirs');
+    pres(rowNet(r), 150000, 'et le net en retire la dette du mois');
+  });
+
+  test('la variation se compte de net à net', () => {
+    poserReleves(releve(200000, 50000, '2026-01-31'),
+                 releve(202000, 49500, '2026-02-28'));
+    const [a, b] = Store.state.monthly;
+    pres(rowNet(a), 150000, 'janvier, en net');
+    pres(rowNet(b), 152500, 'février, en net');
+    pres(rowNet(b) - rowNet(a), 2500, 'la variation vaut deux mille cinq cents');
+    /* Sur le brut elle n'aurait valu que 2 000 : les 500 EUR de capital
+       rembourses ont fait monter le patrimoine sans toucher aux avoirs. */
+    pres(rowTotal(b) - rowTotal(a), 2000,
+      'là où le brut n’en voit que deux mille, ignorant le remboursement');
+  });
+
+  test('rembourser sans rien gagner fait monter le net', () => {
+    /* Le cas qui rend la convention necessaire : les avoirs ne bougent pas d'un
+       centime, la dette baisse de mille, et le patrimoine a monte de mille. Un
+       journal en brut affichait deux fois le meme montant et une variation nulle. */
+    poserReleves(releve(300000, 150000, '2026-01-31'),
+                 releve(300000, 149000, '2026-02-28'));
+    const [a, b] = Store.state.monthly;
+    pres(rowTotal(a), rowTotal(b), 'les avoirs sont identiques');
+    pres(rowNet(b) - rowNet(a), 1000, 'et le net a monté de ce qui a été remboursé');
+    vrai(rowNet(b) > rowNet(a), 'réduire une dette enrichit');
+  });
+
+  test('la série, les variations et le rythme lisent la même définition', () => {
+    /* La soustraction s'ecrivait a trois endroits. Elle s'ecrit dans `rowNet`, et
+       `historySeries` la publie : un quatrieme lecteur ne pourra pas la refaire
+       de travers. */
+    poserReleves(releve(300000, 150000, '2026-01-31'),
+                 releve(302000, 149000, '2026-02-28'));
+    const pts = historySeries({ includeNow: false });
+    eq(pts.length, 2, 'deux points');
+    for (const pt of pts) {
+      const r = Store.state.monthly.find(x => x.date === pt.date);
+      pres(pt.net, rowNet(r), `${pt.label} : la série publie le net du relevé`);
+      pres(pt.net, pt.total - pt.dettes, 'et il vaut bien brut moins dettes');
+    }
+    const src = lireSource('assets/store.js');
+    eq((src.match(/function rowNet/g) || []).length, 1,
+      'une seule définition du net d’un relevé');
+    /* Aucun lecteur ne refait la soustraction a la main. */
+    vrai(!/num\(p\.total\) - num\(p\.dettes\)/.test(src),
+      'et plus personne ne la réécrit à côté');
+  });
+
+  test('le journal et la fiche du relevé montrent le même montant', () => {
+    /* La ligne qu'on touche doit retrouver le meme chiffre dans la fenetre qui
+       s'ouvre. Le journal affichait le brut, la fiche le brut en tete et le net
+       en note : trois lectures pour un mois. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewHistory('),
+                          src.indexOf('function mountHistory('));
+    vrai(/const net = rowNet\(r\), total = rowTotal\(r\)/.test(vue),
+      'le journal calcule le net du relevé');
+    vrai(/valeur: fmtEUR0\(net\)/.test(vue), 'et c’est lui qu’il affiche');
+    /* La borne haute est la fiche suivante : « /* --- Budget » existe plus haut
+       dans le fichier, donc la tranche partait vide. */
+    /* La borne haute est la fiche suivante d'APERCUS. « /* --- Budget » existe
+       aussi plus haut dans le fichier, donc s'y fier rendait une tranche vide. */
+    const iF = src.indexOf('releveMois: (arg)');
+    const fiche = src.slice(iF, src.indexOf('moisObjectif: (sens)', iF));
+    vrai(fiche.length > 500, 'la fiche du relevé doit être trouvable');
+    vrai(/total: net,/.test(fiche), 'la fiche annonce le même net en tête');
+    vrai(/const dlt = avant \? net - rowNet\(avant\) : 0/.test(fiche),
+      'et sa variation se compte aussi de net à net');
+    /* Le brut reste lisible, avec sa dette en face, et la somme des lignes fait
+       le total annonce : les poches sont brutes, donc la dette a sa ligne. */
+    vrai(/trad\('Crédits restants'\)/.test(fiche),
+      'la dette a sa ligne dans le tableau des poches');
+    vrai(/fmtEUR0\(-dettes\)/.test(fiche), 'en négatif, pour que la somme fasse le total');
+    vrai(/trad\('avoirs'\)\} \$\{fmtEUR0\(total\)/.test(fiche),
+      'et les avoirs bruts se lisent sous le total');
+  });
+
+  test('le montant annoncé avant l’enregistrement est celui de la liste', () => {
+    /* Le bandeau du mois en attente promet « tous les montants actuels ({v}) ».
+       `nowTotals().total` est le patrimoine NET -- il l'a toujours ete -- donc
+       promettre un net puis afficher un brut dans la liste faisait deux chiffres
+       pour un seul geste. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewHistory('),
+                          src.indexOf('function mountHistory('));
+    vrai(/tous les montants actuels \(\{v\}\)/.test(vue), 'la promesse est là');
+    vrai(/fmtEUR0\(nowTotals\(\)\.total\)/.test(vue),
+      'et elle porte le total de nowTotals, qui est le net');
+    /* La preuve par les donnees : un releve pris aujourd'hui, avec la dette du
+       jour, redonne exactement le chiffre promis. */
+    Fixture.poser();
+    const t = nowTotals();
+    const faux = { date: currentMonthKey(), comment: '', dettes: t.dettes, v: {} };
+    for (const a of ACCOUNTS) faux.v[a.id] = nowValue(a.id);
+    pres(rowNet(faux), num(t.total),
+      'le relevé du mois vaut le patrimoine net annoncé, au centime');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Marches : un seul denominateur pour la carte du jour
+   ------------------------------------------------------------------ */
+suite('La performance du jour se compte sur le portefeuille entier', () => {
+
+  /* Poids, part et effet avaient adopte une convention -- titres plus cash a
+     investir -- et le pourcentage du jour avait garde la sienne : la valeur
+     d'hier des seules lignes ayant cote. Trois colonnes et un total se
+     divisaient par deux denominateurs differents sur la meme carte. */
+
+  /* Un portefeuille rond : 16 000 de titres apres une baisse de 100, et 4 000 de
+     cash a investir. Le cours de veille se pose a la main pour que la variation
+     du jour soit exactement celle qu'on veut. */
+  const portefeuille = (titres, cash, varJour) => e => {
+    const prixVeille = (titres - varJour) / 100;
+    e.positions = [{ id: 'p1', name: 'ETF', isin: '', symbol: 'X', currency: 'EUR',
+      qty: 100, buyPrice: prixVeille, price: titres / 100, prevClose: prixVeille,
+      fx: 1, fxBuy: 1, account: 'c_cto', manual: false,
+      assetClass: 'actions', role: 'core' }];
+    e.comptes = [{ id: 'c_cto', etabId: 'e_c', type: 'cto', statut: 'ouvert',
+      libelle: 'CTO', court: 'CTO', numero: '', notes: '', alloc: '',
+      ouvertLe: '2020-01-01', lignes: [],
+      cash: cash ? [{ montant: cash, affectation: 'investir' }] : [] }];
+    e.etabs = [{ id: 'e_c', nom: 'Courtier', notes: '', dettes: [] }];
+    e.monthly = [];
+  };
+
+  test('le cash entre dans la base, et le pourcentage baisse d’autant', () => {
+    Fixture.poser(portefeuille(16000, 4000, -100));
+    const j = dayPerformance();
+    pres(j.eur, -100, 'la variation du jour vaut cent euros de moins');
+    pres(basePortefeuilleMarches(), 20000, 'le portefeuille vaut vingt mille');
+    pres(j.base, 20100, 'la base est le portefeuille tel qu’il était ce matin');
+    pres(j.pct, -100 / 20100 * 100, 'donc environ un demi-point de baisse');
+    vrai(Math.abs(j.pct + 0.5) < 0.01, 'soit −0,50 % à l’arrondi de l’affichage');
+    /* Et non les -0,625 % de la seule poche investie, qu'aucune ligne de
+       l'ecran ne nomme. */
+    vrai(Math.abs(j.pct - (-100 / 16100 * 100)) > 0.1,
+      'et non le pourcentage de la seule poche investie');
+  });
+
+  test('la somme des effets s’accorde avec le pourcentage affiché', () => {
+    /* La coherence demandee : chaque ligne porte son effet en euros, leur somme
+       est le numerateur, et le denominateur est celui des poids. Poids x
+       variation redonne donc l'effet, a l'arrondi pres. */
+    Fixture.poser(portefeuille(16000, 4000, -100));
+    const j = dayPerformance();
+    pres(j.lignes.reduce((s, l) => s + l.eur, 0), j.eur,
+      'la somme des effets est exactement le total du jour');
+    pres(j.eur / j.base * 100, j.pct, 'et ce total sur la base fait le pourcentage');
+    /* Le poids d'une ligne se lit sur la meme base que la performance. */
+    const l = j.lignes[0];
+    pres(poidsPortefeuille(l.value), 16000 / 20000 * 100,
+      'le poids de la ligne se lit sur le portefeuille entier');
+    /* Poids x variation = contribution, en points de pourcentage. */
+    const contribution = poidsPortefeuille(l.value) / 100 * l.pct;
+    vrai(Math.abs(contribution - j.pct) < 0.02,
+      'poids × variation redonne la performance globale, à l’arrondi près');
+  });
+
+  test('un portefeuille sans cash retrouve l’ancien calcul', () => {
+    /* La convention ne change rien pour qui n'a pas de cash en attente : c'est
+       la preuve que le cash est la seule difference. */
+    Fixture.poser(portefeuille(16000, 0, -100));
+    const j = dayPerformance();
+    pres(j.base, 16100, 'la base est la valeur d’hier des titres');
+    pres(j.base, j.baseCotees, 'et elle vaut celle des lignes cotées');
+    pres(j.pct, -100 / 16100 * 100, 'le pourcentage est celui de la poche investie');
+  });
+
+  test('un portefeuille tout en cash ne rend ni NaN ni Infinity', () => {
+    Fixture.poser(e => {
+      portefeuille(0, 5000, 0)(e);
+      e.positions = [];
+    });
+    const j = dayPerformance();
+    pres(j.eur, 0, 'rien n’a bougé');
+    pres(j.base, 5000, 'la base est le cash');
+    pres(j.pct, 0, 'et le pourcentage vaut zéro, pas une division impossible');
+    eq(j.lignes.length, 0, 'aucune ligne à lister');
+  });
+
+  test('un portefeuille vide rend zéro plutôt qu’une division par zéro', () => {
+    Fixture.poser(e => { e.positions = []; e.comptes = []; e.etabs = []; e.monthly = []; });
+    const j = dayPerformance();
+    pres(j.base, 0, 'aucune base');
+    pres(j.pct, 0, 'zéro pour cent, et non NaN');
+    vrai(Number.isFinite(j.pct), 'le nombre reste fini');
+  });
+
+  test('une ligne sans cours de veille n’entre dans aucun des deux termes', () => {
+    /* Rien n'est invente : sans cloture de reference, la ligne se compte a part
+       et n'apparait ni au numerateur ni dans la liste. Elle reste dans la base,
+       parce qu'elle fait partie du portefeuille -- et c'est justement pourquoi
+       la carte annonce leur nombre. */
+    Fixture.poser(e => {
+      portefeuille(16000, 4000, -100)(e);
+      e.positions.push({ id: 'p2', name: 'Sans cours', isin: '', symbol: 'Y',
+        currency: 'EUR', qty: 10, buyPrice: 100, price: 100, fx: 1, fxBuy: 1,
+        account: 'c_cto', manual: false, assetClass: 'actions', role: 'satellite' });
+    });
+    const j = dayPerformance();
+    eq(j.sansDonnee, 1, 'la ligne sans référence se compte à part');
+    eq(j.lignes.length, 1, 'et ne figure pas dans la liste');
+    pres(j.eur, -100, 'elle n’ajoute rien au numérateur');
+    pres(basePortefeuilleMarches(), 21000, 'mais elle est dans le portefeuille');
+    pres(j.base, 21100, 'donc dans la base du pourcentage');
+  });
+
+  test('la note dit sur quoi porte le pourcentage', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/sur ton portefeuille Marchés depuis la clôture d’hier/.test(src),
+      'la note nomme le portefeuille Marchés');
+    vrai(!/sur tes lignes de titres depuis la clôture/.test(src),
+      'et non plus les seules lignes de titres, qui décrivaient l’ancienne base');
+    vrai(!(lireSource('assets/i18n.js') || '')
+      .includes('sur tes lignes de titres depuis la clôture'),
+      'la clef de l’ancienne note est partie avec elle');
+  });
+});
+
 suite('Projection tient sur quatre hypothèses', () => {
 
   /* La direction prise etait mauvaise, et vite : une hypothese par classe
@@ -17993,8 +18506,13 @@ suite('Projection se lit sans explication', () => {
     const src = lireSource('assets/app.js');
     const aide = (src.match(/trad\('(de portefeuille financier coté[^']*)'\)/) || [])[1] || '';
     vrai(aide, 'l’aide du rendement de marché doit décrire la poche');
-    vrai(/La crypto, les métaux précieux et le non coté ont leur propre/.test(aide),
-      'et renvoyer vers l’hypothèse séparée de ce qu’elle ne contient pas');
+    /* « ont leur propre hypothese » se lisait « chacun la sienne », ce qui
+       decrivait le moteur de la veille. Une seule hypothese pour les trois, et
+       la phrase la nomme. */
+    vrai(/sont regroupés dans l’hypothèse « Autres actifs »/.test(aide),
+      'et nommer l’hypothèse unique qui couvre ce qu’elle ne contient pas');
+    vrai(!/ont leur propre hypothèse/.test(aide),
+      'sans laisser croire que chacun a la sienne');
     for (const absent of ['actions', 'obligations', 'multi-actifs', 'fonds euros']) {
       vrai(!aide.includes(absent),
         `« ${absent} » : cette infobulle n’énumère plus les classes, c’est le rôle d’Allocation`);
