@@ -686,7 +686,7 @@ const Charts = (() => {
       const every = Math.ceil(items.length / Math.max(3, Math.floor(iw / 60)));
 
       el.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Variation mensuelle du patrimoine">
+        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(trad('Variation mensuelle du patrimoine'))}">
           ${[hi, 0, lo].filter((v, i, a) => a.indexOf(v) === i).map(v =>
             `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="${c.grid}"/>
              <text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end" class="tick">${kEur(v)}</text>`).join('')}

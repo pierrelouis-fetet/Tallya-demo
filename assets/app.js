@@ -2247,7 +2247,9 @@ function viewPositions() {
   ${st.count ? `
   <div class="card">
     <div class="card-head"><h2>${trad('Cumul des plus-values encaissées')}</h2>
-      <span class="hint">${esc(libellePlage)} · ${st.count} vente${st.count > 1 ? 's' : ''}, dans l'ordre</span></div>
+      <span class="hint">${esc(libellePlage)} · ${
+        (st.count > 1 ? trad('{n} ventes, dans l’ordre') : trad('{n} vente, dans l’ordre'))
+          .replace('{n}', st.count)}</span></div>
     <div class="chart" id="perfCumul"></div>
   </div>` : ''}`;
 }
@@ -3774,7 +3776,7 @@ function viewAccounts() {
       <span class="spacer"></span>
       ${groupesRendus.length > 1 ? `<button class="btn sm ghost" data-action="plier-tout"
         title="${groupesRendus.every(c => compteReplies.has(c))
-          ? 'Rouvrir tous les groupes' : 'Ne garder que les totaux'}"
+          ? trad('Rouvrir tous les groupes') : trad('Ne garder que les totaux')}"
         >${groupesRendus.every(c => compteReplies.has(c)) ? trad('Tout déplier') : trad('Tout replier')}</button>` : ''}
       <button class="btn sm" data-action="ajouter-compte">${trad('+ Ajouter')}</button>
     </div>
@@ -4010,7 +4012,8 @@ function espaceBien(c, idx, t) {
   return `
   <div class="card">
     <div class="card-head"><h2>${trad('Le bien')}</h2>
-      <span class="hint">${biens.length > 1 ? `${biens.length} lots` : esc(t.label)}</span></div>
+      <span class="hint">${biens.length > 1
+        ? `${biens.length} ${trad('lots')}` : esc(trad(t.label))}</span></div>
     ${biens.map(({ l, i }) => `
       <div class="modal-champs">
         <div class="field"><label>${trad('Nom du bien')}</label>
@@ -4020,7 +4023,7 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Valeur estimée aujourd\'hui (€)')}${aide(trad("Ce qu'un acheteur te paierait aujourd'hui, frais de notaire exclus : ceux-là sont partis en taxes le jour de l'achat et ne se revendent pas. C'est pour ça qu'un achat récent financé à crédit peut afficher un patrimoine net négatif, sans que rien ne soit faux."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.valeur" value="${num(l.valeur)}"></div>
-          <div class="field"><label>Prix d'acquisition (€)${aide(trad("Frais de notaire et travaux compris si tu veux que la plus-value affichée soit la vraie."))}</label>
+          <div class="field"><label>${trad('Prix d\'acquisition (€)')}${aide(trad("Frais de notaire et travaux compris si tu veux que la plus-value affichée soit la vraie."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.prixDeRevient" value="${num(l.prixDeRevient) || ''}"></div>
         </div>
@@ -4054,9 +4057,10 @@ function espaceBien(c, idx, t) {
       const surface = biens.reduce((s, { l }) => s + num(l.surface), 0);
       if (!surface || !entiere) return '';
       return `<dl class="kv" style="margin-top:12px">
-        <dt>Prix au m²<span class="sub">${fmtNombre(surface)} m² au total</span></dt>
+        <dt>${trad('Prix au m²')}<span class="sub">${trad('{v} m² au total')
+          .replace('{v}', fmtNombre(surface))}</span></dt>
         <dd><b>${fmtEUR0(entiere / surface)}</b> / m²${achatEntier ? `
-          <span class="muted">acheté ${fmtEUR0(achatEntier / surface)}</span>` : ''}</dd>
+          <span class="muted">${trad('acheté')} ${fmtEUR0(achatEntier / surface)}</span>` : ''}</dd>
       </dl>`;
     })()}
     <dl class="kv" style="margin-top:12px">
@@ -4188,10 +4192,10 @@ function espaceBien(c, idx, t) {
         </div>
       </div>`;
     }).join('')}
-    ${credit ? `<p class="small muted" style="margin:12px 0 0">
-      Après chaque mensualité, baisse le capital restant dû : ton patrimoine net
-      monte d'autant, sans que la valeur du bien change. Le crédit est porté par
-      ${esc(nomEtabDe(c))}, il se retrouve aussi sur sa fiche.
+    ${credit ? `<p class="small muted" style="margin:12px 0 0">${
+      trad('Après chaque mensualité, baisse le capital restant dû : ton patrimoine net '
+      + 'monte d’autant, sans que la valeur du bien change. Le crédit est porté par {e}, '
+      + 'il se retrouve aussi sur sa fiche.').replace('{e}', esc(nomEtabDe(c)))}
     </p>` : ''}
   </div>`;
 }
@@ -7002,12 +7006,12 @@ const ACTIONS = {
     if (!c) return;
     const proposes = chargesProposees(c);
     const v = await askForm({
-      titre: `Charge de ${nomCompteV2(c)}`,
+      titre: trad('Charge de {v}').replace('{v}', nomCompteV2(c)),
       sous: trad('Le montant se saisit tel qu’il est facturé, le budget ramène au mois'),
       ok: 'Ajouter',
       champs: [
         { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
-          exemple: `ex. ${proposes[0][0]}`,
+          exemple: trad('ex. {v}').replace('{v}', trad(proposes[0][0])),
           suggestions: [...proposes.map(([l]) => l), ...valeursConnues('posteBien')]
             .filter((l, i, t) => t.findIndex(x => x.toLowerCase() === l.toLowerCase()) === i) },
         { cle: 'amount', label: 'Montant', type: 'nombre', exemple: '0' },
@@ -11139,8 +11143,8 @@ function monteVideChamp() {
   btn.type = 'button';
   btn.className = 'champ-vider';
   btn.hidden = true;
-  btn.setAttribute('aria-label', 'Vider le champ');
-  btn.setAttribute('title', 'Vider le champ');
+  btn.setAttribute('aria-label', trad('Vider le champ'));
+  btn.setAttribute('title', trad('Vider le champ'));
   btn.textContent = '×';
   document.body.appendChild(btn);
 

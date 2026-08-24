@@ -12933,10 +12933,11 @@ suite('La fiche pose la question de l’usage', () => {
     vrai(/function reglagesExploitation\(c, idx\) \{/.test(src),
       'la fonction n’a plus d’option pour lui');
     vrai(!/Apport à l/.test(bloc), 'et il ne s’affiche plus dans l’impact mensuel');
-    const espace = src.slice(src.indexOf('function espaceBien'),
-                             src.indexOf('function carteFinancement') > 0
-                               ? src.indexOf('function carteFinancement')
-                               : src.indexOf('function espaceBien') + 9000);
+    /* La borne haute est la fonction SUIVANTE, pas une longueur : une fenetre en
+       caracteres se defait au premier commentaire ajoute, et c'est arrive. */
+    const iE = src.indexOf('function espaceBien');
+    const espace = src.slice(iE, src.indexOf('function barreValiderFiche', iE));
+    vrai(espace.length > 2000, 'espaceBien doit être trouvable');
     vrai(/data-path="comptes\.\$\{idx\}\.apport"/.test(espace),
       'il se saisit là où le bien s’acquiert, avec le prix payé et le prêt');
   });
@@ -18118,6 +18119,90 @@ suite('Un crédit ne s’amortit que d’une seule façon', () => {
 /* ------------------------------------------------------------------
    « Impact mensuel » montre ce qui a un sens, et rien d'autre
    ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Le francais ecrit hors de trad()
+   ------------------------------------------------------------------ */
+suite('Aucun français ne s’affiche hors du dictionnaire', () => {
+
+  /* Les autres controles d'i18n inspectent les APPELS `trad('...')` et exigent
+     qu'une clef existe. Ils sont aveugles a ce qui ne passe pas par `trad()` du
+     tout, et c'est la que le francais se cache :
+
+       <label>Prix d'acquisition (€)${aide(...)}</label>
+       aria-label="Variation mensuelle du patrimoine"
+       ? 'Rouvrir tous les groupes' : 'Ne garder que les totaux'
+       btn.setAttribute('title', 'Vider le champ')
+       titre: `Charge de ${nomCompteV2(c)}`
+
+     Onze chaines s'affichaient ainsi en francais dans l'interface anglaise, et
+     seule une lecture du texte REELLEMENT rendu par le navigateur les a
+     trouvees. Ce controle-ci les cherche dans la source, ou il peut tourner.
+
+     La methode : effacer d'abord tout ce qui est deja traduit -- le contenu de
+     chaque `trad(...)`, les commentaires -- puis chercher une lettre accentuee
+     dans ce qui reste. L'accent est le signal le plus sur : il ne se trouve ni
+     dans un identifiant, ni dans une classe CSS, ni dans un mot anglais. */
+
+  /* Ce qui reste apres nettoyage, fichier par fichier. */
+  const nettoyer = src => src
+    /* les commentaires : ils ont le droit d'etre en francais, et ils le sont */
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/^[ \t]*\/\/[^\n]*$/gm, ' ')
+    /* le contenu de chaque trad(), concatenations comprises */
+    .replace(/trad\(\s*'(?:[^'\\]|\\.)*'(?:\s*\+\s*'(?:[^'\\]|\\.)*')*/g, "trad('')")
+    .replace(/trad\(\s*"(?:[^"\\]|\\.)*"(?:\s*\+\s*"(?:[^"\\]|\\.)*")*/g, 'trad("")')
+    /* une clef pointee porte son repli en second argument */
+    .replace(/trad\('[\w.]+',\s*'(?:[^'\\]|\\.)*'\)/g, "trad('k','')");
+
+  const ACCENT = /[àâäéèêëîïôöùûüÿçœÀÂÄÉÈÊËÎÏÔÖÙÛÜŸÇŒ]/;
+
+  /* Un second controle a ete essaye ici, puis retire : il cherchait toute lettre
+     accentuee vivant hors d'un `trad(...)` dans app.js. Il a rendu 147
+     trouvailles dont presque toutes fausses -- le nettoyage prealable ne sait pas
+     suivre un `trad('...' + '...')` etale sur cinq lignes, ni les chaines qu'un
+     appelant traduit pour son compte (`aide()`, les libelles d'`askForm`). Un
+     controle qui crie sur du code juste finit par ne plus etre lu.
+
+     La methode qui marche est ailleurs, et elle a trouve les onze : lire le
+     texte REELLEMENT affiche par le navigateur en anglais, sur chaque vue et
+     chaque fiche. Elle demande un navigateur, donc elle ne tient pas dans cette
+     suite ; elle se refait a la main quand un ecran change. */
+
+  test('les tables de données ont toutes leur traduction', () => {
+    /* L'autre moitie du meme defaut, et l'audit ne la voit pas non plus : quand
+       la clef se calcule -- `trad(typeCompte(c.type).label)` -- rien dans la
+       source ne dit quelle chaine sera demandee. On interroge donc les tables
+       elles-memes.
+
+       « Bien immobilier » manquait ici, et s'ecrivait en toutes lettres en tete
+       de la carte d'un bien dans l'interface anglaise. */
+    const dico = lireSource('assets/i18n.js') || '';
+    const manque = [];
+    const verifier = (source, valeurs) => {
+      for (const v of valeurs) {
+        if (typeof v !== 'string' || !v.trim() || !ACCENT.test(v)) continue;
+        /* Les deux ecritures : ce dictionnaire declare ses clefs tantot entre
+         guillemets, tantot entre apostrophes. N'en chercher qu'une signalait
+         trois clefs qui existaient -- et les ajouter aurait fait trois doublons,
+         que le controle voisin a immediatement vus. */
+      if (!dico.includes(`"${v}"`) && !dico.includes(`'${v}'`)) {
+        manque.push(`${source} → ${v}`);
+      }
+      }
+    };
+    verifier('TYPES_COMPTE', TYPES_COMPTE.map(x => x.label));
+    verifier('CLASSES_ACTIFS', Object.values(CLASSES_ACTIFS));
+    verifier('ASSET_CLASSES', Object.values(ASSET_CLASSES));
+    verifier('CHARGE_PERIODES', CHARGE_PERIODES.map(x => x[1]));
+    verifier('USAGES_BIEN', USAGES_BIEN.map(x => x[1]));
+    verifier('VERSEMENT_VERS', VERSEMENT_VERS.map(x => x[1]));
+    verifier('SCENARIOS_PROJECTION', SCENARIOS_PROJECTION.map(x => x[1]));
+    eq(manque.length, 0,
+      `une table porte un libellé que le dictionnaire ignore :\n      ${manque.join('\n      ')}`);
+  });
+});
+
 suite('La carte du mois suit le contexte du bien', () => {
 
   /* Elle couvrait tous les cas a la fois : mensualite, cash-flow, patrimoine,

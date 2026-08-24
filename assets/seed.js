@@ -198,7 +198,9 @@ const SEED_ACCOUNT_INFO = {
   cto:          { opened:'2023-09-01', liquidity:'liquid',   deposit:null, withdrawal:0 },
   crypto:       { opened:'2024-02-01', liquidity:'liquid',   deposit:null, withdrawal:0 },
   fondsNonCote: { opened:'2023-09-01', liquidity:'illiquid', deposit:3000, withdrawal:0 },
-  appart:       { opened:'2019-06-01', liquidity:'illiquid', deposit:255000, withdrawal:0 },
+  appart:       { opened:'2019-06-01', liquidity:'illiquid', deposit:255000, withdrawal:0,
+                  usage:'principale', surface:58,
+                  adresse:'1420 Larkspur Street, Apt 3B, Fairview, OR 97024' },
 };
 
 const SEED_TARGETS = {

@@ -1645,6 +1645,9 @@ const Store = {
           libelle: a.label, valeur: montant,
           prixDeRevient: (num(i.deposit) - num(i.withdrawal)) || montant,
           quantite: i.shares ?? null, dateAcquisition: i.opened || '',
+          ...(i.usage ? { usage: i.usage } : {}),
+          ...(num(i.surface) ? { surface: num(i.surface) } : {}),
+          ...(i.adresse ? { adresse: i.adresse } : {}),
         });
       }
       delete s.now[a.id];
