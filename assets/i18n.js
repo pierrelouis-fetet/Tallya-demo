@@ -2159,7 +2159,7 @@ const FR = {
   'nav.group.monthly': 'Suivi',
   'nav.group.portfolio': 'Portefeuille',
   'nav.group.settings': 'Réglages',
-  'nav.overview': "Vue d'ensemble",
+  'nav.overview': 'Aperçu',
   'nav.performance': 'Performance',
   'nav.objective': 'Projection',
   'nav.history': 'Relevés',
@@ -2174,7 +2174,7 @@ const FR = {
   'nav.networth': 'Patrimoine net',
   'nav.theme': 'Thème',
 
-  'view.overview': "Vue d'ensemble",
+  'view.overview': 'Aperçu',
   'view.overview.sub': 'Photo instantanée de ton patrimoine',
   'view.positions': 'Marchés',
   'view.positions.sub': 'Tes lignes de titres, en direct',
@@ -2182,11 +2182,8 @@ const FR = {
   'view.allocation.sub': 'Où est réellement placé ton argent',
   'view.allocation.reel.sub': 'Comment ton patrimoine est réparti.',
   'view.allocation.cible.sub': 'Ce que tu vises sur la part que tu peux arbitrer',
-  'view.overview.historique': 'Historique',
   'view.overview.historique.sub': 'Ton patrimoine, mois après mois',
-  'view.overview.projection': 'Projection',
   'view.overview.projection.sub': "Où tes hypothèses mènent ton patrimoine",
-  'view.overview.aujourdhui': "Vue d'ensemble",
   'view.overview.aujourdhui.sub': 'Photo instantanée de ton patrimoine',
   /* Trois sous-titres qui ne se sont jamais affiches. Ils s'appelaient
      `view.performance.sub`, `view.history.sub` et `view.rebalance.sub` — des

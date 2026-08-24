@@ -10564,7 +10564,7 @@ function render() {
     const k = `view.${cleOnglet}${suffixe}`;
     return cleOnglet && t(k) !== k ? t(k) : null;
   };
-  const titre = propre('') || viewTitle(v.cle);
+  const titre = viewTitle(v.cle);
   $('#viewTitle').textContent = titre;
   $('#viewSub').textContent = propre('.sub') || viewSub(v.cle);
   $('#brandView').textContent = titre;              // barre fixe, écran replié

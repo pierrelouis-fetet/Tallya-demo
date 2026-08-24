@@ -3346,6 +3346,7 @@ td .empty, th .empty { background: none; border: none; }
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .view { padding: 14px 16px 48px; gap: 14px; }
+  .sous-onglets { padding: 0 0 6px; }
   .g-2, .g-3, .g-4 { grid-template-columns: minmax(0, 1fr); }
   .g-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .g-tuiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
