@@ -1582,6 +1582,14 @@ const I18N = {
     "{n} ligne": "{n} entry",
     "{n} lignes": "{n} entries",
     "net": "net",
+    "Impact mensuel": "Monthly impact",
+    "Patrimoine constitué ce mois": "Added to net worth",
+    "Charges du bien": "Property costs",
+    "{n} charges": "{n} costs",
+    "Le total des charges rattachées à ce bien. Chacune se corrige dans le budget, où elle porte son nom.":
+      "The total of the costs attached to this property. Each one is edited in the budget, where it carries its name.",
+    "La part de capital de ta mensualité : elle réduit ta dette et augmente ton patrimoine net d’autant. Elle quitte ta trésorerie et rejoint tes murs, donc les deux lignes ne s'additionnent pas : elles répondent à deux questions différentes.":
+      "The principal share of your instalment: it cuts your debt and raises your net worth by the same amount. It leaves your cash and joins your walls, so the two lines do not add up: they answer two different questions.",
     "Mensualité de crédit": "Loan instalment",
     "Mensualités de crédit": "Loan instalments",
     "{n} crédits, détaillés dans Financement": "{n} loans, itemised under Financing",
