@@ -1203,6 +1203,18 @@ const fmtPct = (v, dec = 2) => moinsTypographique(new Intl.NumberFormat(locale()
 
 const fmtNombre = v => moinsTypographique(num(v).toLocaleString(locale(), { maximumFractionDigits: 2 }));
 const fmtSigned = v => (v >= 0 ? '+' : '−') + fmtEUR(Math.abs(v), 0);
+/* Un montant signe, sauf a zero : « +584 € », « −300 € », et « 0 € » plutot que
+   « +0 € ». Un plus devant un zero se lit comme une addition qui n'a pas eu
+   lieu ; il fait douter de la ligne au lieu de l'expliquer.
+
+   Le formateur se passe en argument parce qu'il y a deux sorties pour un meme
+   montant : `fmtEUR0` rend du BALISAGE quand les montants sont masques — un
+   oeil barre en SVG — et c'est ce qu'il faut a l'ecran. Dans un ATTRIBUT, celui
+   d'une aide par exemple, ce balisage s'affiche en clair : `fmtEUR0Texte` y rend
+   « ••• € ». Deux fonctions jumelles ecrites a la main auraient fini par ne plus
+   signer pareil. */
+const montantSigne = (v, f = fmtEUR0) =>
+  Math.abs(v) < 0.005 ? f(0) : (v >= 0 ? '+' : '−') + f(Math.abs(v));
 const fmtSignedPct = (v, dec = 2) => (v >= 0 ? '+' : '−') + fmtPct(Math.abs(v), dec);
 
 const MOIS_COURTS = {
@@ -3722,6 +3734,13 @@ function savingsReconciliation() {
   const f = budgetFrame();
   const stats = expenseYearStats(todayISO().slice(0, 4));
   const spend = stats.average || f.target;
+  /* Laquelle des deux, et non le montant seul. Le repli sur l'objectif est
+     silencieux : sans un mot, l'ecran qui nomme le troisieme terme dit
+     « depenses moyennes » alors qu'il affiche un objectif, et la formule
+     annoncee cesse d'etre celle qui a servi. La fonction sait ; deviner depuis
+     l'appelant en comparant `spend` a l'objectif serait ambigu le jour ou les
+     deux sont egaux. Aucun calcul ne change : c'est la branche prise, dite. */
+  const spendObserved = !!stats.average;
   const capital = capitalRembourseParMois();
   const investable = f.income - f.fixed - spend;
   const theoretical = investable + capital;
@@ -3731,7 +3750,7 @@ function savingsReconciliation() {
   const realPerMonth = monthsSpan ? rythme.average : null;
 
   return {
-    income: f.income, fixed: f.fixed, spend,
+    income: f.income, fixed: f.fixed, spend, spendObserved,
     capitalRembourse: capital,
     investable,
     theoretical,

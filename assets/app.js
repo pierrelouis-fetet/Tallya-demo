@@ -633,23 +633,57 @@ function monterEvolution() {
    nulle part. Un test le tient. */
 function carteAccumulation() {
   const rec = savingsReconciliation();
-  const avecCredit = rec.capitalRembourse > 0.005;
+  /* Les quatre lignes sont toujours la, capital rembourse a zero compris.
+
+     Elles ne l'etaient pas : sans credit, la decomposition disparaissait au motif
+     qu'afficher « 0 € » puis deux fois le meme montant sous deux intitules est ce
+     que ce projet s'interdit. Le motif etait bon, la conclusion fausse. Une carte
+     qui n'affiche qu'un total ne dit pas d'ou il vient, et c'est precisement la
+     question qu'elle existe pour repondre : 584 epargnes, 0 rembourse, donc 584
+     accumules. La ligne a zero n'est pas une redite : c'est elle qui
+     EXPLIQUE pourquoi les deux autres sont egales, et une phrase a la place
+     (« sans credit en cours ») demandait de reconstituer mentalement ce que la
+     formule montre d'un coup d'oeil.
+
+     La hierarchie porte donc la lisibilite a la place du masquage : les deux
+     composantes en texte ordinaire, le total en corps 18 et en couleur, le taux
+     en dessous. Le vert reste significatif parce qu'un seul montant le porte.
+
+     Rien n'est recalcule ici : `savingsReconciliation()` reste la seule source. */
+  /* Un montant dans une AIDE ne se formate pas comme a l'ecran : l'aide range son
+     texte dans un attribut, ou le masque des montants s'imprimerait en clair,
+     balise SVG comprise. `fmtEUR0Texte` y rend « ••• € ». */
+  const aEcran = v => montantSigne(v);
+  const enTexte = v => montantSigne(v, fmtEUR0Texte);
+  /* La formule de la capacite d'epargne, avec ses vrais nombres et le vrai nom
+     de son troisieme terme : `savingsReconciliation()` retombe sur l'objectif de
+     depenses quand aucune depense n'est saisie, et annoncer « depenses
+     moyennes » dans ce cas dirait une formule que le moteur n'a pas jouee. */
+  const aideCapacite = trad(rec.spendObserved
+      ? 'Revenus − charges fixes − dépenses moyennes.'
+      : 'Revenus − charges fixes − objectif de dépenses.')
+    + ` ${fmtEUR0Texte(rec.income)} − ${fmtEUR0Texte(rec.fixed)} − ${fmtEUR0Texte(rec.spend)}`
+    + ` = ${enTexte(rec.investable)}`;
+  const aideTotal = trad('Capacité d’épargne + capital remboursé.')
+    + ` ${fmtEUR0Texte(rec.investable)} + ${fmtEUR0Texte(rec.capitalRembourse)}`
+    + ` = ${enTexte(rec.theoretical)}`;
+  const aideTaux = trad('Accumulation patrimoniale ÷ revenus.') + ' ' + (rec.income
+    ? `${fmtEUR0Texte(rec.theoretical)} ÷ ${fmtEUR0Texte(rec.income)} = ${fmtPct(rec.theoreticalRate, 1)}`
+    : trad('Aucun revenu déclaré pour l’instant.'));
   return `
   <div class="card">
     <div class="card-head"><h2>${trad('Accumulation ce mois-ci')}</h2>
-      <span class="hint">${trad('ce que ton épargne et tes crédits ajoutent')}</span></div>
+      <span class="hint">${trad('ce que ton épargne et tes remboursements ajoutent')}</span></div>
     <dl class="kv kv-accumul">
-      ${avecCredit ? `
-      <dt>${trad('Capacité d’épargne')}${aide(trad('Ce qu’il reste après tes revenus, tes charges fixes et tes dépenses.'))}</dt>
-        <dd><button type="button" class="mois-lien ${cls(rec.investable)}" data-action="apercu"
+      <dt>${trad('Capacité d’épargne')}${aide(aideCapacite)}</dt>
+        <dd><button type="button" class="mois-lien" data-action="apercu"
                     data-apercu="capaciteEpargne"
-                    title="${trad('Voir le calcul')}">${fmtEUR0(rec.investable)}</button></dd>
-      <dt>${trad('+ Capital remboursé')}${aide(trad('La part de ta mensualité qui réduit ta dette et augmente ton patrimoine net.'))}</dt>
-        <dd>+${fmtEUR0(rec.capitalRembourse)}</dd>` : ''}
-      <dt class="cle"><b>${trad('Accumulation patrimoniale')}</b>${aide(trad('Capacité d’épargne + capital de crédit remboursé.'))}
-        ${avecCredit ? '' : `<span class="sub">${trad('ta capacité d’épargne, sans crédit en cours')}</span>`}</dt>
-        <dd class="cle"><b class="${cls(rec.theoretical)}">${fmtSigned(rec.theoretical)}</b></dd>
-      <dt>${trad('Taux d’accumulation')}${aide(trad('Part de tes revenus qui augmente ton patrimoine.'))}</dt>
+                    title="${trad('Voir le calcul')}">${aEcran(rec.investable)}</button></dd>
+      <dt>${trad('Capital remboursé')}${aide(trad('La part de tes mensualités qui rembourse le capital de tes crédits. Elle réduit ta dette, donc elle augmente ton patrimoine net.'))}</dt>
+        <dd>${aEcran(rec.capitalRembourse)}</dd>
+      <dt class="cle"><b>${trad('Accumulation patrimoniale')}</b>${aide(aideTotal)}</dt>
+        <dd class="cle"><b class="${cls(rec.theoretical)}">${aEcran(rec.theoretical)}</b></dd>
+      <dt>${trad('Taux d’accumulation')}${aide(aideTaux)}</dt>
         <dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
     </dl>
   </div>`;

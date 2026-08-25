@@ -14776,10 +14776,17 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
      Ces controles gardent la seule chose qui compte dans un demenagement : que
      rien n'ait ete recalcule en route. */
 
+  /* La fonction entiere, bornee sur sa fin reelle et non sur un nombre de
+     caracteres : la tranche etait fixee a 4 000, la carte a grossi, et les
+     controles ont commence a chercher dans le vide en annonçant « absent » ce
+     qui etait simplement au-dela du couperet. Une borne arbitraire ment en
+     silence des que le code bouge. */
   const carte = () => {
     const src = lireSource('assets/app.js');
     const i = src.indexOf('function carteAccumulation()');
-    return i < 0 ? '' : src.slice(i, i + 4000);
+    if (i < 0) return '';
+    const fin = src.indexOf('\n}\n', i);
+    return src.slice(i, fin < 0 ? src.length : fin + 3);
   };
 
   test('Charges fixes ne répond plus qu’à sa question', () => {
@@ -14862,12 +14869,15 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
       'le taux rapporte l’accumulation aux revenus');
   });
 
-  test('sans crédit, la carte ne montre pas deux fois le même montant', () => {
-    /* Le capital rembourse vaut zero, donc l'accumulation vaut exactement la
-       capacite d'epargne. Afficher les deux serait le meme nombre sous deux
-       intitules — ce que ce projet s'interdit partout. La decomposition part,
-       et un sous-titre dit ce que le total est. C'est deja la regle ailleurs :
-       une poche vide n'a pas de bande, une classe a zero n'a pas de tuile. */
+  test('sans crédit, la ligne à zéro explique l’égalité au lieu de disparaître', () => {
+    /* Elle disparaissait, au motif qu'afficher « 0 € » puis deux fois le meme
+       montant sous deux intitules est ce que ce projet s'interdit. Le motif etait
+       bon, la conclusion fausse : la ligne a zero n'est pas une redite, c'est
+       elle qui EXPLIQUE pourquoi capacite et accumulation sont egales. Une phrase
+       a la place — « sans credit en cours » — demandait de reconstituer
+       mentalement ce que la formule montre d'un coup d'oeil.
+
+       Les quatre lignes sont donc toujours rendues, dans tous les cas. */
     Fixture.poser(s => {
       s.etabs.find(e => e.id === 'e_bien').dettes = [];
     });
@@ -14875,12 +14885,19 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     pres(rec.capitalRembourse, 0, 'aucun capital remboursé sans crédit');
     pres(rec.theoretical, rec.investable, 'l’accumulation vaut la capacité d’épargne');
     const c = carte();
-    vrai(/const avecCredit = rec\.capitalRembourse > 0\.005;/.test(c),
-      'la carte sait distinguer les deux cas');
-    vrai(/\$\{avecCredit \? `/.test(c),
-      'et la décomposition ne se rend que dans l’un des deux');
-    vrai(/sans crédit en cours/.test(c),
-      'le sous-titre dit alors ce que le total est, pour qu’on ne cherche pas sa capacité d’épargne');
+    vrai(!/avecCredit/.test(c), 'plus de branche qui masque la décomposition');
+    vrai(!/sans crédit en cours/.test(c), 'et plus de phrase à la place de la formule');
+    /* Les quatre intitules, chacun rendu une seule fois. */
+    for (const ligne of ['Capacité d’épargne', 'Capital remboursé',
+                         'Accumulation patrimoniale', 'Taux d’accumulation']) {
+      eq((c.match(new RegExp(`trad\\('${ligne}'\\)`, 'g')) || []).length, 1,
+        `« ${ligne} » doit être rendu, une fois`);
+    }
+    /* Et zero s'ecrit « 0 € », jamais « +0 € » : un plus devant un zero se lit
+       comme une addition qui n'a pas eu lieu. */
+    eq(montantSigne(0), fmtEUR0(0), 'zéro ne porte pas de signe');
+    eq(montantSigne(645).slice(0, 1), '+', 'un montant positif en porte un');
+    eq(montantSigne(-300).slice(0, 1), '−', 'un négatif aussi, avec le vrai signe moins');
   });
 
   test('une capacité d’épargne négative ne casse pas la somme', () => {
@@ -14916,8 +14933,12 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     const c = carte();
     vrai(/cls\(rec\.theoretical\)/.test(c),
       'la couleur suit le signe, comme partout ailleurs');
-    vrai(/fmtSigned\(rec\.theoretical\)/.test(c),
+    vrai(/aEcran\(rec\.theoretical\)/.test(c),
       'et le signe est toujours écrit : un total signé ne se lit pas comme un solde');
+    /* Le vert reste significatif : un seul montant porte une couleur, le total.
+       Colorer aussi les composantes en ferait une decoration. */
+    eq((c.match(/cls\(/g) || []).length, 1,
+      'une seule ligne est colorée, sinon la couleur ne veut plus rien dire');
   });
 
   test('la carte ne suit pas Net / Brut, et rien ne l’y oblige', () => {
@@ -14972,6 +14993,90 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     const iReprise = css.lastIndexOf('.kv-accumul { column-gap: 0; }');
     vrai(iKvMobile > 0 && iReprise > iKvMobile,
       'la reprise doit suivre la redéclaration mobile, sinon elle ne la bat pas');
+  });
+
+  test('les quatre métriques portent chacune leur aide', () => {
+    /* La carte ne doit pas se contenter d'un total : chaque ligne doit pouvoir
+       dire d'ou elle vient, au doigt, sans quitter la page. Le composant est
+       celui de toute l'application — `aide()`, une pastille « ? » que
+       `monteAides` ouvre — et non un second style d'infobulle. */
+    const c = carte();
+    eq((c.match(/\$\{aide\(/g) || []).length, 4,
+      'quatre métriques, quatre aides : ni une de plus, ni une de moins');
+    /* Chaque intitule porte la sienne, sur la meme ligne. */
+    for (const ligne of ['Capacité d’épargne', 'Capital remboursé',
+                         'Accumulation patrimoniale', 'Taux d’accumulation']) {
+      const i = c.indexOf(`trad('${ligne}')`);
+      vrai(i > 0, `« ${ligne} » doit être rendu`);
+      vrai(/\$\{aide\(/.test(c.slice(i, c.indexOf('</dt>', i))),
+        `« ${ligne} » doit porter une aide`);
+    }
+  });
+
+  test('les aides disent la formule que le moteur a jouée', () => {
+    /* Une aide qui explique autre chose que le calcul fait est pire qu'aucune
+       aide : elle donne raison de se fier a un chiffre pour de mauvaises
+       raisons. Chacune se compose donc de la phrase ET des montants reels. */
+    const c = carte();
+    vrai(/Revenus − charges fixes − dépenses moyennes\./.test(c),
+      'la capacité d’épargne annonce ses trois termes');
+    vrai(/fmtEUR0Texte\(rec\.income\)[\s\S]{0,80}fmtEUR0Texte\(rec\.fixed\)[\s\S]{0,80}fmtEUR0Texte\(rec\.spend\)/.test(c),
+      'et les trois montants qui la composent, dans l’ordre de la formule');
+    vrai(/Capacité d’épargne \+ capital remboursé\./.test(c),
+      'le total annonce sa composition');
+    vrai(/Accumulation patrimoniale ÷ revenus\./.test(c),
+      'le taux annonce son rapport');
+
+    /* Le troisieme terme se NOMME selon la branche prise. `savingsReconciliation`
+       retombe sur l'objectif de depenses quand aucune depense n'est saisie :
+       annoncer « depenses moyennes » dans ce cas dirait une formule que le
+       moteur n'a pas jouee. */
+    vrai(/rec\.spendObserved[\s\S]{0,180}objectif de dépenses/.test(c),
+      'et il change de nom quand le moteur retombe sur l’objectif');
+    Fixture.poser();
+    vrai(savingsReconciliation().spendObserved,
+      'le fixture porte des dépenses, donc la moyenne sert');
+    Fixture.poser(s2 => { s2.budget.expenses = []; });
+    const sans = savingsReconciliation();
+    eq(sans.spendObserved, false, 'sans dépense saisie, c’est l’objectif qui sert');
+    pres(sans.spend, budgetFrame().target, 'et c’est bien lui que le calcul retient');
+
+    /* Aucun revenu : « ÷ 0 € » ne s'explique pas, l'aide dit ce qui manque. */
+    vrai(/rec\.income[\s\S]{0,240}Aucun revenu déclaré/.test(c),
+      'sans revenu déclaré, le taux dit ce qui lui manque au lieu de diviser par zéro');
+  });
+
+  test('un montant dans une aide se formate en texte, jamais en balisage', () => {
+    /* `fmtEUR0` rend du BALISAGE quand les montants sont masques : un oeil barre
+       en SVG. C'est ce qu'il faut a l'ecran, et c'est faux dans un ATTRIBUT —
+       `aide()` range son texte dans `data-aide`, ou la balise s'imprimerait en
+       clair, source SVG comprise. `fmtEUR0Texte` y rend « ••• € ».
+
+       Le fichier des formateurs le dit deja, et c'est pour cette raison que
+       `montantSigne` prend son formateur en argument plutot que d'exister en
+       deux exemplaires. */
+    const c = carte();
+    const aides = [...c.matchAll(/\$\{aide\(([\s\S]*?)\)\}/g)].map(m => m[1]);
+    eq(aides.length, 4, 'les quatre aides doivent être trouvables');
+    /* Les aides composees vivent dans des constantes au-dessus du gabarit : on
+       controle donc la carte entiere, hors du rendu des `<dd>`. */
+    const composition = c.slice(0, c.indexOf('return `'));
+    vrai(!/fmtEUR0\((?!0\))/.test(composition.replace(/fmtEUR0Texte\(/g, '')),
+      'aucune aide ne compose un montant avec le formateur qui rend du balisage');
+    vrai(!/fmtSigned\(/.test(composition),
+      'ni avec fmtSigned, qui s’appuie dessus');
+    vrai(/const enTexte = v => montantSigne\(v, fmtEUR0Texte\);/.test(composition),
+      'le signe des aides passe par le formateur texte');
+    /* Dans une formule ECRITE, l'operateur porte le plus : un operande signe
+       donnerait « +652 € + +475 € ». Seul le resultat est signe, faute
+       d'operateur devant lui pour le dire. */
+    vrai(!/enTexte\(rec\.investable\)[\s\S]{0,60}enTexte\(rec\.capitalRembourse\)/.test(composition),
+      'les opérandes d’une addition ne portent pas leur propre plus');
+    vrai(/= \$\{enTexte\(rec\.theoretical\)\}/.test(composition),
+      'mais le résultat le porte : rien devant lui ne le dirait');
+    /* Et le meme signe des deux cotes : une seule fonction, deux sorties. */
+    eq(montantSigne(645, v => String(v)), '+645', 'le signe ne dépend pas du formateur');
+    eq(montantSigne(0, v => String(v)), '0', 'et zéro n’en porte jamais');
   });
 
   test('« Rythme d’accumulation » garde ce qui lui appartient', () => {
@@ -20312,9 +20417,16 @@ suite('Deux montants, deux noms, et le lecteur voit lequel', () => {
        prevision tiree du budget. Deux natures, deux cartes, aucun chiffre en
        commun. */
     const src = lireSource('assets/app.js');
-    const carte = src.slice(src.indexOf('function carteAccumulation()'),
-                            src.indexOf('/* Les deux sorties d’un rappel de saisie')
-                            + 1 || src.indexOf('function carteAccumulation()') + 4000);
+    /* Deux bornes fausses vivaient ici, et elles se couvraient l'une l'autre.
+       Le marqueur portait une apostrophe TYPOGRAPHIQUE que la source n'a pas :
+       `indexOf` rendait -1, `-1 + 1` vaut 0, donc le repli s'appliquait — une
+       coupure a 4 000 caracteres, que la carte a fini par depasser. Le controle
+       a alors annonce « absent » ce qui etait simplement au-dela du couperet.
+       La borne est la fin reelle de la fonction. */
+    const debutCarte = src.indexOf('function carteAccumulation()');
+    const finCarte = src.indexOf('\n}\n', debutCarte);
+    vrai(debutCarte > 0 && finCarte > debutCarte, 'la carte doit être trouvable');
+    const carte = src.slice(debutCarte, finCarte);
     vrai(/trad\('Accumulation patrimoniale'\)/.test(carte),
       'la carte porte le chiffre');
     vrai(/rec\.investable/.test(carte) && /rec\.capitalRembourse/.test(carte),

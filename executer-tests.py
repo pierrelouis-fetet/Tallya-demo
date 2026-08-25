@@ -25,6 +25,7 @@ et sort en 1 des qu'un controle est rouge.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -153,7 +154,20 @@ def main():
             raise RuntimeError(f"la suite n'a rendu aucun verdict (titre : {titre!r})")
 
         print(titre)
-        if titre.startswith(OK):
+        # Une suite qui ne compte AUCUN test n'est pas une suite qui passe.
+        #
+        # Le harnais n'enregistre rien quand `store.tests.js` ne se parse pas :
+        # il rend zero reussite et zero echec, et le titre s'ecrit « ✓ 0 tests »
+        # -- une coche verte sur un fichier casse. Ce script sortait alors en 0,
+        # donc un push enchaine derriere partait sur une suite qui n'avait rien
+        # verifie. C'est le vert le plus dangereux qui soit : il ne signale rien
+        # a corriger. Le compte est donc lu, et zero vaut echec.
+        compte = re.search(r"\d+", titre)
+        if titre.startswith(OK) and compte and int(compte.group()) == 0:
+            print("\nAucun test executé : le fichier de suites ne se parse "
+                  "probablement pas. Ouvrir /tests.html et lire la console.",
+                  file=sys.stderr)
+        elif titre.startswith(OK):
             code = 0
         else:
             print("\n" + (details_des_echecs() or "(aucun detail)"), file=sys.stderr)
