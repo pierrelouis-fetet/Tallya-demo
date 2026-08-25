@@ -800,7 +800,7 @@ const Charts = (() => {
                 <rect x="0" y="${y}" width="${W}" height="${rowH - 2}" fill="transparent"/>
                 <text x="0" y="${y + rowH / 2 + 1}" class="rb-label">${esc(fitText(it.label, labelW - 12))}</text>
                 <title>${esc(it.label)}</title>
-                <rect x="${labelW}" y="${y + 5}" width="${w}" height="${rowH - 14}" rx="4"
+                <rect class="rb-barre" x="${labelW}" y="${y + 5}" width="${w}" height="${rowH - 14}" rx="4"
                       fill="${neg ? cssv('--critical') : (it.couleur || color)}"
                       fill-opacity="${it.dim ? .45 : 1}"/>
                 <text x="${W}" y="${y + rowH / 2 + 1}" text-anchor="end" class="rb-val">${fmtEUR0Texte(it.value)}<tspan class="rb-pct"> · ${fmtPct(it.pct ?? 0, 1)}</tspan></text>
@@ -884,8 +884,8 @@ const Charts = (() => {
             const cxb = m.l + bandW * i + bandW / 2;
             const xa = cxb - barW - 1, xb = cxb + 1;
             return `<g class="gb" data-i="${i}">
-              <rect x="${xa}" y="${y(it.a)}" width="${barW}" height="${Math.max(1, y(0) - y(it.a))}" rx="4" fill="${cA}"/>
-              <rect x="${xb}" y="${y(it.b)}" width="${barW}" height="${Math.max(1, y(0) - y(it.b))}" rx="4" fill="${cB}" fill-opacity=".85"/>
+              <rect class="gb-barre" x="${xa}" y="${y(it.a)}" width="${barW}" height="${Math.max(1, y(0) - y(it.a))}" rx="4" fill="${cA}"/>
+              <rect class="gb-barre" x="${xb}" y="${y(it.b)}" width="${barW}" height="${Math.max(1, y(0) - y(it.b))}" rx="4" fill="${cB}" fill-opacity=".85"/>
               <text x="${cxb}" y="${H - 24}" text-anchor="middle" class="tick">${esc(it.label)}</text>
               <text x="${cxb}" y="${H - 8}" text-anchor="middle" class="tick tick-strong">${it.delta >= 0 ? '+' : '−'}${fmtEUR0Texte(Math.abs(it.delta))}</text>
             </g>`;
@@ -961,7 +961,7 @@ const Charts = (() => {
             const fill = teinte[niveauDepassement(it.value, target)] || none;
             return `<g class="vb" data-i="${i}">
               <rect x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>
-              <rect x="${cx - bw / 2}" y="${y(it.value)}" width="${bw}" height="${h}" rx="4" fill="${fill}" fill-opacity=".9"/>
+              <rect class="vb-barre" x="${cx - bw / 2}" y="${y(it.value)}" width="${bw}" height="${h}" rx="4" fill="${fill}" fill-opacity=".9"/>
               ${(i % every === 0 || i === items.length - 1)
                 ? `<text x="${cx}" y="${H - 12}" text-anchor="middle" class="tick">${esc(it.label)}</text>` : ''}
             </g>`;
@@ -1035,7 +1035,7 @@ const Charts = (() => {
             const h = Math.max(2, Math.abs(zero - y(it.value)));
             return `<g class="vb" data-i="${i}">
               <rect x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>
-              <rect x="${cx - bw / 2}" y="${top}" width="${bw}" height="${h}" rx="3"
+              <rect class="vb-barre"${it.value < 0 ? ' data-sous="1"' : ''} x="${cx - bw / 2}" y="${top}" width="${bw}" height="${h}" rx="3"
                     fill="${it.value >= 0 ? up : down}" fill-opacity=".9"/>
               ${(i % every === 0 || i === items.length - 1)
                 ? `<text x="${cx}" y="${H - 10}" text-anchor="middle" class="tick">${esc(it.label)}</text>` : ''}

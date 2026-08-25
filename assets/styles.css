@@ -4073,10 +4073,48 @@ td .empty, th .empty { background: none; border: none; }
    repère de cible (.reeq-cible) reste immobile : c'est un point fixe, le voir
    glisser dirait qu'il bouge avec la valeur. */
 @keyframes barre-pousse { from { transform: scaleX(0); } }
-.vue-entre :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre)
+/* `graphes-poussent` et non `vue-entre` : les jauges repoussent aussi quand le
+   perimetre change, alors que la cascade des cartes ne rejoue qu'a l'arrivee.
+   Rejouer la cascade a chaque clic sur une bascule ferait clignoter la page
+   entiere pour un chiffre qui change. */
+.graphes-poussent :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre)
   > :is(i:not(.reeq-cible), div) {
   transform-origin: left center;
   animation: barre-pousse .55s cubic-bezier(.22, .61, .36, 1) .14s backwards;
+}
+
+/* Les barres des graphiques SVG poussent comme les jauges, meme courbe et meme
+   retard : elles se lisent ensemble sur une meme page, et deux rythmes s'y
+   verraient comme un defaut.
+
+   `transform-box: fill-box` est indispensable en SVG : sans lui, l'origine se
+   calcule sur la boite de vue entiere, et une barre du bas se mettrait a
+   grandir depuis un point situe hors d'elle.
+
+   Les zones de survol transparentes n'ont pas ces classes : les animer ferait
+   clignoter la cible du doigt sans que rien ne se voie. */
+@keyframes barre-svg-h { from { transform: scaleX(0); } }
+@keyframes barre-svg-v { from { transform: scaleY(0); } }
+.graphes-poussent :is(.rb-barre, .vb-barre, .gb-barre) {
+  transform-box: fill-box;
+  animation-duration: .55s;
+  animation-timing-function: cubic-bezier(.22, .61, .36, 1);
+  animation-delay: .14s;
+  animation-fill-mode: backwards;
+}
+.graphes-poussent .rb-barre {
+  transform-origin: left center; animation-name: barre-svg-h;
+}
+.graphes-poussent :is(.vb-barre, .gb-barre) {
+  transform-origin: bottom center; animation-name: barre-svg-v;
+}
+.graphes-poussent .vb-barre[data-sous] { transform-origin: top center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .view.vue-entre > *,
+  .graphes-poussent :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre)
+    > :is(i:not(.reeq-cible), div),
+  .graphes-poussent :is(.rb-barre, .vb-barre, .gb-barre) { animation: none; }
 }
 
 .card { transition: border-color .15s ease; }

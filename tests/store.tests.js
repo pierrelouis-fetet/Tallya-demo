@@ -2279,6 +2279,112 @@ suite('La mention de base est une légende, pas une commande', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Les barres poussent de zéro, et pas n'importe quand
+   ------------------------------------------------------------------ */
+suite('Les barres des graphiques poussent, à l’arrivée et au changement de périmètre', () => {
+
+  const css = () => (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  test('seules les barres visibles portent la classe, jamais les zones de survol', () => {
+    /* Chaque groupe porte un rect TRANSPARENT qui sert de cible au doigt, plus
+       la ou les barres peintes. Animer la cible ferait clignoter la zone
+       cliquable sans que rien ne se voie, et la retrecirait pendant le
+       mouvement : on viserait une barre qui n'est pas encore la. */
+    const t = lireSource('assets/charts.js');
+    vrai(t, 'assets/charts.js doit être lisible');
+    for (const [classe, combien] of [['rb-barre', 1], ['vb-barre', 2], ['gb-barre', 2]]) {
+      eq((t.match(new RegExp(`class="${classe}"`, 'g')) || []).length, combien,
+        `« ${classe} » se pose ${combien} fois`);
+    }
+    /* Les rects transparents restent nus. Le controle les cherche par leur
+       remplissage plutot que par leur position : c'est ce qui les definit. */
+    for (const m of t.match(/<rect[^>]*fill="transparent"[^>]*\/>/g) || []) {
+      vrai(!/class="(rb|vb|gb)-barre"/.test(m),
+        'une zone de survol ne s’anime pas');
+    }
+  });
+
+  test('la boîte de transformation est celle du dessin, pas celle de la vue', () => {
+    /* En SVG, sans `fill-box`, l'origine se calcule sur la boite de vue
+       entiere : une barre du bas grandirait depuis un point situe hors d'elle,
+       en traversant le graphique. La regle ne peut pas s'en passer. */
+    const c = css();
+    const i = c.indexOf('.graphes-poussent :is(.rb-barre, .vb-barre, .gb-barre)');
+    vrai(i > 0, 'la règle commune des barres doit exister');
+    vrai(/transform-box: fill-box/.test(c.slice(i, c.indexOf('}', i))),
+      'la transformation se calcule sur la barre elle-même');
+    vrai(/\.graphes-poussent \.rb-barre \{[\s\S]{0,120}transform-origin: left center/.test(c),
+      'une barre horizontale pousse depuis la gauche');
+    vrai(/\.graphes-poussent :is\(\.vb-barre, \.gb-barre\) \{[\s\S]{0,120}transform-origin: bottom center/.test(c),
+      'une barre verticale pousse depuis sa base');
+  });
+
+  test('une variation négative pousse vers le bas', () => {
+    /* Elle pend sous la ligne du zero : son bord HAUT est le zero, et c'est de
+       la qu'elle doit partir. Depuis sa pointe, elle remonterait, ce qui
+       donnerait a lire un mouvement inverse a son signe. */
+    const t = lireSource('assets/charts.js');
+    vrai(/class="vb-barre"\$\{it\.value < 0 \? ' data-sous="1"' : ''\}/.test(t),
+      'la barre qui pend se marque');
+    /* Et elle ne se marque que la ou une valeur peut etre negative : les mois
+       de depenses ne descendent jamais sous zero. */
+    vrai(/const top = it\.value >= 0 \? y\(it\.value\) : zero;/.test(t),
+      'c’est bien le graphique des variations qui peut pendre');
+    vrai(/\.graphes-poussent \.vb-barre\[data-sous\] \{ transform-origin: top center; \}/.test(css()),
+      'et la règle la fait pousser vers le bas');
+  });
+
+  test('les barres repoussent au changement de périmètre, la page ne clignote pas', () => {
+    /* Deux classes et non une, et c'est tout l'interet : `vue-entre` fait aussi
+       monter les cartes en cascade. Rejouer cette cascade a chaque clic sur une
+       bascule ferait clignoter la page entiere pour un chiffre qui change.
+       Mesure : au clic, vingt barres repartent et aucune carte ne bouge. */
+    const c = css();
+    vrai(/\.view\.vue-entre > \* \{[\s\S]{0,80}animation: carte-entre/.test(c),
+      'la cascade des cartes reste attachée à l’arrivée seule');
+    vrai(/\.graphes-poussent :is\(\.repart-barre/.test(c),
+      'les jauges suivent la classe des graphiques');
+    vrai(!/\.vue-entre :is\(\.repart-barre/.test(c),
+      'et ne sont plus attachées à l’arrivée seule');
+
+    const app = lireSource('assets/app.js');
+    const sansCom = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+    vrai(/if \(arrivee \|\| relanceGraphes\) \{\s*\n\s*host\.classList\.add\('graphes-poussent'\);/.test(sansCom),
+      'la classe se pose à l’arrivée ou sur demande');
+    /* Consomme, comme les deux autres drapeaux : sans ca, une frappe dans un
+       champ ferait repousser toutes les barres de la page. */
+    vrai(/relanceGraphes = false;/.test(sansCom),
+      'et le drapeau se consomme');
+    eq((sansCom.match(/relanceGraphes = true/g) || []).length, 2,
+      'deux bascules le lèvent : le périmètre d’Allocation et net / brut');
+  });
+
+  test('les barres partent avec les jauges, et rien ne bouge si le système le refuse', () => {
+    /* Elles se lisent ensemble sur une meme page : deux rythmes s'y verraient
+       comme un defaut. Les valeurs se confrontent plutot que de se recopier. */
+    const c = css();
+    const i = c.indexOf('.graphes-poussent :is(.rb-barre, .vb-barre, .gb-barre)');
+    const commune = c.slice(i, c.indexOf('}', i));
+    const jauge = c.match(/animation: barre-pousse ([\d.]+)s [^;]*?([\d.]+)s backwards/);
+    vrai(jauge, 'la règle des jauges doit être trouvable');
+    vrai(commune.includes(`animation-duration: ${jauge[1]}s`), 'même durée que les jauges');
+    vrai(commune.includes(`animation-delay: ${jauge[2]}s`), 'même retard que les jauges');
+
+    /* Les trois familles d'arrivee se taisent ensemble. La cascade des cartes
+       et la pousse des jauges l'ignoraient, alors que le balayage de la courbe
+       le respectait : trois animations d'arrivee, deux regimes. */
+    /* Le bloc se trouve par son CONTENU : le fichier en compte une dizaine, un
+       par fonctionnalité, et « le dernier » n'est pas une adresse stable. */
+    const blocs = c.split('@media (prefers-reduced-motion: reduce)').slice(1);
+    const bloc = blocs.find(x => x.slice(0, 500).includes('.rb-barre'));
+    vrai(bloc, 'le garde-fou des animations d’arrivée doit exister');
+    for (const cible of ['.view.vue-entre > *', '.repart-barre', '.rb-barre, .vb-barre, .gb-barre']) {
+      vrai(bloc.includes(cible), `« ${cible} » se tait aussi`);
+    }
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -15417,12 +15523,24 @@ suite('Changer de périmètre se voit, sans se rejouer tout seul', () => {
       'le montage consomme le drapeau, il ne le lit pas');
     vrai(/Charts\.stackedArea\(cible, \{ points, height: 300, series, anime \}\)/.test(montage),
       'et le passe au graphique');
-    /* Un seul geste le leve. Si un deuxieme apparait un jour, il devra le dire
-       ici — c'est ce qui empeche « on anime aussi ce cas-la » de se glisser sans
-       qu'on ait pese la fatigue que ça ajoute. */
+    /* DEUX gestes le levent, et ils se nomment ici. Cette barriere a fait son
+       travail le jour ou le second est arrive : elle a refuse le changement
+       jusqu'a ce qu'il soit declare. Un troisieme devra passer par la meme
+       porte — c'est ce qui empeche « on anime aussi ce cas-la » de se glisser
+       sans qu'on ait pese la fatigue que ca ajoute.
+
+       Les deux changent ce que la COURBE montre : le perimetre change les
+       poches empilees, net/brut change ce qu'on en retranche. Un geste qui ne
+       toucherait pas a la courbe n'a rien a faire dans cette liste. */
     const sansCom = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
-    eq((sansCom.match(/evoTransition = true/g) || []).length, 1,
-      'un seul geste déclenche une transition');
+    eq((sansCom.match(/evoTransition = true/g) || []).length, 2,
+      'deux gestes déclenchent une transition de la courbe');
+    for (const geste of ["'evo-perimetre'(btn) {", "'hero-base'(btn) {"]) {
+      const i = sansCom.indexOf(geste);
+      vrai(i > 0, `${geste} doit être trouvable`);
+      vrai(/evoTransition = true/.test(sansCom.slice(i, i + 400)),
+        `${geste} lève le drapeau de la courbe`);
+    }
   });
 
   test('recliquer le bouton déjà allumé n’anime rien', () => {

@@ -3586,6 +3586,7 @@ let allocFinancier = false;
    vue. Le drapeau se leve sur le seul geste qui change le perimetre, et le
    montage le consomme. */
 let allocTransition = false;
+let relanceGraphes = false;
 
 /* La base de cette page, en un seul endroit.
 
@@ -7321,6 +7322,7 @@ const ACTIONS = {
     if (voulu === allocFinancier) return;
     allocFinancier = voulu;
     allocTransition = true;
+    relanceGraphes = true;
     render();
   },
   'proj-scenario'(btn) {
@@ -7349,7 +7351,14 @@ const ACTIONS = {
      grand chiffre, la répartition qui le décompose, et la courbe plus bas. Son
      jumeau `evo-base` vivait sur le graphique, sur la même variable ; il est
      parti, la courbe hérite. */
-  'hero-base'(btn) { evoNet = !!btn.dataset.net; render(); },
+  'hero-base'(btn) {
+    const voulu = !!btn.dataset.net;
+    if (voulu === evoNet) return;
+    evoNet = voulu;
+    evoTransition = true;
+    relanceGraphes = true;
+    render();
+  },
   /* On change d'adresse, pas d'état : `hashchange` déclenche le rendu, et le
      bouton retour du navigateur ramène au sous-onglet précédent. */
   'taire-rappel'(btn) {
@@ -10785,6 +10794,18 @@ function render() {
   } else {
     host.classList.remove('vue-entre');
   }
+  /* Les barres poussent de zero a l'arrivee sur une vue ET au changement de
+     perimetre. Deux classes et non une : `vue-entre` fait aussi monter les
+     cartes en cascade, et rejouer cette cascade a chaque clic sur une bascule
+     ferait clignoter la page entiere pour un chiffre qui change. */
+  if (arrivee || relanceGraphes) {
+    host.classList.add('graphes-poussent');
+    clearTimeout(render._finPousse);
+    render._finPousse = setTimeout(() => host.classList.remove('graphes-poussent'), 750);
+  } else {
+    host.classList.remove('graphes-poussent');
+  }
+  relanceGraphes = false;
   /* Ou se trouvait le lavis des sous-onglets avant ce rendu.
 
      Il glisse d'un onglet a l'autre par une transition CSS, et une transition
