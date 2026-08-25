@@ -3430,6 +3430,35 @@ td .empty, th .empty { background: none; border: none; }
   .hero-value { font-size: 34px; }
   .card, .hero { padding: 15px; }
 
+  /* Une seule convention pour les bascules de vue : l'intitule, puis SA bascule
+     juste dessous, calee a gauche.
+
+     Les deux cartes de l'accueil n'en suivaient pas la meme. Le graphique posait
+     deja « Financier | Global » sous son titre, au bord gauche de la carte,
+     parce que son en-tete se replie. Le grand chiffre, lui, gardait « Net |
+     Brut » sur la ligne de l'intitule, a 9,8 em du bord — donc ni a gauche ni a
+     droite, flottant au milieu. Deux commandes de meme nature, deux places : on
+     lisait une regle par carte au lieu d'une regle par nature.
+
+     Une grille plutot qu'un `flex-wrap` avec des `order` : la mise en page se
+     DECLARE — premiere rangee l'intitule et l'oeil, seconde rangee la bascule —
+     au lieu d'emerger d'un ordre et d'un point de rupture qu'il faudrait relire
+     pour comprendre. `justify-self: start` garde la pilule a sa largeur
+     naturelle ; etiree sur toute la colonne, son cadre traverserait la carte.
+
+     Le plancher de 9,8 em tombe ici, et il n'a plus lieu d'etre : il reservait
+     la place de « PATRIMOINE BRUT » pour que la bascule ne saute pas d'un cote a
+     l'autre a chaque clic. Elle n'est plus a la droite de l'intitule, donc sa
+     longueur ne la deplace plus. Le defaut est regle par la geometrie et non par
+     une largeur mesuree a la main. */
+  .hero-label {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center; gap: 8px 10px;
+  }
+  .hero-label > span:first-child { min-width: 0; grid-column: 1; grid-row: 1; }
+  .hero-oeil { grid-column: 2; grid-row: 1; margin-left: 0; }
+  .hero-label > .segmented { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+
   .card-head { flex-wrap: wrap; gap: 6px 10px; }
   /* Un bouton seul qui passe a la ligne reste a droite. `space-between` distribue
      ligne par ligne : seul sur la seconde, il partait a gauche, et la carte

@@ -14571,6 +14571,69 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
       'ce drapeau ne touche pas au modèle : store.js reçoit un argument, pas un état');
   });
 
+  test('sur téléphone, les deux bascules suivent la même convention', () => {
+    /* Un intitule, puis SA bascule juste dessous, calee a gauche. Les deux
+       cartes de l'accueil n'en suivaient pas la meme : le graphique posait deja
+       « Financier | Global » sous son titre au bord gauche de la carte, parce
+       que son en-tete se replie, tandis que le grand chiffre gardait
+       « Net | Brut » sur la ligne de l'intitule, a 9,8 em du bord — ni a gauche
+       ni a droite, flottant au milieu. Deux commandes de meme nature, deux
+       places : on lisait une regle par carte au lieu d'une regle par nature.
+
+       Mesure a 375 px apres correction, et identique a 320 px : les deux
+       bascules commencent a x = 32, le bord du contenu de leur carte, et chacune
+       se pose 32 px sous son intitule. Aucun debordement. 102 x 36 px pour l'une,
+       142 x 36 pour l'autre : ni l'une ni l'autre n'est comprimee.
+
+       Et un defaut tombe avec : le plancher de 9,8 em reservait la place de
+       « PATRIMOINE BRUT » pour que la bascule ne saute pas d'un cote a l'autre
+       quand l'intitule change de longueur. Elle n'est plus a sa droite, donc sa
+       longueur ne la deplace plus — mesure, le saut vaut 0 px. */
+    const css = lireSource('assets/styles.css');
+    vrai(css, 'la feuille de style doit être lisible');
+
+    /* Les bornes se prennent sur les REGLES, jamais sur « le bloc telephone » :
+       ce fichier en compte dix qui ouvrent a 900 px, et `indexOf` rend le
+       premier. Une tranche prise dessus laisse la regle de bureau dehors et le
+       controle crie sur du code juste. */
+    const iBureau = css.indexOf('.hero-label > span:first-child { min-width: 9.8em; }');
+    vrai(iBureau > 0,
+      'sur grand écran le plancher reste : la bascule y est toujours à droite du mot');
+    const iTel = css.indexOf('.hero-label {\n    display: grid;');
+    vrai(iTel > 0, 'l’étiquette du grand chiffre se dispose en grille sur téléphone');
+    vrai(iTel > iBureau,
+      'et la règle téléphone suit celle du bureau : même spécificité, c’est l’ordre qui tranche');
+
+    /* Elle vit bien sous 900 px, et non dans un bloc voisin.
+
+       `lastIndexOf('@media')` ne suffit pas : le bloc telephone contient des
+       `@media (prefers-reduced-motion)` imbriques, et c'est l'un d'eux qu'on
+       trouvait. L'appartenance se prouve par la structure — dans ce fichier une
+       accolade en COLONNE 0 ne ferme qu'un bloc de premier niveau, donc s'il
+       n'y en a aucune entre l'ouverture et la regle, la regle est dedans. */
+    const ouverture = css.lastIndexOf('@media (max-width: 900px)', iTel);
+    vrai(ouverture > 0, 'un bloc téléphone doit précéder la règle');
+    vrai(!/\n\}/.test(css.slice(ouverture, iTel)),
+      'et rien ne le referme avant elle : la règle appartient bien au bloc téléphone');
+
+    /* La tranche exacte des trois regles, bornee sur la derniere. */
+    const iSeg = css.indexOf('.hero-label > .segmented {', iTel);
+    vrai(iSeg > iTel, 'la règle de la bascule doit suivre');
+    const bloc = css.slice(iTel, css.indexOf('}', iSeg) + 1);
+    vrai(/grid-row: 2;/.test(bloc), 'la bascule Net / Brut passe sur la seconde rangée');
+    vrai(/justify-self: start;/.test(bloc),
+      'calée à gauche, et à sa largeur naturelle : étirée, son cadre traverserait la carte');
+    vrai(/\.hero-oeil \{[^}]*grid-row: 1;/.test(bloc),
+      'l’œil reste sur la ligne de l’intitulé, il n’encombre pas la bascule');
+    vrai(/min-width: 0;/.test(bloc),
+      'le plancher de 9,8 em tombe : la bascule n’est plus à droite de l’intitulé');
+
+    /* Le graphique n'avait rien a changer : sa position venait deja de son
+       en-tete qui se replie, et le controle voisin la garde. */
+    vrai(/<div class="evo-commandes">/.test(lireSource('assets/app.js')),
+      'le périmètre du graphique reste dans son bloc de commandes');
+  });
+
   test('les deux commandes du graphique se replient ensemble', () => {
     /* A 375 px l'en-tete passe a la ligne. Posees separement, le perimetre serait
        reste contre le titre et les periodes seraient descendues seules a l'autre
