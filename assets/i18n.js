@@ -123,6 +123,8 @@ const I18N = {
     'Volatilité élevée': 'High volatility',
     'Volatilité très élevée': 'Very high volatility',
     'Volatilité du S&P 500': 'S&P 500 volatility',
+    'Financier : tes placements et tes liquidités. Global : tout, immobilier et biens compris. Un crédit finance un bien, que le Financier laisse dehors : il ne s’y retire donc pas, et net et brut y donnent la même courbe.':
+      'Financial: your investments and cash. Overall: everything, property and personal assets included. A loan finances an asset that Financial leaves out, so it is not subtracted there: net and gross draw the same curve.',
     'Ce qu’il mesure': 'What it measures',
     'Volatilité attendue, pas une performance': 'Expected volatility, not a return',
     'Le VIX mesure la volatilité implicite attendue sur le S&P 500. Plus il est élevé, plus le marché anticipe de fortes variations.':

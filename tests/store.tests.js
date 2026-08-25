@@ -14931,6 +14931,43 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
       'et le raccourci clavier reste');
   });
 
+  test('l’aide du titre dit la différence, et ne peut pas mentir', () => {
+    /* Les deux boutons portent chacun une infobulle, qui n'existe qu'au survol.
+       Au doigt, l'explication etait donc inatteignable — et c'est precisement la
+       que la difference des deux perimetres se devine le moins. La pastille vit
+       sur le titre, ou elle la dit une fois, plutot que deux definitions
+       separees qu'il faudrait rapprocher soi-meme. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf('function carteEvolution()'),
+                            src.indexOf('function monterEvolution()'));
+    vrai(/<h2>\$\{trad\('Évolution du patrimoine'\)\}\$\{aide\(trad\(AIDE_PERIMETRE\)\)\}<\/h2>/.test(carte),
+      'la pastille vit sur le titre de la carte');
+    /* Ecrit une fois : l'infobulle des boutons et la pastille ne peuvent pas
+       diverger si elles ne se recopient pas. */
+    eq((src.match(/const AIDE_PERIMETRE/g) || []).length, 1,
+      'le texte est écrit une seule fois');
+
+    const texte = (src.match(/const AIDE_PERIMETRE = '([^']*)'/) || [])[1] || '';
+    vrai(texte.length > 80, 'le texte doit être trouvable');
+    for (const mot of ['Financier', 'Global']) {
+      vrai(texte.includes(mot), `« ${mot} » doit être nommé : on lit une différence, pas une définition`);
+    }
+    vrai(I18N.en[texte], 'et la clef a sa traduction anglaise');
+
+    /* Le controle qui compte. L'aide PROMET qu'en vue financiere la bascule
+       net/brut ne bouge pas la courbe. Ce n'est vrai que tant que le code ne
+       retranche aucune dette dans ce perimetre : le jour ou quelqu'un rattache
+       les dettes aux poches, la phrase devient un mensonge affiche, et rien
+       d'autre ne le dirait. Les deux vivent donc ensemble. */
+    const store = lireSource('assets/store.js');
+    vrai(/const retrancher = net && !financier;/.test(store),
+      'la vue financière ne retranche aucune dette : c’est ce que l’aide promet');
+    vrai(/const dettes = net && !financier \? num\(p\.dettes\) : 0;/.test(store),
+      'et la répartition suit la même règle');
+    vrai(/net et brut y donnent la même courbe/.test(texte),
+      'l’aide dit cette conséquence, celle qu’on observe en basculant');
+  });
+
   test('le périmètre vit sur la ligne du titre, les périodes sur la leur', () => {
     /* Les deux commandes ont partage un bloc, pour se replier ensemble. Elles ne
        repondent pourtant pas a la meme question — l'une dit QUOI on regarde,

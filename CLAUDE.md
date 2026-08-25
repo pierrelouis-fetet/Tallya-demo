@@ -98,6 +98,13 @@ Aucune liste n'est tenue à la main, donc rien ne diverge quand un test déména
 qui font tourner le modèle sur des nombres. C'est la moitié qui compte quand un
 calcul change, et aucun nom de fichier ne la désigne.
 
+`--suites` porte sur le **nom de la suite**, pas sur le sujet de chaque test
+qu'elle contient : un contrôle sur le périmètre du graphique vit dans une suite
+appelée « Deux réglages, deux questions », que `--suites périmètre` ne trouve
+pas. C'est vérifié : la sélection a rendu neuf tests verts sans jamais toucher
+celui qu'on voulait. En cas de doute, `--touche` sur le fichier, qui se dérive
+du code et ne dépend d'aucun intitulé.
+
 Un motif qui ne désigne rien est une **erreur**, pas un vert : « 0 test » sous
 une coche est le pire des verts. Une option inconnue arrête le script, avant
 même le serveur.

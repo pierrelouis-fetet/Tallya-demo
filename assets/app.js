@@ -569,7 +569,7 @@ function carteEvolution() {
   const { series } = evolutionAffichee();
   return `
     <div class="card">
-      <div class="card-head"><h2>${trad('Évolution du patrimoine')}</h2>
+      <div class="card-head"><h2>${trad('Évolution du patrimoine')}${aide(trad(AIDE_PERIMETRE))}</h2>
         <span class="segmented seg-mini">
           <button data-action="evo-perimetre" data-perimetre="financier"
                   class="${evoFinancier ? 'on' : ''}" aria-pressed="${evoFinancier}"
@@ -2489,6 +2489,12 @@ const NIVEAUX_VIX = [
   [15, 'Volatilité modérée'],
   [0,  'Volatilité faible'],
 ];
+/* Ce que les deux perimetres contiennent, et la consequence qu'on observe :
+   en Financier, la bascule net/brut ne bouge pas la courbe. Ce n'est pas une
+   approximation, c'est la regle de `repartitionClasses` dite a l'endroit ou on
+   la constate. */
+const AIDE_PERIMETRE = 'Financier : tes placements et tes liquidités. Global : tout, immobilier et biens compris. Un crédit finance un bien, que le Financier laisse dehors : il ne s’y retire donc pas, et net et brut y donnent la même courbe.';
+
 const estVix = l => String(l?.symbole || '') === '^VIX';
 /* `null` plutot qu'un libelle par defaut : sans valeur utilisable, la tuile ne
    doit rien affirmer. C'est la meme regle que le « hors seance » des autres
