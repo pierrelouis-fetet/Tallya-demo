@@ -118,6 +118,13 @@ const I18N = {
     'Non coté': 'Private assets',
     'Immobilier': 'Property',
     'Financier': 'Financial',
+    'Volatilité faible': 'Low volatility',
+    'Volatilité modérée': 'Moderate volatility',
+    'Volatilité élevée': 'High volatility',
+    'Volatilité très élevée': 'Very high volatility',
+    'Volatilité du S&P 500': 'S&P 500 volatility',
+    'Le VIX mesure la volatilité implicite attendue sur le S&P 500. Plus il est élevé, plus le marché anticipe de fortes variations.':
+      'The VIX measures expected implied volatility on the S&P 500. A higher VIX means markets expect larger price swings.',
     'Global': 'Overall',
     'Tes placements et tes liquidités, hors immobilier physique':
       'Your investments and cash, excluding physical property',

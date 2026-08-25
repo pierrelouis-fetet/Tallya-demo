@@ -285,8 +285,28 @@ function blankState() {
 const SEED = {
   version: 1,
   meta: {
-    objective: 150000,
-    objectiveYear: 2027,
+    /* L'objectif se place au-dessus du net du jeu, et il s'est fait depasser
+       deux fois : a 120 000 d'abord, a 150 000 ensuite. La jauge affichait une
+       barre pleine et « objectif atteint », donc la carte ne montrait plus rien
+       de sa mecanique — ni le reste a faire, ni le rythme necessaire.
+
+       Ce qui a manque les deux fois n'est pas le montant mais L'ECHEANCE. Le
+       reste a faire doit tenir dans ce que le jeu accumule d'ici la, sinon la
+       carte annonce un rythme que rien ne rend credible ; mais avec seize mois
+       devant soi et 1 333 EUR par mois, tout objectif atteignable se trouve a
+       moins de dix pour cent du net, et la barre est pleine de toute facon. Les
+       deux contraintes ne peuvent pas tenir sur un horizon court.
+
+       Fin 2028 les desserre : vingt-huit mois a ce rythme font 37 000 EUR de
+       marge. 240 000 laisse donc une marche visible — 82 % atteints, 43 000 a
+       faire, 1 529 EUR par mois contre 1 333 constates — et les trois chiffres
+       de la carte travaillent tous les trois.
+
+       Il se relit chaque fois que les valeurs de la graine bougent : un objectif
+       deja atteint ne demontre rien, et c'est le net qui decide, pas ce nombre.
+       La verification tient en une ligne dans la console, `objectiveStatus()`. */
+    objective: 240000,
+    objectiveYear: 2028,
     expectedInflow: 600,    // cash attendu d'ici le mois prochain
     modelCapital: 100000,   // base des modèles d'allocation
     autoRefresh: false,

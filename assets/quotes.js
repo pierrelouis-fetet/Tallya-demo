@@ -143,6 +143,14 @@ const Quotes = (() => {
       ['^FCHI',     'CAC 40'],
       ['^STOXX50E', 'Stoxx 50'],
       ['^N225',     'Nikkei'],
+      /* Le VIX ferme la famille, et il n'y est pas un indice de plus : il ne
+         mesure pas un marche mais ce que ce marche ANTICIPE comme amplitude de
+         variation. Sa tuile le dit autrement — voir `NIVEAUX_VIX` dans app.js.
+
+         Il passe par la meme passerelle et le meme cache que les cinq autres :
+         un systeme parallele pour un seul symbole couterait une seconde source
+         de fraicheur, et deux facons de dire « donnee indisponible ». */
+      ['^VIX',      'VIX'],
     ]],
     ['metaux', trad('Métaux'), [
       ['GC=F', trad('Or')],

@@ -12097,8 +12097,15 @@ suite('Un indice ne se compte pas en euros', () => {
        par la fiche : le controle porte sur elle, pas sur une copie. */
     vrai(/String\(l\?\.symbole \|\| ''\)\.startsWith\('\^'\)/.test(src),
       'un repère sait dire s’il est un indice, et il le dérive du symbole');
-    vrai(/const uniteRepere = l => String\(l\?\.symbole \|\| ''\)\.startsWith\('\^'\) \? ` \$\{trad\('pts'\)\}`/
+    vrai(/String\(l\?\.symbole \|\| ''\)\.startsWith\('\^'\) \? ` \$\{trad\('pts'\)\}`/
       .test(src), 'un indice s’affiche en points, jamais dans une devise');
+    /* Une exception, nommee, et elle ne contredit pas la regle : le VIX ne
+       s'affiche dans aucune devise non plus, il s'affiche SANS unite. « pts »
+       serait juste pour un panier d'actions et faux pour une volatilite
+       implicite, qui s'exprime en pourcentage annualise — que personne n'ecrit,
+       et surement pas en points. */
+    vrai(/const uniteRepere = l => estVix\(l\) \? ''/.test(src),
+      'et le VIX se lit nu : « pts » mentirait sur ce qu’il mesure');
     vrai(/<span class="rp-unite">\$\{esc\(uniteRepere\(l\)\)\}<\/span>/.test(src),
       'et la tuile du ruban porte la même unité que la fiche qu’elle ouvre');
     vrai(!/const unite = l\.devise === 'USD'/.test(src),
@@ -15415,6 +15422,139 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     }
     vrai(!/savingsReconciliation/.test(bloc),
       'et il ne lit plus le budget : c’est l’autre carte qui le fait');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le VIX : un contexte, jamais un conseil
+   ------------------------------------------------------------------ */
+suite('Le VIX dit un niveau, il ne recommande rien', () => {
+
+  /* Il mesure la volatilite implicite attendue sur le S&P 500, c'est-a-dire
+     l'amplitude que le marche anticipe. Sa variation du jour n'apprend presque
+     rien — « +6,7 % » sur un indice de volatilite ne se lit pas — alors que son
+     niveau se lit tout de suite, pour peu qu'on dise ce qu'il vaut.
+
+     `niveauVix` et la tuile vivent dans app.js, que le harnais ne charge pas :
+     les seuils se relisent dans la source, ce qui verifie du meme coup qu'ils y
+     sont ecrits une seule fois. */
+  const src = () => lireSource('assets/app.js');
+  const table = () => {
+    const t = src();
+    return t.slice(t.indexOf('const NIVEAUX_VIX = ['), t.indexOf('const estVix'));
+  };
+
+  test('il rejoint le ruban des indices, sans carte a lui', () => {
+    /* Marches est deja dense : le VIX y est une information secondaire, pas une
+       section. Il passe donc par la meme table de reperes, la meme passerelle et
+       le meme cache que les cinq autres indices. */
+    const q = lireSource('assets/quotes.js');
+    vrai(q, 'assets/quotes.js doit être lisible');
+    const indices = q.slice(q.indexOf("['indices'"), q.indexOf("['metaux'"));
+    vrai(/\['\^VIX',\s*'VIX'\]/.test(indices),
+      'le VIX est un repère de la famille « Indices »');
+    /* En DERNIER : il ferme la famille, il ne s'intercale pas entre deux
+       indices de marche. */
+    vrai(indices.indexOf("'^VIX'") > indices.indexOf("'^N225'"),
+      'et il ferme la liste');
+    /* Aucune carte, aucun conteneur, aucun montage a lui. */
+    const app = src();
+    for (const invente of ['carteVix', 'monterVix', 'id="vix"', 'chartVix']) {
+      vrai(!app.includes(invente), `« ${invente} » : le VIX n’a pas de carte à lui`);
+    }
+    /* Et une seule requete : pas de systeme parallele pour un symbole. */
+    vrai(!/fetch\([^)]*VIX/.test(app) && !/fetch\([^)]*VIX/.test(q),
+      'il passe par la passerelle commune, pas par un appel dédié');
+  });
+
+  test('les quatre seuils nomment un état, et rien de plus', () => {
+    const t = table();
+    vrai(t.length > 100, 'la table des niveaux doit être trouvable');
+    for (const [seuil, mot] of [[30, 'très élevée'], [20, 'élevée'],
+                                [15, 'modérée'], [0, 'faible']]) {
+      vrai(new RegExp(`\\[${seuil},\\s+'Volatilité ${mot}'\\]`).test(t),
+        `le seuil ${seuil} doit nommer « Volatilité ${mot} »`);
+    }
+    /* La table se lit du plus haut au plus bas : `find` rend le premier seuil
+       atteint, donc l'ordre EST la regle. A l'envers, tout serait « faible ». */
+    const seuils = [...t.matchAll(/\[(\d+),/g)].map(m => Number(m[1]));
+    eq(seuils.join(','), '30,20,15,0',
+      'du plus haut au plus bas : le premier seuil atteint gagne');
+  });
+
+  test('aucun mot d’achat, de vente ni d’alarme', () => {
+    /* Un chiffre de contexte qui se met a recommander cesse d'etre un chiffre de
+       contexte. Le controle porte sur les chaines AFFICHEES du VIX — sa table,
+       son aide, ses clefs anglaises — et non sur le fichier entier, ou
+       « Vendre » est un bouton legitime de la page Positions. */
+    const t = src();
+    /* Commentaires retires : celui qui pose la regle ENUMERE les mots interdits,
+       et un controle qui crie sur son propre enonce finit par etre desactive.
+       C'est la troisieme fois aujourd'hui que ce motif se presente. */
+    const bloc = t.slice(t.indexOf("const AIDE_VIX"), t.indexOf('const uniteRepere'))
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(bloc.length > 200, 'le bloc du VIX doit être trouvable');
+    const anglais = I18N.en['Le VIX mesure la volatilité implicite attendue sur le S&P 500. '
+      + 'Plus il est élevé, plus le marché anticipe de fortes variations.'] || '';
+    vrai(anglais, 'l’aide doit avoir sa traduction');
+    const aSurveiller = (bloc + ' ' + anglais + ' '
+      + Object.entries(I18N.en).filter(([k]) => k.startsWith('Volatilité'))
+          .map(([k, v]) => k + ' ' + v).join(' ')).toLowerCase();
+    for (const mot of ['acheter', 'vendre', 'opportunit', 'danger', 'suracha',
+                       'surachet', 'survendu', 'bullish', 'bearish', 'signal',
+                       'buy', 'sell', 'opportunity']) {
+      vrai(!aSurveiller.includes(mot),
+        `« ${mot} » n’a pas sa place : le VIX contextualise, il ne conseille pas`);
+    }
+  });
+
+  test('sans valeur utilisable, il ne dit rien plutôt que zéro', () => {
+    /* Un « 0 » afficherait une volatilite nulle, ce qui n'existe pas. La tuile
+       retombe alors sur le meme mot que les autres reperes hors seance : une
+       seule facon de dire « pas de donnee », comme pour les cinq voisins. */
+    const t = src();
+    const fn = t.slice(t.indexOf('function niveauVix(v)'), t.indexOf('const uniteRepere'));
+    vrai(/if \(!Number\.isFinite\(n\) \|\| n <= 0\) return null;/.test(fn),
+      'une valeur absente, non finie ou nulle ne donne aucun niveau');
+    vrai(/niveauVix\(l\.prix\) \|\| trad\('hors séance'\)/.test(t),
+      'et la tuile retombe sur le mot que les autres repères emploient déjà');
+    /* La tuile n'est de toute facon rendue que pour les reperes utilisables :
+       `utiles` filtre sur `l.ok`, comme pour les cinq autres. */
+    vrai(/const utiles = lignes\.filter\(l => l\.ok\);/.test(t),
+      'et le ruban ne rend que les repères que la passerelle a servis');
+  });
+
+  test('la tuile garde sa forme, et l’aide vit où elle peut être touchée', () => {
+    const t = src();
+    /* Le niveau prend la place de la variation : meme rangee, donc pas un pixel
+       de plus sur une tuile de 90 px, et pas une rangee de plus dans la grille. */
+    vrai(/\$\{estVix\(l\) \? `<span class="rp-var rp-vix">/.test(t),
+      'le niveau occupe la troisième ligne, celle de la variation');
+    const css = lireSource('assets/styles.css');
+    const regle = css.slice(css.indexOf('.rp-vix {'), css.indexOf('}', css.indexOf('.rp-vix {')));
+    vrai(/text-overflow: ellipsis/.test(regle) && /white-space: nowrap/.test(regle),
+      'un libellé plus long qu’un pourcentage se coupe au lieu d’élargir la tuile');
+    vrai(!/var\(--good\)|var\(--critical\)/.test(regle),
+      'et il n’emprunte pas les couleurs d’alerte : c’est un contexte, pas une alarme');
+    /* L'aide vit dans la fiche, qui est un panneau — dans la tuile, qui est un
+       bouton, une pastille cliquable se disputerait le clic avec elle. C'est le
+       defaut deja rencontre sur le montant du grand chiffre. */
+    vrai(/totalNote: estVix\(l\)[\s\S]{0,120}aide\(trad\(AIDE_VIX\)\)/.test(t),
+      'la fiche porte le composant d’aide de la maison');
+    vrai(/title="\$\{esc\(l\.nom\)\}\$\{estVix\(l\) \? ` · \$\{esc\(trad\(AIDE_VIX\)\)\}`/.test(t),
+      'et la tuile porte la même phrase dans son infobulle');
+    /* Une seule ecriture du texte, pour les deux surfaces. */
+    eq((t.match(/const AIDE_VIX/g) || []).length, 1,
+      'le texte est écrit une fois : deux formulations finiraient par diverger');
+  });
+
+  test('le VIX n’est pas annoncé comme un indice boursier', () => {
+    /* Il ne suit aucun panier d'actions : il mesure l'amplitude que le marche
+       anticipe. Le sous-titre de sa fiche le dit. */
+    const t = src();
+    vrai(/sous: estVix\(l\) \? trad\('Volatilité du S&P 500'\)/.test(t),
+      'sa fiche nomme ce qu’il mesure, pas ce qu’il n’est pas');
+    vrai(I18N.en['Volatilité du S&P 500'], 'et la clef a sa traduction');
   });
 });
 

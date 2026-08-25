@@ -2480,7 +2480,27 @@ function glypheSeance(etat) {
 
 let REPERES_AFFICHES = [];
 
-const uniteRepere = l => String(l?.symbole || '').startsWith('^') ? ` ${trad('pts')}`
+const AIDE_VIX = 'Le VIX mesure la volatilité implicite attendue sur le S&P 500. '
+  + 'Plus il est élevé, plus le marché anticipe de fortes variations.';
+
+const NIVEAUX_VIX = [
+  [30, 'Volatilité très élevée'],
+  [20, 'Volatilité élevée'],
+  [15, 'Volatilité modérée'],
+  [0,  'Volatilité faible'],
+];
+const estVix = l => String(l?.symbole || '') === '^VIX';
+/* `null` plutot qu'un libelle par defaut : sans valeur utilisable, la tuile ne
+   doit rien affirmer. C'est la meme regle que le « hors seance » des autres
+   reperes, qui se tait plutot que d'afficher la variation de la veille. */
+function niveauVix(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return trad((NIVEAUX_VIX.find(([seuil]) => n >= seuil) || NIVEAUX_VIX[NIVEAUX_VIX.length - 1])[1]);
+}
+
+const uniteRepere = l => estVix(l) ? ''
+  : String(l?.symbole || '').startsWith('^') ? ` ${trad('pts')}`
   : l?.devise === 'USD' ? ' $' : l?.devise === 'EUR' ? ' €'
   : l?.devise ? ` ${l.devise}` : '';
 
@@ -2542,14 +2562,16 @@ async function mountReperes() {
   box.innerHTML = utiles.map(l => `
     <button type="button" class="repere" data-action="apercu"
             data-apercu="repere" data-arg="${esc(l.symbole)}"
-            title="${esc(l.nom)}${l.quoteTime ? ` · ${trad('cours')} ${fmtCoursQuand(l.quoteTime)}` : ''}">
+            title="${esc(l.nom)}${estVix(l) ? ` · ${esc(trad(AIDE_VIX))}` : ''}${
+              l.quoteTime ? ` · ${trad('cours')} ${fmtCoursQuand(l.quoteTime)}` : ''}">
       <span class="rp-tete">
         <span class="rp-nom">${esc(l.nom)}</span>
         ${glypheSeance(marketStatus(l))}
       </span>
-      <span class="rp-prix">${nb(l.prix, l.prix < 10 ? 4 : 0)}<span class="rp-unite">${esc(uniteRepere(l))}</span></span>
-      <span class="rp-var ${l.pct == null ? 'muted' : cls(l.pct)}">${
-        l.pct == null ? trad('hors séance') : fmtSignedPct(l.pct, 2)}</span>
+      <span class="rp-prix">${nb(l.prix, estVix(l) ? 1 : l.prix < 10 ? 4 : 0)}<span class="rp-unite">${esc(uniteRepere(l))}</span></span>
+      ${estVix(l) ? `<span class="rp-var rp-vix">${esc(niveauVix(l.prix) || trad('hors séance'))}</span>`
+        : `<span class="rp-var ${l.pct == null ? 'muted' : cls(l.pct)}">${
+        l.pct == null ? trad('hors séance') : fmtSignedPct(l.pct, 2)}</span>`}
     </button>`).join('');
   box.hidden = false;
   if (reperesEntrent) {
@@ -10230,7 +10252,7 @@ const APERCUS = {
   repere: (sym) => {
     const l = REPERES_AFFICHES.find(x => x.symbole === sym);
     if (!l) return null;
-    const dec = l.prix < 10 ? 4 : 2;
+    const dec = estVix(l) ? 1 : l.prix < 10 ? 4 : 2;
     const nb = v => new Intl.NumberFormat(locale(),
       { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(v);
     const estIndice = String(l.symbole || '').startsWith('^');
@@ -10257,9 +10279,11 @@ const APERCUS = {
 
     return {
       titre: l.nom,
-      sous: estIndice ? 'Indice boursier' : l.symbole,
+      sous: estVix(l) ? trad('Volatilité du S&P 500') : estIndice ? 'Indice boursier' : l.symbole,
       totalTexte: `${nb(l.prix)}${unite}`,
-      totalNote: m ? m.label : '',
+      totalNote: estVix(l)
+        ? `${niveauVix(l.prix) || ''}${aide(trad(AIDE_VIX))}`
+        : (m ? m.label : ''),
       html: `<dl class="kv">
         <dt>${trad('Variation du jour')}</dt>
           <dd class="${l.pct == null ? 'muted' : cls(l.pct)}">${l.pct == null
