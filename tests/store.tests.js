@@ -1602,10 +1602,21 @@ suite('Une bande trop mince ne porte pas de trait', () => {
     vrai(/epaisseur >= HAUTEUR_TRAIT/.test(bloc),
       'le trait doit être conditionné à l’épaisseur de la bande');
     /* Le maximum sur la periode, pas chaque point : un trait qui apparaitrait en
-       juillet pour disparaitre en aout se lirait comme une donnee manquante. */
-    vrai(/Math\.max\(\.\.\.points\.map/.test(bloc),
+       juillet pour disparaitre en aout se lirait comme une donnee manquante.
+
+       La regle a demenage dans `empiler()`, la fonction qui empile les bandes —
+       le rendu et chaque image de la transition d'un perimetre a l'autre en
+       demandent une geometrie, et deux ecritures du meme empilement auraient
+       fini par ne plus empiler pareil. Le controle la suit : ce qui compte est
+       qu'une seule ligne decide de l'epaisseur, et qu'elle prenne un maximum. */
+    const pile = src.slice(src.indexOf('function empiler(valeur, topC, cles)'),
+                           src.indexOf('const valeurDuPoint'));
+    vrai(pile.length > 200, 'la fonction d’empilement doit être trouvable');
+    vrai(/epaisseur: Math\.max\(\.\.\./.test(pile),
       'l’épaisseur retenue doit être le maximum sur la période, sinon le trait '
       + 'clignoterait d’un mois à l’autre');
+    eq((src.match(/epaisseur: Math\.max/g) || []).length, 1,
+      'et une seule ligne la décide, sinon le dessin et la transition divergeraient');
     /* Et la surface n'est jamais conditionnee. */
     vrai(/areas\.push\(`<polygon[^`]*\$\{trait\}`\)/.test(bloc),
       'la bande doit être peinte dans tous les cas : sans elle, le total cesserait '
@@ -14588,6 +14599,398 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
   });
 });
 
+/* ------------------------------------------------------------------
+   La transition d'un perimetre a l'autre
+   ------------------------------------------------------------------ */
+suite('Changer de périmètre se voit, sans se rejouer tout seul', () => {
+
+  /* Le harnais ne charge pas `charts.js` : le mouvement lui-meme se mesure dans
+     un navigateur, et il l'a ete. Relevé image par image sur un patrimoine de
+     30 265 EUR de financier plus un appartement de 300 000 :
+
+       Financier -> Global   le repère 200 k EUR entre par le haut, y = -1010
+                             puis -173, -38, 2, et se pose a 14 vers 520 ms.
+       Global -> Financier   le repère 40 k EUR remonte, y = 219 -> 184 -> 125
+                             -> 56 -> 18 -> 14, et la bande d'immobilier reste
+                             tracée jusqu'a 447 ms avant d'etre retiree.
+       Mouvement refusé      41 images, UNE seule position d'axe : rien ne bouge.
+
+     Ce que ces controles gardent, c'est la mecanique qui rend ces mesures
+     possibles — et surtout les deux pieges qui l'ont fait echouer en silence. */
+
+  test('le souvenir du dessin se range par identifiant, jamais par nœud', () => {
+    /* Le piege, et il ne levait aucune erreur. Une `WeakMap` clefee sur
+       l'element etait le premier reflexe : `render()` reecrit le `innerHTML` de
+       la vue entiere, donc le conteneur du rendu suivant est un AUTRE nœud, la
+       clef n'existe plus, `get()` rend `undefined`, et la transition se pose
+       d'un coup. Mesuree a l'image pres : deja arrivee a 13 ms. */
+    const src = lireSource('assets/charts.js');
+    vrai(src, 'assets/charts.js doit être lisible pour ce contrôle');
+    vrai(/const dernierTrace = new Map\(\);/.test(src),
+      'le souvenir est une Map de clefs stables');
+    vrai(/const cleTrace = el => el\.id \|\| null;/.test(src),
+      'et la clef est l’identifiant du conteneur');
+    vrai(!/dernierTrace = new WeakMap/.test(src),
+      'une WeakMap sur le nœud ne retiendrait rien d’un rendu à l’autre');
+    /* Un conteneur sans identifiant ne se souvient de rien : la lecture ET
+       l'ecriture sont gardees. */
+    vrai(/if \(anime && cle && !mouvementRefuse\(\)\) animerDepuis/.test(src),
+      'sans clef, pas de transition');
+    vrai(/if \(cle\) dernierTrace\.set\(cle,/.test(src),
+      'et rien à retenir non plus');
+  });
+
+  test('la transition ne se rejoue ni au redimensionnement ni à la frappe', () => {
+    /* Deux gardes, a deux etages, et il faut les deux.
+
+       Cote graphique : le registre rejoue le rendu a chaque redimensionnement,
+       avec les mêmes options. Un drapeau lu dans `opts` a chaque fois aurait
+       rejoue la transition en tirant sur le coin de la fenetre.
+
+       Cote vue : `render()` remonte le graphique a chaque frappe et a chaque
+       changement de plage. Le drapeau se leve sur le seul geste qui change le
+       cadrage, et le montage le consomme. C'est la regle deja posee pour le
+       balayage d'arrivee, qui ne joue que sous `.vue-entre`. */
+    const charts = lireSource('assets/charts.js');
+    vrai(/let anime = !!opts\.anime;/.test(charts),
+      'le drapeau est copié hors du rendu');
+    vrai(/\n      anime = false;/.test(charts),
+      'et éteint après le premier, sinon un redimensionnement le rejouerait');
+
+    const app = lireSource('assets/app.js');
+    const montage = app.slice(app.indexOf('function monterEvolution()'),
+                              app.indexOf('function monterEvolution()') + 900);
+    vrai(/const anime = evoTransition;\s*\n\s*evoTransition = false;/.test(montage),
+      'le montage consomme le drapeau, il ne le lit pas');
+    vrai(/Charts\.stackedArea\(cible, \{ points, height: 300, series, anime \}\)/.test(montage),
+      'et le passe au graphique');
+    /* Un seul geste le leve. Si un deuxieme apparait un jour, il devra le dire
+       ici — c'est ce qui empeche « on anime aussi ce cas-la » de se glisser sans
+       qu'on ait pese la fatigue que ça ajoute. */
+    const sansCom = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+    eq((sansCom.match(/evoTransition = true/g) || []).length, 1,
+      'un seul geste déclenche une transition');
+  });
+
+  test('recliquer le bouton déjà allumé n’anime rien', () => {
+    /* Une transition de zéro vers zéro est un clignotement, et le bouton actif
+       reste cliquable — rien dans le balisage ne l'en empêche. */
+    const app = lireSource('assets/app.js');
+    const action = app.slice(app.indexOf("'evo-perimetre'(btn) {"),
+                             app.indexOf("'alloc-base'(btn)"));
+    vrai(/if \(voulu === evoFinancier\) return;/.test(action),
+      'le même périmètre ressort tout de suite');
+    vrai(action.indexOf('return;') < action.indexOf('evoTransition = true'),
+      'et avant de lever le drapeau');
+  });
+
+  test('le mouvement refusé est respecté, et relu à chaque fois', () => {
+    /* Le reglage se change sans recharger la page : une valeur figee au
+       chargement aurait continue d'animer chez quelqu'un qui vient de demander
+       l'arret. */
+    const src = lireSource('assets/charts.js');
+    vrai(/const mouvementRefuse = \(\) =>/.test(src),
+      'c’est une fonction, donc relue à chaque appel');
+    vrai(/matchMedia\('\(prefers-reduced-motion: reduce\)'\)/.test(src),
+      'et elle lit la préférence du système');
+    /* La feuille de style tient la même règle pour le balayage d'arrivee : les
+       deux mouvements du graphique s'arretent ensemble. */
+    const css = lireSource('assets/styles.css');
+    vrai(/@media \(prefers-reduced-motion: reduce\) \{\s*\n\s*\.vue-entre \.chart-trace \{ animation: none; \}/.test(css),
+      'le balayage d’arrivée s’arrête aussi');
+  });
+
+  test('un seul empilement sert le dessin et chacune de ses images', () => {
+    /* Le dessin etait empile une fois, en ligne, ce qui suffisait tant qu'il ne
+       bougeait plus apres sa pose. L'animation en redemande une image par frame,
+       avec d'autres valeurs et une autre echelle. Deux ecritures du meme
+       empilement auraient fini par ne plus empiler pareil, et l'ecart ne se
+       verrait que pendant la demi-seconde de la transition — donc jamais. */
+    const src = lireSource('assets/charts.js');
+    vrai(/function empiler\(valeur, topC, cles\)/.test(src),
+      'la géométrie des bandes vit dans une fonction');
+    vrai((src.match(/empiler\(/g) || []).length >= 3,
+      'et le rendu comme les images de la transition l’appellent');
+    /* Les crochets que la transition attrape. Sans eux elle compterait les
+       enfants, ce qu'un trait absent fausse — une bande trop mince en pose deux
+       de moins que sa voisine. */
+    vrai(/data-bande="\$\{esc\(sr\.key\)\}"/.test(src),
+      'chaque bande porte sa poche');
+    vrai(/data-trait="\$\{esc\(sr\.key\)\}"/.test(src),
+      'et ses traits aussi');
+    vrai(/data-tick="\$\{t\}"/.test(src),
+      'chaque repère d’axe porte sa valeur, pour se replacer à l’échelle du moment');
+  });
+
+  test('une bande qui s’en va reste tracée le temps de partir', () => {
+    /* Elle n'existe pas dans le dessin d'arrivee : sans ce rattrapage,
+       l'immobilier disparaitrait au premier instant et la moitie du mouvement
+       ne se verrait pas. Mesure : la bande tient jusqu'a 447 ms puis part. */
+    const src = lireSource('assets/charts.js');
+    const fn = src.slice(src.indexOf('function animerDepuis(avant) {'),
+                         src.indexOf('const tip = ensureTip(el);'));
+    vrai(fn.length > 500, 'animerDepuis doit être trouvable');
+    vrai(/const partantes = cles\.filter\(k => !ordre\.includes\(k\)\);/.test(fn),
+      'les poches qui quittent la pile sont nommées');
+    vrai(/trace\.insertBefore\(poly, apres\)/.test(fn),
+      'et reposées à leur rang : l’ordre de peinture est l’ordre d’empilement');
+    vrai(/for \(const t of temporaires\) t\.remove\(\);/.test(fn),
+      'puis retirées à l’arrivée');
+    /* L'arrivee est le dessin exact, pas la derniere image calculee : une image
+       a 0,999 laisse des demi-pixels d'ecart, et c'est ce dessin-la qui reste a
+       l'ecran jusqu'au prochain montage. */
+    vrai(/const finir = \(\) => \{/.test(fn) && /geo\.bandes\.forEach/.test(fn),
+      'la dernière image est le dessin d’arrivée, recalculé et non interpolé');
+  });
+
+  test('la transition s’interrompt au premier geste', () => {
+    /* Le curseur lit les valeurs d'arrivee des le premier instant : une
+       animation qui continue sous le doigt fait mentir l'infobulle. */
+    const src = lireSource('assets/charts.js');
+    vrai(/svgEl\.addEventListener\('pointerdown', finir, \{ once: true \}\)/.test(src),
+      'un appui la termine');
+    vrai(/svgEl\.addEventListener\('pointermove', finir, \{ once: true \}\)/.test(src),
+      'un survol aussi');
+  });
+
+  test('deux dessins qui ne parlent pas des mêmes mois ne se fondent pas', () => {
+    /* Changer de plage en même temps que de périmètre glisserait une courbe sur
+       une autre abscisse : un mouvement qui ne veut rien dire. */
+    const src = lireSource('assets/charts.js');
+    vrai(/if \(!avant \|\| avant\.dates !== points\.map\(p => p\.date \|\| p\.label\)\.join\('\|'\)\) return;/.test(src),
+      'le montage se pose d’un coup quand les abscisses diffèrent');
+  });
+});
+
+/* ------------------------------------------------------------------
+   « Combien est-ce que j'accumule en ce moment ? »
+   ------------------------------------------------------------------ */
+suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () => {
+
+  /* Elle vivait dans Budget > Charges fixes et y agregeait revenus, charges,
+     depenses, capacite d'epargne, capital rembourse, accumulation, taux,
+     objectif d'investissement, croissance constatee et ecart au budget. Un
+     onglet qui s'appelle « Charges fixes » doit repondre « quelles sont mes
+     charges fixes ».
+
+     Ces controles gardent la seule chose qui compte dans un demenagement : que
+     rien n'ait ete recalcule en route. */
+
+  const carte = () => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('function carteAccumulation()');
+    return i < 0 ? '' : src.slice(i, i + 4000);
+  };
+
+  test('Charges fixes ne répond plus qu’à sa question', () => {
+    const src = lireSource('assets/app.js');
+    vrai(!/Épargne et croissance/.test(src), 'la carte a quitté l’onglet');
+    /* Ce qui doit y rester, et qui y est : le total, sa part du revenu, la
+       repartition par poste, le tableau et son edition. */
+    vrai(/trad\('Ce qui sort chaque mois'\)/.test(src), 'le total mensuel reste');
+    vrai(/trad\('des revenus'\)/.test(src), 'sa part du revenu reste');
+    vrai(/data-apercu="chargesFixes"/.test(src), 'la répartition par poste reste');
+    vrai(/data-anchor="charges"/.test(src) && /data-action="edit-charge"/.test(src),
+      'le tableau et son édition restent');
+    /* Et plus aucun bilan patrimonial : les trois notions qui n'ont rien a
+       faire dans cet onglet ont disparu de la source. */
+    /* Sur l'APPEL et non sur la chaine nue : le commentaire qui explique le
+       retrait cite ces intitules, et un controle qui crie sur sa propre
+       explication finit par etre desactive. */
+    for (const parti of ['Croissance observée du patrimoine', 'Ce qui ne vient pas du budget',
+                         'Voir le rapprochement dans Budget']) {
+      vrai(!src.includes(`trad('${parti}')`), `« ${parti} » n’a plus rien à faire ici`);
+    }
+  });
+
+  test('la carte est sur Aujourd’hui, entre la répartition et le rythme', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/function carteAccumulation\(\)/.test(src), 'la carte existe');
+    eq((src.match(/carteAccumulation\(\)/g) || []).length, 2,
+      'sa définition et son seul appel : un balisage recopié finirait par diverger');
+    /* L'ordre de lecture : le patrimoine, sa repartition, la courbe, puis
+       l'accumulation, puis son rythme. Le controle porte sur les positions
+       relatives dans la vue, pas sur un numero de ligne. */
+    const vue = src.slice(src.indexOf('function viewOverview()'),
+                          src.indexOf('function mountOverview()'));
+    const iHero = vue.indexOf('class="hero card-cliquable"');
+    const iEvo = vue.indexOf('${carteEvolution()}');
+    const iAcc = vue.indexOf('${carteAccumulation()}');
+    const iRythme = vue.indexOf("trad('Rythme d\\'accumulation')");
+    vrai(iHero > 0 && iEvo > 0 && iAcc > 0 && iRythme > 0, 'les quatre repères existent');
+    vrai(iHero < iAcc, 'le patrimoine principal vient avant');
+    vrai(iEvo < iAcc, 'la courbe aussi');
+    vrai(iAcc < iRythme, 'et le rythme, qui montre l’évolution, vient après');
+  });
+
+  test('une seule source de vérité, et aucun calcul refait dans la vue', () => {
+    /* Le risque d'un demenagement : recopier la formule a l'arrivee « pour
+       simplifier », et se retrouver avec deux additions qui derivent. */
+    const src = lireSource('assets/app.js');
+    const c = carte();
+    vrai(/const rec = savingsReconciliation\(\);/.test(c),
+      'la carte lit le modèle');
+    /* Aucune arithmetique sur ces grandeurs dans la vue : ni soustraction de
+       revenus, ni addition du capital. */
+    vrai(!/investable\s*\+\s*/.test(c) && !/income\s*-\s*/.test(c),
+      'et elle n’en refait aucune : le total vient de rec.theoretical');
+    vrai(!/theoreticalRate\s*=/.test(c), 'le taux non plus ne se recalcule pas');
+    /* Le modele n'a pas ete touche : la formule est toujours celle-la. */
+    Fixture.poser();
+    const rec = savingsReconciliation();
+    pres(rec.investable, rec.income - rec.fixed - rec.spend,
+      'capacité d’épargne = revenus − charges fixes − dépenses');
+    pres(rec.theoretical, rec.investable + rec.capitalRembourse,
+      'accumulation = capacité d’épargne + capital remboursé');
+  });
+
+  test('688 plus 645 font 1 333, et le taux suit', () => {
+    /* Les chiffres de la demande, rejoues sur un fixture qui les produit. */
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 3150 }];
+      s.budget.fixedCharges = [{ id: 'c1', label: 'Loyer', amount: 1462, periode: 'mois' }];
+      s.budget.expenses = [{ month: todayISO().slice(0, 4) + '-01', v: { Courses: 1000 }, note: '' }];
+      s.etabs.find(e => e.id === 'e_bien').dettes = [
+        { id: 'd', libelle: 'Prêt', montant: 150000, taux: 2, mensualite: 900, note: '' }];
+    });
+    const rec = savingsReconciliation();
+    pres(rec.investable, 688, 'capacité d’épargne');
+    pres(rec.investable + rec.capitalRembourse, rec.theoretical,
+      'et le total est bien la somme des deux lignes affichées au-dessus');
+    /* Le taux se lit sur les revenus, et sur eux seuls. */
+    pres(rec.theoreticalRate, rec.theoretical / rec.income * 100,
+      'le taux rapporte l’accumulation aux revenus');
+  });
+
+  test('sans crédit, la carte ne montre pas deux fois le même montant', () => {
+    /* Le capital rembourse vaut zero, donc l'accumulation vaut exactement la
+       capacite d'epargne. Afficher les deux serait le meme nombre sous deux
+       intitules — ce que ce projet s'interdit partout. La decomposition part,
+       et un sous-titre dit ce que le total est. C'est deja la regle ailleurs :
+       une poche vide n'a pas de bande, une classe a zero n'a pas de tuile. */
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_bien').dettes = [];
+    });
+    const rec = savingsReconciliation();
+    pres(rec.capitalRembourse, 0, 'aucun capital remboursé sans crédit');
+    pres(rec.theoretical, rec.investable, 'l’accumulation vaut la capacité d’épargne');
+    const c = carte();
+    vrai(/const avecCredit = rec\.capitalRembourse > 0\.005;/.test(c),
+      'la carte sait distinguer les deux cas');
+    vrai(/\$\{avecCredit \? `/.test(c),
+      'et la décomposition ne se rend que dans l’un des deux');
+    vrai(/sans crédit en cours/.test(c),
+      'le sous-titre dit alors ce que le total est, pour qu’on ne cherche pas sa capacité d’épargne');
+  });
+
+  test('une capacité d’épargne négative ne casse pas la somme', () => {
+    /* −300 de capacite et +500 de capital font +200, pas +500 et pas zero. */
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 1200 }];
+      s.budget.fixedCharges = [{ id: 'c1', label: 'Loyer', amount: 900, periode: 'mois' }];
+      s.budget.expenses = [{ month: todayISO().slice(0, 4) + '-01', v: { Courses: 600 }, note: '' }];
+      s.etabs.find(e => e.id === 'e_bien').dettes = [
+        { id: 'd', libelle: 'Prêt', montant: 150000, taux: 2, mensualite: 900, note: '' }];
+    });
+    const rec = savingsReconciliation();
+    pres(rec.investable, -300, 'la capacité d’épargne est négative, et le reste');
+    vrai(rec.capitalRembourse > 0.005, 'et un capital se rembourse quand même');
+    pres(rec.theoretical, rec.investable + rec.capitalRembourse,
+      'la somme se fait telle quelle, sans plancher à zéro');
+    vrai(rec.theoretical > rec.investable,
+      'le capital remonte le total sans effacer le déficit');
+  });
+
+  test('une accumulation négative s’affiche négative, jamais ramenée à zéro', () => {
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 1000 }];
+      s.budget.fixedCharges = [{ id: 'c1', label: 'Loyer', amount: 900, periode: 'mois' }];
+      s.budget.expenses = [{ month: todayISO().slice(0, 4) + '-01', v: { Courses: 900 }, note: '' }];
+      s.etabs.find(e => e.id === 'e_bien').dettes = [];
+    });
+    const rec = savingsReconciliation();
+    pres(rec.theoretical, -800, 'moins huit cents, et pas zéro');
+    vrai(rec.theoreticalRate < 0, 'le taux suit le signe');
+    /* Cote affichage : la convention negative du projet, et un signe toujours
+       ecrit sur le total. */
+    const c = carte();
+    vrai(/cls\(rec\.theoretical\)/.test(c),
+      'la couleur suit le signe, comme partout ailleurs');
+    vrai(/fmtSigned\(rec\.theoretical\)/.test(c),
+      'et le signe est toujours écrit : un total signé ne se lit pas comme un solde');
+  });
+
+  test('la carte ne suit pas Net / Brut, et rien ne l’y oblige', () => {
+    /* Elle mesure un FLUX mensuel. `savingsReconciliation()` ne lit ni
+       `patrimoine()` ni les dettes en stock : le commutateur du haut de page ne
+       la traverse nulle part, et il n'y avait donc aucune convention a inventer.
+
+       Le controle porte sur la cause : ni la carte ni la fonction ne mentionnent
+       le commutateur. */
+    const c = carte();
+    vrai(!/evoNet/.test(c), 'la carte ne lit pas le commutateur');
+    const store = lireSource('assets/store.js');
+    const fn = store.slice(store.indexOf('function savingsReconciliation()'),
+                           store.indexOf('function prochainJour('));
+    vrai(fn.length > 200, 'la fonction doit être trouvable');
+    vrai(!/patrimoine\(\)/.test(fn) && !/dettesTotal\(\)/.test(fn),
+      'et son calcul ne touche pas au patrimoine en stock');
+    /* Mesure : le même résultat quel que soit l'état du patrimoine. */
+    Fixture.poser();
+    const avant = savingsReconciliation().theoretical;
+    Fixture.poser(s => {
+      s.comptes.find(c2 => c2.id === 'c_immo').lignes = [];
+    });
+    pres(savingsReconciliation().theoretical, avant,
+      'retirer 120 000 EUR de murs ne change pas d’un centime ce qu’on accumule ce mois-ci');
+  });
+
+  test('le filet du total ne se coupe pas dans la gouttière', () => {
+    /* Le total porte un filet au-dessus : c'est le dessin d'une addition, et il
+       dit sans un mot que les lignes du dessus s'y ajoutent. `.kv` est une
+       GRILLE a deux colonnes, donc un `border-top` pose sur le libelle et sur le
+       montant laisse la gouttiere non peinte : deux troncons et un trou au
+       milieu. L'ecart passe en remplissage du libelle.
+
+       Et il faut le poser DEUX FOIS. Le bloc telephone redeclare le `gap` de
+       `.kv`, a la meme specificite et plus bas dans le fichier : c'est lui qui
+       tranche sous 768 px. Sans la reprise, le filet etait continu sur grand
+       ecran et coupe de dix pixels a 375 px — mesure, et invisible a qui ne
+       regarde que son ordinateur. Le fichier documente deja ce piege pour
+       `.kv-texte`, deux regles plus haut. */
+    const css = lireSource('assets/styles.css');
+    vrai(css, 'la feuille de style doit être lisible');
+    const regles = (css.match(/\.kv-accumul \{ column-gap: 0; \}/g) || []).length;
+    eq(regles, 2,
+      'la règle doit être posée deux fois : une fois pour l’écran, une fois dans '
+      + 'le bloc téléphone qui redéclare le gap de .kv');
+    eq((css.match(/\.kv-accumul dt \{ padding-right: \d+px; \}/g) || []).length, 2,
+      'et l’écart entre les colonnes est rendu par le remplissage, des deux côtés');
+    /* La reprise vit bien DANS le bloc telephone, apres la redeclaration
+       qu'elle doit battre : c'est l'ordre qui tranche, pas la specificite. */
+    const iKvMobile = css.lastIndexOf('.kv { grid-template-columns');
+    const iReprise = css.lastIndexOf('.kv-accumul { column-gap: 0; }');
+    vrai(iKvMobile > 0 && iReprise > iKvMobile,
+      'la reprise doit suivre la redéclaration mobile, sinon elle ne la bat pas');
+  });
+
+  test('« Rythme d’accumulation » garde ce qui lui appartient', () => {
+    /* Il perd la ligne qui a demenage, et rien d'autre : sa courbe, sa plage,
+       sa moyenne constatee, ses apports exceptionnels et ses trois compteurs. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("trad('Rythme d\\'accumulation')");
+    vrai(i > 0, 'la carte existe toujours');
+    const bloc = src.slice(i, src.indexOf("trad('Autonomie financière')"));
+    for (const garde of ["rangeControl('pace-range', paceRange)", 'id="chartPace"',
+                         "trad('Moyenne mensuelle du patrimoine')", "trad('Mois en hausse')",
+                         "trad('Meilleur mois')", "trad('Pire mois')"]) {
+      vrai(bloc.includes(garde), `« ${garde} » appartient au rythme et y reste`);
+    }
+    vrai(!/savingsReconciliation/.test(bloc),
+      'et il ne lit plus le budget : c’est l’autre carte qui le fait');
+  });
+});
+
 suite('Un crédit dit ce qu’il reste à payer', () => {
 
   /* La formule fermee se verifie contre un amortissement mois par mois, calcule
@@ -16504,9 +16907,13 @@ suite('Un montant, un nom, partout', () => {
     const src = lireSource('assets/app.js');
     vrai(!/Reste à investir/.test(src),
       'ce libellé entrait en concurrence avec « Capacité d’épargne »');
-    /* Le meme chiffre, le meme nom, aux deux endroits qui l'affichent. */
-    eq((src.match(/trad\('Objectif d’investissement'\)/g) || []).length, 2,
-      'la barre du budget et la carte « Épargne et croissance » le nomment pareil');
+    /* Un seul endroit l'affiche depuis que « Epargne et croissance » a quitte
+       l'onglet Charges fixes : la barre « Ou va ce que tu gagnes », dans l'onglet
+       Depenses. Le libelle et l'aide y etaient deja repris de cette carte, mot
+       pour mot, ce que son commentaire dit encore — le fait ne s'est donc pas
+       perdu en route, il a cesse d'etre ecrit deux fois. */
+    eq((src.match(/trad\('Objectif d’investissement'\)/g) || []).length, 1,
+      'la barre du budget le nomme, et elle est seule à le faire');
     /* Et les deux grandeurs viennent bien de deux sources distinctes. */
     Fixture.poser();
     const rec = savingsReconciliation();
@@ -16518,21 +16925,31 @@ suite('Un montant, un nom, partout', () => {
       'la capacité d’épargne suit les dépenses constatées');
   });
 
-  test('« croissance observée » et non « réelle »', () => {
+  test('aucune croissance ne se dit « réelle »', () => {
     /* « Reel » veut dire « corrige de l'inflation » en finance, et Projection
-       emploie deja cette notion sous le nom d'euros d'aujourd'hui. Ce chiffre-ci
-       est ce que les releves montrent, inflation comprise. */
+       emploie deja cette notion sous le nom d'euros d'aujourd'hui. Le chiffre
+       qui s'appelait « Croissance reelle du patrimoine » a d'abord ete renomme
+       « Croissance observee », puis il a disparu avec la carte « Epargne et
+       croissance » : il redisait le rythme observe d'Apercu > Aujourd'hui, ce
+       que sa propre aide affirmait mot pour mot.
+
+       Ce qui reste a garder est la regle de nommage, pas le libelle : aucune
+       variation constatee ne doit se dire « reelle », et celle qui survit doit
+       continuer de dire ce qu'elle contient. */
     const src = lireSource('assets/app.js');
     vrai(!/Croissance réelle du patrimoine/.test(src),
       'le mot « réelle » promettait une correction de l’inflation qui n’a pas lieu');
-    vrai(/trad\('Croissance observée du patrimoine'\)/.test(src),
-      'et le nom dit d’où vient le chiffre : des relevés');
-    /* Les longues aides sont concatenees sur plusieurs lignes : on recolle la
-       colle avant de chercher, sinon le test depend de la mise en page. */
-    const recolle = s => s.replace(/'\s*\+\s*'/g, '');
-    const i = src.indexOf("trad('Croissance observée du patrimoine')");
-    vrai(i > 0 && /n’est pas corrigée de l’inflation/.test(recolle(src.slice(i, i + 1600))),
-      'l’aide lève l’ambiguïté au lieu de la laisser');
+    /* La ligne survivante, dans « Rythme d'accumulation ». Les longues aides sont
+       concatenees sur plusieurs lignes : on recolle avant de chercher, sinon le
+       test depend de la mise en page. */
+    const recolle = t => t.replace(/'\s*\+\s*'/g, '');
+    const i = src.indexOf("trad('Moyenne mensuelle du patrimoine')");
+    vrai(i > 0, 'la variation constatée du patrimoine garde sa ligne');
+    const aide = recolle(src.slice(i, i + 900));
+    vrai(/mouvements de marché et les apports/.test(aide),
+      'et son aide dit ce qu’elle contient, marchés et apports compris');
+    vrai(/Le mois en cours reste dehors/.test(aide),
+      'ainsi que ce qu’elle laisse dehors');
   });
 
   test('aucune comparaison à une moyenne sans base', () => {
@@ -19882,15 +20299,45 @@ suite('Deux montants, deux noms, et le lecteur voit lequel', () => {
       '« investissable » cède la place à « capacité d’épargne », un seul nom par notion');
   });
 
-  test('le rythme d’accumulation porte le bon nom et dit sa composition', () => {
+  test('l’accumulation dit sa composition, et une seule carte la porte', () => {
+    /* La ligne « Accumulation patrimoniale theorique » vivait dans « Rythme
+       d'accumulation », avec sa composition en sous-titre et un lien vers la
+       carte de Budget qui la calculait. Elle a sa carte a elle desormais,
+       « Accumulation ce mois-ci », sur la meme page : la garder aux deux
+       endroits aurait mis le meme montant deux fois sur un ecran, et son lien
+       menait vers une carte qui n'existe plus.
+
+       Le partage est celui que la page annonce : « Rythme » montre la variation
+       CONSTATEE et son etalement dans le temps, « Accumulation ce mois-ci » la
+       prevision tiree du budget. Deux natures, deux cartes, aucun chiffre en
+       commun. */
     const src = lireSource('assets/app.js');
-    const carte = src.slice(src.indexOf("trad('Accumulation patrimoniale théorique')"),
-                            src.indexOf("trad('Mois en hausse')"));
-    vrai(carte, 'la carte doit être trouvable');
-    vrai(/budgetee\.theoretical/.test(src),
-      'la valeur affichée reste l’accumulation : c’est bien ce nombre-là');
-    vrai(/budgetee\.investable[\s\S]{0,200}budgetee\.capitalRembourse/.test(carte),
-      'et la ligne du dessous décompose : capacité d’épargne plus capital remboursé');
+    const carte = src.slice(src.indexOf('function carteAccumulation()'),
+                            src.indexOf('/* Les deux sorties d’un rappel de saisie')
+                            + 1 || src.indexOf('function carteAccumulation()') + 4000);
+    vrai(/trad\('Accumulation patrimoniale'\)/.test(carte),
+      'la carte porte le chiffre');
+    vrai(/rec\.investable/.test(carte) && /rec\.capitalRembourse/.test(carte),
+      'et ses deux composantes, capacité d’épargne et capital remboursé');
+    vrai(/rec\.theoretical/.test(carte), 'le total vient du modèle, pas d’une addition refaite ici');
+    /* Et « Rythme d'accumulation » ne la redit plus. */
+    vrai(!/Accumulation patrimoniale théorique/.test(src),
+      'la ligne dupliquée a quitté « Rythme d’accumulation »');
+    vrai(!/const budgetee =/.test(src),
+      'son intermédiaire est parti avec elle : un appel sans lecteur est du code mort');
+    /* Et l'autre appel sans lecteur, celui de la vue Budget : la carte en etait
+       la seule cliente de cet ecran. */
+    /* `viewBudgetCadre` est DECLARE AVANT `viewBudget` : borner la tranche
+       dessus la rendait vide, et le controle criait « introuvable » au lieu de
+       mesurer quoi que ce soit. La borne est la fonction qui SUIT vraiment. */
+    const vueBudget = src.slice(src.indexOf('function viewBudget(section'),
+                                src.indexOf('function paliersCible('));
+    vrai(vueBudget.length > 1000, 'la vue Budget doit être trouvable');
+    /* Commentaires retires : celui qui explique le retrait cite la fonction, et
+       un controle qui crie sur sa propre explication finit par etre desactive. */
+    const codeBudget = vueBudget.replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(!/savingsReconciliation\(\)/.test(codeBudget),
+      'et viewBudget ne lit plus un rapprochement que plus rien n’y affiche');
   });
 
   test('la décomposition affichée fait exactement le total affiché', () => {
@@ -22195,29 +22642,30 @@ suite('Chercher un titre, c’est en ajouter un', () => {
       'très loin des 116 000 € que le taux du marché lui aurait prêtés');
   });
 
-  test('une carte qui porte deux natures ne s’appelle pas d’une seule', () => {
-    /* Le haut de la carte est un flux de budget : ce que les revenus laissent
-       une fois les charges et les depenses retirees. Le bas est la variation du
-       patrimoine net d'un mois sur l'autre, qui contient les marches, les
-       apports exterieurs et le capital rembourse d'un credit. Sous le titre
-       « Epargne mensuelle », le second se lisait comme de l'epargne.
+  test('les deux natures ont chacune leur carte, et plus un titre commun', () => {
+    /* « Epargne et croissance » portait deux choses sous un titre : un flux de
+       budget — ce que les revenus laissent une fois charges et depenses
+       retirees — et la variation du patrimoine net d'un mois sur l'autre, qui
+       contient les marches et les apports exterieurs. Le titre les nommait
+       toutes deux, faute de mieux, parce qu'elles etaient dans la meme carte.
 
-       Et « Ecart avec la theorie » invitait a y voir une erreur de saisie, la
-       ou il n'y a que ce que le budget ne peut pas prevoir. Un intitule dit ce
-       qu'il compte. */
+       Elles n'y sont plus. Le flux est devenu « Accumulation ce mois-ci » sur
+       l'accueil ; la variation constatee vit dans « Rythme d'accumulation »,
+       ou elle etait deja. Un titre a deux natures etait le pansement d'un
+       probleme de rangement, et le rangement est fait. */
     const src = lireSource('assets/app.js');
-    vrai(/<h2>\$\{trad\('Épargne et croissance'\)\}<\/h2>/.test(src),
-      'le titre nomme les deux natures');
+    vrai(!/trad\('Épargne et croissance'\)/.test(src),
+      'la carte à deux natures a quitté l’onglet Charges fixes');
     vrai(!/trad\('Écart avec la théorie'\)/.test(src),
-      'plus d’« écart », qui se lisait comme une erreur');
-    vrai(/trad\('Ce qui ne vient pas du budget'\)/.test(src),
-      'l’intitulé dit ce que la ligne compte');
-    /* Les deux montants restent ceux du calcul : renommer ne recalcule rien. */
+      'et « écart », qui se lisait comme une erreur, n’est jamais revenu');
+    /* Le modele n'a pas bouge : `gap` reste calcule et reste juste, meme si plus
+       aucun ecran ne l'affiche. On ne touche pas aux calculs pour un
+       demenagement d'interface. */
     Fixture.poser();
     const rec = savingsReconciliation();
     if (rec.realPerMonth != null) {
       pres(rec.gap, rec.realPerMonth - rec.theoretical,
-        'la ligne reste la différence entre le constaté et le prévu');
+        'la différence entre le constaté et le prévu reste exacte dans le modèle');
     }
   });
 

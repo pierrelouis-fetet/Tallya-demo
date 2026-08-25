@@ -2957,6 +2957,32 @@ td .empty, th .empty { background: none; border: none; }
 .kv-texte dd { white-space: normal; overflow-wrap: anywhere; }
 .kv-texte dt { overflow-wrap: normal; min-width: max-content; }
 
+/* La carte « Accumulation ce mois-ci » : deux lignes qui composent, une ligne
+   qui compte.
+
+   Le total porte un filet au-dessus et un corps plus grand — c'est le dessin
+   d'une addition, et il dit sans un mot que les lignes du dessus s'y ajoutent.
+   Le filet ne se pose que si quelque chose le precede : sans credit a
+   rembourser, la decomposition n'a pas lieu d'etre et le total ouvre la liste,
+   ou un trait horizontal en tete de carte ne separerait rien.
+
+   `:first-of-type` plutot qu'un drapeau passe par le gabarit : la regle se lit
+   sur la structure reelle, donc elle reste juste le jour ou une ligne s'ajoute
+   au-dessus. */
+/* La gouttiere de 14 px de `.kv` coupait le filet en deux troncons, un sous le
+   libelle et un sous le montant, avec un trou au milieu — le trait cessait de
+   se lire comme la barre d'une addition. L'ecart passe donc en remplissage du
+   libelle : meme respiration entre les deux colonnes, et un filet continu.
+   L'ecart entre les LIGNES, lui, ne change pas. */
+.kv-accumul { column-gap: 0; }
+.kv-accumul dt { padding-right: 14px; }
+.kv-accumul dt.cle:not(:first-of-type),
+.kv-accumul dd.cle:not(:first-of-type) {
+  border-top: 1px solid var(--grid); padding-top: 9px; margin-top: 3px;
+}
+.kv-accumul .cle { color: var(--text-primary); }
+.kv-accumul dd.cle b { font-size: 18px; letter-spacing: -.015em; }
+
 .acct-card { display: flex; flex-direction: column; gap: 12px; }
 .acct-head { display: flex; align-items: center; gap: 10px; }
 .acct-head h3 { margin: 0; font-size: 14px; }
@@ -3438,6 +3464,13 @@ td .empty, th .empty { background: none; border: none; }
 
   .kv-texte { grid-template-columns: auto minmax(0, 1fr); }
   .kv-texte dt { min-width: max-content; overflow-wrap: normal; }
+  /* Reprise, et pour la raison que `.kv-texte` documente juste au-dessus : le
+     `gap` de `.kv` est redeclare dans ce bloc, a la meme specificite et plus
+     bas dans le fichier, donc c'est lui qui tranche. Sans cette ligne le filet
+     du total se coupait en deux troncons a 375 px, avec dix pixels de trou au
+     milieu — mesure, et invisible sur grand ecran. */
+  .kv-accumul { column-gap: 0; }
+  .kv-accumul dt { padding-right: 10px; }
 
   /* La colonne du pourcentage tient aussi sous 900 px : sans elle dans la
      grille, le `.flow-pct` du panneau passerait a la ligne suivante et chaque
@@ -4129,25 +4162,16 @@ details[open]::details-content { block-size: auto; }
   box-shadow: 0 0 0 2px var(--surface-1);
 }
 
-/* ---------------- Budget : le resume, puis les deux tableaux ----------
-   Trois cartes a la suite, sur toute la largeur, et l'ordre du balisage n'est
-   pas le bon : `order` le corrige sans qu'on ait a deplacer soixante lignes de
-   gabarit.
+/* ---------------- Budget : les cartes de l'onglet Charges fixes -------
+   Trois regles d'ordre vivaient ici. Elles remettaient « Epargne et croissance »
+   devant le tableau des charges, `order` evitant de deplacer soixante lignes de
+   gabarit pour un resultat identique.
 
-   « Epargne mensuelle » vient en premier, juste sous « Ce qui sort chaque
-   mois » : c'est un resume de six lignes — revenus, charges, depenses, epargne
-   theorique, taux, objectif — et il se lit avant les tableaux qui le detaillent.
-   Il fermait la page, donc apres cent lignes de saisie, alors qu'il repond a la
-   question qu'on se pose en arrivant. Le commentaire d'avant annoncait deja
-   qu'il « passe devant » : l'ordre disait le contraire.
-
-   La colonne interieure s'efface en `display: contents` : ses deux cartes
-   deviennent des elements de la grille exterieure, et l'ordre se decide alors
-   sur les trois d'un coup. */
-.budget-charges > .grid { display: contents; }
-.budget-charges > .grid > .card:nth-child(1) { order: 1; } /* Epargne mensuelle */
-.budget-charges > .card { order: 2; }                      /* Charges fixes */
-.budget-charges > .grid > .card:nth-child(2) { order: 3; } /* Autres depenses */
+   Cette carte est passee sur l'accueil, ou sa question se pose vraiment. Il ne
+   reste qu'une carte dans cette grille, donc plus rien a ordonner : les trois
+   regles sont parties avec elle, et la classe `budget-charges` qui n'existait
+   que pour les porter. Une regle d'ordre sans second element est du CSS qui ne
+   fait rien, et la prochaine session la lirait comme une contrainte a tenir. */
 
 .sous-onglets .pastille-onglet {
   display: inline-block; width: 6px; height: 6px; border-radius: var(--radius-pill);

@@ -43,9 +43,19 @@ c'est normal.
    `--force` et toute réécriture d'un historique déjà publié ; un `git push` qui
    pousse une branche autre que celle demandée ; ici, pousser la branche de
    travail, dont l'historique est privé, la publication passant par
-   `public-propre:main` et par elle seule. Et en cas de rejet pour
+   `public-purge2:main` et par elle seule. `public-propre` existe encore et porte
+   le même genre de nom : elle date du 18 août et accuse 63 commits de retard. La
+   nommer a déjà envoyé une session ailleurs. Et en cas de rejet pour
    non-fast-forward, on regarde ce que le distant porte en plus avant de faire
    quoi que ce soit : quelqu'un a écrit ailleurs, l'écraser perdrait son travail.
+
+   **Et l'arbre doit être propre AVANT tout `git checkout`.** Le miroir se pose
+   par `git read-tree -u --reset`, qui écrase l'arbre de travail sans rien
+   demander : une modification non commitée qui traînait au moment du basculement
+   est perdue, et git ne l'a pas — elle n'a jamais été indexée. C'est arrivé à
+   ce fichier-ci, le 25 août, pendant la publication qui corrigeait justement le
+   nom de branche ci-dessus. `git status --porcelain` doit rendre le vide, et
+   c'est un arrêt, pas un avertissement.
 
    Les deux `fatal: Failed to write item to store` de chaque push sont du bruit :
    c'est la ligne d'avancement des refs qui dit si l'envoi a abouti, jamais le
@@ -491,8 +501,12 @@ tenir :
 
 1. **Une branche de travail ne va jamais sur un dépôt public.** Son historique
    porte tout ce qu'on a essayé puis retiré, et personne ne relit six cents
-   commits avant un push. Ici, seule `public-propre:main` est publiable, et son
-   historique a été reparti de zéro le 9 août pour cette raison exacte.
+   commits avant un push. Ici, seule `public-purge2:main` est publiable, et son
+   historique a été reparti de zéro le 9 août pour cette raison exacte. Les
+   branches `public`, `public-propre` et `public-purge` sont ses ancêtres
+   abandonnés : elles portent le même genre de nom et des mois de retard, donc
+   la seule façon de savoir laquelle est la bonne est de la comparer au distant,
+   `git rev-list --count public-purge2..origin/main`, qui doit rendre 0.
 2. **Avant de pousser vers un distant public, on regarde ce que la branche
    porte**, et pas seulement ce que l'arbre montre. `git log -S"<un nom>"` coûte
    trois secondes et répond.

@@ -17,6 +17,32 @@ const Charts = (() => {
 
   const registry = new Map();     // el -> render fn
 
+  /* Ce que chaque conteneur a trace en dernier, pour pouvoir animer vers la
+     suite.
+
+     Le souvenir vit ici et non chez l'appelant. `monterEvolution()` aurait pu
+     garder les points precedents dans une variable de module, mais il aurait
+     fallu qu'il sache aussi l'echelle, le tableau des bandes et leur ordre —
+     soit la moitie de l'etat interne du graphique, recopiee dans la vue. La
+     vue dit « anime cette transition », le graphique sait d'ou il vient.
+
+     **Range par identifiant, et surtout pas par element.** Une `WeakMap` clefee
+     sur le noeud etait le premier reflexe, et elle ne retenait rien : `render()`
+     reecrit le `innerHTML` de la vue entiere, donc le `<div id="chartEvo">` du
+     rendu suivant est un AUTRE noeud. La clef n'existait plus au moment de la
+     lire, `get()` rendait `undefined`, et la transition se posait d'un coup sans
+     erreur ni message — mesuree a l'image pres, elle etait deja arrivee a 13 ms.
+     Un conteneur sans identifiant ne se souvient donc de rien, et n'anime pas :
+     c'est le cas de tous les graphiques sauf celui-ci.
+
+     Ce que ca retient est minuscule — sept tableaux d'une douzaine de nombres —
+     et jamais un noeud du DOM, donc rien qui empeche une page de se liberer. */
+  const dernierTrace = new Map();
+  const cleTrace = el => el.id || null;
+
+  const mouvementRefuse = () =>
+    window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   /* Un conteneur absent n'est pas une erreur, c'est une carte que la vue a
      choisi de ne pas rendre. Sans cette garde, chaque graphique lisait
      `el.clientWidth` sur `null` et l'exception remontait jusqu'a `render()` :
@@ -209,6 +235,10 @@ const Charts = (() => {
      (Une seconde serie en pointille pour les euros d'aujourd'hui a ete
      essayee puis retiree : deux courbes quasi paralleles, du bruit.) */
   function stackedArea(el, opts) {
+    /* `anime` vit hors du rendu et s'eteint apres le premier : le registre
+       rejoue ce rendu a chaque redimensionnement, et une transition qui se
+       rejouerait en tirant sur le coin de la fenetre serait un tic. */
+    let anime = !!opts.anime;
     mount(el, () => {
       /* `bande: { min, max }` : deux cles a lire sur chaque point, tracees en
          zone translucide derriere les bandes. Sert aux scenarios de la
@@ -232,23 +262,55 @@ const Charts = (() => {
       const x = i => m.l + (points.length === 1 ? iw / 2 : i * iw / (points.length - 1));
       const y = v => m.t + ih - (v / top) * ih;
 
-      let cum = points.map(() => 0);
+      /* --- la geometrie des bandes, en un seul endroit ---------------------
+
+         Elle etait ecrite une fois, en ligne, ce qui suffisait tant que le
+         dessin ne bougeait plus apres sa pose. L'animation en redemande une
+         image par frame, avec d'autres valeurs et une autre echelle : deux
+         ecritures du meme empilement auraient fini par ne plus empiler pareil,
+         et le defaut ne se verrait que pendant le demi-seconde de la
+         transition — donc jamais vraiment.
+
+         `valeur(i, cle)` plutot que les points directement : c'est le seul
+         point ou l'animation differe, elle interpole entre deux etats. `topC`
+         de meme, l'echelle etant ce qui bouge le plus d'une vue a l'autre. */
+      function empiler(valeur, topC, cles) {
+        const yC = v => m.t + ih - (v / topC) * ih;
+        let bas = points.map(() => 0);
+        const bandes = [];
+        for (const cle of cles) {
+          const dessous = [...bas];
+          bas = bas.map((v, i) => v + valeur(i, cle));
+          bandes.push({
+            cle,
+            haut: bas.map((v, i) => `${x(i)},${yC(v)}`).join(' '),
+            bas: dessous.map((v, i) => `${x(i)},${yC(v)}`).reverse().join(' '),
+            epaisseur: Math.max(...bas.map((v, i) => Math.abs(yC(dessous[i]) - yC(v)))),
+          });
+        }
+        return { bandes, cumul: bas, total: bas.map((v, i) => `${x(i)},${yC(v)}`).join(' '), y: yC };
+      }
+
+      const valeurDuPoint = (i, cle) => points[i][cle] || 0;
+      const geo = empiler(valeurDuPoint, top, series.map(sr => sr.key));
+
       const areas = [];
       const HAUTEUR_TRAIT = 2.5;
-      for (const sr of series) {
-        const lower = [...cum];
-        cum = cum.map((v, i) => v + (points[i][sr.key] || 0));
-        const up = cum.map((v, i) => `${x(i)},${y(v)}`).join(' ');
-        const dn = lower.map((v, i) => `${x(i)},${y(v)}`).reverse().join(' ');
-        const epaisseur = Math.max(...points.map((p, i) => Math.abs(y(lower[i]) - y(cum[i]))));
-        const trait = epaisseur >= HAUTEUR_TRAIT
-          ? `<polyline points="${up}" fill="none" stroke="${c.surface}" stroke-width="2"/>`
-            + `<polyline points="${up}" fill="none" stroke="${sr.color}" stroke-width="1.75"
-                        stroke-linejoin="round" stroke-linecap="round"/>`
+      series.forEach((sr, k) => {
+        const b = geo.bandes[k];
+        /* `data-bande` : l'animation retrouve la bande de chaque poche sans
+           compter les enfants, ce qu'un trait absent fausserait — une bande
+           trop mince en pose deux de moins que sa voisine. */
+        const trait = b.epaisseur >= HAUTEUR_TRAIT
+          ? `<polyline points="${b.haut}" fill="none" stroke="${c.surface}" stroke-width="2"
+                       data-trait="${esc(sr.key)}"/>`
+            + `<polyline points="${b.haut}" fill="none" stroke="${sr.color}" stroke-width="1.75"
+                        stroke-linejoin="round" stroke-linecap="round" data-trait="${esc(sr.key)}"/>`
           : '';
-        areas.push(`<polygon points="${up} ${dn}" fill="${sr.color}" fill-opacity=".28"/>${trait}`);
-      }
-      const totalLine = totals.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+        areas.push(`<polygon points="${b.haut} ${b.bas}" fill="${sr.color}" fill-opacity=".28"
+                             data-bande="${esc(sr.key)}"/>${trait}`);
+      });
+      const totalLine = geo.total;
 
       const every = Math.ceil(points.length / Math.max(3, Math.floor(iw / 78)));
       const xLabels = points.map((p, i) =>
@@ -260,8 +322,8 @@ const Charts = (() => {
       el.innerHTML = `
         <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Évolution du patrimoine')}">
           <defs><clipPath id="${clip}"><rect x="${m.l}" y="0" width="${iw}" height="${H}"/></clipPath></defs>
-          ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${c.grid}" stroke-width="1"/>
-            <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" class="tick">${kEur(t)}</text>`).join('')}
+          ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${c.grid}" stroke-width="1" data-tick="${t}"/>
+            <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" class="tick" data-tick="${t}">${kEur(t)}</text>`).join('')}
           <g clip-path="url(#${clip})">
           ${bande ? (() => {
             const haut = points.map((p, i) => `${x(i)},${y(p[bande.max] || 0)}`).join(' ');
@@ -293,6 +355,109 @@ const Charts = (() => {
           </g>
           <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" class="hit"/>
         </svg>`;
+
+      const cle = cleTrace(el);
+      if (anime && cle && !mouvementRefuse()) animerDepuis(dernierTrace.get(cle));
+      anime = false;
+      if (cle) dernierTrace.set(cle, {
+        valeurs: Object.fromEntries(series.map(sr =>
+          [sr.key, points.map(p => p[sr.key] || 0)])),
+        cles: series.map(sr => sr.key),
+        couleurs: Object.fromEntries(series.map(sr => [sr.key, sr.color])),
+        top,
+        dates: points.map(p => p.date || p.label).join('|'),
+      });
+
+      function animerDepuis(avant) {
+        if (!avant || avant.dates !== points.map(p => p.date || p.label).join('|')) return;
+        const cles = [...avant.cles];
+        for (const k of series.map(sr => sr.key)) if (!cles.includes(k)) cles.push(k);
+        const ordre = series.map(sr => sr.key);
+        cles.sort((a, b) => {
+          const ia = ordre.indexOf(a), ib = ordre.indexOf(b);
+          if (ia >= 0 && ib >= 0) return ia - ib;
+          return avant.cles.indexOf(a) - avant.cles.indexOf(b);
+        });
+
+        const svgEl = el.querySelector('svg');
+        const trace = el.querySelector('.chart-trace');
+        if (!svgEl || !trace) return;
+
+        const couleur = Object.fromEntries(series.map(sr => [sr.key, sr.color]));
+        const partantes = cles.filter(k => !ordre.includes(k));
+        /* Les bandes qui s'en vont, reposees a leur rang pour la duree du
+           mouvement. `insertBefore` sur la bande qui les suivait dans la pile :
+           l'ordre de peinture EST l'ordre d'empilement en SVG. */
+        const temporaires = partantes.map(k => {
+          const suivante = ordre.find((_, i) => cles.indexOf(ordre[i]) > cles.indexOf(k));
+          const apres = suivante ? trace.querySelector(`[data-bande="${suivante}"]`) : null;
+          const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          poly.setAttribute('fill', avant.couleurs?.[k] || c.muted);
+          poly.setAttribute('fill-opacity', '.28');
+          poly.setAttribute('data-bande', k);
+          trace.insertBefore(poly, apres);
+          return poly;
+        });
+
+        const valeurAvant = (i, cle) => (avant.valeurs[cle] || [])[i] || 0;
+        const valeurApres = (i, cle) => points[i][cle] || 0;
+        const DUREE = 520;
+        let debut = null, fini = false;
+
+        const poser = (frac) => {
+          const e = 1 - Math.pow(1 - frac, 3);
+          const topC = avant.top + (top - avant.top) * e;
+          const g = empiler((i, cle) => valeurAvant(i, cle)
+            + (valeurApres(i, cle) - valeurAvant(i, cle)) * e, topC, cles);
+          g.bandes.forEach(b => {
+            const forme = trace.querySelector(`[data-bande="${b.cle}"]`);
+            if (forme) forme.setAttribute('points', `${b.haut} ${b.bas}`);
+            for (const t of trace.querySelectorAll(`[data-trait="${b.cle}"]`)) {
+              t.setAttribute('points', b.haut);
+            }
+          });
+          const ligne = trace.querySelector('polyline:not([data-trait])');
+          if (ligne) ligne.setAttribute('points', g.total);
+          for (const rep of svgEl.querySelectorAll('[data-tick]')) {
+            const v = Number(rep.dataset.tick);
+            const yv = m.t + ih - (v / topC) * ih;
+            if (rep.tagName === 'line') { rep.setAttribute('y1', yv); rep.setAttribute('y2', yv); }
+            else rep.setAttribute('y', yv + 4);
+          }
+        };
+
+        const finir = () => {
+          if (fini) return;
+          fini = true;
+          for (const t of temporaires) t.remove();
+          geo.bandes.forEach(b => {
+            const forme = trace.querySelector(`[data-bande="${b.cle}"]`);
+            if (forme) forme.setAttribute('points', `${b.haut} ${b.bas}`);
+            for (const t of trace.querySelectorAll(`[data-trait="${b.cle}"]`)) {
+              t.setAttribute('points', b.haut);
+            }
+          });
+          const ligne = trace.querySelector('polyline:not([data-trait])');
+          if (ligne) ligne.setAttribute('points', totalLine);
+          for (const rep of svgEl.querySelectorAll('[data-tick]')) {
+            const yv = y(Number(rep.dataset.tick));
+            if (rep.tagName === 'line') { rep.setAttribute('y1', yv); rep.setAttribute('y2', yv); }
+            else rep.setAttribute('y', yv + 4);
+          }
+        };
+
+        const pas = (t) => {
+          if (fini) return;
+          if (debut === null) debut = t;
+          const frac = Math.min(1, (t - debut) / DUREE);
+          poser(frac);
+          if (frac < 1) requestAnimationFrame(pas); else finir();
+        };
+        poser(0);
+        requestAnimationFrame(pas);
+        svgEl.addEventListener('pointerdown', finir, { once: true });
+        svgEl.addEventListener('pointermove', finir, { once: true });
+      }
 
       const tip = ensureTip(el);
       const svg = el.querySelector('svg');

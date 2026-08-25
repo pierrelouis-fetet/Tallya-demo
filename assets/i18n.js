@@ -927,6 +927,19 @@ const I18N = {
     "− Dépenses moyennes": "− Average spending",
     "Le capital remboursé sur tes crédits": "The principal repaid on your loans",
     "Taux d’accumulation": "Accumulation rate",
+    "Accumulation ce mois-ci": "This month’s accumulation",
+    "ce que ton épargne et tes crédits ajoutent": "what your saving and your loans add",
+    "Accumulation patrimoniale": "Net worth accumulation",
+    "+ Capital remboursé": "+ Principal repaid",
+    "ta capacité d’épargne, sans crédit en cours": "your savings capacity, with no loan running",
+    "Ce qu’il reste après tes revenus, tes charges fixes et tes dépenses.":
+      "What is left after your income, fixed costs and spending.",
+    "La part de ta mensualité qui réduit ta dette et augmente ton patrimoine net.":
+      "The share of your monthly payment that cuts your debt and raises your net worth.",
+    "Capacité d’épargne + capital de crédit remboursé.":
+      "Savings capacity plus loan principal repaid.",
+    "Part de tes revenus qui augmente ton patrimoine.":
+      "The share of your income that grows your net worth.",
     "augmente ton patrimoine, mais il n’est pas compté ici : il est déjà parti avec la mensualité, donc il n’est pas disponible à investir.": "raises your net worth, but it is not counted here: it left with the monthly payment, so it is not available to invest.",
     "Le cash qui reste chaque mois : revenus moins charges fixes moins dépenses moyennes. Le capital remboursé sur tes crédits n’y est pas : il augmente ton patrimoine, mais il est déjà parti avec la mensualité, donc il n’est pas disponible à investir.": "The cash left each month: income minus fixed costs minus average spending. The principal repaid on your loans is not in it: it raises your net worth, but it left with the monthly payment, so it is not available to invest.",
     "Progression théorique de ton patrimoine net : ta capacité d’épargne, plus le capital de crédit remboursé, qui fait baisser ta dette. La ligne du dessus est une variation constatée ; celle-ci est une prévision tirée de tes saisies.": "Theoretical growth of your net worth: your savings capacity, plus the loan principal repaid, which brings your debt down. The line above is an observed change; this one is a forecast drawn from your entries.",

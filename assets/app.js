@@ -601,11 +601,58 @@ function carteEvolution() {
 function monterEvolution() {
   const { points, series } = evolutionAffichee();
   const cible = $('#chartEvo');
+  const anime = evoTransition;
+  evoTransition = false;
   /* L'echelle verticale se recalcule toute seule sur les bandes passees :
      `Charts.stackedArea` somme `series` point par point pour son maximum et pour
      sa ligne Total. Retirer l'immobilier de la liste suffit donc a rendre l'axe
      aux placements, sans qu'un seul chiffre soit force ici. */
-  if (cible) Charts.stackedArea(cible, { points, height: 300, series });
+  if (cible) Charts.stackedArea(cible, { points, height: 300, series, anime });
+}
+
+/* « Combien est-ce que j'accumule en ce moment ? »
+
+   La reponse vivait dans Budget > Charges fixes, sous le titre « Epargne et
+   croissance », et elle y depassait de loin son onglet : revenus, charges,
+   depenses, capacite d'epargne, capital rembourse, accumulation, taux, plus la
+   croissance constatee du patrimoine et son ecart au budget. Un onglet qui
+   s'appelle « Charges fixes » doit repondre « quelles sont mes charges fixes ».
+
+   Ici la carte ne garde que la question qu'on se pose sur l'accueil, et le
+   chiffre qui y repond est le total, pas ses parts. Les deux lignes au-dessus
+   ne sont la que pour dire de quoi il est fait.
+
+   Rien n'est recalcule : `savingsReconciliation()` est la seule source, et elle
+   n'a pas bouge d'une ligne. Le detail — revenus, charges, depenses moyennes —
+   reste dans Budget et dans le panneau `capaciteEpargne`, ou la premiere ligne
+   mene. Une synthese qui refait le detail cesse d'etre une synthese.
+
+   Elle ne suit pas Net / Brut, et il n'y avait rien a decider : cette carte
+   mesure un FLUX mensuel, `savingsReconciliation()` ne lit ni `patrimoine()` ni
+   les dettes en stock, donc le commutateur du haut de page ne la traverse
+   nulle part. Un test le tient. */
+function carteAccumulation() {
+  const rec = savingsReconciliation();
+  const avecCredit = rec.capitalRembourse > 0.005;
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Accumulation ce mois-ci')}</h2>
+      <span class="hint">${trad('ce que ton épargne et tes crédits ajoutent')}</span></div>
+    <dl class="kv kv-accumul">
+      ${avecCredit ? `
+      <dt>${trad('Capacité d’épargne')}${aide(trad('Ce qu’il reste après tes revenus, tes charges fixes et tes dépenses.'))}</dt>
+        <dd><button type="button" class="mois-lien ${cls(rec.investable)}" data-action="apercu"
+                    data-apercu="capaciteEpargne"
+                    title="${trad('Voir le calcul')}">${fmtEUR0(rec.investable)}</button></dd>
+      <dt>${trad('+ Capital remboursé')}${aide(trad('La part de ta mensualité qui réduit ta dette et augmente ton patrimoine net.'))}</dt>
+        <dd>+${fmtEUR0(rec.capitalRembourse)}</dd>` : ''}
+      <dt class="cle"><b>${trad('Accumulation patrimoniale')}</b>${aide(trad('Capacité d’épargne + capital de crédit remboursé.'))}
+        ${avecCredit ? '' : `<span class="sub">${trad('ta capacité d’épargne, sans crédit en cours')}</span>`}</dt>
+        <dd class="cle"><b class="${cls(rec.theoretical)}">${fmtSigned(rec.theoretical)}</b></dd>
+      <dt>${trad('Taux d’accumulation')}${aide(trad('Part de tes revenus qui augmente ton patrimoine.'))}</dt>
+        <dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+    </dl>
+  </div>`;
 }
 
 function sortiesRappel(genre, label, avant = '') {
@@ -755,6 +802,8 @@ function viewOverview() {
     ${carteEvolution()}
   </div>
 
+  ${carteAccumulation()}
+
   <div class="grid g-2-1">
     <div class="card">
       <div class="card-head"><h2>${trad('Rythme d\'accumulation')}</h2>
@@ -762,7 +811,6 @@ function viewOverview() {
       <div class="chart" id="chartPace"></div>
       ${(() => {
         const p = statsRythme(limitRange(monthlyPace().points, paceRange, { ecarts: true }));
-        const budgetee = savingsReconciliation();
         return `<dl class="kv" style="margin-top:12px">
           ${p.apports ? `
           <dt>${trad('Dont')} ${p.apports < 0 ? trad('sorties exceptionnelles') : trad('entrées extérieures')}${aide(
@@ -773,12 +821,6 @@ function viewOverview() {
                 >${fmtSigned(p.apports)}</button></dd>` : ''}
           <dt>${trad('Moyenne mensuelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d’un mois sur l’autre, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Le mois en cours reste dehors : il est incomplet."))}
             <span class="sub">${trad('marchés et apports compris')}</span></dt><dd class="${cls(p.average)}">${fmtSigned(p.average)}</dd>
-          <dt>${trad('Accumulation patrimoniale théorique')}${aide(trad('Progression théorique de ton patrimoine net : ta capacité d’épargne, plus le capital de crédit remboursé, qui fait baisser ta dette. La ligne du dessus est une variation constatée ; celle-ci est une prévision tirée de tes saisies.'))}
-            <span class="sub">${budgetee.capitalRembourse > 0.005
-              ? `${fmtEUR0(budgetee.investable)} ${trad('de capacité d’épargne')} + ${fmtEUR0(budgetee.capitalRembourse)} ${trad('de capital de crédit remboursé')}`
-              : trad('prévision, hors marchés')}</span></dt>
-            <dd><button type="button" class="mois-lien" data-action="goto" data-view="budget" data-anchor=""
-                        title="${trad('Voir le rapprochement dans Budget')}">${fmtEUR0(budgetee.theoretical)}</button></dd>
           <dt>${trad('Mois en hausse')}</dt><dd>${p.positive} / ${p.count}</dd>
           ${p.best ? `<dt>${trad('Meilleur mois')}</dt><dd>${esc(p.best.label)} · ${fmtSigned(p.best.delta)}</dd>` : ''}
           ${p.worst ? `<dt>${trad('Pire mois')}</dt><dd>${esc(p.worst.label)} · ${fmtSigned(p.worst.delta)}</dd>` : ''}
@@ -1801,6 +1843,15 @@ let evoNet = true;    // valorisation de toute la page Aujourd'hui
    tant qu'aucune dette ne declare l'actif qu'elle finance : voir
    `pointsEvolution()`. */
 let evoFinancier = true;
+/* Une transition a montrer au prochain montage de la courbe, et une seule.
+
+   `render()` remonte le graphique a chaque frappe, a chaque changement de plage
+   et a chaque retour sur la vue : animer a chaque montage rejouerait une demi
+   seconde de mouvement pour un rafraichissement que personne n'a demande. C'est
+   la regle deja posee pour le balayage d'arrivee, qui ne joue que sous
+   `.vue-entre`. Le drapeau se leve sur le seul geste qui change le cadrage, et
+   le montage de la courbe le consomme. */
+let evoTransition = false;
 let paceRange = '1y';        // rythme d'accumulation
 let journalOuvert = false;
 /* La ligne « Revenus » de la carte « Ou va ce que tu gagnes » ouvre ses sources.
@@ -4749,7 +4800,10 @@ function viewBudget(section = 'depenses') {
     .map((r, i) => ({ r, i }))
     .filter(({ r }) => year === 'all' || String(r.month).startsWith(year));
   const cur = currentExpenseMonth();
-  const rec = savingsReconciliation();
+  /* `savingsReconciliation()` etait lu ici, pour la carte « Epargne et
+     croissance » qui a rejoint l'accueil. Elle en etait le seul lecteur de cette
+     vue : la ligne est partie avec elle, sans quoi c'etait un appel dont plus
+     personne ne se servait — la moitie qu'on oublie en retirant un affichage. */
   const b = Store.state.budget;
 
   const resteObjectif = f.target - (cur ? cur.total : 0);
@@ -5181,7 +5235,7 @@ function viewBudget(section = 'depenses') {
     })()}
   </div>
 
-  <div class="grid budget-charges">
+  <div class="grid">
     <div class="card" data-anchor="charges">
       <div class="card-head"><h2>${trad('Charges fixes')}</h2>
         <div class="row">
@@ -5268,42 +5322,6 @@ function viewBudget(section = 'depenses') {
       })()}
     </div>
 
-    <div class="grid" style="gap:16px; align-content:start">
-      <div class="card">
-        <div class="card-head"><h2>${trad('Épargne et croissance')}</h2>
-          <span class="hint">${trad('ce que le budget prévoit, ce que le patrimoine fait')}</span></div>
-        <dl class="kv">
-          <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
-          <dt>${trad('− Charges fixes')}</dt><dd>−${fmtEUR0(rec.fixed)}</dd>
-          <dt>− ${trad('Dépenses (moy.')} ${esc(year)})</dt><dd>−${fmtEUR0(rec.spend)}</dd>
-          <dt><b>${trad('= Capacité d’épargne')}</b>${aide(trad('Le montant qui reste chaque mois après tes revenus, tes charges fixes et tes dépenses. C’est le cash réellement disponible : investir, poser sur un livret, ou laisser dormir. Projection le reprend comme versement mensuel. Une prévision tirée de tes saisies, pas un montant constaté sur un compte.'))}</dt><dd><b class="${cls(rec.investable)}">${fmtEUR0(rec.investable)}</b></dd>
-          ${rec.capitalRembourse > 0.005 ? `
-          <dt>${trad('+ Capital de crédit remboursé')}${aide(trad("La part de tes mensualités de crédit qui rembourse le capital, intérêts et assurance exclus. Elle augmente ton patrimoine net (le bien ne bouge pas, la dette baisse) mais elle n'arrive sur aucun compte : elle est déjà partie avec la mensualité. Projection ne la traite donc jamais comme un versement à investir."))}</dt><dd>+${fmtEUR0(rec.capitalRembourse)}</dd>
-          <dt><b>${trad('= Accumulation patrimoniale')}</b>${aide(trad('Progression théorique de ton patrimoine net : ta capacité d’épargne, plus le capital de crédit remboursé. Ce n’est pas un montant disponible.'))}</dt><dd><b class="${cls(rec.theoretical)}">${fmtEUR0(rec.theoretical)}</b></dd>` : ''}
-          <dt>${trad('Taux d’accumulation')}${aide(trad('Part de tes revenus qui contribue à '
-            + 'l’augmentation de ton patrimoine : ta capacité d’épargne, plus le capital de '
-            + 'crédit remboursé.'))}</dt><dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
-          <dt>${trad('Objectif d’investissement')}${aide(trad('Revenus moins charges fixes moins ton objectif de dépenses. C’est le montant que tu vises, là où la capacité d’épargne est ce que tes dépenses réelles laissent.'))}</dt><dd>${fmtEUR0(rec.targetSaving)}</dd>
-        </dl>
-        ${rec.realPerMonth != null ? `
-          <hr style="border:none;border-top:1px solid var(--grid);margin:14px 0">
-          <dl class="kv">
-            <dt>${trad('Croissance observée du patrimoine')}${aide(trad('Moyenne des '
-              + 'variations du patrimoine net d’un mois sur l’autre, telle que tes relevés '
-              + 'la montrent. Elle comprend les mouvements de marché et tout apport '
-              + 'extérieur, pas seulement ton épargne, et elle n’est pas corrigée de '
-              + 'l’inflation. C’est le même chiffre que le rythme observé dans '
-              + 'Aperçu > Aujourd’hui.'))}</dt><dd>${fmtEUR0(rec.realPerMonth)} ${trad('/ mois')}</dd>
-            <dt>${trad('Ce qui ne vient pas du budget')}${aide(trad("Ce qui sépare la croissance de ton patrimoine de l'épargne que ton budget dégage : les marchés, un apport extérieur, le capital d'un crédit que tu rembourses. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n'est une erreur de budget."))}</dt><dd class="${cls(rec.gap)}">${fmtSigned(rec.gap)}</dd>
-          </dl>
-          <p class="small muted" style="margin:12px 0 0">
-            ${trad('Mesuré sur les')} ${rec.monthsSpan} ${trad('derniers mois clos. Le mois en cours est '
-            + 'écarté, il est incomplet. L’écart vient des performances de marché et des '
-            + 'apports supplémentaires : ce n’est pas une erreur de budget.')}
-          </p>` : ''}
-      </div>
-
-    </div>
   </div>`}`;
 }
 
@@ -7215,7 +7233,13 @@ const ACTIONS = {
 
      `evo-base` vivait ici, jumeau de `hero-base` : deux commandes pour une seule
      variable. Elle est partie avec la bascule Net / Brut du graphique. */
-  'evo-perimetre'(btn) { evoFinancier = btn.dataset.perimetre === 'financier'; render(); },
+  'evo-perimetre'(btn) {
+    const voulu = btn.dataset.perimetre === 'financier';
+    if (voulu === evoFinancier) return;
+    evoFinancier = voulu;
+    evoTransition = true;
+    render();
+  },
   'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
   'proj-scenario'(btn) {
     /* La case « Personnalise » n'applique rien : elle ouvre le depliant, et
