@@ -12,8 +12,12 @@ const Tests = (() => {
   const suites = [];
   let courante = null;
 
+  /* Le corps de la suite est retenu sous forme de texte. C'est ce qui permet de
+     savoir quels fichiers elle lit — `lireSource('assets/app.js')` — sans tenir
+     de liste a cote, qui divergerait au premier deplacement de test. La regle
+     de la maison vaut ici comme ailleurs : une liste se derive. */
   function suite(nom, fn) {
-    courante = { nom, cas: [] };
+    courante = { nom, cas: [], source: String(fn) };
     suites.push(courante);
     fn();
     courante = null;
@@ -61,10 +65,43 @@ const Tests = (() => {
      partait dans le vide : le harnais affirmait le contraire de ce qu'il
      mesurait. Un `await` sur une valeur qui n'est pas une promesse ne coute
      rien, donc les cas synchrones ne changent pas de comportement. */
-  async function run() {
+  /* Choisir un sous-ensemble de suites.
+
+     Deux facons de designer, et la seconde est celle qui colle a cette base de
+     code : par NOM, quand on sait ce qu'on cherche, et par FICHIER TOUCHE,
+     quand on vient de modifier `app.js` et qu'on veut ce qui le lit. Le second
+     se derive du corps des suites, il ne se tient pas a la main.
+
+     `touche=calcul` designe le complement : les suites qui ne lisent aucune
+     source, donc celles qui font tourner le modele sur des nombres. C'est la
+     moitie qui compte quand un calcul change, et aucun nom de fichier ne la
+     designe.
+
+     Une selection vide est une erreur, pas un vert : un motif qui ne matche
+     rien rendrait « 0 test » avec une coche, ce qui est le pire des verts. */
+  function choisir({ nom = '', touche = '' } = {}) {
+    let choix = suites;
+    if (nom) {
+      const motif = new RegExp(nom, 'i');
+      choix = choix.filter(s => motif.test(s.nom));
+    }
+    if (touche === 'calcul') {
+      choix = choix.filter(s => !s.source.includes('lireSource('));
+    } else if (touche) {
+      choix = choix.filter(s => s.source.includes(`lireSource('${touche}'`));
+    }
+    return choix;
+  }
+
+  async function run(selection = {}) {
+    const partiel = !!(selection.nom || selection.touche);
+    const choix = choisir(selection);
+    if (partiel && !choix.length) {
+      throw new Error(`aucune suite ne correspond a ${JSON.stringify(selection)}`);
+    }
     const resultats = [];
     let ok = 0, ko = 0;
-    for (const s of suites) {
+    for (const s of choix) {
       const cas = [];
       for (const c of s.cas) {
         try { await c.fn(); cas.push({ nom: c.nom, ok: true }); ok++; }
@@ -72,8 +109,10 @@ const Tests = (() => {
       }
       resultats.push({ nom: s.nom, cas });
     }
-    return { resultats, ok, ko, total: ok + ko };
+    /* `partiel` voyage avec le resultat : la page et le lanceur en dependent
+       tous les deux pour ne pas presenter un vert partiel comme un vert. */
+    return { resultats, ok, ko, total: ok + ko, partiel, suites: choix.length };
   }
 
-  return { suite, test, pres, eq, vrai, leve, run };
+  return { suite, test, pres, eq, vrai, leve, run, choisir };
 })();

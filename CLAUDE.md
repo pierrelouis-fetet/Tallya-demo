@@ -61,6 +61,81 @@ c'est normal.
    c'est la ligne d'avancement des refs qui dit si l'envoi a abouti, jamais le
    code de sortie.
 
+## Choisir ses tests : ciblés par défaut, complets quand le risque le justifie
+
+**Principe permanent : tests ciblés par défaut, suite complète uniquement quand
+le risque le justifie.** Il gouverne la boucle de travail — et il ne gouverne
+jamais un envoi, qui exige la suite entière (voir plus bas, c'est mécanique).
+
+Avant de s'en servir, un chiffre. La suite a mis 112 secondes pendant des mois,
+et c'est ce qui rendait la question urgente. Elle en met 14, dont 3,5 de tests :
+le reste est le démarrage de Chrome, que rien ne cible. **Le ciblage ne fait donc
+plus gagner que 3 secondes sur une exécution en ligne de commande.** Ce qu'il
+apporte vraiment est ailleurs : la page ouverte dans un navigateur affiche 15
+lignes au lieu de 1 052, et un rouge se lit sans le chercher.
+
+La conséquence pratique est franche, et elle va contre l'intuition qui a mené
+ici : **dans le doute, tout lancer.** Le plafond est à 14 secondes.
+
+### Les commandes
+
+```
+python executer-tests.py                          tout
+python executer-tests.py --touche assets/app.js   les suites qui lisent ce fichier
+python executer-tests.py --touche assets/styles.css
+python executer-tests.py --touche calcul          le modèle, sans lecture de source
+python executer-tests.py --suites crédit          les suites dont le nom porte le mot
+```
+
+Et dans le navigateur, la même chose dans l'adresse :
+`tests.html?touche=assets/app.js`, `tests.html?suites=crédit`,
+`tests.html?touche=calcul`.
+
+`--touche` se **dérive** du corps des suites : une suite qui lit
+`assets/app.js` est celle dont le texte contient `lireSource('assets/app.js')`.
+Aucune liste n'est tenue à la main, donc rien ne diverge quand un test déménage.
+`calcul` est le complément — les suites qui ne lisent aucune source, donc celles
+qui font tourner le modèle sur des nombres. C'est la moitié qui compte quand un
+calcul change, et aucun nom de fichier ne la désigne.
+
+Un motif qui ne désigne rien est une **erreur**, pas un vert : « 0 test » sous
+une coche est le pire des verts. Une option inconnue arrête le script, avant
+même le serveur.
+
+### Quel niveau pour quel changement
+
+| Risque | Ce que c'est | Ce qu'on lance |
+|---|---|---|
+| Bas | un libellé, une traduction, une couleur, un commentaire | `--touche` sur le fichier modifié |
+| Moyen | le balisage d'une carte, une chaîne affichée nouvelle, un graphique | `--touche` sur le fichier, **plus** `--suites` sur le sujet |
+| Élevé | tout ce qui **calcule** | la suite complète, sans exception |
+
+Est à risque élevé, et la liste n'est pas négociable : `store.js` sous toutes
+ses formes ; une migration ; la persistance et la synchronisation ; un helper
+partagé (`fmtEUR`, `trad`, `aide`, `esc`) — il ne se voit nulle part et se lit
+partout ; la chaîne de publication ; et tout changement dont on ne sait pas dire
+ce qu'il touche. Ce dernier cas est le plus fréquent, et c'est pour lui que le
+plafond de 14 secondes compte.
+
+### Un vert partiel ne peut pas autoriser un envoi
+
+Le lanceur rend **trois** codes de sortie :
+
+```
+0   vert, et complet. Le seul qui autorise un envoi.
+1   rouge.
+2   vert, mais PARTIEL.
+```
+
+La règle de la maison veut qu'un push soit gardé par `... && git push`, et `&&`
+ne passe que sur 0. Une exécution ciblée ne peut donc pas autoriser un envoi,
+**même en ayant oublié qu'elle était ciblée**. La page écrit `(PARTIEL)` dans son
+titre, le lanceur le lit et en tire le 2 : la règle cesse d'être une promesse
+tenue de mémoire et devient une mécanique.
+
+C'est la même leçon que le `$?` qui doit garder le push plutôt que le précéder.
+Une règle que rien n'applique finit par ne pas s'appliquer.
+
 ## Ce que les tests doivent couvrir
 
 La règle qui les gouverne tient en une phrase : **un total égale la somme de

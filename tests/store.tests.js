@@ -18,11 +18,37 @@ const { suite, test, pres, eq, vrai, leve } = Tests;
    ce fichier — mais quand la fonction visee ne depend de rien, on la reconstruit
    depuis sa source et on l'execute pour de vrai : une assertion sur le
    comportement vaut mieux qu'une recherche de motif dans une chaine. */
+/* Lue une fois par chargement de page, et retenue.
+
+   Cinq cent douze appels partaient d'ici, dont trois cent quarante-six sur
+   `app.js`, qui pese pres d'un mega-octet : trois cent quarante mega-octets
+   relus en XHR SYNCHRONE, donc sur le fil principal, a chaque execution. Deux
+   consequences, et la seconde etait prise pour une fatalite :
+
+   - la suite mettait cent douze secondes, dont l'essentiel a relire les memes
+     octets ;
+   - une lecture tombait de temps en temps — « Failed to execute 'send' » — sur
+     un test qui changeait a chaque fois, ce qui obligeait a relancer avant de
+     pouvoir croire un rouge. Le defaut n'etait pas dans la suite, il etait dans
+     le nombre de lectures.
+
+   Le casse-cache reste, et il garde son role : au PREMIER appel, il interdit au
+   navigateur de servir une copie d'avant la modification qu'on vient d'ecrire.
+   Dans un meme chargement, en revanche, un fichier ne change pas — le relire ne
+   peut rien apprendre. Recharger la page vide la memoire et relit tout.
+
+   Un echec de lecture n'est pas retenu : il serait resservi a toutes les suites
+   suivantes, transformant un incident en cascade. */
+const SOURCES = new Map();
+
 function lireSource(fichier) {
+  if (SOURCES.has(fichier)) return SOURCES.get(fichier);
   const r = new XMLHttpRequest();
   r.open('GET', fichier + '?lint=' + Date.now(), false);
   r.send();
-  return r.status === 200 ? r.responseText : null;
+  const texte = r.status === 200 ? r.responseText : null;
+  if (texte !== null) SOURCES.set(fichier, texte);
+  return texte;
 }
 
 /* Jouer un contrôle à une date choisie.
@@ -1854,6 +1880,137 @@ suite('Les couleurs de classes ne se marchent pas dessus', () => {
 /* ------------------------------------------------------------------
    7 bis. Le source lui-même
    ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   Le harnais : lire une source une fois, et savoir dire « partiel »
+   ------------------------------------------------------------------ */
+suite('Une source se lit une fois, et un vert partiel se dit', () => {
+
+  test('un fichier lu deux fois ne part qu’une fois sur le réseau', () => {
+    /* Cinq cent douze lectures partaient d'ici, dont trois cent quarante-six
+       sur `app.js`, qui pese pres d'un mega-octet : trois cent quarante
+       mega-octets relus en XHR synchrone a chaque execution. La suite mettait
+       cent douze secondes, et une lecture tombait de temps en temps — « Failed
+       to execute 'send' » — sur un test qui changeait a chaque fois.
+
+       Le defaut n'etait pas dans un controle, il etait dans le NOMBRE de
+       lectures. Retenues, la suite tient en trois secondes et demie et le rouge
+       transitoire perd sa cause. */
+    const avant = SOURCES.size;
+    const un = lireSource('assets/i18n.js');
+    vrai(un && SOURCES.has('assets/i18n.js'), 'la première lecture remplit la mémoire');
+    const taille = SOURCES.size;
+    const deux = lireSource('assets/i18n.js');
+    eq(deux, un, 'la seconde lecture rend exactement le même texte');
+    eq(SOURCES.size, taille, 'et n’ajoute rien : elle n’est pas partie sur le réseau');
+    vrai(taille >= avant, 'la mémoire ne se vide pas en cours de route');
+  });
+
+  test('un échec de lecture ne se retient pas', () => {
+    /* Retenir un `null` le resservirait a toutes les suites suivantes : un
+       incident de reseau deviendrait une cascade, et le vrai defaut serait
+       introuvable sous les degats derives. */
+    const t = lireSource('tests/store.tests.js');
+    vrai(t, 'le fichier de suites doit être lisible');
+    vrai(/if \(texte !== null\) SOURCES\.set\(fichier, texte\);/.test(t),
+      'seul un texte obtenu entre en mémoire');
+    vrai(/r\.open\('GET', fichier \+ '\?lint=' \+ Date\.now\(\), false\);/.test(t),
+      'le casse-cache reste : la PREMIÈRE lecture ne doit pas servir une copie d’avant');
+  });
+
+  test('une sélection par nom réduit, une sélection vide se refuse', () => {
+    /* `choisir` ne joue rien : il rend la liste. On peut donc l'interroger
+       depuis un test sans relancer la suite dans la suite. */
+    const tout = Tests.choisir();
+    vrai(tout.length > 100, 'la suite complète compte plus de cent suites');
+    const credit = Tests.choisir({ nom: 'crédit' });
+    vrai(credit.length > 0 && credit.length < tout.length,
+      'un motif désigne un sous-ensemble, ni vide ni total');
+    for (const s of credit) {
+      vrai(/crédit/i.test(s.nom), `« ${s.nom} » ne porte pas le motif`);
+    }
+    eq(Tests.choisir({ nom: 'zzzinexistant' }).length, 0,
+      'un motif qui ne matche rien rend zéro, et la page en fait une erreur');
+  });
+
+  test('« touche » se dérive du corps des suites, il ne se recopie pas', () => {
+    /* Une liste ecrite a la main de « quelles suites lisent app.js » aurait
+       menti au premier test deplace. Le corps de chaque suite est retenu sous
+       forme de texte, et la question se pose au texte. */
+    const tout = Tests.choisir();
+    const app = Tests.choisir({ touche: 'assets/app.js' });
+    vrai(app.length > 0 && app.length < tout.length,
+      'un fichier désigne les suites qui le lisent');
+    for (const s of app) {
+      vrai(s.source.includes("lireSource('assets/app.js'"),
+        `« ${s.nom} » ne lit pas app.js`);
+    }
+
+    /* `calcul` est le COMPLEMENT : ce qui ne lit aucune source, donc ce qui
+       fait tourner le modele sur des nombres. Aucun nom de fichier ne le
+       designe, et c'est pourtant la moitie qui compte quand un calcul change. */
+    const calcul = Tests.choisir({ touche: 'calcul' });
+    vrai(calcul.length > 0, 'le modèle a ses suites');
+    for (const s of calcul) {
+      vrai(!s.source.includes('lireSource('),
+        `« ${s.nom} » lit une source : elle n’est pas du calcul pur`);
+    }
+    /* Les deux familles ne se recouvrent pas, et aucune suite n'est perdue :
+       une suite lit une source, ou elle n'en lit pas. */
+    const noms = new Set(calcul.map(s => s.nom));
+    vrai(!app.some(s => noms.has(s.nom)), 'les deux familles sont disjointes');
+    const lisant = tout.filter(s => s.source.includes('lireSource('));
+    eq(lisant.length + calcul.length, tout.length,
+      'et ensemble elles couvrent toute la suite');
+  });
+
+  test('un vert partiel se dit partiel, et ne peut pas garder un envoi', () => {
+    /* Le point entier du mecanisme. Le lanceur ne lit que le titre de
+       l'onglet : un vert partiel presente comme un vert autoriserait un envoi
+       sur du code que rien n'a verifie. Trois pieces, et il faut les trois. */
+    const page = lireSource('tests.html');
+    vrai(page, 'tests.html doit être lisible');
+    vrai(/Tests\.run\(selection\)/.test(page),
+      'la page passe la sélection au harnais');
+    vrai(/r\.partiel \? ' \(PARTIEL\)' : ''/.test(page),
+      'et le titre porte le mot quand l’exécution est ciblée');
+
+    const h = lireSource('tests/harness.js');
+    vrai(/const partiel = !!\(selection\.nom \|\| selection\.touche\);/.test(h),
+      'le harnais sait qu’il a été ciblé');
+    vrai(/total: ok \+ ko, partiel/.test(h),
+      'et il le fait voyager avec le résultat');
+
+    /* Cote lanceur : le mot devient un code de sortie qui n'est pas zero, donc
+       le `&&` d'un push ne passe pas. La regle cesse d'etre une promesse. */
+    const lanceur = lireSource('executer-tests.py');
+    vrai(lanceur, 'executer-tests.py doit être lisible');
+    vrai(/PARTIEL = "\(PARTIEL\)"/.test(lanceur),
+      'le lanceur cherche le même mot que celui que la page écrit');
+    const bloc = lanceur.slice(lanceur.indexOf('elif titre.startswith(OK) and PARTIEL in titre:'),
+                               lanceur.indexOf('elif titre.startswith(OK):'));
+    vrai(bloc.length > 50, 'la branche du partiel doit être trouvable');
+    vrai(/code = 2/.test(bloc), 'un vert partiel sort en 2, jamais en 0');
+    /* Et le zero reste reserve au vert complet : c'est la branche d'apres. */
+    const complet = lanceur.slice(lanceur.indexOf('elif titre.startswith(OK):'),
+                                  lanceur.indexOf('else:', lanceur.indexOf('elif titre.startswith(OK):')));
+    vrai(/code = 0/.test(complet), 'et le zéro reste réservé au vert complet');
+  });
+
+  test('une option mal orthographiée se refuse au lieu de tout jouer', () => {
+    /* Un `--touch` ignore en silence ferait tourner la suite entiere en
+       laissant croire a un ciblage, ou l'inverse. Et il se refuse AVANT le
+       serveur : une faute de frappe ne doit pas couter un demarrage. */
+    const t = lireSource('executer-tests.py');
+    vrai(/sys\.exit\(f"option inconnue : \{drapeau\}/.test(t),
+      'un drapeau inconnu arrête le script');
+    vrai(/sys\.exit\(f"\{drapeau\} attend une valeur"\)/.test(t),
+      'et un drapeau sans valeur aussi');
+    const corps = t.slice(t.indexOf('def main():'));
+    vrai(corps.indexOf('cible = selection()') < corps.indexOf('serveur = None'),
+      'les arguments se lisent avant que quoi que ce soit ne démarre');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au

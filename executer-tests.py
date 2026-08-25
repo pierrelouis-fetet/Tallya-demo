@@ -8,20 +8,31 @@ d'autre que son auteur, sur sa machine, quand il y pensait. Une promesse de
 fiabilite qui depend de la memoire de son auteur n'en est pas une.
 
 Le titre se lit par l'endpoint HTTP de debogage, pas par une evaluation JS, et
-c'est le point qui a demande deux essais. La suite lit une trentaine de fichiers
-en XHR SYNCHRONE : le fil principal du navigateur est bloque pendant tout ce
-temps, donc un `Runtime.evaluate` reste en file d'attente et la connexion tombe
-en timeout. `/json/list` rend le titre de chaque onglet sans jamais toucher au
+c'est le point qui a demande deux essais. La suite lit ses fichiers source en XHR
+SYNCHRONE : le fil principal du navigateur est bloque pendant ces lectures, donc
+un `Runtime.evaluate` reste en file d'attente et la connexion tombe en timeout. `/json/list` rend le titre de chaque onglet sans jamais toucher au
 fil de la page.
 
 Le pilotage CDP vient de `captures.py` et n'est pas recopie : c'est le meme
 besoin, la meme poignee de main, et deux clients qui divergent finiraient par ne
 plus lancer le meme navigateur.
 
-    python executer-tests.py
+    python executer-tests.py                          tout
+    python executer-tests.py --touche assets/app.js   ce qui lit ce fichier
+    python executer-tests.py --touche calcul          le modele, sans lecture de source
+    python executer-tests.py --suites credit          les suites dont le nom le porte
 
 Le script demarre le serveur lui-meme s'il ne repond pas, ferme tout en sortant,
-et sort en 1 des qu'un controle est rouge.
+et rend TROIS codes de sortie, pas deux :
+
+    0   vert, et complet. Le seul qui autorise un envoi.
+    1   rouge.
+    2   vert, mais PARTIEL — une selection etait demandee.
+
+Le 2 n'est pas une coquetterie. La regle de la maison veut qu'un push soit garde
+par `... && git push`, et `&&` ne passe que sur 0 : une execution ciblee ne peut
+donc pas autoriser un envoi, meme si on oublie qu'elle etait ciblee. La regle
+cesse d'etre une promesse et devient une mecanique.
 """
 import json
 import os
@@ -52,6 +63,30 @@ RACINE = os.path.dirname(os.path.abspath(__file__))
 # et un compte, ou une croix et un nombre d'echecs. Le lire est donc le meme
 # geste que celui d'un humain devant l'onglet.
 OK, KO = "✓", "✕"
+# Le titre d'une execution ciblee porte ce mot, pose par `tests.html`.
+PARTIEL = "(PARTIEL)"
+
+
+def selection():
+    """Les options de ciblage, rendues en morceau de requete.
+
+    Volontairement minuscule : deux drapeaux, aucune bibliotheque, et un refus
+    net de ce qui n'est pas reconnu. Un argument mal orthographie qui serait
+    ignore ferait tourner TOUTE la suite en laissant croire au contraire — ou
+    l'inverse, ce qui est pire.
+    """
+    import urllib.parse
+    args, params = sys.argv[1:], {}
+    while args:
+        drapeau = args.pop(0)
+        cle = {"--suites": "suites", "--touche": "touche"}.get(drapeau)
+        if not cle:
+            sys.exit(f"option inconnue : {drapeau}\n"
+                     "attendu : --suites <motif> ou --touche <chemin|calcul>")
+        if not args:
+            sys.exit(f"{drapeau} attend une valeur")
+        params[cle] = args.pop(0)
+    return ("?" + urllib.parse.urlencode(params)) if params else ""
 
 
 def serveur_repond():
@@ -99,6 +134,13 @@ def main():
     if not captures.CHROME:
         sys.exit("Chrome introuvable : installe-le ou mets-le dans le PATH.")
 
+    # Les arguments se lisent AVANT de demarrer quoi que ce soit : rejeter une
+    # option apres avoir leve un serveur et un navigateur fait payer trois
+    # secondes a une faute de frappe.
+    cible = selection()
+    if cible:
+        print(f"execution ciblee : {cible}")
+
     serveur = None
     if serveur_repond():
         print(f"serveur deja en place sur {BASE}")
@@ -134,7 +176,7 @@ def main():
             # demarrage sans rien dire d'exploitable.
             "--no-sandbox",
             "--disable-dev-shm-usage",
-            BASE + "/tests.html",
+            BASE + "/tests.html" + cible,
         ],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
@@ -145,11 +187,14 @@ def main():
             raise RuntimeError("Chrome n'a pas ouvert son port de debogage.")
 
         titre = ""
-        for _ in range(300):                       # cinq minutes au plus
+        # Un cinquieme de seconde : la suite complete tient en trois secondes et
+        # demie depuis que les sources se lisent une seule fois, et un sondage a
+        # la seconde y ajoutait un demi-tour de roue pour rien.
+        for _ in range(1500):                      # cinq minutes au plus
             titre = titre_de_la_page()
             if titre.startswith(OK) or titre.startswith(KO):
                 break
-            time.sleep(1)
+            time.sleep(0.2)
         else:
             raise RuntimeError(f"la suite n'a rendu aucun verdict (titre : {titre!r})")
 
@@ -167,6 +212,13 @@ def main():
             print("\nAucun test executé : le fichier de suites ne se parse "
                   "probablement pas. Ouvrir /tests.html et lire la console.",
                   file=sys.stderr)
+        elif titre.startswith(OK) and PARTIEL in titre:
+            # Vert, mais il ne parle que d'une partie de la suite : 2, pour que
+            # le `&&` d'un push ne passe pas.
+            print("\nExecution PARTIELLE : ce vert ne dit rien du reste de la "
+                  "suite, et ne peut pas autoriser un envoi. Relancer sans "
+                  "option avant de pousser.", file=sys.stderr)
+            code = 2
         elif titre.startswith(OK):
             code = 0
         else:

@@ -58,7 +58,7 @@ principal, gets projected and asked about, never silently overwritten.
 ## Tested against the defects that actually happened
 
 Several hundred test cases, no test framework: the whole harness is
-[79 lines](tests/harness.js). Open `/tests.html`, the browser tab title gives
+[118 lines](tests/harness.js). Open `/tests.html`, the browser tab title gives
 the verdict.
 
 They also run on every push, and the badge above is that result. The runner
@@ -69,6 +69,20 @@ locally, too, if you would rather not open a tab:
 ```bash
 python executer-tests.py
 ```
+
+The whole suite takes about fourteen seconds, so running all of it is the
+default. When you only want the suites that read the file you just changed, or
+the ones that exercise the model on numbers:
+
+```bash
+python executer-tests.py --touche assets/app.js
+python executer-tests.py --touche calcul
+```
+
+A targeted run says so, in the tab title and in its exit code: `0` means green
+and complete, `1` red, `2` green but partial. Since a push is guarded by
+`... && git push`, and `&&` only passes on `0`, a partial run cannot authorise
+one, even if you forgot it was partial.
 
 Three habits make these tests worth more than their count:
 
@@ -91,7 +105,7 @@ assets/
   quotes.js        market quotes client
   cloudsync.js     cross-device sync
 _worker.js         gateway and access control (Cloudflare)
-tests/             79-line harness, synthetic fixture, the suites
+tests/             118-line harness, synthetic fixture, the suites
 ```
 
 State lives in the browser (`localStorage`) and syncs through Cloudflare KV.
