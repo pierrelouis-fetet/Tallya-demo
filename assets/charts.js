@@ -361,6 +361,7 @@ const Charts = (() => {
       if (anime && cle && !mouvementRefuse()) animerDepuis(dernierTrace.get(cle));
       anime = false;
       if (cle) dernierTrace.set(cle, {
+        genre: 'aire',
         valeurs: Object.fromEntries(series.map(sr =>
           [sr.key, points.map(p => p[sr.key] || 0)])),
         cles: series.map(sr => sr.key),
@@ -370,7 +371,8 @@ const Charts = (() => {
       });
 
       function animerDepuis(avant) {
-        if (!avant || avant.dates !== points.map(p => p.date || p.label).join('|')) return;
+        if (!avant || avant.genre !== 'aire') return;
+        if (avant.dates !== points.map(p => p.date || p.label).join('|')) return;
         const cles = [...avant.cles];
         for (const k of series.map(sr => sr.key)) if (!cles.includes(k)) cles.push(k);
         const ordre = series.map(sr => sr.key);
@@ -552,6 +554,10 @@ const Charts = (() => {
   }
 
   function donut(el, opts) {
+    /* Meme regle que la pile : le drapeau vit hors du rendu et s'eteint apres
+       le premier. `mount` peut rappeler la fonction, et une transition rejouee
+       a chaque redimensionnement serait un clignotement. */
+    let anime = !!opts.anime;
     mount(el, () => {
       const { items, centerLabel } = opts;
       const c = ink();
@@ -560,19 +566,27 @@ const Charts = (() => {
       const R = Math.min(W, H) / 2 - 8;
       const r = R * 0.62;
       const cx = W / 2, cy = H / 2;
-      const total = items.reduce((s, i) => s + Math.max(0, i.value), 0) || 1;
 
-      let a0 = -Math.PI / 2;
-      const arcs = items.map(it => {
-        const frac = Math.max(0, it.value) / total;
-        const a1 = a0 + frac * Math.PI * 2;
-        const large = frac > 0.5 ? 1 : 0;
-        const p = (ang, rad) => `${cx + rad * Math.cos(ang)},${cy + rad * Math.sin(ang)}`;
-        const d = `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
-        const mid = (a0 + a1) / 2;
-        a0 = a1;
-        return { d, it, frac, mid };
-      });
+      const tracer = (liste) => {
+        const somme = liste.reduce((s, i) => s + Math.max(0, i.valeur), 0) || 1;
+        let a0 = -Math.PI / 2;
+        return liste.map(it => {
+          const frac = Math.max(0, it.valeur) / somme;
+          const a1 = a0 + frac * Math.PI * 2;
+          const large = frac > 0.5 ? 1 : 0;
+          const p = (ang, rad) => `${cx + rad * Math.cos(ang)},${cy + rad * Math.sin(ang)}`;
+          const d = `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
+          const mid = (a0 + a1) / 2;
+          a0 = a1;
+          return { d, frac, mid, cle: it.cle };
+        });
+      };
+
+      const parts = items.map(it => ({
+        cle: it.label, valeur: Math.max(0, it.value), couleur: it.color,
+      }));
+      const total = parts.reduce((s, i) => s + i.valeur, 0) || 1;
+      const arcs = tracer(parts).map((a, i) => ({ ...a, it: items[i] }));
 
       el.innerHTML = `
         <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${trad('Répartition')}">
@@ -580,6 +594,97 @@ const Charts = (() => {
           <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="donut-val">${kEur(opts.centerValue ?? total)}</text>
           <text x="${cx}" y="${cy + 16}" text-anchor="middle" class="donut-lab">${esc(centerLabel || 'Total')}</text>
         </svg>`;
+
+      const cle = cleTrace(el);
+      if (anime && cle && !mouvementRefuse()) animerDepuis(dernierTrace.get(cle));
+      anime = false;
+      if (cle) dernierTrace.set(cle, { genre: 'donut', parts });
+
+      function animerDepuis(avant) {
+        if (!avant || avant.genre !== 'donut') return;
+        const noeud = new Map();
+        el.querySelectorAll('.slice').forEach((n, i) => {
+          if (parts[i]) noeud.set(parts[i].cle, n);
+        });
+
+        const ancien = avant.parts.map(p => p.cle);
+        const cles = parts.map(p => p.cle);
+        for (let i = ancien.length - 1; i >= 0; i--) {
+          const k = ancien[i];
+          if (cles.includes(k)) continue;
+          let ancre = -1;
+          for (let j = i - 1; j >= 0; j--) {
+            const idx = cles.indexOf(ancien[j]);
+            if (idx >= 0) { ancre = idx; break; }
+          }
+          cles.splice(ancre + 1, 0, k);
+        }
+        if (avant.parts.length === parts.length
+            && parts.every((p, i) => avant.parts[i].cle === p.cle
+                                  && Math.abs(avant.parts[i].valeur - p.valeur) < 0.005)) {
+          return;
+        }
+
+        const valeur = (liste, k) => (liste.find(p => p.cle === k) || {}).valeur || 0;
+        const teinte = k => (parts.find(p => p.cle === k)
+                          || avant.parts.find(p => p.cle === k) || {}).couleur || c.muted;
+
+        const svgEl = el.querySelector('svg');
+        if (!svgEl) return;
+        /* Les parts qui s'en vont, reposees a leur rang pour la duree du
+           mouvement. Sans classe `slice` ni `data-i` : les infobulles sont
+           branchees sur les parts d'arrivee, et une part fantome qui repondrait
+           au survol annoncerait un montant qui n'existe plus. */
+        const temporaires = [];
+        for (const k of cles) {
+          if (noeud.has(k)) continue;
+          const suivante = cles.slice(cles.indexOf(k) + 1).find(x => noeud.has(x));
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('fill', teinte(k));
+          path.setAttribute('stroke', c.surface);
+          path.setAttribute('stroke-width', '2');
+          svgEl.insertBefore(path, suivante ? noeud.get(suivante) : svgEl.querySelector('text'));
+          noeud.set(k, path);
+          temporaires.push(path);
+        }
+
+        const DUREE = 520;
+        let debut = null, fini = false;
+
+        const poser = (frac) => {
+          const e = 1 - Math.pow(1 - frac, 3);
+          tracer(cles.map(k => ({
+            cle: k,
+            valeur: valeur(avant.parts, k)
+              + (valeur(parts, k) - valeur(avant.parts, k)) * e,
+          }))).forEach(a => {
+            const n = noeud.get(a.cle);
+            if (n) n.setAttribute('d', a.d);
+          });
+        };
+
+        const finir = () => {
+          if (fini) return;
+          fini = true;
+          for (const t of temporaires) t.remove();
+          arcs.forEach(a => {
+            const n = noeud.get(a.cle);
+            if (n) n.setAttribute('d', a.d);
+          });
+        };
+
+        const pas = (t) => {
+          if (fini) return;
+          if (debut === null) debut = t;
+          const f = Math.min(1, (t - debut) / DUREE);
+          poser(f);
+          if (f < 1) requestAnimationFrame(pas); else finir();
+        };
+        poser(0);
+        requestAnimationFrame(pas);
+        svgEl.addEventListener('pointerdown', finir, { once: true });
+        svgEl.addEventListener('pointermove', finir, { once: true });
+      }
 
       const tip = ensureTip(el);
       el.querySelectorAll('.slice').forEach(node => {

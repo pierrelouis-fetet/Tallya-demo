@@ -3119,22 +3119,27 @@ function mountAllocation() {
   Charts.rankedBars($('#aAsset'), { items: allocationByAsset({ credits: false, financier: allocFinancier }) });
   Charts.rankedBars($('#aAcct'), { items: allocationByAccount({ financier: allocFinancier }) });
   const t = nowTotals();
+  const animAlloc = allocTransition;
   Charts.donut($('#aMacro'), {
+    anime: animAlloc,
     height: 200, centerLabel: baseAlloc().nom, centerValue: valeurBaseAlloc(),
     items: pochesPatrimoine({ financier: allocFinancier }).map(p => ({ label: p.label, value: p.value, color: p.color })),
   });
   const bt = teinterParRang(byAccountType({ financier: allocFinancier }));
   Charts.donut($('#aType'), {
+    anime: animAlloc,
     height: 200, centerLabel: baseAlloc().nom,
     centerValue: bt.reduce((s, i) => s + i.value, 0),
     items: bt.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
   const bd = teinterParRang(allocationParDisponibilite({ financier: allocFinancier }));
   Charts.donut($('#aDispo'), {
+    anime: animAlloc,
     height: 200, centerLabel: baseAlloc().nom,
     centerValue: bd.reduce((s, i) => s + i.value, 0),
     items: bd.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
+  allocTransition = false;
 }
 
 function diagnosticRoles(rr) {
@@ -3574,6 +3579,13 @@ function mountHistory() {
 
 let compteVue = 'banque';            // banque | type
 let allocFinancier = false;
+/* Une transition a montrer au prochain montage des anneaux, et une seule.
+
+   Meme mecanique que `evoTransition` pour la courbe, et pour la meme raison :
+   `render()` remonte les graphiques a chaque frappe et a chaque retour sur la
+   vue. Le drapeau se leve sur le seul geste qui change le perimetre, et le
+   montage le consomme. */
+let allocTransition = false;
 
 /* La base de cette page, en un seul endroit.
 
@@ -7304,7 +7316,13 @@ const ACTIONS = {
     evoTransition = true;
     render();
   },
-  'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
+  'alloc-base'(btn) {
+    const voulu = btn.dataset.base === 'financier';
+    if (voulu === allocFinancier) return;
+    allocFinancier = voulu;
+    allocTransition = true;
+    render();
+  },
   'proj-scenario'(btn) {
     /* La case « Personnalise » n'applique rien : elle ouvre le depliant, et
        c'est tout. Lui faire enregistrer `projScenario = 'perso'` aurait fige les

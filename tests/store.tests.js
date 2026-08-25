@@ -2011,6 +2011,145 @@ suite('Une source se lit une fois, et un vert partiel se dit', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Changer de périmètre transforme les anneaux, il ne les remplace pas
+   ------------------------------------------------------------------ */
+suite('Les anneaux d’Allocation se transforment quand le périmètre change', () => {
+
+  const ch = () => lireSource('assets/charts.js');
+  const anneau = () => {
+    const t = ch();
+    return t.slice(t.indexOf('function donut(el, opts)'), t.indexOf('function rankedBars'));
+  };
+
+  test('la transition part des montants, pas des angles', () => {
+    /* Interpoler les angles serait plus court et faux : une part qui garde son
+       montant verrait quand meme son arc bouger, puisque le total change. En
+       partant des montants, chaque part suit ce qu'elle vaut a chaque image et
+       la somme des arcs fait toujours le tour complet. */
+    const t = anneau();
+    vrai(t.length > 1000, 'la fonction doit être trouvable');
+    vrai(/valeur: valeur\(avant\.parts, k\)\s*\+ \(valeur\(parts, k\) - valeur\(avant\.parts, k\)\) \* e/.test(t),
+      'chaque image interpole un montant');
+    /* Une seule ecriture de la geometrie, pour le dessin ET pour la transition :
+       deux copies auraient fini par se decaler d'un demi degre. */
+    eq((t.match(/const tracer = \(liste\)/g) || []).length, 1,
+      'la géométrie est écrite une fois');
+    /* Deux sites d'appel : le dessin d'arrivee, et chaque image de la
+       transition. Le troisieme usage est le repose de la fin, qui rejoue les
+       arcs deja calcules plutot que de retracer. */
+    eq((t.match(/tracer\(/g) || []).length, 2,
+      'et elle sert au dessin comme à chaque image de la transition');
+  });
+
+  test('le nombre au centre ne s’anime pas', () => {
+    /* Un montant intermediaire, qui n'a jamais ete vrai, resterait lisible une
+       demi seconde. C'est la meme regle que les graduations de la pile, qui se
+       deplacent sans que leur libelle change. */
+    const t = anneau();
+    const boucle = t.slice(t.indexOf('const poser = (frac)'), t.indexOf('const finir = ()'));
+    vrai(boucle.length > 100, 'la boucle d’images doit être trouvable');
+    vrai(!/donut-val|centerValue|kEur/.test(boucle),
+      'aucune image ne réécrit le montant du centre');
+  });
+
+  test('« rien n’a bougé » compare les longueurs, et c’est le cœur du contrôle', () => {
+    /* Le defaut, trouve a la mesure et pas a l'oeil. La garde parcourait la
+       liste de DEPART et s'arretait a sa fin. Au retour vers le perimetre
+       large, les poches financieres gardent leurs montants au centime pres et
+       une poche s'AJOUTE : les anciennes s'accordaient donc toutes, la garde
+       concluait « identique », et la part qui apparaissait se posait d'un coup.
+
+       Mesure a l'appui : une seule forme distincte sur quatre-vingt-onze
+       images, la ou l'aller en montrait cinquante-trois. Deux anneaux sur trois
+       etaient muets au retour, et le troisieme animait seulement parce que son
+       classement change d'ordre. */
+    const t = anneau();
+    const garde = t.slice(t.indexOf('if (avant.parts.length === parts.length'),
+                          t.indexOf('const valeur = (liste, k)'));
+    vrai(garde.length > 50, 'la garde doit être trouvable');
+    vrai(/avant\.parts\.length === parts\.length/.test(garde),
+      'les deux listes doivent d’abord avoir la même longueur');
+    /* Et la comparaison parcourt la liste d'ARRIVEE : parcourir celle de depart
+       est exactement la faute ci-dessus. */
+    vrai(/parts\.every\(\(p, i\) => avant\.parts\[i\]/.test(garde),
+      'la comparaison parcourt la liste d’arrivée');
+    vrai(!/avant\.parts\.every/.test(garde),
+      'et surtout pas celle de départ, qui s’arrête avant la part qui s’ajoute');
+  });
+
+  test('une part qui s’en va est tenue, puis retirée, et ne répond à rien', () => {
+    /* Elle garde son rang le temps du mouvement : posee en fin de liste, une
+       grosse part qui disparait sauterait d'un quart de tour a la premiere
+       image avant de se retracter, et on lirait une rotation la ou il n'y en a
+       pas. */
+    const t = anneau();
+    vrai(/const suivante = cles\.slice\(cles\.indexOf\(k\) \+ 1\)\.find\(x => noeud\.has\(x\)\)/.test(t),
+      'elle se replace derrière la survivante qui la précédait');
+    vrai(/for \(const t of temporaires\) t\.remove\(\);/.test(t),
+      'et elle est retirée à la fin du mouvement');
+    /* Sans classe `slice` ni `data-i` : les infobulles sont branchees sur les
+       parts d'arrivee, et une part fantome qui repondrait au survol annoncerait
+       un montant qui n'existe plus. */
+    const pose = t.slice(t.indexOf('const temporaires = [];'), t.indexOf('const DUREE = 520;'));
+    vrai(pose.length > 100, 'la pose des parts temporaires doit être trouvable');
+    vrai(!/setAttribute\('class'|classList\.add|data-i/.test(pose),
+      'une part temporaire ne porte ni la classe ni l’indice des parts vivantes');
+  });
+
+  test('le registre est partagé, donc il dit de quel genre il se souvient', () => {
+    /* `dernierTrace` est clefe par identifiant et sert a tous les graphiques.
+       Deux dessins de natures differentes qui porteraient le meme identifiant
+       se liraient l'un l'autre, et l'animation partirait de nombres qui ne
+       veulent rien dire a cet endroit. */
+    const t = ch();
+    vrai(/genre: 'aire'/.test(t) && /genre: 'donut'/.test(t),
+      'les deux genres s’écrivent avec l’état');
+    vrai(/if \(!avant \|\| avant\.genre !== 'aire'\) return;/.test(t),
+      'la pile ne part que d’une pile');
+    vrai(/if \(!avant \|\| avant\.genre !== 'donut'\) return;/.test(t),
+      'et l’anneau que d’un anneau');
+  });
+
+  test('le mouvement se refuse quand le système le demande', () => {
+    const t = anneau();
+    vrai(/if \(anime && cle && !mouvementRefuse\(\)\) animerDepuis/.test(t),
+      'l’anneau consulte le même réglage que la pile');
+    /* Et le drapeau s'eteint apres le premier rendu : `mount` peut rappeler la
+       fonction, et une transition rejouee a chaque redimensionnement serait un
+       clignotement. */
+    vrai(/let anime = !!opts\.anime;/.test(t) && /anime = false;/.test(t),
+      'le drapeau vit hors du rendu et s’éteint après le premier');
+  });
+
+  test('les trois anneaux partagent le drapeau, et il s’éteint après le dernier', () => {
+    /* L'eteindre au premier aurait anime le camembert du haut et fait sauter
+       les deux autres, alors qu'ils changent tous ensemble. */
+    const t = lireSource('assets/app.js');
+    const bloc = t.slice(t.indexOf('const animAlloc = allocTransition;'),
+                         t.indexOf('allocTransition = false;',
+                                   t.indexOf('const animAlloc = allocTransition;')));
+    vrai(bloc.length > 200, 'le montage des anneaux doit être trouvable');
+    eq((bloc.match(/anime: animAlloc/g) || []).length, 3,
+      'les trois anneaux reçoivent le même drapeau');
+    for (const id of ['#aMacro', '#aType', '#aDispo']) {
+      vrai(bloc.includes(id), `${id} est dans le bloc que le drapeau couvre`);
+    }
+  });
+
+  test('recliquer le périmètre déjà allumé n’anime rien', () => {
+    /* Une transition de zero vers zero est un clignotement. Meme garde que la
+       bascule de la courbe, et pour la meme raison. */
+    const t = lireSource('assets/app.js');
+    const action = t.slice(t.indexOf("'alloc-base'(btn) {"),
+                           t.indexOf("'alloc-base'(btn) {") + 400);
+    vrai(/if \(voulu === allocFinancier\) return;/.test(action),
+      'le même périmètre ne relance ni rendu ni transition');
+    vrai(/allocTransition = true;/.test(action),
+      'et un changement réel lève le drapeau');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -15242,8 +15381,13 @@ suite('Changer de périmètre se voit, sans se rejouer tout seul', () => {
     /* Changer de plage en même temps que de périmètre glisserait une courbe sur
        une autre abscisse : un mouvement qui ne veut rien dire. */
     const src = lireSource('assets/charts.js');
-    vrai(/if \(!avant \|\| avant\.dates !== points\.map\(p => p\.date \|\| p\.label\)\.join\('\|'\)\) return;/.test(src),
+    vrai(/if \(avant\.dates !== points\.map\(p => p\.date \|\| p\.label\)\.join\('\|'\)\) return;/.test(src),
       'le montage se pose d’un coup quand les abscisses diffèrent');
+    /* Et le registre est partage par tous les graphiques, clefe par
+       identifiant : la pile refuse de partir d'un etat qu'un autre genre de
+       dessin y aurait laisse. */
+    vrai(/if \(!avant \|\| avant\.genre !== 'aire'\) return;/.test(src),
+      'la pile ne se fond que depuis une pile');
   });
 });
 
