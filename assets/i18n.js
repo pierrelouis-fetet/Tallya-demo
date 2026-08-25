@@ -1079,7 +1079,7 @@ const I18N = {
     "Dépenses de {m} à saisir": "Spending for {m} to enter",
     "Objectif de dépenses au-dessus du reste pour vivre": "Spending target above what is left to live on",
     "{t} visés pour {a} disponibles": "{t} targeted for {a} available",
-    "Répartition globale": "Overall split",
+    "Répartition.carte": "Allocation",
     "Tout sauf les liquidités": "Everything except cash",
     "Tout confondu": "Everything together",
     "Une seule case à remplir chaque mois.": "One box to fill each month.",

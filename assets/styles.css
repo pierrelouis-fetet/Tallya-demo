@@ -888,6 +888,22 @@ table .field :is(input, select) { max-width: none; }
   color: var(--text-primary);
 }
 .card-head .hint { font-size: 12px; color: var(--muted); }
+
+/* La base d'un pourcentage, sous le titre de sa carte et non a cote.
+
+   Elle vivait dans l'en-tete, donc a droite du titre : deux textes de longueurs
+   tres differentes que `space-between` poussait aux deux bords. En francais,
+   « en % de ton patrimoine financier · 66 182 EUR » et « Repartition globale »
+   se rejoignaient au milieu et se chevauchaient sur un telephone.
+
+   Sous le titre, elle se lit comme ce qu'elle est : la legende de la carte, pas
+   une commande. Et le probleme de place disparait, puisqu'il n'y a plus deux
+   textes a loger sur une ligne.
+
+   `:has()` plutot qu'une classe de variante sur l'en-tete : c'est la presence
+   de la legende qui resserre le titre, et la regle le dit dans ce sens-la. */
+.card-head:has(+ .tete-legende) { margin-bottom: 2px; }
+.tete-legende { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
 /* Une bascule posee dans un en-tete de carte se cale au bord droit, et y reste
    quand elle passe a la ligne.
 

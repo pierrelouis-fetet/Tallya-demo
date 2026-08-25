@@ -558,6 +558,9 @@ const Charts = (() => {
        le premier. `mount` peut rappeler la fonction, et une transition rejouee
        a chaque redimensionnement serait un clignotement. */
     let anime = !!opts.anime;
+    /* `null` tant qu'on n'a pas rendu : c'est le premier rendu qui decide s'il
+       s'agit d'une arrivee, les suivants n'en sont jamais une. */
+    let entree = null;
     mount(el, () => {
       const { items, centerLabel } = opts;
       const c = ink();
@@ -567,15 +570,26 @@ const Charts = (() => {
       const r = R * 0.62;
       const cx = W / 2, cy = H / 2;
 
-      const tracer = (liste) => {
+      const DEBUT = -Math.PI / 2;
+      /* `avance` est la fraction du tour deja dessinee, et elle sert au
+         remplissage d'arrivee : chaque part est coupee au front, celles qui
+         sont encore devant lui rendent un arc de longueur nulle, donc rien.
+
+         Les parts gardent leurs proportions definitives pendant tout le
+         remplissage. Les faire grandir ensemble aurait donne un anneau dont les
+         parts changent de taille en se remplissant : on aurait lu une
+         repartition qui bouge, alors que rien ne bouge. */
+      const tracer = (liste, avance = 1) => {
         const somme = liste.reduce((s, i) => s + Math.max(0, i.valeur), 0) || 1;
-        let a0 = -Math.PI / 2;
+        const front = DEBUT + Math.min(1, Math.max(0, avance)) * Math.PI * 2;
+        let a0 = DEBUT;
         return liste.map(it => {
           const frac = Math.max(0, it.valeur) / somme;
           const a1 = a0 + frac * Math.PI * 2;
-          const large = frac > 0.5 ? 1 : 0;
+          const d0 = Math.min(a0, front), d1 = Math.min(a1, front);
+          const large = (d1 - d0) > Math.PI ? 1 : 0;
           const p = (ang, rad) => `${cx + rad * Math.cos(ang)},${cy + rad * Math.sin(ang)}`;
-          const d = `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
+          const d = `M ${p(d0, R)} A ${R} ${R} 0 ${large} 1 ${p(d1, R)} L ${p(d1, r)} A ${r} ${r} 0 ${large} 0 ${p(d0, r)} Z`;
           const mid = (a0 + a1) / 2;
           a0 = a1;
           return { d, frac, mid, cle: it.cle };
@@ -597,8 +611,62 @@ const Charts = (() => {
 
       const cle = cleTrace(el);
       if (anime && cle && !mouvementRefuse()) animerDepuis(dernierTrace.get(cle));
+      /* L'arrivee sur la vue se lit sur le DOM, pas sur un second drapeau :
+         `render()` pose `.vue-entre` sur le conteneur de la vue avant d'y
+         ecrire les cartes, et l'enleve 700 ms plus tard. Les jauges de la page
+         poussent deja de zero sous cette classe ; l'anneau etait le seul a se
+         poser d'un coup au milieu de barres qui grandissent.
+
+         Decide au PREMIER rendu, puis consomme. `mount` rejoue la fonction a
+         chaque redimensionnement, et se remplir a nouveau parce qu'on a tourne
+         le telephone serait un clignotement.
+
+         Jamais en meme temps que la transition de perimetre : celle-ci part des
+         montants d'avant, un remplissage partirait de zero, et les deux se
+         disputeraient les memes arcs. Le cas ne se presente pas — changer de
+         perimetre n'est pas arriver sur la vue — mais l'ecrire vaut mieux que
+         le supposer. */
+      if (entree === null) entree = !!(el.closest && el.closest('.vue-entre'));
+      if (entree && !anime && !mouvementRefuse()) remplir();
+      entree = false;
       anime = false;
       if (cle) dernierTrace.set(cle, { genre: 'donut', parts });
+
+      function remplir() {
+        const svgEl = el.querySelector('svg');
+        if (!svgEl) return;
+        const noeuds = [...el.querySelectorAll('.slice')];
+        if (!noeuds.length) return;
+        const RETARD = 140, DUREE = 550;
+        let debut = null, fini = false;
+
+        const poser = (frac) => {
+          /* Meme attenuation que les jauges, `cubic-bezier(.22,.61,.36,1)` :
+             on part vite et on se pose lentement. */
+          const e = 1 - Math.pow(1 - frac, 3);
+          tracer(parts, e).forEach((a, i) => {
+            if (noeuds[i]) noeuds[i].setAttribute('d', a.d);
+          });
+        };
+
+        const finir = () => {
+          if (fini) return;
+          fini = true;
+          arcs.forEach((a, i) => { if (noeuds[i]) noeuds[i].setAttribute('d', a.d); });
+        };
+
+        const pas = (t) => {
+          if (fini) return;
+          if (debut === null) debut = t;
+          const f = Math.min(1, Math.max(0, (t - debut - RETARD) / DUREE));
+          poser(f);
+          if (f < 1) requestAnimationFrame(pas); else finir();
+        };
+        poser(0);
+        requestAnimationFrame(pas);
+        svgEl.addEventListener('pointerdown', finir, { once: true });
+        svgEl.addEventListener('pointermove', finir, { once: true });
+      }
 
       function animerDepuis(avant) {
         if (!avant || avant.genre !== 'donut') return;

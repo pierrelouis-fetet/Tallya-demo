@@ -2033,13 +2033,87 @@ suite('Les anneaux d’Allocation se transforment quand le périmètre change', 
       'chaque image interpole un montant');
     /* Une seule ecriture de la geometrie, pour le dessin ET pour la transition :
        deux copies auraient fini par se decaler d'un demi degre. */
-    eq((t.match(/const tracer = \(liste\)/g) || []).length, 1,
+    /* L'ancrage porte sur le NOM, pas sur la liste des parametres : celle-ci
+       s'est elargie le jour ou le remplissage d'arrivee a eu besoin d'un tour
+       partiel, et le controle est tombe pour une signature, pas pour un defaut. */
+    eq((t.match(/const tracer = \(/g) || []).length, 1,
       'la géométrie est écrite une fois');
-    /* Deux sites d'appel : le dessin d'arrivee, et chaque image de la
-       transition. Le troisieme usage est le repose de la fin, qui rejoue les
+    /* Trois sites d'appel : le dessin d'arrivee, chaque image de la transition
+       de perimetre, chaque image du remplissage. Le repose de la fin rejoue les
        arcs deja calcules plutot que de retracer. */
-    eq((t.match(/tracer\(/g) || []).length, 2,
-      'et elle sert au dessin comme à chaque image de la transition');
+    eq((t.match(/tracer\(/g) || []).length, 3,
+      'et elle sert au dessin comme à chaque image des deux mouvements');
+  });
+
+  test('l’anneau se remplit à l’arrivée, comme les jauges poussent', () => {
+    /* Les jauges de la page poussent deja de zero sous `.vue-entre` ; l'anneau
+       etait le seul a se poser d'un coup au milieu de barres qui grandissent.
+
+       L'arrivee se lit sur le DOM et non sur un second drapeau : `render()`
+       pose la classe sur le conteneur de la vue avant d'y ecrire les cartes. */
+    const t = anneau();
+    vrai(/if \(entree === null\) entree = !!\(el\.closest && el\.closest\('\.vue-entre'\)\);/.test(t),
+      'l’arrivée se lit sur la classe que render() pose déjà');
+    /* Decide au PREMIER rendu puis consomme : `mount` rejoue la fonction a
+       chaque redimensionnement, et se remplir a nouveau parce qu'on a tourne le
+       telephone serait un clignotement. */
+    vrai(/let entree = null;/.test(t) && /\n      entree = false;/.test(t),
+      'décidé au premier rendu, puis consommé');
+    vrai(/if \(entree && !anime && !mouvementRefuse\(\)\) remplir\(\);/.test(t),
+      'jamais en même temps que la transition de périmètre, et jamais si le système refuse le mouvement');
+  });
+
+  test('le remplissage garde les proportions, et le grand arc suit ce qui est tracé', () => {
+    const t = anneau();
+    /* Les parts gardent leurs proportions definitives pendant tout le
+       remplissage : les faire grandir ensemble aurait donne un anneau dont les
+       parts changent de taille en se remplissant, donc une repartition qui
+       bouge alors que rien ne bouge. C'est le FRONT qui avance, et chaque part
+       est coupee dessus. */
+    vrai(/const front = DEBUT \+ Math\.min\(1, Math\.max\(0, avance\)\) \* Math\.PI \* 2;/.test(t),
+      'un front avance sur le tour');
+    vrai(/const d0 = Math\.min\(a0, front\), d1 = Math\.min\(a1, front\);/.test(t),
+      'et chaque part est coupée dessus');
+
+    /* Le drapeau du grand arc se lit sur la portion REELLEMENT tracee. Sur la
+       part entiere — l'ancienne ecriture, `frac > 0.5` — une grosse part coupee
+       a moins d'un demi-tour aurait peint son complementaire : l'anneau se
+       serait rempli a l'envers pendant quelques images. */
+    vrai(/const large = \(d1 - d0\) > Math\.PI \? 1 : 0;/.test(t),
+      'le grand arc se lit sur la portion tracée, pas sur la part entière');
+    vrai(!/const large = frac > 0\.5/.test(t),
+      'et surtout pas sur la part entière, qui peindrait le complémentaire');
+
+    /* Vide des le temps de calcul qui ecrit le SVG : sans cette premiere pose,
+       l'anneau complet s'afficherait une image avant de disparaitre. */
+    /* La tranche s'arrete a `animerDepuis` : les deux mouvements finissent par
+       la meme paire d'appels, et une tranche plus large aurait pu la trouver
+       chez le voisin. */
+    const bloc = t.slice(t.indexOf('function remplir()'), t.indexOf('function animerDepuis(avant)'));
+    vrai(bloc.length > 300, 'la fonction de remplissage doit être trouvable');
+    /* Les deux appels ADJACENTS, dans cet ordre. Chercher le premier
+       `requestAnimationFrame(pas)` trouvait l'appel recursif ecrit dans `pas`
+       lui-meme, qui precede la pose : le controle tombait sur une lecture, pas
+       sur un defaut. */
+    vrai(/poser\(0\);\s+requestAnimationFrame\(pas\);/.test(bloc),
+      'la première pose précède la boucle : pas d’image d’anneau plein');
+  });
+
+  test('l’anneau part avec les jauges, et ne peut pas dériver d’elles', () => {
+    /* Deux fichiers doivent s'accorder : le CSS fait pousser les barres de la
+       page, le JavaScript remplit l'anneau. Des valeurs differentes donneraient
+       une arrivee ou l'anneau part avant ou apres ses voisines, et rien ne le
+       dirait. Le controle les confronte. */
+    const t = anneau();
+    const m = t.match(/const RETARD = (\d+), DUREE = (\d+);/);
+    vrai(m, 'le retard et la durée du remplissage doivent être trouvables');
+    const css = lireSource('assets/styles.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    const regle = css.slice(css.indexOf('@keyframes barre-pousse'),
+                            css.indexOf('@keyframes barre-pousse') + 400);
+    const j = regle.match(/animation: barre-pousse ([\d.]+)s [^;]*?([\d.]+)s backwards/);
+    vrai(j, 'la règle des jauges doit être trouvable');
+    eq(Number(m[2]) / 1000, Number(j[1]), 'même durée que les jauges');
+    eq(Number(m[1]) / 1000, Number(j[2]), 'même retard que les jauges');
   });
 
   test('le nombre au centre ne s’anime pas', () => {
@@ -2147,6 +2221,61 @@ suite('Les anneaux d’Allocation se transforment quand le périmètre change', 
       'le même périmètre ne relance ni rendu ni transition');
     vrai(/allocTransition = true;/.test(action),
       'et un changement réel lève le drapeau');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La base d'un pourcentage se lit sous le titre, pas à côté
+   ------------------------------------------------------------------ */
+suite('La mention de base est une légende, pas une commande', () => {
+
+  test('aucune mention ne vit plus dans un en-tête de carte', () => {
+    /* L'en-tete de carte est une ligne a deux bords : le titre a gauche, une
+       COMMANDE a droite. La mention y etait donc traitee comme un bouton, et
+       `space-between` poussait deux textes de longueurs tres differentes vers
+       les deux bords. En francais, « en % de ton patrimoine financier · 66 182
+       EUR » rejoignait « Repartition globale » au milieu et se chevauchait sur
+       un telephone.
+
+       Le controle est DERIVE : il refuse le motif partout, plutot que de tenir
+       la liste des cinq cartes qui le portaient. Une sixieme ecrite demain
+       tomberait dessus. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible');
+    eq((src.match(/<span class="hint">\$\{mentionBase\(/g) || []).length, 0,
+      'une mention de base ne se pose plus dans un en-tête');
+    const posees = (src.match(/<p class="tete-legende">\$\{mentionBase\(/g) || []).length;
+    eq(posees, (src.match(/\$\{mentionBase\(/g) || []).length - 1,
+      'toutes les mentions sauf celle de l’accueil sont des légendes de carte');
+    vrai(posees >= 5, 'les cinq cartes à pourcentages en portent une');
+  });
+
+  test('la légende se serre sous son titre, et la règle le dit dans ce sens', () => {
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(/\.card-head:has\(\+ \.tete-legende\) \{ margin-bottom: 2px; \}/.test(css),
+      'c’est la présence de la légende qui resserre le titre');
+    const i = css.indexOf('.tete-legende {');
+    vrai(i > 0, 'la légende doit avoir sa règle');
+    const regle = css.slice(i, css.indexOf('}', i));
+    vrai(/font-size: 12px/.test(regle) && /color: var\(--muted\)/.test(regle),
+      'elle garde l’encre et la taille qu’elle avait dans l’en-tête');
+  });
+
+  test('« Répartition » porte deux sens, et une clef pointée les sépare', () => {
+    /* « Repartition » vaut deja « Breakdown » : c'est l'etiquette vocale de tous
+       les anneaux. Une clef-phrase ne porte qu'un seul sens, donc le titre de
+       la carte passe par une clef pointee avec son francais en repli — la
+       convention deja posee pour « sur.objectif ». */
+    const src = lireSource('assets/app.js');
+    vrai(/<h2>\$\{trad\('Répartition\.carte', 'Répartition'\)\}<\/h2>/.test(src),
+      'le titre s’affiche « Répartition » et se traduit par sa clef');
+    eq(I18N.en['Répartition.carte'], 'Allocation', 'la carte se dit « Allocation »');
+    eq(I18N.en['Répartition'], 'Breakdown', 'et l’étiquette vocale garde son mot');
+    /* « globale » contredisait la bascule des qu'on passait en Financier : un
+       titre qui annonce « global » au-dessus d'une base restreinte ment. */
+    vrai(!src.includes("trad('Répartition globale')"),
+      'plus rien n’annonce « globale » au-dessus d’une base qui peut être restreinte');
+    vrai(!I18N.en['Répartition globale'], 'et la clef morte est partie avec');
   });
 });
 
@@ -16802,11 +16931,11 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
                           src.indexOf('function mountAllocation'));
     const l = positions(vue,
       'class="card repart"',
-      "trad('Répartition globale')",
+      "trad('Répartition.carte', 'Répartition')",
       "trad('Où est placé ton argent')",
       "trad('Par disponibilité')");
     vrai(croissant(l),
-      `l’ordre attendu est poches, répartition globale, emplacement, disponibilité : ${l.join(' < ')}`);
+      `l’ordre attendu est poches, répartition, emplacement, disponibilité : ${l.join(' < ')}`);
   });
 });
 

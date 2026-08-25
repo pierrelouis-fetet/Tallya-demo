@@ -3077,8 +3077,8 @@ function viewAllocation() {
   </div>
 
   <div class="card" data-anchor="actifs">
-    <div class="card-head"><h2>${trad('Répartition globale')}</h2>
-      <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
+    <div class="card-head"><h2>${trad('Répartition.carte', 'Répartition')}</h2></div>
+    <p class="tete-legende">${mentionBase(baseAlloc(), valeurBaseAlloc())}</p>
     <div class="chart" id="aMacro"></div>
     ${tbl(poches, baseAlloc().nom,
            valeurBaseAlloc())}
@@ -3093,8 +3093,8 @@ function viewAllocation() {
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2>
-      <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
+    <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2></div>
+    <p class="tete-legende">${mentionBase(baseAlloc(), valeurBaseAlloc())}</p>
     <h3 class="sous-titre-carte">${trad('Par type de détention')}</h3>
     <div class="chart" id="aType"></div>
     ${tbl(byType, baseAlloc().nom, byType.reduce((s, i) => s + i.value, 0))}
@@ -3103,8 +3103,8 @@ function viewAllocation() {
   </div>
 
   <div class="card" data-anchor="disponibilite">
-    <div class="card-head"><h2>${trad('Par disponibilité')}</h2>
-      <span class="hint">${mentionBase(baseAlloc(), valeurBaseAlloc())}</span></div>
+    <div class="card-head"><h2>${trad('Par disponibilité')}</h2></div>
+    <p class="tete-legende">${mentionBase(baseAlloc(), valeurBaseAlloc())}</p>
     <p class="hint" style="margin:0 0 12px">${trad('Quand cet argent peut redevenir disponible.')}${aide(allocFinancier
       ? trad("Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Tes murs et tes objets de valeur sont écartés de cette vue, et c’est ce qui fait disparaître le palier du logement que tu habites.")
       : trad("Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Le logement que tu habites et ce qui est bloqué jusqu’à une échéance figurent ici parce qu’ils font partie de tes avoirs, mais l’autonomie financière de l’accueil les écarte de son cumul : elle compte ce sur quoi tu peux vivre, pas ce que tu possèdes."))}</p>
@@ -3340,8 +3340,8 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
         ? `${fmtEUR0(per.montantDehors)} ${trad('restent dehors, soit')} ${dehorsDetail
              .map(([, phrase, v]) => `${fmtEUR0(v)} ${trad(phrase)}`).join(', ')}.${
            per.nonCote > 0 ? ` ${trad('Le non coté se suit en lignes de compte et non en lignes de marché : il se lit dans l’onglet')} ${SOUS_ONGLETS.allocation[0][1]}.` : ''}`
-        : trad('Tout ton patrimoine y est.')}`)}</h2>
-      <span class="hint">${mentionBase(BASES.baseCibles, r.base)}</span></div>
+        : trad('Tout ton patrimoine y est.')}`)}</h2></div>
+    <p class="tete-legende">${mentionBase(BASES.baseCibles, r.base)}</p>
     ${per.exclues.length ? `<p class="perimetre exclues">
       Sorties du rééquilibrage à ta demande :
       ${per.exclues.map(x => `<button type="button" class="mois-lien" data-action="reintegrer-classe"
@@ -3378,8 +3378,8 @@ ${trad('Le périmètre : tes comptes d’investissement (PEA, compte-titres, ass
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>${ROLES.core} ${trad('et satellites')}${aide(trad("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale."))}</h2>
-      <span class="hint">${mentionBase(BASES.baseCibles, rr.base)}</span></div>
+    <div class="card-head"><h2>${ROLES.core} ${trad('et satellites')}${aide(trad("À l’intérieur de ce qui est placé en bourse : ce que tu alimentes sans le remettre en question, et ce que tu arbitres. Le core n’est pas de l’argent immobile, c’est souvent là qu’arrive l’essentiel des versements : c’est de l’argent que tu ne comptes pas vendre. C’est une lecture, pas un objectif : le plan de rééquilibrage ne vient que des classes. Poser une seconde série de cibles sur ce même argent pourrait la contredire sans que rien ne le signale."))}</h2></div>
+    <p class="tete-legende">${mentionBase(BASES.baseCibles, rr.base)}</p>
     ${diagnosticRoles(rr)}
     <ul class="reeq">
       ${rr.roles.map(x => {
