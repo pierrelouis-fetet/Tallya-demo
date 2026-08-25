@@ -2310,6 +2310,52 @@ function pointsEvolution({ net = true, financier = false } = {}) {
   });
 }
 
+/* --- Une bascule qui ne change rien ne se montre pas --------------------
+
+   La question n'est PAS « ce detenteur a-t-il un appartement » ni « a-t-il un
+   credit ». Ces drapeaux repondent a cote, et l'un d'eux se trompe : quelqu'un
+   sans aucun bien physique mais avec une dette de courtier voit deja Financier
+   et Global diverger, parce que la vue financiere ne retranche aucune dette la
+   ou la vue globale nette les retranche. `aUnBien` aurait masque une bascule
+   utile, et personne ne l'aurait vu.
+
+   On compare donc les deux vues REELLEMENT calculees, sur la plage reellement
+   affichee. C'est la seule formulation qui ne peut pas se tromper, et elle ne
+   recopie aucune regle : le jour ou le perimetre change de definition, ces
+   fonctions suivent sans etre touchees.
+
+   Corollaire assume : le perimetre se juge a la lecture courante. Sans bien
+   physique, Financier et Global donnent la meme courbe BRUTE et deux courbes
+   NETTES differentes des qu'une dette existe — la bascule apparait donc en Net
+   et disparait en Brut. C'est ce que la regle demande, et c'est vrai. */
+function memeCourbe(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((p, i) => {
+    const q = b[i] || {};
+    /* L'union des clefs, parce que la vue financiere SUPPRIME les poches hors
+       perimetre au lieu de les mettre a zero : comparer les seules clefs de
+       l'une raterait une poche que l'autre porte. `num(undefined)` vaut zero,
+       donc une poche absente et une poche nulle se valent, ce qui est
+       exactement ce qu'on veut dire. */
+    const cles = new Set([...Object.keys(p), ...Object.keys(q)]);
+    for (const k of cles) {
+      if (k === 'date' || k === 'label') continue;
+      if (Math.abs(num(p[k]) - num(q[k])) > 0.005) return false;
+    }
+    return true;
+  });
+}
+
+function basculesEvolution({ net = true, financier = false, range = 'all' } = {}) {
+  const courbe = (n, f) => limitRange(pointsEvolution({ net: n, financier: f }), range);
+  const p = patrimoine();
+  return {
+    netBrut: Math.abs(num(p.net) - num(p.brut)) > 0.005
+      || !memeCourbe(courbe(true, financier), courbe(false, financier)),
+    perimetre: !memeCourbe(courbe(net, true), courbe(net, false)),
+  };
+}
+
 function currentMonthKey() {
   return todayISO().slice(0, 7) + '-01';
 }
@@ -2615,9 +2661,22 @@ function allocationByAccount({ financier = false } = {}) {
    La soustraction est la meme des deux cotes — `invested` retire `g.cash`, cette
    liste retire `cashCompte()` compte par compte — donc la somme des lignes fait
    le total, et un controle l'exige. */
-function placeByAccount() {
-  const base = nowTotals().invested;
-  return allocationByAccount()
+/* Le perimetre se passe, il ne se suppose pas.
+
+   Cette fonction ignorait la vue financiere quand sa voisine `allocationByAccount`
+   la connaissait deja : la carte « Place » retranchait les murs, la fiche qu'elle
+   ouvre ne les retranchait pas, et le meme intitule donnait deux montants a un
+   clic d'ecart. C'est exactement ce que ce depot s'interdit — un total doit
+   egaler la somme de ses parts, et deux ecrans qui nomment la meme chose doivent
+   l'evaluer pareil.
+
+   La base suit le perimetre elle aussi : un pourcentage calcule sur le patrimoine
+   entier au-dessus d'une liste qui n'en montre qu'une part ne totaliserait pas
+   cent. */
+function placeByAccount({ financier = false } = {}) {
+  const base = financier ? nowTotals().invested - horsFinancierTotal()
+                         : nowTotals().invested;
+  return allocationByAccount({ financier })
     .map(r => ({ ...r, value: r.value - cashCompte(compteById(r.id)) }))
     .filter(r => Math.abs(r.value) > 0.005)
     .map(r => ({ ...r, pct: base ? r.value / base * 100 : 0 }))

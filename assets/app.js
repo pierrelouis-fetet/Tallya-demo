@@ -559,6 +559,10 @@ function legendeSeries(series, avecTotal = false) {
 
    Ce qui reste ici : le dessin, les couleurs, et le choix de l'utilisateur. */
 
+function basculesAffichees() {
+  return basculesEvolution({ net: evoNet, financier: evoFinancier, range: evoRange });
+}
+
 function evolutionAffichee() {
   const points = limitRange(
     pointsEvolution({ net: evoNet, financier: evoFinancier }), evoRange);
@@ -567,9 +571,12 @@ function evolutionAffichee() {
 
 function carteEvolution() {
   const { series } = evolutionAffichee();
+  const perimetreUtile = basculesAffichees().perimetre;
   return `
     <div class="card">
-      <div class="card-head"><h2>${trad('Évolution du patrimoine')}${aide(trad(AIDE_PERIMETRE))}</h2>
+      <div class="card-head"><h2>${trad('Évolution du patrimoine')}${
+        perimetreUtile ? aide(trad(AIDE_PERIMETRE)) : ''}</h2>${
+        perimetreUtile ? `
         <span class="segmented seg-mini">
           <button data-action="evo-perimetre" data-perimetre="financier"
                   class="${evoFinancier ? 'on' : ''}" aria-pressed="${evoFinancier}"
@@ -578,7 +585,7 @@ function carteEvolution() {
           <button data-action="evo-perimetre" data-perimetre="global"
                   class="${evoFinancier ? '' : 'on'}" aria-pressed="${!evoFinancier}"
                   title="${trad('Tout ton patrimoine')}">${trad('Global')}</button>
-        </span></div>
+        </span>` : ''}</div>
       <div class="evo-commandes">${rangeControl('evo-range', evoRange)}</div>
       <div class="chart" id="chartEvo"></div>
       ${invitePremierPas('releves')}
@@ -762,12 +769,12 @@ function viewOverview() {
     <div>
       <div class="hero-label">
         <span>${trad('Patrimoine')}</span>
-        <span class="segmented seg-mini">
+        ${basculesAffichees().netBrut ? `<span class="segmented seg-mini">
           <button data-action="hero-base" data-net="1" class="${evoNet ? 'on' : ''}"
                   title="${trad('Tes avoirs moins tes crédits')}">${trad('Net')}</button>
           <button data-action="hero-base" data-net="" class="${evoNet ? '' : 'on'}"
                   title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
-        </span>
+        </span>` : ''}
       </div>
       <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>
       ${!evoNet && patrimoine().dettes ? `<div class="hero-sous muted">
@@ -10004,13 +10011,28 @@ const APERCUS = {
     };
   },
 
-  investiTotal: () => ({
-    titre: BASES.place.nom, sous: trad('Tout sauf les liquidités'),
-    total: nowTotals().invested,
-    totalNote: `${fmtPct(nowTotals().total ? nowTotals().invested / nowTotals().total * 100 : 0)} ${trad('du patrimoine')}`,
-    lignes: placeByAccount().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
-    vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
-  }),
+  /* Cette fiche s'ouvre depuis Allocation, et de nulle part ailleurs : elle
+     herite donc du perimetre de cette page. Sans cet heritage, la carte
+     annoncait un montant hors immobilier et la fiche en rendait un autre, murs
+     compris — le meme intitule, deux montants a un clic d'ecart.
+
+     La note du haut prend la base du perimetre, pas le patrimoine entier : un
+     pourcentage calcule sur une base plus large que la liste qu'il surmonte ne
+     totalise pas cent, et c'est la faute que cette base de code traque depuis le
+     debut. `baseAlloc().de` porte deja la forme grammaticale des deux cas. */
+  investiTotal: () => {
+    const place = allocFinancier ? nowTotals().invested - horsFinancierTotal()
+                                 : nowTotals().invested;
+    const base = valeurBaseAlloc();
+    return {
+      titre: BASES.place.nom, sous: trad('Tout sauf les liquidités'),
+      total: place,
+      totalNote: `${fmtPct(base ? place / base * 100 : 0)} ${baseAlloc().de}`,
+      lignes: placeByAccount({ financier: allocFinancier })
+        .map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
+      vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
+    };
+  },
 
   /* Les lignes de cibles, tresorerie comprise quand elle est suivie. Cinq
      endroits lisaient `[...r.classes, r.cash]` en supposant `r.cash` toujours

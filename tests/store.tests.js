@@ -2385,6 +2385,288 @@ suite('Les barres des graphiques poussent, à l’arrivée et au changement de p
   });
 });
 
+/* ------------------------------------------------------------------
+   Une bascule ne se montre que si ses deux positions donnent deux vues
+   ------------------------------------------------------------------ */
+suite('Une bascule qui ne change rien ne se montre pas', () => {
+
+  /* Le fixture porte les deux : un studio a 120 000 hors perimetre financier,
+     et un credit de 40 000. Chaque cas ci-dessous en retire un, ou les deux. */
+  const sansDette = s => { for (const e of s.etabs) e.dettes = []; };
+  const sansBien = (s) => {
+    s.comptes = s.comptes.filter(c => c.id !== 'c_immo');
+    for (const m of s.monthly) delete m.v.c_immo;
+  };
+  /* Une dette qui ne finance aucun bien physique : c'est le cas qu'un drapeau
+     « a-t-il un appartement » traiterait a l'envers. */
+  const detteDeCourtier = (s) => {
+    sansDette(s);
+    s.etabs.find(e => e.id === 'e_courtier').dettes =
+      [{ id: 'd_marge', libelle: 'Marge', montant: 10000, note: '' }];
+  };
+
+  test('les deux existent quand les deux changent quelque chose', () => {
+    Fixture.poser();
+    const p = patrimoine();
+    pres(p.brut, Fixture.BRUT, 'le brut du fixture');
+    pres(p.net, Fixture.BRUT - Fixture.DETTE, 'le net du fixture');
+    const b = basculesEvolution({ net: true, financier: false, range: 'all' });
+    vrai(b.netBrut, 'une dette de 40 000 sépare le net du brut');
+    vrai(b.perimetre, 'un studio de 120 000 sépare le financier du global');
+  });
+
+  test('sans dette, Net et Brut disent la même chose : pas de bascule', () => {
+    Fixture.poser(sansDette);
+    const p = patrimoine();
+    pres(p.dettes, 0, 'plus aucune dette');
+    pres(p.net, p.brut, 'le net vaut le brut');
+    const b = basculesEvolution({ net: true, financier: false, range: 'all' });
+    vrai(!b.netBrut, 'la bascule Net / Brut n’a rien à proposer');
+    /* Le studio est toujours la : l'autre bascule ne bouge pas. Deux reglages,
+       deux questions, et l'un ne repond pas pour l'autre. */
+    vrai(b.perimetre, 'celle du périmètre reste, elle a toujours sa raison');
+  });
+
+  test('sans actif hors périmètre, Financier et Global tracent la même courbe', () => {
+    Fixture.poser(s => { sansBien(s); sansDette(s); });
+    pres(totalFinancier(), patrimoine().brut,
+      'tout le patrimoine tient dans le périmètre financier');
+    for (const net of [true, false]) {
+      const b = basculesEvolution({ net, financier: false, range: 'all' });
+      vrai(!b.perimetre, `la bascule du périmètre disparaît (net : ${net})`);
+      vrai(!b.netBrut, `et celle de Net / Brut aussi (net : ${net})`);
+    }
+  });
+
+  test('une dette sans bien physique fait quand même diverger les deux périmètres', () => {
+    /* Le cas qui condamne le drapeau `aUnBien`. Aucun bien physique, donc les
+       deux courbes BRUTES sont identiques ; mais la vue financiere ne retranche
+       aucune dette la ou la vue globale nette les retranche, donc les deux
+       courbes NETTES different. La bascule doit apparaitre en Net et disparaitre
+       en Brut : c'est vrai des deux cotes, et c'est la regle. */
+    Fixture.poser(s => { sansBien(s); detteDeCourtier(s); });
+    pres(totalFinancier(), patrimoine().brut, 'aucun actif hors périmètre');
+    pres(patrimoine().dettes, 10000, 'une dette de courtier');
+
+    const enNet = basculesEvolution({ net: true, financier: false, range: 'all' });
+    vrai(enNet.perimetre,
+      'en Net, la dette retranchée d’un côté seulement sépare les deux courbes');
+    vrai(enNet.netBrut, 'et Net / Brut a évidemment sa raison');
+
+    const enBrut = basculesEvolution({ net: false, financier: false, range: 'all' });
+    vrai(!enBrut.perimetre,
+      'en Brut, aucune dette n’est retranchée nulle part : les deux courbes se confondent');
+  });
+
+  test('ajouter puis retirer un bien fait apparaître et disparaître la bascule', () => {
+    /* Le meme etat, joue dans les deux sens : rien n'est memorise, la reponse
+       vient des donnees du moment. */
+    const sansRien = s => { sansBien(s); sansDette(s); };
+    Fixture.poser(sansRien);
+    vrai(!basculesEvolution({ net: true, financier: false, range: 'all' }).perimetre,
+      'sans bien : absente');
+
+    Fixture.poser(s => { sansDette(s); });        // le studio revient
+    vrai(basculesEvolution({ net: true, financier: false, range: 'all' }).perimetre,
+      'le bien revient : la bascule revient');
+
+    Fixture.poser(sansRien);
+    vrai(!basculesEvolution({ net: true, financier: false, range: 'all' }).perimetre,
+      'et elle repart quand il repart');
+  });
+
+  test('la comparaison lit les vues, elle ne lit pas un drapeau', () => {
+    /* Ce que la regle interdit : deduire la reponse d'une propriete du
+       patrimoine plutot que des deux vues calculees. Un drapeau se trompe des
+       que la definition d'un perimetre bouge, et personne ne le voit. */
+    const src = lireSource('assets/store.js');
+    /* La borne de fin est du CODE, jamais un commentaire : le depot public est
+       servi sans commentaires, `indexOf` y rend -1, et `slice(a, -1)` prend tout
+       le reste du fichier au lieu de rien. Le controle passait ici et tombait
+       la-bas, sur une tranche qui contenait la moitie du modele. */
+    const fn = src.slice(src.indexOf('function basculesEvolution'),
+                         src.indexOf('function currentMonthKey'));
+    vrai(fn.length > 200 && fn.length < 3000, 'la fonction doit être trouvable, et elle seule');
+    vrai(/const courbe = \(n, f\) => limitRange\(pointsEvolution\(\{ net: n, financier: f \}\), range\);/.test(fn),
+      'les deux vues se calculent vraiment');
+    vrai(/!memeCourbe\(courbe\(net, true\), courbe\(net, false\)\)/.test(fn),
+      'et le périmètre se juge en les comparant');
+    vrai(!/CLASSES_HORS_FINANCIER|horsFinancier\(|SERIES_HORS_FINANCIER/.test(fn),
+      'aucune règle de périmètre n’est recopiée ici');
+    /* La plage compte : deux courbes qui ne different qu'avant la fenetre
+       affichee se confondent a l'ecran, et la bascule serait morte. */
+    vrai(/range/.test(fn), 'la comparaison porte sur la plage affichée');
+  });
+
+  test('une poche absente et une poche nulle sont la même chose', () => {
+    /* La vue financiere SUPPRIME les poches hors perimetre au lieu de les
+       mettre a zero. Comparer les seules clefs de l'une raterait une poche que
+       l'autre porte, et deux courbes differentes passeraient pour identiques. */
+    const src = lireSource('assets/store.js');
+    const fn = src.slice(src.indexOf('function memeCourbe'),
+                         src.indexOf('function basculesEvolution'));
+    vrai(/const cles = new Set\(\[\.\.\.Object\.keys\(p\), \.\.\.Object\.keys\(q\)\]\);/.test(fn),
+      'la comparaison porte sur l’union des clefs');
+    /* Et la reponse se verifie sur de vrais nombres : sans bien, la vue globale
+       porte une poche `immo` a zero que la vue financiere n'a pas du tout. */
+    Fixture.poser(s => { sansBien(s); sansDette(s); });
+    const g = pointsEvolution({ net: true, financier: false });
+    const f = pointsEvolution({ net: true, financier: true });
+    vrai(g.length && g.length === f.length, 'les deux vues ont le même nombre de points');
+    vrai(memeCourbe(g, f), 'et elles se confondent malgré des clefs différentes');
+  });
+
+  test('le rendu n’émet rien plutôt que de masquer', () => {
+    /* Masquer laisserait les boutons dans l'ordre de tabulation et dans ce que
+       lit une synthese vocale, pour un choix qui n'existe pas. */
+    const app = lireSource('assets/app.js');
+    const tete = app.slice(app.indexOf('<div class="hero-label">'),
+                           app.indexOf('<div class="hero-value">'));
+    vrai(/\$\{basculesAffichees\(\)\.netBrut \? `<span class="segmented seg-mini">/.test(tete),
+      'le grand chiffre n’émet sa bascule que si elle sert');
+    vrai(!/opacity: ?0|visibility: ?hidden|display: ?none/.test(tete),
+      'et il ne la masque pas');
+
+    const carte = app.slice(app.indexOf('function carteEvolution()'),
+                            app.indexOf('function monterEvolution()'));
+    vrai(/const perimetreUtile = basculesAffichees\(\)\.perimetre;/.test(carte),
+      'la carte lit l’état une seule fois');
+    vrai(/perimetreUtile \? `\s*\n\s*<span class="segmented seg-mini">/.test(carte),
+      'et n’émet la bascule du périmètre que si elle sert');
+    /* L'aide part avec elle : une pastille qui explique la difference entre
+       deux vues n'a rien a dire quand une seule existe. */
+    vrai(/perimetreUtile \? aide\(trad\(AIDE_PERIMETRE\)\) : ''/.test(carte),
+      'et son aide disparaît avec elle');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le détail d'une catégorie reste dans le périmètre de la carte
+   ------------------------------------------------------------------ */
+suite('Une fiche ne réintroduit pas ce que sa carte a écarté', () => {
+
+  /* Le fixture : 138 250 de brut, dont 6 500 de liquidités et 120 000 de murs.
+     Ce qui est placé vaut donc 131 750 en global et 11 750 en financier —
+     9 000 d'actions, 750 de métaux, 2 000 de non coté. */
+  const PLACE_GLOBAL = 131750;
+  const PLACE_FINANCIER = 11750;
+
+  test('en vue financière, les murs quittent aussi la liste', () => {
+    /* Le defaut signale : la carte « Place » retranchait les murs, la fiche
+       qu'elle ouvre ne les retranchait pas. Le meme intitule donnait deux
+       montants a un clic d'ecart, et le bien reapparaissait en tete de liste. */
+    Fixture.poser();
+    pres(nowTotals().invested, PLACE_GLOBAL, 'ce qui est placé, tout compris');
+    pres(horsFinancierTotal(), 120000, 'les murs du fixture');
+
+    const global = placeByAccount();
+    const financier = placeByAccount({ financier: true });
+    pres(global.reduce((s, r) => s + r.value, 0), PLACE_GLOBAL,
+      'la liste globale fait le total global');
+    pres(financier.reduce((s, r) => s + r.value, 0), PLACE_FINANCIER,
+      'et la liste financière fait le total financier');
+    pres(PLACE_GLOBAL - PLACE_FINANCIER, horsFinancierTotal(),
+      'l’écart entre les deux listes EST ce que le périmètre écarte');
+
+    /* Le compte qui porte les murs disparait, il ne se contente pas de maigrir. */
+    vrai(global.some(r => r.id === 'c_immo'), 'le studio est dans la vue globale');
+    vrai(!financier.some(r => r.id === 'c_immo'),
+      'et il n’est nulle part dans la vue financière');
+    for (const r of financier) {
+      vrai(Math.abs(r.value) > 0.005, `« ${r.label} » ne pèse rien : il n’a rien à faire dans la liste`);
+    }
+  });
+
+  test('les pourcentages de la fiche font cent, dans les deux vues', () => {
+    /* Une base plus large que la liste qu'elle surmonte ne totalise pas cent, et
+       c'est la faute que ce depot traque depuis le debut. */
+    Fixture.poser();
+    for (const financier of [false, true]) {
+      const l = placeByAccount({ financier });
+      pres(l.reduce((s, r) => s + r.pct, 0), 100,
+        `les parts totalisent cent (financier : ${financier})`);
+    }
+  });
+
+  test('sans actif hors périmètre, les deux listes se confondent', () => {
+    Fixture.poser(s => {
+      s.comptes = s.comptes.filter(c => c.id !== 'c_immo');
+      for (const m of s.monthly) delete m.v.c_immo;
+    });
+    pres(horsFinancierTotal(), 0, 'plus rien hors périmètre');
+    const a = placeByAccount(), b = placeByAccount({ financier: true });
+    eq(a.length, b.length, 'les deux listes ont le même nombre de lignes');
+    for (let i = 0; i < a.length; i++) {
+      eq(a[i].id, b[i].id, `même compte au rang ${i}`);
+      pres(b[i].value, a[i].value, `même montant pour « ${a[i].label} »`);
+    }
+  });
+
+  test('la fiche et sa carte lisent la même expression', () => {
+    /* Deux ecritures d'un meme montant finissent par diverger, et c'est
+       exactement ce qui s'est passe. Elles doivent etre litteralement la meme. */
+    const app = lireSource('assets/app.js');
+    const carte = app.slice(app.indexOf('{ label: BASES.place.nom,'),
+                            app.indexOf('...pochesLiquidites()'));
+    vrai(/value: allocFinancier \? t\.invested - horsFinancierTotal\(\) : t\.invested/.test(carte),
+      'la carte retranche ce qui sort du périmètre');
+    /* La borne de fin repart de l'index trouve : « Voir les avoirs » existe
+       aussi plus haut dans le fichier, et une tranche dont la fin precede le
+       debut est vide, donc verte pour de mauvaises raisons. */
+    const iFiche = app.indexOf('investiTotal: () => {');
+    const fiche = app.slice(iFiche, app.indexOf("cta: trad('Voir les avoirs')", iFiche));
+    vrai(fiche.length > 200, 'la fiche doit être trouvable');
+    vrai(/allocFinancier \? nowTotals\(\)\.invested - horsFinancierTotal\(\)/.test(fiche),
+      'la fiche retranche la même chose');
+    vrai(/placeByAccount\(\{ financier: allocFinancier \}\)/.test(fiche),
+      'et ses lignes viennent de la source filtrée, pas d’une autre');
+    /* La note du haut prend la base du perimetre, pas le patrimoine entier. */
+    vrai(/const base = valeurBaseAlloc\(\);/.test(fiche),
+      'le pourcentage se calcule sur la base de la page');
+    vrai(!/nowTotals\(\)\.total/.test(fiche),
+      'et plus sur le patrimoine entier, qui ne totaliserait pas cent');
+  });
+
+  test('l’écran n’ouvre que trois fiches, et on sait lesquelles', () => {
+    /* Une barriere, pas un inventaire. Chaque fiche atteignable depuis cette
+       page herite du perimetre ou n'a rien a en faire :
+
+       - `investiTotal` melange les deux mondes, donc elle recoit le mode ;
+       - `cash` et `cashInvestir` ne portent que des liquidites, une classe qui
+         n'est jamais hors perimetre — elles ne peuvent rien reintroduire.
+
+       Une quatrieme ajoutee demain tombera sur ce controle, et il faudra dire
+       de quel cote elle est. C'est le seul moyen de ne pas refaire ce defaut. */
+    const app = lireSource('assets/app.js');
+    const vue = app.slice(app.indexOf('function viewAllocation()'),
+                          app.indexOf('function mountAllocation'));
+    vrai(vue.length > 1000, 'la vue doit être trouvable');
+    /* Une fiche se designe par un litteral, mais pas toujours seule : les
+       poches de cash choisissent entre deux noms sur la meme ligne. On lit donc
+       tous les litteraux qui suivent `apercu:` jusqu'a la fin de l'expression,
+       sinon la moitie des fiches echappe au recensement. */
+    const noms = new Set([...vue.matchAll(/apercu: (.+)/g)].flatMap(m => {
+      /* Un ternaire porte sa CONDITION avant le « ? » : « p.cle === 'investir' »
+         n'est pas un nom de fiche, c'est la clef d'une poche de cash. On ne lit
+         donc que la partie qui désigne. */
+      const q = m[1].indexOf('?');
+      const designe = q >= 0 ? m[1].slice(q) : m[1];
+      return [...designe.matchAll(/'([a-zA-Z]+)'/g)].map(x => x[1]);
+    }));
+    eq([...noms].sort().join(','), 'cash,cashInvestir,investiTotal',
+      'trois fiches, et chacune a été jugée sur le périmètre');
+    /* Et le seul point d'entree reste celui-la : aucune autre action de cette
+       page n'ouvre quoi que ce soit. */
+    const actions = new Set([...vue.matchAll(/data-action="([a-z-]+)"/g)].map(m => m[1]));
+    eq([...actions].join(','), 'apercu',
+      'un seul geste ouvre un détail sur cet écran');
+    /* Les liquidites ne sortent jamais du perimetre financier : c'est ce qui
+       rend les deux autres fiches inoffensives, et ca se verifie. */
+    vrai(!CLASSES_HORS_FINANCIER.includes('liquidites'),
+      'les liquidités sont dans le périmètre financier, donc « cash » ne réintroduit rien');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -5424,11 +5706,14 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
        ressemblent : c'est exactement la confusion qui a produit le defaut. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    const bloc = src.slice(src.indexOf('investiTotal:'),
-                           src.indexOf('investiTotal:') + 700);
-    vrai(/placeByAccount\(\)/.test(bloc),
+    /* La tranche se ferme sur du code et non sur une longueur : sept cents
+       caracteres etaient un nombre choisi, et le bloc a grandi. */
+    const i = src.indexOf('investiTotal:');
+    const bloc = src.slice(i, src.indexOf("cta: trad('Voir les avoirs')", i));
+    vrai(bloc.length > 200 && bloc.length < 2000, 'le bloc doit être trouvable, et lui seul');
+    vrai(/placeByAccount\(/.test(bloc),
       '« Placé » doit dériver ses lignes de placeByAccount()');
-    vrai(!/allocationByAccount\(\)/.test(bloc),
+    vrai(!/allocationByAccount\(/.test(bloc),
       'allocationByAccount() compte les espèces : elle ne peut pas servir ici');
   });
 
@@ -15314,8 +15599,11 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
     const src = lireSource('assets/app.js');
     const carte = src.slice(src.indexOf('function carteEvolution()'),
                             src.indexOf('function monterEvolution()'));
-    vrai(/<h2>\$\{trad\('Évolution du patrimoine'\)\}\$\{aide\(trad\(AIDE_PERIMETRE\)\)\}<\/h2>/.test(carte),
-      'la pastille vit sur le titre de la carte');
+    /* La pastille vit sur le titre, et elle y vit SI ET SEULEMENT SI la bascule
+       y vit aussi : une aide qui explique la différence entre deux vues n'a
+       rien à dire quand une seule existe. Les deux lisent le même booléen. */
+    vrai(/<h2>\$\{trad\('Évolution du patrimoine'\)\}\$\{\s*\n\s*perimetreUtile \? aide\(trad\(AIDE_PERIMETRE\)\) : ''\}<\/h2>/.test(carte),
+      'la pastille vit sur le titre de la carte, et seulement quand le périmètre se choisit');
     /* Ecrit une fois : l'infobulle des boutons et la pastille ne peuvent pas
        diverger si elles ne se recopient pas. */
     eq((src.match(/const AIDE_PERIMETRE/g) || []).length, 1,
