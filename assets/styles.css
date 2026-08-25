@@ -888,6 +888,16 @@ table .field :is(input, select) { max-width: none; }
   color: var(--text-primary);
 }
 .card-head .hint { font-size: 12px; color: var(--muted); }
+/* Une bascule posee dans un en-tete de carte se cale au bord droit, et y reste
+   quand elle passe a la ligne.
+
+   `space-between` distribue ligne par ligne : seule sur la seconde, elle partait
+   a gauche. Le cas se produit en francais, ou « Evolution du patrimoine » prend
+   179 des 311 px d'une carte a 375 px quand l'anglais « Wealth over time » n'en
+   prend que 126 — la meme carte se replie dans une langue et pas dans l'autre.
+   C'est la meme regle que pour la bascule du grand chiffre, et c'est la meme
+   raison : le bord droit est celui des commandes. */
+.card-head > .segmented { margin-left: auto; }
 /* Un intitule et sa precision, empiles dans l'en-tete.
 
    Un compte pose a cote du titre, avant les commandes, n'appartient ni a l'un ni
@@ -991,10 +1001,8 @@ table .field :is(input, select) { max-width: none; }
 }
 .hero-label > .segmented { margin-left: auto; }
 
-.seg-mini { padding: 1px; }
-.seg-mini button {
-  font-size: 10.5px; letter-spacing: .04em; padding: 2px 8px; border-radius: var(--radius-xs);
-}
+/* La version reduite du controle segmente vit plus bas, apres `.segmented`.
+   Elle etait ecrite ici et n'a jamais rien fait : voir son commentaire. */
 .hero-sous { font-size: 12px; margin-top: 2px; text-transform: none; letter-spacing: 0; }
 
 .bien { padding: 12px 0; border-bottom: 1px solid var(--grid); }
@@ -2736,29 +2744,9 @@ select.annee {
   font-weight: 650;
 }
 
-/* --------- Les deux commandes du graphique d'evolution ---------
-
-   Le perimetre (Financier / Global) et la periode (YTD / 1 an / ...). Deux
-   reglages du meme dessin, donc un seul element de flex dans l'en-tete : poses
-   separement, ils tombaient un par un a 375 px -- le perimetre restait contre le
-   titre, les periodes descendaient seules a l'autre bout de la rangee, et deux
-   commandes du meme graphique se lisaient comme deux commandes sans rapport.
-   C'est la regle deja posee pour la paire de boutons de Budget.
-
-   `flex-wrap` a l'interieur : les deux groupes font 149 px et 284 px a 375 px,
-   soit 443 px pour 311 px de carte. Ils se rangent donc l'un sous l'autre plutot
-   que de se comprimer, et rien ne deborde. Sur un ecran large ils tiennent la
-   meme ligne, cales a droite du titre.
-
-   L'ecart de 14 px entre les deux, plus large que les 6 px qui separent les
-   boutons d'un meme groupe : c'est lui qui dit qu'il y a deux questions et non
-   sept boutons a la file. */
 .evo-commandes {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  /* Il se cale a droite du titre quand la place le permet, et au depart de sa
-     ligne quand il se replie : `space-between` de l'en-tete distribue ligne par
-     ligne, un enfant seul sur la sienne part a gauche. Rien a poser. */
-  min-width: 0;
+  display: flex; justify-content: flex-end; flex-wrap: wrap;
+  margin: 0 0 10px; min-width: 0;
 }
 
 .barre-recherche {
@@ -3012,6 +3000,47 @@ td .empty, th .empty { background: none; border: none; }
 }
 .segmented button.on { background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow); }
 
+/* --- la seconde famille : les filtres de vue ---------------------------
+   Deux natures de controle segmente vivent dans cette application, et elles ne
+   demandent pas la meme presence.
+
+   La NAVIGATION — « Aujourd'hui | Historique | Projection », « Depenses |
+   Charges fixes » — porte `.sous-onglets` et garde du volume : c'est une barre
+   qu'on vise, pas un reglage qu'on effleure.
+
+   Les FILTRES DE VUE — Net / Brut, Financier / Global, les plages, le tri d'un
+   journal, un filtre de role — portent `.seg-mini`. Ils choisissent un etat dans
+   une carte, a cote d'un titre ou d'une etiquette de 11 px, et ils ne doivent pas
+   peser plus lourd que le mot qu'ils accompagnent. « Choisir un etat » n'a pas le
+   poids de « declencher une action » : c'est ce que la difference doit dire.
+
+   **La classe existait et ne faisait rien.** Elle etait declaree 2 500 lignes
+   plus haut, avant `.segmented`, a specificite egale : elle perdait. Mesure sur
+   la bascule Net / Brut, qui la porte depuis toujours : corps calcule a 12,5 px
+   et remplissage a 7px 12px, soit exactement les valeurs de `.segmented`. Seul
+   son `letter-spacing` s'appliquait, faute de concurrent — il ELARGISSAIT le
+   controle au lieu de le reduire.
+
+   Les valeurs ne sont pas celles qu'elle annonçait : 2 px de remplissage
+   auraient donne des pilules de 17 px de haut, quand la regle de la maison en
+   demande 24 au doigt. La pilule fait 25 px et le controle 31, contre 36 pour un
+   segmente ordinaire.
+
+   Et la cible du doigt est plus grande que le dessin, comme pour les
+   boutons-icones et les pastilles d'aide : quatre pixels tout autour, poses en
+   absolu, qui n'occupent aucune place et ne peignent rien. Trente-trois pixels
+   sous le pouce pour vingt-cinq a l'oeil. */
+.seg-mini { padding: 2px; }
+.seg-mini button {
+  font-size: 12px; letter-spacing: .01em; padding: 5px 12px;
+  border-radius: var(--radius-xs); position: relative;
+  /* Posee pour la meme raison que celle de la navigation : une boite de ligne
+     en `normal` depend de ce que la pilule contient. */
+  line-height: 1.25;
+}
+@media (max-width: 900px) { .seg-mini button { padding: 7px 12px; } }
+.seg-mini button::after { content: ''; position: absolute; inset: -4px; }
+
 .choix-hypothese {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
   width: min(36em, 100%);
@@ -3042,6 +3071,18 @@ td .empty, th .empty { background: none; border: none; }
 
 .sous-onglets {
   display: flex; margin-bottom: 2px;
+  /* Les pastilles ne s'etirent pas a la hauteur de la bande.
+
+     La bande DECLARE sa hauteur, `--h-sous-onglets`, parce que les bandeaux
+     collants s'y accrochent — et en `align-items` par defaut, le controle
+     segmente s'etirait pour la remplir. Sa hauteur n'etait donc pas la sienne :
+     elle valait la bande moins son remplissage, quoi qu'on demande aux pilules.
+     Mesure : 47 px a 375 px pour des boutons regles a 34.
+
+     Centrees, les pilules mesurent ce qu'on leur demande et la bande garde le
+     repere dont les collants ont besoin. Les deux faits cessent d'etre le
+     meme. */
+  align-items: center;
   position: sticky; top: 0; z-index: 6;
   padding: 6px 0 8px;
   /* Aucun fond, et aucun flou : seules les pastilles portent une surface.
@@ -3061,7 +3102,21 @@ td .empty, th .empty { background: none; border: none; }
   background: transparent;
   min-height: var(--h-sous-onglets); box-sizing: border-box;
 }
-.sous-onglets .segmented button { padding: 6px 16px; font-size: 13px; }
+/* La hauteur de ligne est POSEE, et ce n'est pas un detail de style.
+
+   En `normal`, elle depend de ce que la pilule contient : la pastille de rappel,
+   un `<i>` de 6 px cale a deux pixels de la ligne de base, gonflait la boite de
+   ligne de sept pixels. La barre grandissait donc de sept pixels le jour ou une
+   saisie devenait en attente, et retrecissait quand on la faisait — mesure a
+   375 px : 41 px de pilule avec la pastille, 34 sans. Une navigation qui change
+   de taille selon son contenu se remarque, et rien ne l'expliquait.
+
+   Posee, la boite de ligne ne depend plus que du corps. La pastille flotte
+   dedans sans la pousser. */
+.sous-onglets .segmented button {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 30px; padding: 0 16px; font-size: 13px; line-height: 1.25;
+}
 
 .sous-onglets .segmented { background: var(--surface-1); position: relative; }
 
@@ -3446,6 +3501,8 @@ td .empty, th .empty { background: none; border: none; }
   .topbar h1 { font-size: 19px; }
   .hero-value { font-size: 34px; }
   .card, .hero { padding: 15px; }
+
+  .sous-onglets .segmented button { min-height: 34px; padding: 0 10px; font-size: 12.5px; }
 
   /* Une seule convention pour les bascules de vue : l'intitule a gauche, SA
      bascule en haut a droite de la carte, sur la meme ligne.

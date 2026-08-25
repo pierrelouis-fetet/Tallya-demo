@@ -570,18 +570,16 @@ function carteEvolution() {
   return `
     <div class="card">
       <div class="card-head"><h2>${trad('Évolution du patrimoine')}</h2>
-        <div class="evo-commandes">
-          <span class="segmented">
-            <button data-action="evo-perimetre" data-perimetre="financier"
-                    class="${evoFinancier ? 'on' : ''}" aria-pressed="${evoFinancier}"
-                    title="${trad('Tes placements et tes liquidités, hors immobilier physique')}"
-                    >${trad('Financier')}</button>
-            <button data-action="evo-perimetre" data-perimetre="global"
-                    class="${evoFinancier ? '' : 'on'}" aria-pressed="${!evoFinancier}"
-                    title="${trad('Tout ton patrimoine')}">${trad('Global')}</button>
-          </span>
-          ${rangeControl('evo-range', evoRange)}
-        </div></div>
+        <span class="segmented seg-mini">
+          <button data-action="evo-perimetre" data-perimetre="financier"
+                  class="${evoFinancier ? 'on' : ''}" aria-pressed="${evoFinancier}"
+                  title="${trad('Tes placements et tes liquidités, hors immobilier physique')}"
+                  >${trad('Financier')}</button>
+          <button data-action="evo-perimetre" data-perimetre="global"
+                  class="${evoFinancier ? '' : 'on'}" aria-pressed="${!evoFinancier}"
+                  title="${trad('Tout ton patrimoine')}">${trad('Global')}</button>
+        </span></div>
+      <div class="evo-commandes">${rangeControl('evo-range', evoRange)}</div>
       <div class="chart" id="chartEvo"></div>
       ${invitePremierPas('releves')}
       <div class="legend">${legendeSeries(series, true)}</div>
@@ -999,7 +997,7 @@ function rangeControl(action, courant, annees = []) {
   const connu = HISTORY_RANGES.some(r => r.id === courant);
   return `
     <div class="plage">
-      <div class="segmented">
+      <div class="segmented seg-mini">
         ${HISTORY_RANGES.map(r => `<button data-action="${action}" data-range="${r.id}"
           class="${!surAnnee && (r.id === courant || (!connu && r.id === 'all')) ? 'on' : ''}"
           >${esc(r.label)}</button>`).join('')}
@@ -2296,7 +2294,7 @@ function viewPositions() {
         <button class="btn sm" data-action="ajouter-ligne">${trad('+ Ajouter une ligne')}</button>
       </div>
       <div class="row" style="margin:8px 0 0">
-        <div class="segmented" role="group" aria-label="${trad('Filtrer par rôle')}">
+        <div class="segmented seg-mini" role="group" aria-label="${trad('Filtrer par rôle')}">
           ${[['tous', trad('Tous')], ['core', 'Core'], ['satellite', 'Satellite']].map(([v, l]) =>
             `<button type="button" data-action="filtrer-role" data-role="${v}"
                      class="${posRole === v ? 'on' : ''}" aria-pressed="${posRole === v}">${l}</button>`).join('')}

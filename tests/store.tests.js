@@ -14579,6 +14579,88 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
       'ce drapeau ne touche pas au modèle : store.js reçoit un argument, pas un état');
   });
 
+  test('deux familles de contrôles segmentés, et une seule déclaration chacune', () => {
+    /* Cette application a deux natures de controle segmente, et elles ne
+       demandent pas la meme presence.
+
+       La NAVIGATION — « Aujourd'hui | Historique | Projection », « Depenses |
+       Charges fixes » — porte `.sous-onglets` : une barre qu'on vise.
+
+       Les FILTRES DE VUE — Net / Brut, Financier / Global, les plages, le tri
+       d'un journal, un filtre de role — portent `.seg-mini` : un etat qu'on
+       choisit dans une carte, a cote d'un titre. « Choisir un etat » n'a pas le
+       poids de « declencher une action », et c'est ce que l'ecart doit dire.
+
+       Mesure apres harmonisation, hauteur du controle entier :
+
+         navigation      36 px sur grand ecran, 40 sur telephone
+         filtre de vue   31 px sur grand ecran, 35 sur telephone
+
+       Les trois filtres de l'accueil sont au pixel identiques, ce qui n'etait pas
+       le cas : la barre des plages avait sa propre regle. Cible au doigt : 33 px
+       sur grand ecran et 37 sur telephone, pour 25 et 29 a l'oeil — le debord est
+       pose en absolu, il n'occupe aucune place. */
+    const css = lireSource('assets/styles.css');
+    const app = lireSource('assets/app.js');
+    vrai(css && app, 'les deux fichiers doivent être lisibles');
+
+    /* 1. Les filtres partagent UNE declaration, et aucun n'a la sienne. */
+    vrai(/^\.seg-mini button \{/m.test(css), 'la famille compacte est déclarée');
+    vrai(!/\.plage \.segmented button \{/.test(css),
+      'la barre des plages n’a plus de règle à elle : elle rejoint la famille');
+    /* Les plages se lisent dans `rangeControl`, ou le controle SUIT son
+       conteneur ; les autres portent leur action DANS le controle, donc on
+       remonte. Deux sens de lecture, et c'est le balisage qui les impose. */
+    const plage = app.slice(app.indexOf('function rangeControl('),
+                            app.indexOf('</div>`;', app.indexOf('function rangeControl(')));
+    vrai(/class="segmented seg-mini"/.test(plage),
+      '« plage » est un filtre de vue : il porte la famille compacte');
+    for (const usage of ['evo-perimetre', 'hero-base', 'tri-ventes', 'filtrer-role']) {
+      const i = app.indexOf(`data-action="${usage}"`);
+      vrai(i > 0, `« ${usage} » doit être trouvable`);
+      const avant = app.slice(Math.max(0, i - 700), i);
+      const dernier = avant.lastIndexOf('class="segmented');
+      vrai(dernier >= 0, `« ${usage} » doit vivre dans un contrôle segmenté`);
+      vrai(avant.slice(dernier, dernier + 40).includes('seg-mini'),
+        `« ${usage} » est un filtre de vue : il porte la famille compacte`);
+    }
+
+    /* 2. `.seg-mini` doit SUIVRE `.segmented`, sinon elle ne fait rien. C'est
+       exactement ce qui s'est passe pendant des mois : declaree avant, a
+       specificite egale, elle perdait, et trois controles la portaient en
+       croyant obtenir une version reduite. */
+    vrai(css.indexOf('.seg-mini button {') > css.indexOf('.segmented button {'),
+      'la famille compacte suit celle qu’elle doit battre : c’est l’ordre qui tranche');
+
+    /* 3. La cible du doigt est plus grande que le dessin. */
+    vrai(/\.seg-mini button::after \{[^}]*inset: -4px;/.test(css),
+      'le débord de la cible tactile est posé, et il ne peint rien');
+    vrai(/\.seg-mini button \{[^}]*position: relative;/.test(css),
+      'et son ancrage avec lui');
+
+    /* 4. La hauteur des deux familles est POSEE, jamais subie. Deux fois elle
+       l'etait : la pastille de rappel gonflait la boite de ligne de la
+       navigation, et la bande collante l'etirait a sa propre hauteur. */
+    vrai(/\.sous-onglets \.segmented button \{[^}]*min-height: 30px;/.test(css),
+      'la navigation déclare sa hauteur');
+    vrai(/\.sous-onglets \{[^}]*align-items: center;/.test(css),
+      'et elle ne s’étire plus à la hauteur de la bande collante');
+    vrai(/\.sous-onglets \.segmented button \{[^}]*line-height: 1\.25;/.test(css),
+      'sa boîte de ligne ne dépend plus de ce que la pilule contient');
+
+    /* 5. La navigation reste PLUS HAUTE que les filtres : c'est la hierarchie
+       entiere de cette passe. Les deux valeurs se lisent dans la feuille. */
+    const hNav = Number((css.match(/\.sous-onglets \.segmented button \{[^}]*min-height: (\d+)px/) || [])[1]);
+    const padFiltre = Number((css.match(/\.seg-mini button \{[^}]*padding: (\d+)px/) || [])[1]);
+    vrai(hNav >= 30, `la navigation garde de la présence (${hNav} px)`);
+    vrai(padFiltre <= 6, `le filtre reste compact (${padFiltre} px de remplissage)`);
+
+    /* 6. Et les vrais boutons ne bougent pas : un toggle choisit un etat, un
+       bouton declenche une action, et rien de cette passe ne les touche. */
+    vrai(!/\.btn \{[^}]*min-height/.test(css.slice(css.indexOf('.seg-mini button {'))),
+      'aucune règle de cette passe ne redéfinit les boutons d’action');
+  });
+
   test('les deux bascules vivent en haut à droite de leur carte', () => {
     /* L'intitule a gauche, SA bascule au bord droit. C'est la ou vivent les
        commandes dans toute l'application — les vingt-six en-tetes de carte y
@@ -14639,31 +14721,51 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
       'et le raccourci clavier reste');
   });
 
-  test('les deux commandes du graphique se replient ensemble', () => {
-    /* A 375 px l'en-tete passe a la ligne. Posees separement, le perimetre serait
-       reste contre le titre et les periodes seraient descendues seules a l'autre
-       bout de la rangee : deux reglages du meme dessin lus comme deux commandes
-       sans rapport. Un seul element de flex, donc un seul point de rupture.
-       C'est la regle deja posee pour la paire de boutons de Budget.
+  test('le périmètre vit sur la ligne du titre, les périodes sur la leur', () => {
+    /* Les deux commandes ont partage un bloc, pour se replier ensemble. Elles ne
+       repondent pourtant pas a la meme question — l'une dit QUOI on regarde,
+       l'autre SUR QUELLE DUREE — et le bloc les faisait descendre toutes les deux
+       sous le titre, dont la ligne restait vide.
 
-       Mesure a 375 px apres correction : titre sur la premiere ligne, perimetre
-       sur la deuxieme (142 px), periodes sur la troisieme (258 px), pour 311 px
-       de carte. Aucun debordement, boutons a 30 px de haut. */
+       Separees, l'en-tete se comporte comme les vingt-cinq autres : titre a
+       gauche, commande a droite. Mesure a 1440 px : la bascule finit au bord
+       droit du contenu de la carte, sur la ligne du titre. A 375 px en francais,
+       « Evolution du patrimoine » prend 179 des 311 px et la bascule en demande
+       140 : elle passe a la ligne suivante, toujours contre le bord droit. En
+       anglais, « Wealth over time » lui laisse la place et elle reste en haut.
+       C'est le repli du flex qui en decide, pas une valeur ecrite a la main. */
     const src = lireSource('assets/app.js');
     const carte = src.slice(src.indexOf('function carteEvolution()'),
                             src.indexOf('function monterEvolution()'));
-    vrai(/<div class="evo-commandes">/.test(carte), 'les deux commandes partagent un bloc');
-    const bloc = carte.slice(carte.indexOf('<div class="evo-commandes">'),
-                             carte.indexOf('<div class="chart" id="chartEvo">'));
-    vrai(/data-action="evo-perimetre"/.test(bloc), 'le périmètre y est');
-    vrai(/rangeControl\('evo-range', evoRange\)/.test(bloc), 'les périodes aussi');
+    vrai(carte.length > 500, 'la carte doit être trouvable');
+
+    /* Le perimetre est un enfant DIRECT de l'en-tete, a cote du titre. */
+    const tete = carte.slice(carte.indexOf('<div class="card-head">'),
+                             carte.indexOf('<div class="evo-commandes">'));
+    vrai(/trad\('Évolution du patrimoine'\)/.test(tete), 'le titre y est');
+    vrai(/data-action="evo-perimetre"/.test(tete),
+      'et le périmètre avec lui, sur la même ligne');
+    vrai(!/rangeControl/.test(tete),
+      'les périodes n’y sont pas : elles ne disent pas la même chose que le périmètre');
+
+    /* Les periodes ont leur rangee, calee sur le meme bord. */
+    const rangee = carte.slice(carte.indexOf('<div class="evo-commandes">'),
+                               carte.indexOf('<div class="chart" id="chartEvo">'));
+    vrai(/rangeControl\('evo-range', evoRange\)/.test(rangee), 'les périodes y sont');
+    vrai(!/data-action="evo-perimetre"/.test(rangee), 'et le périmètre n’y est plus');
+
     const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
     const debut = css.indexOf('.evo-commandes {');
-    vrai(debut > 0, 'la règle doit exister');
+    vrai(debut > 0, 'la règle de la rangée doit exister');
     const regle = css.slice(debut, css.indexOf('}', debut));
-    vrai(/display:\s*flex/.test(regle), 'c’est un flex, donc un seul enfant de l’en-tête');
-    vrai(/flex-wrap:\s*wrap/.test(regle),
-      'et le bloc se replie sur lui-même plutôt que de comprimer ses boutons');
+    vrai(/justify-content:\s*flex-end/.test(regle),
+      'la rangée des périodes se cale sur le même bord que la bascule du dessus');
+
+    /* Et l'en-tete se replie plutot que de comprimer : c'est ce qui rattrape le
+       francais, ou le titre ne laisse pas la place. */
+    const iTel = css.indexOf('@media (max-width: 900px)');
+    vrai(/\.card-head \{ flex-wrap: wrap;/.test(css.slice(iTel)),
+      'l’en-tête se replie sous 900 px, ce qui suffit quand le titre est long');
   });
 });
 
