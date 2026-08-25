@@ -12339,6 +12339,52 @@ suite('La traduction des écrans ne peut pas heurter les totaux', () => {
 
 suite('Le dictionnaire anglais ne laisse pas de trou', () => {
 
+  test('l’anglais de l’application se prononce', () => {
+    /* « i.e. » est du latin abrege. Correct a l'ecrit juridique, illisible sur
+       un ecran de telephone : personne ne le prononce, et le lecteur le decode
+       au lieu de lire le chiffre qui suit. « soit » se disait de trois facons —
+       « i.e. », « that is », « left, i.e. » — donc la meme reformulation
+       changeait de registre selon la carte ou elle tombait.
+
+       « e.g. » n'est pas juge sur le meme critere, et ce n'est pas une
+       tolerance : il vit dans les indications de champ, ou le francais abrege
+       exactement pareil (« ex. Fortuneo »). Ce qui est verifie est donc la
+       SYMETRIE — une abreviation anglaise en face d'une abreviation francaise.
+       Un « e.g. » ecrit la ou le francais ecrit une phrase entiere serait une
+       abreviation apparue a la traduction, et il tombe. */
+    const latin = [];
+    const dissymetrie = [];
+    for (const [fr, en] of Object.entries(I18N.en)) {
+      if (typeof en !== 'string') continue;
+      if (/\bi\.e\./i.test(en)) latin.push(`« ${fr} » → « ${en} »`);
+      if (/\be\.g\./i.test(en) && !/(^|[(,] ?)ex\. /.test(fr)) {
+        dissymetrie.push(`« ${fr} » → « ${en} »`);
+      }
+    }
+    eq(latin.length, 0, `« i.e. » dans du texte affiché : ${latin.join(' ; ')}`);
+    eq(dissymetrie.length, 0,
+      `« e.g. » sans « ex. » en face : ${dissymetrie.join(' ; ')}`);
+  });
+
+  test('une même reformulation se dit d’une seule façon', () => {
+    /* Trois clefs portent « soit » comme CONNECTEUR : il introduit une seconde
+       ecriture du montant qu'on vient de lire. Elles doivent partager le meme
+       mot, sinon l'objectif, le revenu et la position parlent trois anglais.
+
+       L'ancrage est etroit a dessein : « soit » est aussi un subjonctif, et
+       « quelle que soit sa periodicite » n'introduit rien du tout. Le connecteur
+       ouvre la clef ou suit une virgule ; le verbe a toujours un sujet devant. */
+    const estConnecteur = fr => /^soit( |$)/.test(fr) || /, soit$/.test(fr);
+    const soit = Object.entries(I18N.en).filter(([fr]) => estConnecteur(fr));
+    vrai(soit.length >= 3, 'les clefs de reformulation doivent être trouvables');
+    for (const [fr, en] of soit) {
+      vrai(/that’s/.test(en), `« ${fr} » → « ${en} » : la maison dit « that’s »`);
+    }
+    /* Et le subjonctif reste hors du filet, sinon le controle se contredirait. */
+    vrai(!estConnecteur('Ce que la ligne pèse chaque mois, quelle que soit sa périodicité'),
+      'un « soit » subjonctif n’est pas une reformulation');
+  });
+
   test('aucune balise ne porte de français écrit à la main', () => {
     /* Le rattrapage de 2026 a repris deux mille chaines une a une. Rien ne
        gardait ensuite la porte : soixante-dix textes affiches etaient repartis
@@ -15539,8 +15585,26 @@ suite('Le VIX dit un niveau, il ne recommande rien', () => {
     /* L'aide vit dans la fiche, qui est un panneau — dans la tuile, qui est un
        bouton, une pastille cliquable se disputerait le clic avec elle. C'est le
        defaut deja rencontre sur le montant du grand chiffre. */
-    vrai(/totalNote: estVix\(l\)[\s\S]{0,120}aide\(trad\(AIDE_VIX\)\)/.test(t),
-      'la fiche porte le composant d’aide de la maison');
+    /* L'aide vit dans le slot HTML de la fiche, et surtout PAS dans la note sous
+       le grand nombre. Celle-ci passe par `escMontant`, qui echappe tout sauf le
+       fragment de l'oeil masque : une pastille posee la s'imprimait en clair,
+       balise comprise, sous le nombre. Le defaut est parti en ligne avant d'etre
+       vu — d'ou ce controle, qui garde le contrat des deux slots.
+
+       Les bornes se prennent en repartant de l'index trouve : `vue: 'positions'`
+       existe AILLEURS et plus haut dans le fichier, et une tranche dont la fin
+       precede le debut est vide — donc verte pour de mauvaises raisons. */
+    const iNote = t.indexOf('totalNote: estVix(l)');
+    const iHtml = t.indexOf('html: `<dl class="kv">');
+    vrai(iNote > 0 && iHtml > iNote, 'les deux slots de la fiche doivent être trouvables');
+    vrai(/totalNote: estVix\(l\) \? \(niveauVix\(l\.prix\) \|\| ''\)/.test(t),
+      'la note sous le nombre reste du texte nu');
+    vrai(!/aide\(|<span/.test(t.slice(iNote, iHtml)),
+      'aucun balisage dans un slot que le rendu échappe');
+    const htmlFiche = t.slice(iHtml, t.indexOf('</dl>', iHtml))
+      .replace(/<!--[\s\S]*?-->/g, '');
+    vrai(/estVix\(l\)[\s\S]{0,160}aide\(trad\(AIDE_VIX\)\)/.test(htmlFiche),
+      'et le composant d’aide vit dans le slot qui accepte du balisage');
     vrai(/title="\$\{esc\(l\.nom\)\}\$\{estVix\(l\) \? ` · \$\{esc\(trad\(AIDE_VIX\)\)\}`/.test(t),
       'et la tuile porte la même phrase dans son infobulle');
     /* Une seule ecriture du texte, pour les deux surfaces. */

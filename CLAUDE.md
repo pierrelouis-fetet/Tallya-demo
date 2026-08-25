@@ -485,6 +485,14 @@ bien (`bienId`).
   `f"{{ a "` `"}}"` produit `{ a }}`. Le JavaScript généré reçoit alors une
   accolade de trop. Écrire le code injecté d'un seul tenant, ou passer les
   valeurs par `json.dumps()`.
+- **`executer-tests.py` sert SON dossier, pas le répertoire courant.**
+  `RACINE = os.path.dirname(os.path.abspath(__file__))` : lancé depuis ici, celui
+  du dépôt privé démarre un serveur sur l'arbre privé et rend son verdict. Il
+  n'accepte aucun argument de chemin, et n'en refuse donc aucun — le `.` passé
+  derrière est ignoré en silence. Le vert obtenu est vrai, il ne parle simplement
+  pas de l'arbre qu'on vient de modifier. Chaque dépôt a le sien : lancer celui du
+  dossier où l'on se trouve. Le compte de tests diffère entre les deux (1 046
+  contre 1 065) et c'est le signal le moins cher pour s'en apercevoir.
 
 ## Données personnelles
 

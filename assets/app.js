@@ -10281,10 +10281,18 @@ const APERCUS = {
       titre: l.nom,
       sous: estVix(l) ? trad('Volatilité du S&P 500') : estIndice ? 'Indice boursier' : l.symbole,
       totalTexte: `${nb(l.prix)}${unite}`,
-      totalNote: estVix(l)
-        ? `${niveauVix(l.prix) || ''}${aide(trad(AIDE_VIX))}`
-        : (m ? m.label : ''),
+      /* Le niveau prend la place de l'etat de seance sous le nombre : c'est ce
+         qu'on vient lire.
+
+         TEXTE NU, et c'est un contrat : `noteApercu` passe par `escMontant`,
+         qui echappe tout sauf le fragment de l'oeil masque. Une pastille d'aide
+         posee ici s'imprimait donc en clair, balise comprise, sous le grand
+         nombre. Le slot qui accepte du balisage est `html`, plus bas, et c'est
+         la que l'aide vit. */
+      totalNote: estVix(l) ? (niveauVix(l.prix) || '') : (m ? m.label : ''),
       html: `<dl class="kv">
+        ${estVix(l) ? `<dt>${trad('Ce qu’il mesure')}${aide(trad(AIDE_VIX))}</dt>
+          <dd class="phrase">${trad('Volatilité attendue, pas une performance')}</dd>` : ''}
         <dt>${trad('Variation du jour')}</dt>
           <dd class="${l.pct == null ? 'muted' : cls(l.pct)}">${l.pct == null
             ? `${trad('hors séance')}${l.quoteTime ? ` · ${trad('cours')} ${esc(fmtCoursQuand(l.quoteTime))}` : ''}`
