@@ -303,6 +303,7 @@ const Charts = (() => {
            trop mince en pose deux de moins que sa voisine. */
         const trait = b.epaisseur >= HAUTEUR_TRAIT
           ? `<polyline points="${b.haut}" fill="none" stroke="${c.surface}" stroke-width="2"
+                       stroke-linejoin="round" stroke-linecap="round"
                        data-trait="${esc(sr.key)}"/>`
             + `<polyline points="${b.haut}" fill="none" stroke="${sr.color}" stroke-width="1.75"
                         stroke-linejoin="round" stroke-linecap="round" data-trait="${esc(sr.key)}"/>`

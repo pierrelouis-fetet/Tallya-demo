@@ -1597,7 +1597,15 @@ suite('Une bande trop mince ne porte pas de trait', () => {
 
     const i = src.indexOf('const HAUTEUR_TRAIT');
     vrai(i > 0, 'le seuil de dessin doit exister, et porter un nom');
-    const bloc = src.slice(i, i + 900);
+    /* Borne sur la fin du bloc, pas sur 900 caracteres. La tranche fixe a tenu
+       jusqu'au jour ou un commentaire de six lignes s'est glisse au-dessus de la
+       boucle : le controle a annonce « le trait n'est pas conditionne » sur du
+       code qui l'etait, simplement pousse au-dela du couperet. Le fichier lui
+       meme previent contre ce genre d'ancrage — « un test ne doit dependre ni
+       d'un commentaire ni d'une longueur ». */
+    const fin = src.indexOf('const totalLine', i);
+    vrai(fin > i, 'la boucle des bandes doit se terminer');
+    const bloc = src.slice(i, fin);
 
     vrai(/epaisseur >= HAUTEUR_TRAIT/.test(bloc),
       'le trait doit être conditionné à l’épaisseur de la bande');
@@ -14681,6 +14689,74 @@ suite('Changer de périmètre se voit, sans se rejouer tout seul', () => {
      Ce que ces controles gardent, c'est la mecanique qui rend ces mesures
      possibles — et surtout les deux pieges qui l'ont fait echouer en silence. */
 
+  test('la courbe arrondit ses angles, jamais sa trajectoire', () => {
+    /* Un releve par mois, et rien entre deux. Une spline ou une Bezier non
+       monotone inventerait des sommets et des creux que personne n'a mesures,
+       depasserait les valeurs relevees, et laisserait croire que l'application
+       connait la trajectoire quotidienne. Ce qui s'adoucit est le RENDU des
+       jonctions, pas le chemin : les segments restent rectilignes et passent
+       exactement par leurs points.
+
+       Le controle porte donc sur les deux moities de la regle. */
+    const src = lireSource('assets/charts.js');
+    vrai(src, 'assets/charts.js doit être lisible pour ce contrôle');
+    const i = src.indexOf('function stackedArea');
+    const aire = src.slice(i, src.indexOf('function donut', i));
+    vrai(aire.length > 2000, 'la fonction doit être trouvable');
+
+    /* 1. Aucun chemin courbe. `<polyline>` et `<polygon>` ne relient leurs
+       points que par des droites : le seul moyen d'introduire une courbe serait
+       un `<path>` avec un C, un S ou un Q. */
+    /* Commentaires retires : celui qui explique pourquoi il n'y a pas de spline
+       contient le mot, et un controle qui crie sur sa propre explication finit
+       par etre desactive. */
+    const codeAire = aire.replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(!/<path\b/.test(codeAire),
+      'la pile se trace en polylignes : un <path> ouvrirait la porte aux courbes');
+    for (const mot of ['curve', 'spline', 'basis', 'ezier', 'monotone']) {
+      vrai(!codeAire.includes(mot),
+        `« ${mot} » n’a rien à faire ici : la trajectoire ne se recalcule pas`);
+    }
+
+    /* 2. Les trois traits de la pile portent la meme jonction. Le lisere de fond
+       ne l'avait pas : en `miter`, un angle aigu produit une pointe qui peut
+       depasser de plusieurs pixels, et comme il est plus epais (2 px) que le
+       trait de couleur qu'il souligne (1,75), cette pointe sortait du dessin sur
+       les renversements francs. Deux traits arrondis et un troisieme anguleux se
+       voient. */
+    const traits = [...aire.matchAll(/<polyline[\s\S]*?\/>/g)].map(m => m[0])
+      /* Ceux de la PILE : les deux traits de chaque bande, qui portent leur
+         poche, et la ligne du total. Les pointilles de l'option `bande` ne sont
+         pas de la partie — ils appartiennent aux scenarios de la Projection,
+         qui trace un intervalle et non une trajectoire relevee. */
+      .filter(t => /data-trait=/.test(t) || t.includes('${totalLine}'));
+    vrai(traits.length >= 3, `trois traits attendus, ${traits.length} trouvés`);
+    for (const t of traits) {
+      vrai(/stroke-linejoin="round"/.test(t) && /stroke-linecap="round"/.test(t),
+        'chaque trait de la pile arrondit ses jonctions : ' + t.slice(0, 60));
+    }
+
+    /* 3. Et la geometrie reste celle des points. `empiler()` ne fabrique que des
+       couples « x,y » a partir des valeurs recues : aucun point intermediaire,
+       aucune moyenne, aucun lissage. */
+    const pile = src.slice(src.indexOf('function empiler(valeur, topC, cles)'),
+                           src.indexOf('const valeurDuPoint'));
+    vrai(/\$\{x\(i\)\},\$\{yC\(v\)\}/.test(pile),
+      'chaque sommet est un point reçu, placé tel quel');
+    vrai(!/\/ 2|moyenne|lissage/.test(pile),
+      'rien n’y interpole entre deux relevés');
+
+    /* 4. Preuve par les nombres : autant de sommets que de points, ni plus. Le
+       fixture porte un releve et la photo du jour, donc deux. */
+    Fixture.poser();
+    const pts = pointsEvolution({ net: true });
+    vrai(pts.length >= 2, 'la série doit porter au moins deux points');
+    /* `stackedArea` vit dans charts.js, que le harnais ne charge pas : on
+       verifie que la source construit un sommet PAR point, sans en ajouter. */
+    vrai(/haut: bas\.map\(\(v, i\) => `\$\{x\(i\)\},\$\{yC\(v\)\}`\)\.join\(' '\)/.test(pile),
+      'un sommet par point de la série, et rien d’autre');
+  });
+
   test('le souvenir du dessin se range par identifiant, jamais par nœud', () => {
     /* Le piege, et il ne levait aucune erreur. Une `WeakMap` clefee sur
        l'element etait le premier reflexe : `render()` reecrit le `innerHTML` de
@@ -14864,12 +14940,19 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
       'le tableau et son édition restent');
     /* Et plus aucun bilan patrimonial : les trois notions qui n'ont rien a
        faire dans cet onglet ont disparu de la source. */
-    /* Sur l'APPEL et non sur la chaine nue : le commentaire qui explique le
-       retrait cite ces intitules, et un controle qui crie sur sa propre
-       explication finit par etre desactive. */
+    /* Le controle porte sur LA VUE, pas sur le fichier. « Croissance observee »
+       et « Ce qui ne vient pas du budget » sont revenues, mais sur l'accueil, ou
+       elles confrontent l'equation a ce que le patrimoine a fait. Chercher leur
+       absence dans tout `app.js` reviendrait a interdire qu'elles existent
+       quelque part, ce qui n'est pas la regle : la regle est que l'onglet
+       « Charges fixes » ne porte pas de bilan patrimonial. */
+    const vueBudget2 = src.slice(src.indexOf('function viewBudget(section'),
+                                 src.indexOf('function paliersCible('));
+    vrai(vueBudget2.length > 1000, 'la vue Budget doit être trouvable');
     for (const parti of ['Croissance observée du patrimoine', 'Ce qui ne vient pas du budget',
-                         'Voir le rapprochement dans Budget']) {
-      vrai(!src.includes(`trad('${parti}')`), `« ${parti} » n’a plus rien à faire ici`);
+                         'Voir le rapprochement dans Budget', '= Accumulation patrimoniale']) {
+      vrai(!vueBudget2.includes(`trad('${parti}')`),
+        `« ${parti} » n’a plus rien à faire dans cet onglet`);
     }
   });
 
@@ -14950,12 +15033,22 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     const c = carte();
     vrai(!/avecCredit/.test(c), 'plus de branche qui masque la décomposition');
     vrai(!/sans crédit en cours/.test(c), 'et plus de phrase à la place de la formule');
-    /* Les quatre intitules, chacun rendu une seule fois. */
-    for (const ligne of ['Capacité d’épargne', 'Capital remboursé',
-                         'Accumulation patrimoniale', 'Taux d’accumulation']) {
-      eq((c.match(new RegExp(`trad\\('${ligne}'\\)`, 'g')) || []).length, 1,
+    /* Les sept intitules de la cascade, chacun rendu une seule fois, avec son
+       operateur : la colonne se lit de haut en bas comme une addition posee. */
+    /* Les operateurs sont des caracteres d'expression rationnelle : le « + » de
+       « + Capital rembourse » vaut « un ou plus » et la recherche ne trouvait
+       rien. On compte donc les occurrences de la chaine, sans motif. */
+    const combien = (t, aiguille) => t.split(aiguille).length - 1;
+    for (const ligne of ['Revenus fixes', '− Charges fixes', '= Capacité d’épargne',
+                         '+ Capital remboursé', '= Accumulation patrimoniale',
+                         'Taux d’accumulation']) {
+      eq(combien(c, `trad('${ligne}')`), 1,
         `« ${ligne} » doit être rendu, une fois`);
     }
+    /* Le troisieme terme porte le nom de la branche prise. */
+    vrai(/trad\('− Dépenses observées'\)/.test(c) && /trad\('− Objectif de dépenses'\)/.test(c),
+      'et la ligne des dépenses sait dire laquelle des deux bases a servi');
+
     /* Et zero s'ecrit « 0 € », jamais « +0 € » : un plus devant un zero se lit
        comme une addition qui n'a pas eu lieu. */
     eq(montantSigne(0), fmtEUR0(0), 'zéro ne porte pas de signe');
@@ -14998,10 +15091,16 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
       'la couleur suit le signe, comme partout ailleurs');
     vrai(/aEcran\(rec\.theoretical\)/.test(c),
       'et le signe est toujours écrit : un total signé ne se lit pas comme un solde');
-    /* Le vert reste significatif : un seul montant porte une couleur, le total.
-       Colorer aussi les composantes en ferait une decoration. */
-    eq((c.match(/cls\(/g) || []).length, 1,
-      'une seule ligne est colorée, sinon la couleur ne veut plus rien dire');
+    /* Le vert reste significatif : dans l'equation, un seul montant porte une
+       couleur — le total. Colorer aussi ses composantes en ferait une
+       decoration. L'ecart hors budget, lui, vit sous le filet, dans la partie
+       qui CONFRONTE l'equation, et il se lit dans les deux sens : sa couleur y
+       porte un sens que le vert de l'accumulation ne dit pas. */
+    const equation = c.slice(c.indexOf('<dl class="kv kv-accumul">'), c.indexOf('kv-filet'));
+    eq((equation.match(/cls\(/g) || []).length, 1,
+      'une seule ligne de l’équation est colorée, sinon la couleur ne veut plus rien dire');
+    vrai(/cls\(rec\.gap\)/.test(c.slice(c.indexOf('kv-filet'))),
+      'et l’écart hors budget porte la sienne, sous le filet');
   });
 
   test('la carte ne suit pas Net / Brut, et rien ne l’y oblige', () => {
@@ -15058,31 +15157,92 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
       'la reprise doit suivre la redéclaration mobile, sinon elle ne la bat pas');
   });
 
-  test('les quatre métriques portent chacune leur aide', () => {
-    /* La carte ne doit pas se contenter d'un total : chaque ligne doit pouvoir
-       dire d'ou elle vient, au doigt, sans quitter la page. Le composant est
-       celui de toute l'application — `aide()`, une pastille « ? » que
-       `monteAides` ouvre — et non un second style d'infobulle. */
+  test('chaque métrique calculée porte son aide', () => {
+    /* Une cascade sans explication demande de faire confiance a sept nombres.
+       Chaque ligne CALCULEE doit pouvoir dire d'ou elle vient, au doigt, sans
+       quitter la page. Le composant est celui de toute l'application — `aide()`,
+       une pastille « ? » que `monteAides` ouvre — et non un second style.
+
+       Les deux premieres lignes n'en portent pas, et c'est voulu : « Revenus
+       fixes » et « − Charges fixes » sont des montants SAISIS, pas des resultats.
+       Une aide qui dirait « ce que tu as declare » n'apprendrait rien. */
     const c = carte();
-    eq((c.match(/\$\{aide\(/g) || []).length, 4,
-      'quatre métriques, quatre aides : ni une de plus, ni une de moins');
-    /* Chaque intitule porte la sienne, sur la meme ligne. */
-    for (const ligne of ['Capacité d’épargne', 'Capital remboursé',
-                         'Accumulation patrimoniale', 'Taux d’accumulation']) {
-      const i = c.indexOf(`trad('${ligne}')`);
+    /* La ligne des depenses ne rend pas son intitule en clair : il se choisit
+       au-dessus du gabarit, selon la branche prise par le moteur, et arrive dans
+       le `<dt>` par une variable. On l'y cherche donc sous cette forme. */
+    const rendu = { '− Dépenses observées': '${esc(nomDepenses)}' };
+    for (const ligne of ['− Dépenses observées', '= Capacité d’épargne',
+                         '+ Capital remboursé', '= Accumulation patrimoniale',
+                         'Taux d’accumulation', 'Croissance observée du patrimoine',
+                         'Ce qui ne vient pas du budget']) {
+      const i = c.indexOf(rendu[ligne] || `trad('${ligne}')`);
       vrai(i > 0, `« ${ligne} » doit être rendu`);
-      vrai(/\$\{aide\(/.test(c.slice(i, c.indexOf('</dt>', i))),
+      const fin = c.indexOf('</dt>', i);
+      vrai(fin > i && /\$\{aide\(/.test(c.slice(i, fin)),
         `« ${ligne} » doit porter une aide`);
     }
+    /* Les deux montants saisis n'en portent pas. */
+    const revenus = c.indexOf("trad('Revenus fixes')");
+    vrai(!/\$\{aide\(/.test(c.slice(revenus, c.indexOf('</dt>', revenus))),
+      'un montant saisi n’a rien à expliquer');
   });
+
+  test('la carte ne réintroduit pas l’objectif d’investissement', () => {
+    /* Il figurait dans l'ancienne carte de Budget et il n'est PAS une composante
+       de l'accumulation : il se calcule sur l'OBJECTIF de depenses quand tout le
+       reste se calcule sur les depenses constatees. Le poser au milieu de la
+       cascade ferait une ligne qui ne s'additionne a rien. Il vit toujours dans
+       la barre « Ou va ce que tu gagnes » de l'onglet Depenses. */
+    const c = carte();
+    vrai(!/Objectif d’investissement/.test(c),
+      'il n’a pas sa place dans une cascade où chaque ligne s’additionne');
+    vrai(!/targetSaving/.test(c), 'et son montant n’est pas lu ici');
+    /* Il n'a pas disparu pour autant. */
+    const src = lireSource('assets/app.js');
+    eq((src.match(/trad\('Objectif d’investissement'\)/g) || []).length, 1,
+      'la barre du budget le nomme, et elle est seule à le faire');
+  });
+
+  test('la confrontation vit sous un filet, jamais dans l’équation', () => {
+    /* Deux natures. Au-dessus du filet, ce que le budget et les remboursements
+       EXPLIQUENT, ligne a ligne. En dessous, ce que le patrimoine a REELLEMENT
+       fait, et l'ecart entre les deux. Melangees, la croissance observee se
+       lirait comme un terme de plus de l'addition, alors qu'elle n'en est pas
+       un : elle contient les marches et les apports exterieurs. */
+    const c = carte();
+    const iFilet = c.indexOf('kv-filet');
+    vrai(iFilet > 0, 'le filet doit séparer les deux parties');
+    const equation = c.slice(0, iFilet), confrontation = c.slice(iFilet);
+    for (const dans of ['Revenus fixes', '= Capacité d’épargne', '= Accumulation patrimoniale']) {
+      vrai(equation.includes(`trad('${dans}')`), `« ${dans} » appartient à l’équation`);
+      vrai(!confrontation.includes(`trad('${dans}')`), `« ${dans} » n’est pas sous le filet`);
+    }
+    for (const sous of ['Croissance observée du patrimoine', 'Ce qui ne vient pas du budget']) {
+      vrai(confrontation.includes(`trad('${sous}')`), `« ${sous} » vit sous le filet`);
+      vrai(!equation.includes(`trad('${sous}')`), `« ${sous} » n’entre pas dans l’addition`);
+    }
+    /* Sans historique, il n'y a rien a confronter : la partie entiere se tait
+       plutot que d'afficher un ecart contre un vide. */
+    vrai(/rec\.realPerMonth == null \? '' :/.test(c),
+      'sans relevé, la confrontation ne s’affiche pas');
+    /* Et sa base est nommee : « Rythme d'accumulation » montre la meme nature de
+       chiffre sur la periode qu'on y choisit, celle-ci sur une fenetre fixe. */
+    Fixture.poser();
+    eq(PACE_WINDOW, 12, 'la fenêtre de la croissance observée est fixe');
+    vrai(/douze derniers mois clos/.test(c),
+      'et l’aide la nomme, sinon deux nombres proches se liraient comme une erreur');
+    vrai(/rec\.monthsSpan/.test(c),
+      'la note compte les mois réellement mesurés, elle n’annonce pas douze par principe');
+  });
+
 
   test('les aides disent la formule que le moteur a jouée', () => {
     /* Une aide qui explique autre chose que le calcul fait est pire qu'aucune
        aide : elle donne raison de se fier a un chiffre pour de mauvaises
        raisons. Chacune se compose donc de la phrase ET des montants reels. */
     const c = carte();
-    vrai(/Revenus − charges fixes − dépenses moyennes\./.test(c),
-      'la capacité d’épargne annonce ses trois termes');
+    vrai(/Revenus − charges fixes − dépenses observées\./.test(c),
+      'la capacité d’épargne annonce ses trois termes, avec le mot de la ligne du dessus');
     vrai(/fmtEUR0Texte\(rec\.income\)[\s\S]{0,80}fmtEUR0Texte\(rec\.fixed\)[\s\S]{0,80}fmtEUR0Texte\(rec\.spend\)/.test(c),
       'et les trois montants qui la composent, dans l’ordre de la formule');
     vrai(/Capacité d’épargne \+ capital remboursé\./.test(c),
@@ -15094,7 +15254,7 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
        retombe sur l'objectif de depenses quand aucune depense n'est saisie :
        annoncer « depenses moyennes » dans ce cas dirait une formule que le
        moteur n'a pas jouee. */
-    vrai(/rec\.spendObserved[\s\S]{0,180}objectif de dépenses/.test(c),
+    vrai(/rec\.spendObserved[\s\S]{0,200}objectif de dépenses/.test(c),
       'et il change de nom quand le moteur retombe sur l’objectif');
     Fixture.poser();
     vrai(savingsReconciliation().spendObserved,
@@ -15119,8 +15279,8 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
        `montantSigne` prend son formateur en argument plutot que d'exister en
        deux exemplaires. */
     const c = carte();
-    const aides = [...c.matchAll(/\$\{aide\(([\s\S]*?)\)\}/g)].map(m => m[1]);
-    eq(aides.length, 4, 'les quatre aides doivent être trouvables');
+    vrai((c.match(/\$\{aide\(/g) || []).length >= 7,
+      'les aides de la cascade et de la confrontation doivent être trouvables');
     /* Les aides composees vivent dans des constantes au-dessus du gabarit : on
        controle donc la carte entiere, hors du rendu des `<dd>`. */
     const composition = c.slice(0, c.indexOf('return `'));
@@ -20490,7 +20650,7 @@ suite('Deux montants, deux noms, et le lecteur voit lequel', () => {
     const finCarte = src.indexOf('\n}\n', debutCarte);
     vrai(debutCarte > 0 && finCarte > debutCarte, 'la carte doit être trouvable');
     const carte = src.slice(debutCarte, finCarte);
-    vrai(/trad\('Accumulation patrimoniale'\)/.test(carte),
+    vrai(/trad\('= Accumulation patrimoniale'\)/.test(carte),
       'la carte porte le chiffre');
     vrai(/rec\.investable/.test(carte) && /rec\.capitalRembourse/.test(carte),
       'et ses deux composantes, capacité d’épargne et capital remboursé');

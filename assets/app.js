@@ -633,34 +633,37 @@ function monterEvolution() {
    nulle part. Un test le tient. */
 function carteAccumulation() {
   const rec = savingsReconciliation();
-  /* Les quatre lignes sont toujours la, capital rembourse a zero compris.
+  /* La carte se lit comme une equation, et c'est tout son interet.
 
-     Elles ne l'etaient pas : sans credit, la decomposition disparaissait au motif
-     qu'afficher « 0 € » puis deux fois le meme montant sous deux intitules est ce
-     que ce projet s'interdit. Le motif etait bon, la conclusion fausse. Une carte
-     qui n'affiche qu'un total ne dit pas d'ou il vient, et c'est precisement la
-     question qu'elle existe pour repondre : 584 epargnes, 0 rembourse, donc 584
-     accumules. La ligne a zero n'est pas une redite : c'est elle qui
-     EXPLIQUE pourquoi les deux autres sont egales, et une phrase a la place
-     (« sans credit en cours ») demandait de reconstituer mentalement ce que la
-     formule montre d'un coup d'oeil.
+     Elle a d'abord ete reduite a quatre chiffres — capacite, capital,
+     accumulation, taux. C'etait trop peu : « +1 333 € » sans les trois lignes
+     qui le fabriquent affiche un resultat au lieu d'expliquer une mecanique, et
+     la question que cette carte existe pour repondre est justement « comment mes
+     revenus deviennent du patrimoine ». Les operateurs vivent dans les intitules
+     pour que la colonne se lise de haut en bas comme une addition posee.
 
-     La hierarchie porte donc la lisibilite a la place du masquage : les deux
-     composantes en texte ordinaire, le total en corps 18 et en couleur, le taux
-     en dessous. Le vert reste significatif parce qu'un seul montant le porte.
+     Ce n'est pas pour autant l'ancienne carte de Budget : l'objectif
+     d'investissement n'y revient pas — il n'est pas une composante de
+     l'accumulation, et il vit deja dans la barre « Ou va ce que tu gagnes » — et
+     la note de methode tient en une ligne au lieu d'un paragraphe.
 
-     Rien n'est recalcule ici : `savingsReconciliation()` reste la seule source. */
-  /* Un montant dans une AIDE ne se formate pas comme a l'ecran : l'aide range son
-     texte dans un attribut, ou le masque des montants s'imprimerait en clair,
-     balise SVG comprise. `fmtEUR0Texte` y rend « ••• € ». */
+     Rien n'est recalcule ici : `savingsReconciliation()` reste la seule source
+     des sept montants, et elle n'a pas bouge. */
+  /* Un montant dans une AIDE ne se formate pas comme a l'ecran : l'aide range
+     son texte dans un attribut, ou le masque des montants s'imprimerait en
+     clair, balise SVG comprise. `fmtEUR0Texte` y rend « ••• € ». */
   const aEcran = v => montantSigne(v);
   const enTexte = v => montantSigne(v, fmtEUR0Texte);
-  /* La formule de la capacite d'epargne, avec ses vrais nombres et le vrai nom
-     de son troisieme terme : `savingsReconciliation()` retombe sur l'objectif de
-     depenses quand aucune depense n'est saisie, et annoncer « depenses
-     moyennes » dans ce cas dirait une formule que le moteur n'a pas jouee. */
+  /* Le troisieme terme porte le nom de la branche prise : `savingsReconciliation`
+     retombe sur l'objectif de depenses quand aucune depense n'est saisie, et
+     l'annoncer « observees » dirait une formule que le moteur n'a pas jouee. */
+  const nomDepenses = rec.spendObserved
+    ? trad('− Dépenses observées') : trad('− Objectif de dépenses');
+  const aideDepenses = trad(rec.spendObserved
+    ? 'La moyenne de tes dépenses saisies cette année.'
+    : 'Aucune dépense saisie cette année : c’est ton objectif qui sert de base.');
   const aideCapacite = trad(rec.spendObserved
-      ? 'Revenus − charges fixes − dépenses moyennes.'
+      ? 'Revenus − charges fixes − dépenses observées.'
       : 'Revenus − charges fixes − objectif de dépenses.')
     + ` ${fmtEUR0Texte(rec.income)} − ${fmtEUR0Texte(rec.fixed)} − ${fmtEUR0Texte(rec.spend)}`
     + ` = ${enTexte(rec.investable)}`;
@@ -673,19 +676,30 @@ function carteAccumulation() {
   return `
   <div class="card">
     <div class="card-head"><h2>${trad('Accumulation ce mois-ci')}</h2>
-      <span class="hint">${trad('ce que ton épargne et tes remboursements ajoutent')}</span></div>
+      <span class="hint">${trad('Comment tes revenus se transforment en patrimoine')}</span></div>
     <dl class="kv kv-accumul">
-      <dt>${trad('Capacité d’épargne')}${aide(aideCapacite)}</dt>
-        <dd><button type="button" class="mois-lien" data-action="apercu"
-                    data-apercu="capaciteEpargne"
-                    title="${trad('Voir le calcul')}">${aEcran(rec.investable)}</button></dd>
-      <dt>${trad('Capital remboursé')}${aide(trad('La part de tes mensualités qui rembourse le capital de tes crédits. Elle réduit ta dette, donc elle augmente ton patrimoine net.'))}</dt>
+      <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
+      <dt>${trad('− Charges fixes')}</dt><dd>${aEcran(-rec.fixed)}</dd>
+      <dt>${esc(nomDepenses)}${aide(aideDepenses)}</dt><dd>${aEcran(-rec.spend)}</dd>
+      <dt class="somme"><b>${trad('= Capacité d’épargne')}</b>${aide(aideCapacite)}</dt>
+        <dd class="somme">${aEcran(rec.investable)}</dd>
+      <dt>${trad('+ Capital remboursé')}${aide(trad('La part de tes mensualités qui rembourse le capital de tes crédits. Elle réduit ta dette, donc elle augmente ton patrimoine net.'))}</dt>
         <dd>${aEcran(rec.capitalRembourse)}</dd>
-      <dt class="cle"><b>${trad('Accumulation patrimoniale')}</b>${aide(aideTotal)}</dt>
-        <dd class="cle"><b class="${cls(rec.theoretical)}">${aEcran(rec.theoretical)}</b></dd>
-      <dt>${trad('Taux d’accumulation')}${aide(aideTaux)}</dt>
-        <dd>${fmtPct(rec.theoreticalRate, 1)}</dd>
+      <dt class="somme cle"><b>${trad('= Accumulation patrimoniale')}</b>${aide(aideTotal)}</dt>
+        <dd class="somme cle"><b class="${cls(rec.theoretical)}">${aEcran(rec.theoretical)}</b></dd>
+      <dt class="sobre">${trad('Taux d’accumulation')}${aide(aideTaux)}</dt>
+        <dd class="sobre">${fmtPct(rec.theoreticalRate, 1)}</dd>
     </dl>
+    ${rec.realPerMonth == null ? '' : `
+    <div class="kv-filet"></div>
+    <dl class="kv kv-accumul">
+      <dt>${trad('Croissance observée du patrimoine')}${aide(trad('Moyenne des variations de ton patrimoine net d’un mois sur l’autre, marchés et apports extérieurs compris. Elle porte toujours sur les douze derniers mois clos, là où la carte « Rythme d’accumulation » suit la période que tu y choisis.'))}</dt>
+        <dd>${aEcran(rec.realPerMonth)} ${trad('/ mois')}</dd>
+      <dt>${trad('Ce qui ne vient pas du budget')}${aide(trad('L’écart entre la croissance réellement observée de ton patrimoine et ce que ton budget et tes remboursements expliquent : les marchés, un apport extérieur, la valeur d’un bien qui bouge. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n’est une erreur de budget.'))}</dt>
+        <dd class="${cls(rec.gap)}">${aEcran(rec.gap)}</dd>
+    </dl>
+    <p class="small muted" style="margin:12px 0 0">${trad('Croissance observée calculée sur les')}
+      ${rec.monthsSpan} ${rec.monthsSpan > 1 ? trad('derniers mois clos') : trad('dernier mois clos')}${aide(trad('Le mois en cours est écarté : il est incomplet, et il ferait bouger le chiffre chaque jour.'))}</p>`}
   </div>`;
 }
 

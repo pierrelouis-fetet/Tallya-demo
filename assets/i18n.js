@@ -928,9 +928,24 @@ const I18N = {
     "Le capital remboursé sur tes crédits": "The principal repaid on your loans",
     "Taux d’accumulation": "Accumulation rate",
     "Accumulation ce mois-ci": "This month’s accumulation",
-    "ce que ton épargne et tes remboursements ajoutent":
-      "what your saving and your repayments add",
-    "Capital remboursé": "Principal repaid",
+    "Comment tes revenus se transforment en patrimoine":
+      "How your income turns into wealth",
+    "− Dépenses observées": "− Observed spending",
+    "− Objectif de dépenses": "− Spending target",
+    "+ Capital remboursé": "+ Principal repaid",
+    "La moyenne de tes dépenses saisies cette année.":
+      "The average of the spending you entered this year.",
+    "Aucune dépense saisie cette année : c’est ton objectif qui sert de base.":
+      "No spending entered this year: your target is used as the base.",
+    "Moyenne des variations de ton patrimoine net d’un mois sur l’autre, marchés et apports extérieurs compris. Elle porte toujours sur les douze derniers mois clos, là où la carte « Rythme d’accumulation » suit la période que tu y choisis.":
+      "The average month-to-month change in your net worth, market moves and outside contributions included. It always covers the last twelve closed months, where the “Accumulation pace” card follows the period you pick there.",
+    "L’écart entre la croissance réellement observée de ton patrimoine et ce que ton budget et tes remboursements expliquent : les marchés, un apport extérieur, la valeur d’un bien qui bouge. Rien de tout cela ne passe par tes revenus et tes dépenses, donc rien de tout cela n’est une erreur de budget.":
+      "The gap between the growth your net worth actually showed and what your budget and your repayments explain: markets, an outside contribution, an asset changing value. None of it goes through your income and spending, so none of it is a budget error.",
+    "Croissance observée calculée sur les": "Observed growth measured over the last",
+    "derniers mois clos": "closed months",
+    "dernier mois clos": "closed month",
+    "Le mois en cours est écarté : il est incomplet, et il ferait bouger le chiffre chaque jour.":
+      "The current month is left out: it is incomplete, and it would move the figure every day.",
     "Revenus − charges fixes − dépenses moyennes.":
       "Income − fixed costs − average spending.",
     "Revenus − charges fixes − objectif de dépenses.":

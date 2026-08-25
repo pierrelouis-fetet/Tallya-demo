@@ -2976,12 +2976,31 @@ td .empty, th .empty { background: none; border: none; }
    L'ecart entre les LIGNES, lui, ne change pas. */
 .kv-accumul { column-gap: 0; }
 .kv-accumul dt { padding-right: 14px; }
-.kv-accumul dt.cle:not(:first-of-type),
-.kv-accumul dd.cle:not(:first-of-type) {
+/* Trois niveaux, et ils se lisent comme une addition posee.
+
+   `.somme` marque une ligne de resultat — la capacite d'epargne, puis
+   l'accumulation : un filet au-dessus, la graisse, l'encre pleine. C'est le
+   dessin d'un trait de calcul, et il dit sans un mot que ce qui precede
+   s'additionne.
+
+   `.cle` s'ajoute au second, et lui seul : le corps monte a 18 px. Il ne porte
+   pas de couleur ici — elle vient de `cls()` sur la valeur, parce que le vert ne
+   reste significatif que si UN montant le porte.
+
+   `.sobre` redescend le taux d'un cran : il commente le resultat, il n'en fait
+   pas partie. */
+.kv-accumul .somme {
   border-top: 1px solid var(--grid); padding-top: 9px; margin-top: 3px;
+  color: var(--text-primary);
 }
-.kv-accumul .cle { color: var(--text-primary); }
 .kv-accumul dd.cle b { font-size: 18px; letter-spacing: -.015em; }
+.kv-accumul .sobre { color: var(--muted); }
+.kv-accumul dd.sobre { font-weight: 500; }
+
+/* Le filet qui separe l'equation de ce qui la confronte. Un element vide plutot
+   qu'un `<hr>` : la liste de description est une grille a deux colonnes, et un
+   `<hr>` pose dedans n'occuperait qu'une cellule. */
+.kv-filet { border-top: 1px solid var(--grid); margin: 14px 0; }
 
 .acct-card { display: flex; flex-direction: column; gap: 12px; }
 .acct-head { display: flex; align-items: center; gap: 10px; }
