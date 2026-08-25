@@ -2484,10 +2484,10 @@ const AIDE_VIX = 'Le VIX mesure la volatilité implicite attendue sur le S&P 500
   + 'Plus il est élevé, plus le marché anticipe de fortes variations.';
 
 const NIVEAUX_VIX = [
-  [30, 'Volatilité très élevée'],
-  [20, 'Volatilité élevée'],
-  [15, 'Volatilité modérée'],
-  [0,  'Volatilité faible'],
+  [30, 'Très élevée'],
+  [20, 'Élevée'],
+  [15, 'Modérée'],
+  [0,  'Faible'],
 ];
 /* Ce que les deux perimetres contiennent, et la consequence qu'on observe :
    en Financier, la bascule net/brut ne bouge pas la courbe. Ce n'est pas une

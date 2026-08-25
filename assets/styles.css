@@ -2625,7 +2625,12 @@ select.annee {
 
 .repere {
   flex: none;
-  display: grid; gap: 1px; min-width: 104px;
+  /* Une LARGEUR, pas un plancher. `min-width` laissait chaque tuile grandir
+     avec son contenu : celle du VIX, dont la troisieme ligne porte des mots au
+     lieu d'un pourcentage, faisait 123 px contre 104 pour ses cinq voisines, et
+     le ruban se lisait comme une rangee mal alignee. Les cinq autres tenaient
+     dans 80 px de contenu, donc la largeur commune ne coute rien a personne. */
+  display: grid; gap: 1px; width: 104px;
   padding: 8px 11px; border-radius: var(--radius-sm);
   background: var(--surface-1); border: 1px solid var(--border);
   font: inherit; color: inherit; text-align: left; cursor: pointer;
@@ -2636,12 +2641,26 @@ select.annee {
   text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .rp-prix { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .rp-unite { font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
+.rp-var { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* APRES `.rp-var`, et c'est la seule chose qui fait tenir cette regle : la
+   tuile porte les deux classes, elles ont la meme specificite, et c'est l'ordre
+   qui tranche. Ecrite avant, elle a longtemps declare une taille de 10,5 px que
+   `.rp-var` ecrasait sans que rien ne le dise — la couleur passait, la taille
+   non, et seule une mesure du style calcule pouvait le montrer.
+
+   Cette taille reduite a disparu avec sa raison d'etre : elle servait a loger
+   un libelle long, or le niveau se dit maintenant d'un mot. Il se lit donc a la
+   meme taille que le pourcentage des voisines, ce qui est plus juste : c'est la
+   meme ligne et la meme fonction.
+
+   L'encre reste secondaire : un vert pour « faible » et un rouge pour « tres
+   elevee » feraient d'un chiffre de contexte une alerte. La coupure reste un
+   filet de securite : la tuile a une largeur fixe, plus rien ne peut l'elargir,
+   mais un libelle trop long doit se couper plutot que de deborder. */
 .rp-vix {
-  color: var(--text-secondary); font-size: 10.5px;
+  color: var(--text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-
-.rp-var { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .jour-lignes { display: flex; flex-direction: column; gap: 2px; }
 .jour-ligne {

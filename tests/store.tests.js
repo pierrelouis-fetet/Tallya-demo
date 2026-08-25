@@ -16101,16 +16101,78 @@ suite('Le VIX dit un niveau, il ne recommande rien', () => {
   test('les quatre seuils nomment un état, et rien de plus', () => {
     const t = table();
     vrai(t.length > 100, 'la table des niveaux doit être trouvable');
-    for (const [seuil, mot] of [[30, 'très élevée'], [20, 'élevée'],
-                                [15, 'modérée'], [0, 'faible']]) {
-      vrai(new RegExp(`\\[${seuil},\\s+'Volatilité ${mot}'\\]`).test(t),
-        `le seuil ${seuil} doit nommer « Volatilité ${mot} »`);
+    for (const [seuil, mot] of [[30, 'Très élevée'], [20, 'Élevée'],
+                                [15, 'Modérée'], [0, 'Faible']]) {
+      vrai(new RegExp(`\\[${seuil},\\s+'${mot}'\\]`).test(t),
+        `le seuil ${seuil} doit nommer « ${mot} »`);
+      vrai(I18N.en[mot], `« ${mot} » doit avoir sa traduction`);
     }
     /* La table se lit du plus haut au plus bas : `find` rend le premier seuil
        atteint, donc l'ordre EST la regle. A l'envers, tout serait « faible ». */
     const seuils = [...t.matchAll(/\[(\d+),/g)].map(m => Number(m[1]));
     eq(seuils.join(','), '30,20,15,0',
       'du plus haut au plus bas : le premier seuil atteint gagne');
+  });
+
+  test('le qualificatif tient dans une tuile, sans répéter « volatilité »', () => {
+    /* Le mot n'apprenait rien a cet endroit — la tuile dit deja VIX, sa fiche
+       dit « Volatilite du S&P 500 », son infobulle dit ce que l'indice mesure —
+       et il coutait cher : « Moderate volatility » demandait 99 px la ou la
+       tuile en offre 82, donc elle s'elargissait a 123 px contre 104 pour ses
+       cinq voisines, et le ruban se lisait comme une rangee mal alignee.
+
+       La borne est un majorant mesure : a 11,5 px, quatorze caracteres restent
+       sous les 82 px utiles dans les deux langues. Ce n'est pas une limite de
+       style, c'est la place qui existe. */
+    const t = table();
+    const mots = [...t.matchAll(/\[\d+,\s+'([^']+)'\]/g)].map(m => m[1]);
+    eq(mots.length, 4, 'les quatre niveaux doivent être lisibles');
+    for (const m of mots) {
+      vrai(!/volatilit/i.test(m), `« ${m} » répète un mot que la tuile dit déjà`);
+      vrai(m.length <= 14, `« ${m} » (${m.length} car.) ne tient pas dans la tuile`);
+      const en = I18N.en[m] || '';
+      vrai(en.length <= 14, `« ${en} » (${en.length} car.) ne tient pas dans la tuile`);
+    }
+  });
+
+  test('toutes les tuiles du ruban font la même largeur', () => {
+    /* `min-width` laissait chaque tuile grandir avec son contenu. Une largeur
+       fixe les egalise, et elle ne coute rien : les cinq indices tiennent dans
+       80 px de contenu pour 82 disponibles. */
+    /* Le selecteur `.repere` porte PLUSIEURS regles — la geometrie et
+       l'animation d'entree vivent separement. Prendre la premiere trouvee
+       tombait sur l'animation et jugeait la mauvaise. On les reunit toutes. */
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const blocs = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(m => m[1].trim() === '.repere').map(m => m[2]);
+    vrai(blocs.length >= 1, 'la règle de la tuile doit exister');
+    const tout = blocs.join(' ');
+    vrai(/width: 104px/.test(tout), 'la tuile a une largeur');
+    vrai(!/min-width/.test(tout),
+      'et pas un plancher : sinon un libellé long élargit sa tuile');
+    vrai(/flex: none/.test(tout), 'et le flex ne la reprend pas');
+  });
+
+  test('la règle du VIX vient après celle qu’elle précise', () => {
+    /* La tuile porte les DEUX classes, elles ont la meme specificite, et c'est
+       l'ordre qui tranche. Ecrite avant, `.rp-vix` a longtemps declare une
+       taille que `.rp-var` ecrasait sans que rien ne le dise : la couleur
+       passait, la taille non, et seule une mesure du style calcule pouvait le
+       montrer. C'est le meme defaut que `.seg-mini`, deux fois la meme faute. */
+    const css = lireSource('assets/styles.css') || '';
+    const iVar = css.indexOf('.rp-var {');
+    const iVix = css.indexOf('.rp-vix {');
+    vrai(iVar > 0 && iVix > 0, 'les deux règles doivent exister');
+    vrai(iVix > iVar,
+      '.rp-vix doit être déclarée après .rp-var, sinon elle est écrasée en silence');
+    /* La taille reduite est partie avec sa raison d'etre : elle logeait un
+       libelle long, qui n'existe plus. Le niveau se lit donc a la taille du
+       pourcentage des voisines, ce qui est la meme ligne et la meme fonction. */
+    const regle = css.slice(iVix, css.indexOf('}', iVix));
+    vrai(!/font-size/.test(regle),
+      'elle ne déclare plus de taille : celle de .rp-var vaut pour les deux');
+    vrai(/color: var\(--text-secondary\)/.test(regle),
+      'mais elle garde son encre : un contexte n’est pas une alerte');
   });
 
   test('aucun mot d’achat, de vente ni d’alarme', () => {
