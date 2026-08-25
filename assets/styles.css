@@ -989,9 +989,7 @@ table .field :is(input, select) { max-width: none; }
   font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-secondary);
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.hero-label > span:first-child { min-width: 9.8em; }
-.hero-oeil { margin-left: auto; padding: 9px; }
-.hero-oeil svg { width: 16px; height: 16px; }
+.hero-label > .segmented { margin-left: auto; }
 
 .seg-mini { padding: 1px; }
 .seg-mini button {
@@ -3449,34 +3447,20 @@ td .empty, th .empty { background: none; border: none; }
   .hero-value { font-size: 34px; }
   .card, .hero { padding: 15px; }
 
-  /* Une seule convention pour les bascules de vue : l'intitule, puis SA bascule
-     juste dessous, calee a gauche.
+  /* Une seule convention pour les bascules de vue : l'intitule a gauche, SA
+     bascule en haut a droite de la carte, sur la meme ligne.
 
-     Les deux cartes de l'accueil n'en suivaient pas la meme. Le graphique posait
-     deja « Financier | Global » sous son titre, au bord gauche de la carte,
-     parce que son en-tete se replie. Le grand chiffre, lui, gardait « Net |
-     Brut » sur la ligne de l'intitule, a 9,8 em du bord — donc ni a gauche ni a
-     droite, flottant au milieu. Deux commandes de meme nature, deux places : on
-     lisait une regle par carte au lieu d'une regle par nature.
+     Elle a d'abord ete l'inverse — la bascule sous l'intitule, calee a gauche —
+     parce que l'en-tete du graphique s'y repliait deja et qu'il fallait bien
+     choisir un cote. Le bord droit vaut mieux : c'est la ou vivent les commandes
+     dans toute l'application, les vingt-six en-tetes de carte y posent leurs
+     boutons, et une bascule calee a gauche sous un titre se lit comme un
+     sous-titre.
 
-     Une grille plutot qu'un `flex-wrap` avec des `order` : la mise en page se
-     DECLARE — premiere rangee l'intitule et l'oeil, seconde rangee la bascule —
-     au lieu d'emerger d'un ordre et d'un point de rupture qu'il faudrait relire
-     pour comprendre. `justify-self: start` garde la pilule a sa largeur
-     naturelle ; etiree sur toute la colonne, son cadre traverserait la carte.
-
-     Le plancher de 9,8 em tombe ici, et il n'a plus lieu d'etre : il reservait
-     la place de « PATRIMOINE BRUT » pour que la bascule ne saute pas d'un cote a
-     l'autre a chaque clic. Elle n'est plus a la droite de l'intitule, donc sa
-     longueur ne la deplace plus. Le defaut est regle par la geometrie et non par
-     une largeur mesuree a la main. */
-  .hero-label {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center; gap: 8px 10px;
-  }
-  .hero-label > span:first-child { min-width: 0; grid-column: 1; grid-row: 1; }
-  .hero-oeil { grid-column: 2; grid-row: 1; margin-left: 0; }
-  .hero-label > .segmented { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+     Rien a declarer ici pour le grand chiffre : `margin-left: auto` sur la
+     bascule suffit, et il vaut aux deux tailles d'ecran. Ce qui suit ne concerne
+     que les commandes du graphique, qui se replient. */
+  .evo-commandes { justify-content: flex-end; }
 
   .card-head { flex-wrap: wrap; gap: 6px 10px; }
   /* Un bouton seul qui passe a la ligne reste a droite. `space-between` distribue

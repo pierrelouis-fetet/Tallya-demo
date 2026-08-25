@@ -763,23 +763,13 @@ function viewOverview() {
             title="${trad('Voir la répartition par actif')}"></button>
     <div>
       <div class="hero-label">
-        <span>${evoNet ? trad('Patrimoine net') : trad('Patrimoine brut')}</span>
+        <span>${trad('Patrimoine')}</span>
         <span class="segmented seg-mini">
           <button data-action="hero-base" data-net="1" class="${evoNet ? 'on' : ''}"
                   title="${trad('Tes avoirs moins tes crédits')}">${trad('Net')}</button>
           <button data-action="hero-base" data-net="" class="${evoNet ? '' : 'on'}"
                   title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
         </span>
-        <button type="button" class="btn-oeil hero-oeil" data-action="toggle-masque"
-                aria-pressed="${masqueActif() ? 'true' : 'false'}"
-                aria-label="${masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants')}"
-                title="${masqueActif() ? trad('Afficher les montants') : trad('Masquer les montants')} ${trad('(touche h)')}">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path class="o-contour" d="M1.9 12S5.9 5.6 12 5.6 22.1 12 22.1 12 18.1 18.4 12 18.4 1.9 12 1.9 12Z"/>
-            <circle class="o-pupille" cx="12" cy="12" r="3"/>
-            <line class="o-barre" x1="4.5" y1="19.5" x2="19.5" y2="4.5"/>
-          </svg>
-        </button>
       </div>
       <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>
       ${!evoNet && patrimoine().dettes ? `<div class="hero-sous muted">

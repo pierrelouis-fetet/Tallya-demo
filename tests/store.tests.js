@@ -14579,67 +14579,64 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
       'ce drapeau ne touche pas au modèle : store.js reçoit un argument, pas un état');
   });
 
-  test('sur téléphone, les deux bascules suivent la même convention', () => {
-    /* Un intitule, puis SA bascule juste dessous, calee a gauche. Les deux
-       cartes de l'accueil n'en suivaient pas la meme : le graphique posait deja
-       « Financier | Global » sous son titre au bord gauche de la carte, parce
-       que son en-tete se replie, tandis que le grand chiffre gardait
-       « Net | Brut » sur la ligne de l'intitule, a 9,8 em du bord — ni a gauche
-       ni a droite, flottant au milieu. Deux commandes de meme nature, deux
-       places : on lisait une regle par carte au lieu d'une regle par nature.
+  test('les deux bascules vivent en haut à droite de leur carte', () => {
+    /* L'intitule a gauche, SA bascule au bord droit. C'est la ou vivent les
+       commandes dans toute l'application — les vingt-six en-tetes de carte y
+       posent leurs boutons — et une bascule calee a gauche sous un titre se lit
+       comme un sous-titre.
 
-       Mesure a 375 px apres correction, et identique a 320 px : les deux
-       bascules commencent a x = 32, le bord du contenu de leur carte, et chacune
-       se pose 32 px sous son intitule. Aucun debordement. 102 x 36 px pour l'une,
-       142 x 36 pour l'autre : ni l'une ni l'autre n'est comprimee.
+       Elle a d'abord ete posee sous l'intitule, a gauche, parce que l'en-tete du
+       graphique s'y repliait deja. Le bord droit vaut mieux, et il vaut aux deux
+       tailles d'ecran : une seule regle au lieu d'une par point de rupture.
 
-       Et un defaut tombe avec : le plancher de 9,8 em reservait la place de
-       « PATRIMOINE BRUT » pour que la bascule ne saute pas d'un cote a l'autre
-       quand l'intitule change de longueur. Elle n'est plus a sa droite, donc sa
-       longueur ne la deplace plus — mesure, le saut vaut 0 px. */
+       Mesure a 375 px : le grand chiffre pose « Net | Brut » a 208 px du bord de
+       la carte, contre l'autre bord ; le graphique y pose « Financier | Global »
+       de meme. Aucun debordement, aucune bascule comprimee. */
     const css = lireSource('assets/styles.css');
     vrai(css, 'la feuille de style doit être lisible');
 
-    /* Les bornes se prennent sur les REGLES, jamais sur « le bloc telephone » :
-       ce fichier en compte dix qui ouvrent a 900 px, et `indexOf` rend le
-       premier. Une tranche prise dessus laisse la regle de bureau dehors et le
-       controle crie sur du code juste. */
-    const iBureau = css.indexOf('.hero-label > span:first-child { min-width: 9.8em; }');
-    vrai(iBureau > 0,
-      'sur grand écran le plancher reste : la bascule y est toujours à droite du mot');
-    const iTel = css.indexOf('.hero-label {\n    display: grid;');
-    vrai(iTel > 0, 'l’étiquette du grand chiffre se dispose en grille sur téléphone');
-    vrai(iTel > iBureau,
-      'et la règle téléphone suit celle du bureau : même spécificité, c’est l’ordre qui tranche');
+    vrai(/\.hero-label > \.segmented \{ margin-left: auto; \}/.test(css),
+      'la bascule du grand chiffre se cale au bord droit');
+    /* Une seule regle, hors de tout bloc telephone : elle vaut partout. Dans ce
+       fichier une regle de PREMIER NIVEAU commence en colonne 0, celles d'un
+       bloc media sont indentees de deux espaces — l'ancrage suffit a le dire. */
+    vrai(/^\.hero-label > \.segmented \{ margin-left: auto; \}/m.test(css),
+      'et elle ne dépend pas d’un point de rupture');
+    vrai(/\.evo-commandes \{ justify-content: flex-end; \}/.test(css),
+      'les commandes du graphique se calent au même bord quand elles se replient');
 
-    /* Elle vit bien sous 900 px, et non dans un bloc voisin.
+    /* Le plancher de 9,8 em est parti, et il n'a plus d'objet : l'intitule ne
+       change plus de longueur, et la bascule est ancree a droite. */
+    vrai(!/min-width: 9\.8em/.test(css),
+      'le plancher qui réservait la place de « PATRIMOINE BRUT » n’a plus d’objet');
+    /* Les regles de l'ancienne convention sont parties avec elle. */
+    vrai(!/\.hero-label > \.segmented \{[^}]*grid-row: 2;/.test(css),
+      'la bascule n’est plus posée sous l’intitulé');
 
-       `lastIndexOf('@media')` ne suffit pas : le bloc telephone contient des
-       `@media (prefers-reduced-motion)` imbriques, et c'est l'un d'eux qu'on
-       trouvait. L'appartenance se prouve par la structure — dans ce fichier une
-       accolade en COLONNE 0 ne ferme qu'un bloc de premier niveau, donc s'il
-       n'y en a aucune entre l'ouverture et la regle, la regle est dedans. */
-    const ouverture = css.lastIndexOf('@media (max-width: 900px)', iTel);
-    vrai(ouverture > 0, 'un bloc téléphone doit précéder la règle');
-    vrai(!/\n\}/.test(css.slice(ouverture, iTel)),
-      'et rien ne le referme avant elle : la règle appartient bien au bloc téléphone');
+    const app = lireSource('assets/app.js');
+    /* L'intitule ne dit plus que « Patrimoine » : le qualifier a cote d'une
+       bascule qui dit lequel des deux repetait le bouton, et le mot changeait de
+       longueur a chaque clic. */
+    const hero = app.slice(app.indexOf('<div class="hero-label">'),
+                           app.indexOf('<div class="hero-value">'));
+    vrai(/<span>\$\{trad\('Patrimoine'\)\}<\/span>/.test(hero),
+      'l’intitulé ne qualifie plus : la bascule s’en charge');
+    vrai(!/Patrimoine brut/.test(hero),
+      'et il ne change plus avec le réglage');
 
-    /* La tranche exacte des trois regles, bornee sur la derniere. */
-    const iSeg = css.indexOf('.hero-label > .segmented {', iTel);
-    vrai(iSeg > iTel, 'la règle de la bascule doit suivre');
-    const bloc = css.slice(iTel, css.indexOf('}', iSeg) + 1);
-    vrai(/grid-row: 2;/.test(bloc), 'la bascule Net / Brut passe sur la seconde rangée');
-    vrai(/justify-self: start;/.test(bloc),
-      'calée à gauche, et à sa largeur naturelle : étirée, son cadre traverserait la carte');
-    vrai(/\.hero-oeil \{[^}]*grid-row: 1;/.test(bloc),
-      'l’œil reste sur la ligne de l’intitulé, il n’encombre pas la bascule');
-    vrai(/min-width: 0;/.test(bloc),
-      'le plancher de 9,8 em tombe : la bascule n’est plus à droite de l’intitulé');
-
-    /* Le graphique n'avait rien a changer : sa position venait deja de son
-       en-tete qui se replie, et le controle voisin la garde. */
-    vrai(/<div class="evo-commandes">/.test(lireSource('assets/app.js')),
-      'le périmètre du graphique reste dans son bloc de commandes');
+    /* L'oeil du masquage a quitte la carte : l'en-tete le porte sur telephone,
+       la barre laterale sur grand ecran. Trois exemplaires a trente pixels les
+       uns des autres n'encombrent plus la ligne. */
+    vrai(!/hero-oeil/.test(app), 'l’œil a quitté la carte du patrimoine');
+    vrai(!/hero-oeil/.test(css), 'et sa règle est partie avec lui');
+    const html = lireSource('index.html');
+    vrai(/id="btnMasqueEntete"[\s\S]{0,200}data-action="toggle-masque"/.test(html),
+      'l’en-tête en porte un, celui du haut de l’écran');
+    vrai(/id="btnMasque"[\s\S]{0,200}data-action="toggle-masque"/.test(html),
+      'et la barre latérale aussi, pour les grands écrans');
+    /* Le raccourci demeure : c'est lui qui rend le geste atteignable partout. */
+    vrai(/'h'/.test(app) || /case 'h'/.test(app),
+      'et le raccourci clavier reste');
   });
 
   test('les deux commandes du graphique se replient ensemble', () => {
