@@ -11587,9 +11587,13 @@ suite('Un bien de valeur compte partout', () => {
   });
 
   test('le graphique d’évolution connaît chaque poche d’écran', () => {
-    /* Derive : chaque cle de nowByGroup() doit avoir sa bande declaree dans
-       SERIES_PATRIMOINE, sinon la pile cesse de faire le total — sans erreur,
-       sans ecran pour le dire. Le controle couvre la poche de demain. */
+    /* Derive : chaque cle de nowByGroup() doit figurer dans POCHES_EVOLUTION,
+       sinon la pile cesse de faire le total — sans erreur, sans ecran pour le
+       dire. Le controle couvre la poche de demain.
+
+       Il lisait la source d'app.js a la regex, faute de pouvoir charger le
+       fichier. La liste vit desormais dans store.js, que le harnais charge :
+       c'est la vraie valeur qu'on interroge. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     Fixture.poser();
@@ -11601,21 +11605,28 @@ suite('Un bien de valeur compte partout', () => {
        s'affichait à 100 % d'actifs de marché. Une étiquette juste sur un début
        tardif vaut mieux qu'une étiquette fausse sur toute la courbe. */
     for (const cle of Object.keys(nowByGroup())) {
+      vrai(POCHES_EVOLUTION.includes(cle),
+        `la poche « ${cle} » n’est pas dans POCHES_EVOLUTION`);
       vrai(new RegExp(`key: '${cle}'`).test(src),
         `la poche « ${cle} » n’a pas de bande dans SERIES_PATRIMOINE`);
     }
+    eq(POCHES_EVOLUTION.length, Object.keys(nowByGroup()).length,
+      'et aucune bande de plus : une poche que le patrimoine ne connaît pas '
+      + 'tracerait une bande vide sous une entrée de légende');
     /* La cascade des dettes du tracé net visite CHAQUE bande, du moins liquide
        au plus liquide : une poche oubliée là, et la dette cesse d'être
        entièrement retranchée dès qu'elle dépasse les poches visitées. Dérivée
        plutôt qu'écrite en dur, sinon la poche suivante manquera aussi — c'est
-       exactement ce qui vient d'arriver au capital garanti. */
-    const cascade = (src.match(/for \(const cle of \[('[a-z]+'(?:, )?)+\]\)/) || [''])[0];
-    for (const cle of Object.keys(nowByGroup())) {
-      vrai(cascade.includes(`'${cle}'`),
-        `la cascade des dettes saute la poche « ${cle} »`);
-    }
-    vrai(/q\.total = SERIES_PATRIMOINE\(\)\.reduce/.test(src),
-      'et le total du point se dérive des séries tracées');
+       exactement ce qui est arrivé au capital garanti.
+
+       Les deux listes ne sont pas dans le même ordre, et ce n'est pas une
+       négligence : on empile en partant du disponible, on rembourse en partant
+       de ce qui se vend le plus mal. Ce sont les mêmes poches, jamais le même
+       rang. */
+    eq([...CASCADE_DETTES].sort().join(','), [...POCHES_EVOLUTION].sort().join(','),
+      'la cascade des dettes et la pile doivent porter exactement les mêmes poches');
+    vrai(CASCADE_DETTES.join(',') !== POCHES_EVOLUTION.join(','),
+      'et pas dans le même ordre : la dette part du moins liquide');
   });
 
   test('la fenêtre du non coté ne liste que du non coté', () => {
@@ -14334,6 +14345,246 @@ suite('La vue financière retire les murs, et le total reste la somme de ses par
     refreshAccounts();
     eq(horsFinancierExiste(), false,
       'sans mur ni objet de valeur, le commutateur doit se taire');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Aujourd'hui : Net / Brut valorise, Financier / Global cadre
+   ------------------------------------------------------------------ */
+suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => {
+
+  /* La page portait deux notions que rien ne distinguait a l'ecran : COMMENT le
+     patrimoine est valorise -- net ou brut -- et QUEL PERIMETRE la courbe montre.
+     Deux commutateurs Net / Brut coexistaient, celui du grand chiffre et celui du
+     graphique, sur une seule variable : deux boutons identiques a deux endroits,
+     dont on pouvait croire qu'ils reglaient deux choses.
+
+     Le second est parti. La place libre porte le seul reglage qui appartienne en
+     propre a cette carte, le perimetre, et le fixture le mesure de tete :
+
+       Liquidités          6 500     |  Financier   18 250
+       Actifs de marché    9 750     |  Studio     120 000
+       Non coté            2 000     |  Brut       138 250
+                                     |  Crédit      40 000
+                                     |  Net global  98 250   */
+
+  const auj = pts => pts[pts.length - 1];
+  const perimetre = (net, financier) => auj(pointsEvolution({ net, financier }));
+
+  test('les quatre combinaisons donnent quatre chiffres justes', () => {
+    Fixture.poser();
+    pres(perimetre(true,  true).total,  18250, 'Financier net');
+    pres(perimetre(false, true).total,  18250, 'Financier brut');
+    pres(perimetre(true,  false).total, 98250, 'Global net');
+    pres(perimetre(false, false).total, 138250, 'Global brut');
+    /* Et chacun s'accroche au chiffre que le reste de la page annonce : une
+       courbe qui finirait ailleurs que sur le patrimoine du jour raconterait une
+       autre histoire que le bandeau juste au-dessus. */
+    pres(perimetre(false, false).total, patrimoine().brut, 'le brut du bandeau');
+    pres(perimetre(true, false).total, patrimoine().net, 'le net du bandeau');
+    pres(perimetre(true, true).total, totalFinancier(),
+      'la base financière de la page Allocation');
+  });
+
+  test('le crédit immobilier ne se déduit jamais de la vue financière', () => {
+    /* La regle, et c'est une regle de justesse. Le fixture porte 18 250 EUR
+       d'avoirs financiers, un studio de 120 000 et un pret de 40 000 sur le
+       studio. Retrancher ce pret d'un perimetre dont on vient de retirer les murs
+       donnerait -21 750 EUR : un patrimoine financier negatif chez quelqu'un qui
+       n'a aucune dette financiere. Le chiffre serait faux, et faux du cote qui
+       alarme.
+
+       Une dette ne declare pas l'actif qu'elle finance dans ce modele : elle vit
+       sur un etablissement, sans lien vers le compte ni vers la ligne. Tant que
+       ce lien n'existe pas, le financier net vaut le financier brut, et c'est
+       preferable a une deduction inventee. */
+    Fixture.poser();
+    pres(patrimoine().dettes, 40000, 'le fixture porte bien un crédit');
+    pres(perimetre(true, true).total, perimetre(false, true).total,
+      'Financier net et Financier brut doivent donner le même montant');
+    pres(perimetre(true, true).total, 18250,
+      'et ce montant est celui des avoirs financiers');
+    /* Le global, lui, le retranche, et c'est le seul endroit ou il le fait. */
+    pres(perimetre(false, false).total - perimetre(true, false).total, 40000,
+      'le global net soustrait exactement le crédit');
+  });
+
+  test('une dette de courtier ne se déduit pas non plus, faute de lien déclaré', () => {
+    /* Le cas que le modele NE SAIT PAS traiter, epingle pour qu'on sache
+       exactement ce qui manquerait le jour ou on voudra le traiter.
+
+       Une marge de courtier ou un credit lombard sont des dettes financieres :
+       elles devraient se retrancher du perimetre financier. Elles ne le font pas,
+       parce qu'une dette ne porte que le nom de son etablissement, et le meme
+       etablissement peut tenir le pret immobilier et le compte titres. Deviner
+       par le libelle serait une convention de plus que rien ne verifie.
+
+       Ce test ne demande donc pas la deduction : il fige l'etat des lieux et
+       nomme la donnee manquante. Le jour ou une dette declarera son actif, il
+       tombera, et c'est le signal qu'on attend de lui. */
+    Fixture.poser(e => {
+      e.etabs.find(x => x.id === 'e_courtier').dettes.push(
+        { id: 'd_marge', libelle: 'Marge', montant: 5000, note: '' });
+    });
+    pres(patrimoine().dettes, 45000, 'les deux dettes comptent dans le patrimoine');
+    pres(perimetre(true, true).total, 18250,
+      'la vue financière reste sur les avoirs : aucune dette ne déclare son actif');
+    /* La donnee qui manque, nommee : aucune dette ne porte de rattachement. */
+    const champs = new Set(ETABS().flatMap(e => (e.dettes || []).flatMap(d => Object.keys(d))));
+    for (const lien of ['compteId', 'ligneId', 'classe', 'actif']) {
+      vrai(!champs.has(lien),
+        `une dette porte « ${lien} » : le rattachement existe, la déduction financière doit suivre`);
+    }
+  });
+
+  test('la vue financière ne garde pas les murs dans ses points', () => {
+    /* Pas seulement masques a l'ecran : retires du point. Un total est la somme
+       de ses parts, et un point qui porterait 120 000 EUR de murs sous un total
+       de 18 250 le dementirait au premier lecteur venu. */
+    Fixture.poser();
+    for (const p of pointsEvolution({ net: true, financier: true })) {
+      for (const cle of SERIES_HORS_FINANCIER) {
+        vrai(!(cle in p), `le point de ${p.label} porte encore « ${cle} »`);
+      }
+      pres(pochesEvolution({ financier: true }).reduce((s, c) => s + num(p[c]), 0),
+        num(p.total), `la pile de ${p.label} doit faire son total`);
+    }
+    /* Et le global les garde, sans quoi le commutateur ne commuterait rien. */
+    pres(num(auj(pointsEvolution({ net: false, financier: false })).immo), 120000,
+      'le studio revient en vue globale');
+  });
+
+  test('les liquidités et les placements traversent le filtre intacts', () => {
+    /* Ce que la vue financiere retire est nomme ; tout le reste doit passer sans
+       une egratignure. Le controle porte poche par poche plutot que sur le seul
+       total : deux erreurs qui se compensent feraient un total juste. */
+    Fixture.poser();
+    const g = auj(pointsEvolution({ net: false, financier: false }));
+    const f = auj(pointsEvolution({ net: false, financier: true }));
+    for (const cle of pochesEvolution({ financier: true })) {
+      pres(num(f[cle]), num(g[cle]), `la poche « ${cle} » ne doit pas bouger`);
+    }
+    pres(num(f.cash), 6500, 'les liquidités du fixture');
+    pres(num(f.bourse), 9750, 'les actifs de marché, métaux compris');
+    pres(num(f.pe), 2000, 'le non coté reste : on choisit d’y remettre ou non');
+  });
+
+  test('la légende ne peut annoncer que des bandes tracées', () => {
+    /* Les points et les bandes se filtrent par la MEME fonction. Deux filtres
+       ecrits separement auraient fini par annoncer en legende une bande absente
+       du dessin, ou l'inverse : c'est le defaut que ce depot corrige sans arret. */
+    Fixture.poser();
+    eq(pochesEvolution({ financier: true }).join(','), 'cash,bourse,crypto,pe,garanti',
+      'la vue financière garde cinq poches, dans l’ordre de la pile');
+    eq(pochesEvolution().join(','), POCHES_EVOLUTION.join(','),
+      'et la vue globale les garde toutes');
+    const src = lireSource('assets/app.js');
+    vrai(/function seriesUtiles\(points, \{ financier = false \} = \{\}\) \{/.test(src),
+      'seriesUtiles prend le périmètre');
+    vrai(/const gardees = pochesEvolution\(\{ financier \}\);/.test(src),
+      'et il vient de pochesEvolution, la même que celle des points');
+    /* Un seul appel calcule les deux, pour la carte et pour le montage. */
+    vrai(/function evolutionAffichee\(\)/.test(src),
+      'la carte et le graphique partagent un appel');
+    eq((src.match(/evolutionAffichee\(\)/g) || []).length, 3,
+      'sa définition, la carte, le montage : jamais un quatrième calcul parallèle');
+  });
+
+  test('l’échelle se recalcule sur les bandes tracées, jamais sur le patrimoine entier', () => {
+    /* C'est le but meme de la vue : l'immobilier pese 87 % du fixture, et sa
+       bande ecrase les quatre autres. L'echelle du graphique se derive des series
+       qu'on lui passe, donc retirer l'immobilier de la liste suffit, sans qu'un
+       seul chiffre soit force cote application. */
+    Fixture.poser();
+    const chartsSrc = lireSource('assets/charts.js');
+    vrai(/const totals = points\.map\(p => series\.reduce\(/.test(chartsSrc),
+      'le total tracé se dérive des séries reçues');
+    vrai(/const maxV = Math\.max\(\.\.\.totals/.test(chartsSrc),
+      'et le maximum de l’axe se dérive de ces totaux');
+    /* Le rapport d'echelle, mesure : sept fois et demie plus bas. Sans lui, les
+       variations financieres tiennent dans un huitieme de la hauteur. */
+    const global = auj(pointsEvolution({ net: false, financier: false })).total;
+    const financier = auj(pointsEvolution({ net: false, financier: true })).total;
+    vrai(global / financier > 7,
+      `l’échelle globale écrase la financière (${(global / financier).toFixed(1)} fois)`);
+  });
+
+  test('le périmètre du graphique ne touche à rien d’autre sur la page', () => {
+    /* La question a laquelle la repartition repond, « de quoi est compose mon
+       patrimoine aujourd'hui », est globale par nature. Cliquer « Financier »
+       sur la courbe ne doit ni recalculer ses parts, ni changer le grand chiffre.
+
+       Le controle porte sur la cause : `repartitionClasses` n'est jamais appelee
+       avec le perimetre du graphique, et le grand chiffre ne le lit pas. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const sansCom = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+    eq((sansCom.match(/repartitionClasses\(\{ net: evoNet \}\)/g) || []).length, 2,
+      'la barre et la liste lisent le patrimoine complet, jamais le périmètre du graphique');
+    vrai(!/repartitionClasses\([^)]*evoFinancier/.test(sansCom),
+      'aucun appel ne passe evoFinancier à la répartition');
+    vrai(/<div class="hero-value">\$\{fmtEUR\(evoNet \? t\.total : t\.brut\)\}<\/div>/.test(sansCom),
+      'le grand chiffre suit Net / Brut et rien d’autre');
+    vrai(!/allocFinancier = evoFinancier/.test(sansCom),
+      'et le commutateur d’Allocation ne se branche pas dessus');
+  });
+
+  test('il n’y a plus qu’un commutateur Net / Brut, et il est en haut', () => {
+    const src = lireSource('assets/app.js');
+    const sansCom = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+    vrai(!sansCom.includes('evo-base'),
+      'la bascule Net / Brut du graphique est partie, action comprise');
+    eq((sansCom.match(/data-action="hero-base"/g) || []).length, 2,
+      'les deux boutons du seul commutateur, dans la grande carte');
+    eq((sansCom.match(/'hero-base'\(btn\)/g) || []).length, 1,
+      'et une seule action pour eux');
+    /* La courbe herite : elle lit la variable de la page, elle n'en a pas une. */
+    vrai(/pointsEvolution\(\{ net: evoNet, financier: evoFinancier \}\)/.test(sansCom),
+      'la courbe lit le Net / Brut de la page');
+    eq((sansCom.match(/\bevoNet = /g) || []).length, 2,
+      'une déclaration et un seul geste qui l’écrit');
+  });
+
+  test('le graphique s’ouvre sur Financier', () => {
+    /* Le defaut est le coeur du reglage : sans lui, personne ne decouvre que la
+       courbe peut montrer autre chose qu'un mur. */
+    const src = lireSource('assets/app.js');
+    vrai(/let evoFinancier = true;/.test(src), 'Financier à l’ouverture');
+    vrai(/let evoNet = true;/.test(src), 'et Net, comme le reste de la page');
+    /* Il ne s'enregistre pas : un reglage de lecture vit le temps d'une session,
+       comme le commutateur d'Allocation. */
+    const action = src.slice(src.indexOf("'evo-perimetre'(btn)"),
+                             src.indexOf("'evo-perimetre'(btn)") + 200);
+    vrai(!/Store\.save/.test(action), 'et le clic n’écrit rien dans les données');
+    vrai(!/evoFinancier/.test(lireSource('assets/store.js') || ''),
+      'ce drapeau ne touche pas au modèle : store.js reçoit un argument, pas un état');
+  });
+
+  test('les deux commandes du graphique se replient ensemble', () => {
+    /* A 375 px l'en-tete passe a la ligne. Posees separement, le perimetre serait
+       reste contre le titre et les periodes seraient descendues seules a l'autre
+       bout de la rangee : deux reglages du meme dessin lus comme deux commandes
+       sans rapport. Un seul element de flex, donc un seul point de rupture.
+       C'est la regle deja posee pour la paire de boutons de Budget.
+
+       Mesure a 375 px apres correction : titre sur la premiere ligne, perimetre
+       sur la deuxieme (142 px), periodes sur la troisieme (258 px), pour 311 px
+       de carte. Aucun debordement, boutons a 30 px de haut. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf('function carteEvolution()'),
+                            src.indexOf('function monterEvolution()'));
+    vrai(/<div class="evo-commandes">/.test(carte), 'les deux commandes partagent un bloc');
+    const bloc = carte.slice(carte.indexOf('<div class="evo-commandes">'),
+                             carte.indexOf('<div class="chart" id="chartEvo">'));
+    vrai(/data-action="evo-perimetre"/.test(bloc), 'le périmètre y est');
+    vrai(/rangeControl\('evo-range', evoRange\)/.test(bloc), 'les périodes aussi');
+    const css = (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const debut = css.indexOf('.evo-commandes {');
+    vrai(debut > 0, 'la règle doit exister');
+    const regle = css.slice(debut, css.indexOf('}', debut));
+    vrai(/display:\s*flex/.test(regle), 'c’est un flex, donc un seul enfant de l’en-tête');
+    vrai(/flex-wrap:\s*wrap/.test(regle),
+      'et le bloc se replie sur lui-même plutôt que de comprimer ses boutons');
   });
 });
 
@@ -18594,32 +18845,32 @@ suite('Le net dit la vérité, même sous zéro', () => {
        disparaissait. La courbe se posait a zero au lieu de descendre sous
        l'axe, et un patrimoine negatif n'apparaissait jamais.
 
-       `pointsEvolution` vit dans app.js, que le harnais ne charge pas : on
-       rejoue sa regle sur les memes donnees, puis on verifie que la source
-       porte bien le rattrapage. */
-    const src = lireSource('assets/app.js');
-    const fn = src.slice(src.indexOf('function pointsEvolution()'),
-                         src.indexOf('function carteEvolution') > 0
-                           ? src.indexOf('function carteEvolution')
-                           : src.indexOf('function pointsEvolution()') + 2600);
-    vrai(/if \(reste > 0\.005\) q\.immo = \(q\.immo \|\| 0\) - reste;/.test(fn),
-      'ce qui dépasse les avoirs se retranche encore, sur la poche qui porte les prêts');
-    vrai(/q\.total = SERIES_PATRIMOINE\(\)\.reduce/.test(fn),
-      'et le total reste dérivé des séries tracées, donc la pile fait son total');
+       Ce controle REJOUAIT la regle sur ses propres donnees, parce que
+       `pointsEvolution` vivait dans app.js, que le harnais ne charge pas : une
+       copie du calcul servait a verifier le calcul. Elle ne pouvait rien
+       prouver — les deux pouvaient se tromper de la meme facon, et le seul
+       ancrage sur le vrai code etait une expression rationnelle sur sa source.
 
-    /* La regle, rejouee : 50 000 sur une poche, 70 000 de dette. */
-    const poches = ['immo', 'biens', 'pe', 'crypto', 'bourse', 'garanti', 'cash'];
-    const q = { immo: 0, biens: 0, pe: 0, crypto: 0, bourse: 0, garanti: 0, cash: 50000 };
-    let reste = 70000;
-    for (const cle of poches) {
-      const pris = Math.min(reste, q[cle] || 0);
-      q[cle] = (q[cle] || 0) - pris;
-      reste -= pris;
-    }
-    if (reste > 0.005) q.immo = (q.immo || 0) - reste;
-    pres(poches.reduce((s, c) => s + q[c], 0), -20000,
-      'la somme des poches vaut les avoirs moins les dettes');
-    pres(q.immo, -20000, 'et le reliquat se voit, sur la poche des prêts');
+       La fonction vit dans `store.js` : on l'appelle. */
+    poser(releve(50000, 70000, '2026-01-01'));
+    /* Sans le point d'aujourd'hui : le fixture de cette suite n'a qu'un compte
+       de cash a zero, et la photo actuelle ecraserait le releve qu'on teste. */
+    const pt = pointsEvolution({ net: true }).find(p => p.date === '2026-01-01');
+    vrai(pt, 'le relevé de janvier doit être dans la série');
+    pres(pt.total, -20000, 'les avoirs moins les dettes, jamais zéro');
+    pres(POCHES_EVOLUTION.reduce((s, c) => s + num(pt[c]), 0), -20000,
+      'la somme des poches vaut le total : la pile fait son total');
+    pres(pt.immo, -20000, 'et le reliquat se voit, sur la poche des prêts');
+  });
+
+  test('en brut, la même courbe ne retranche rien', () => {
+    /* La bascule du haut de page gouverne la courbe depuis qu'elle n'a plus la
+       sienne. Le brut doit donc rendre les avoirs tels quels, dette comprise
+       nulle part. */
+    poser(releve(50000, 70000, '2026-01-01'));
+    const pt = pointsEvolution({ net: false }).find(p => p.date === '2026-01-01');
+    pres(pt.total, 50000, 'les avoirs seuls');
+    pres(num(pt.immo), 0, 'et rien n’est allé chercher la dette sur une poche');
   });
 
   test('un relevé qui ne porte qu’une dette n’est pas vide', () => {

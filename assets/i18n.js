@@ -118,6 +118,10 @@ const I18N = {
     'Non coté': 'Private assets',
     'Immobilier': 'Property',
     'Financier': 'Financial',
+    'Global': 'Overall',
+    'Tes placements et tes liquidités, hors immobilier physique':
+      'Your investments and cash, excluding physical property',
+    'Tout ton patrimoine': 'All of your wealth',
     'Patrimoine financier': 'Financial wealth',
     'de ton patrimoine financier': 'of your financial wealth',
     'Il te reste': 'Left to run',

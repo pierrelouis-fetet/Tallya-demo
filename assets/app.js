@@ -521,69 +521,70 @@ const SERIES_PATRIMOINE = () => [
   { key: 'biens',  color: Charts.cssv('--series-9') },
   { key: 'garanti', color: Charts.cssv('--series-8') },
 ].map(s => ({ ...s, label: trad(CLASSES_ACTIFS[POCHE_CLASSE[s.key]]) }));
-function seriesUtiles(points) {
-  return SERIES_PATRIMOINE().filter(s => s.key === 'cash'
-    || points.some(p => Math.abs(Number(p[s.key]) || 0) > 0.005));
+/* Les bandes que la courbe trace vraiment, donc celles que la legende annonce.
+
+   Deux filtres, et le premier est nouveau : le perimetre. Il se derive de
+   `pochesEvolution()`, la meme fonction dont `pointsEvolution()` tire ses points
+   -- une seconde liste de poches a ecarter aurait fini par annoncer en legende
+   une bande absente du dessin, ou l'inverse.
+
+   Le second n'a pas change : une poche qui ne porte rien sur la periode affichee
+   n'ajouterait qu'une pastille de legende et une ligne « 0 EUR » dans la bulle.
+   Les liquidites restent toujours, sinon un patrimoine tout juste ouvert n'aurait
+   plus de graphique du tout. */
+function seriesUtiles(points, { financier = false } = {}) {
+  const gardees = pochesEvolution({ financier });
+  return SERIES_PATRIMOINE()
+    .filter(s => gardees.includes(s.key))
+    .filter(s => s.key === 'cash'
+      || points.some(p => Math.abs(Number(p[s.key]) || 0) > 0.005));
 }
 function legendeSeries(series, avecTotal = false) {
   return series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('')
     + (avecTotal ? `<span><i style="background:var(--text-secondary)"></i>Total</span>` : '');
 }
 
-/* Les points de l'evolution, tels que le graphique les trace.
-   En net, les credits se retranchent de la poche qui porte le bien —
-   l'immobilier d'abord, puis le non cote : c'est la que vivent les prets.
+/* `pointsEvolution()` a quitte ce fichier pour `store.js`.
 
-   Chaque releve porte desormais le capital restant du du mois (`dettes`),
-   note par la photo au meme titre que le prix de revient du portefeuille. La
-   bande d'immobilier monte donc doucement d'un mois sur l'autre, a mesure que
-   le pret se rembourse — c'est exactement ce que le net veut montrer. Seul le
-   dernier point utilise la dette d'aujourd'hui.
+   Il y calculait la courbe -- imputation des dettes poche par poche, total
+   derive des bandes -- et le harnais de tests ne charge pas `app.js` : le
+   controle le plus important de cette fonction, « la pile fait son total »,
+   etait donc une expression rationnelle sur la source, doublee d'un test qui
+   REJOUAIT la regle sur ses propres donnees. Deux ecritures d'un seul calcul,
+   dont l'une servait a verifier l'autre : la copie ne pouvait rien prouver.
 
-   Les mois anterieurs a ce changement n'ont pas la donnee : ils restent
-   traces bruts plutot que de se voir appliquer une dette d'aujourd'hui qui
-   n'etait pas la leur. La courbe se corrige d'elle-meme, un releve par mois.
+   Le calcul est du modele, pas de la vue. Depuis `store.js` il se lit avec de
+   vrais nombres, sur le meme fixture que le reste, et le perimetre Financier /
+   Global y rejoint les autres regles d'exclusion, qui y vivaient deja.
 
-   La vue et le montage appellent tous deux cette fonction : la legende ne
-   peut donc pas annoncer une serie que la courbe ne trace pas. */
-function pointsEvolution() {
-  const pts = historySeries();
-  const dettesAuj = patrimoine().dettes;
-  if (!evoNet) return pts;
-  return pts.map((p, i) => {
-    const dernier = i === pts.length - 1;
-    const dettes = dernier ? dettesAuj : num(p.dettes);
-    if (!dettes) return p;
-    let reste = dettes;
-    const q = { ...p };
-    /* `biens` juste apres l'immobilier : un pret sur un bien (une voiture)
-       se retranche de lui avant d'entamer les placements. */
-    for (const cle of ['immo', 'biens', 'pe', 'crypto', 'bourse', 'garanti', 'cash']) {
-      const pris = Math.min(reste, q[cle] || 0);
-      q[cle] = (q[cle] || 0) - pris;
-      reste -= pris;
-    }
-    if (reste > 0.005) q.immo = (q.immo || 0) - reste;
-    q.total = SERIES_PATRIMOINE().reduce((s, se) => s + (q[se.key] || 0), 0);
-    return q;
-  });
+   Ce qui reste ici : le dessin, les couleurs, et le choix de l'utilisateur. */
+
+function evolutionAffichee() {
+  const points = limitRange(
+    pointsEvolution({ net: evoNet, financier: evoFinancier }), evoRange);
+  return { points, series: seriesUtiles(points, { financier: evoFinancier }) };
 }
 
 function carteEvolution() {
-  const pts = limitRange(pointsEvolution(), evoRange);
+  const { series } = evolutionAffichee();
   return `
     <div class="card">
       <div class="card-head"><h2>${trad('Évolution du patrimoine')}</h2>
-        <span class="segmented seg-mini">
-          <button data-action="evo-base" data-net="1" class="${evoNet ? 'on' : ''}"
-                  title="${trad('Tes avoirs moins tes crédits')}">${trad('Net')}</button>
-          <button data-action="evo-base" data-net="" class="${evoNet ? '' : 'on'}"
-                  title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
-        </span>
-        ${rangeControl('evo-range', evoRange)}</div>
+        <div class="evo-commandes">
+          <span class="segmented">
+            <button data-action="evo-perimetre" data-perimetre="financier"
+                    class="${evoFinancier ? 'on' : ''}" aria-pressed="${evoFinancier}"
+                    title="${trad('Tes placements et tes liquidités, hors immobilier physique')}"
+                    >${trad('Financier')}</button>
+            <button data-action="evo-perimetre" data-perimetre="global"
+                    class="${evoFinancier ? '' : 'on'}" aria-pressed="${!evoFinancier}"
+                    title="${trad('Tout ton patrimoine')}">${trad('Global')}</button>
+          </span>
+          ${rangeControl('evo-range', evoRange)}
+        </div></div>
       <div class="chart" id="chartEvo"></div>
       ${invitePremierPas('releves')}
-      <div class="legend">${legendeSeries(seriesUtiles(pts), true)}</div>
+      <div class="legend">${legendeSeries(series, true)}</div>
     </div>`;
 }
 
@@ -598,9 +599,13 @@ function carteEvolution() {
    Un depliant sans lecteur est du poids mort, et son etat en memoire vive
    l'etait deux fois. */
 function monterEvolution() {
-  const pts = limitRange(pointsEvolution(), evoRange);
+  const { points, series } = evolutionAffichee();
   const cible = $('#chartEvo');
-  if (cible) Charts.stackedArea(cible, { points: pts, height: 300, series: seriesUtiles(pts) });
+  /* L'echelle verticale se recalcule toute seule sur les bandes passees :
+     `Charts.stackedArea` somme `series` point par point pour son maximum et pour
+     sa ligne Total. Retirer l'immobilier de la liste suffit donc a rendre l'axe
+     aux placements, sans qu'un seul chiffre soit force ici. */
+  if (cible) Charts.stackedArea(cible, { points, height: 300, series });
 }
 
 function sortiesRappel(genre, label, avant = '') {
@@ -1762,7 +1767,40 @@ const currencySign = c => CURRENCY_SIGNS[c] || c || '€';
    plus d'appelant. */
 
 let evoRange = '1y';
-let evoNet = true;    // évolution du patrimoine, vue d'ensemble
+/* Net ou brut : une seule notion, un seul réglage, et désormais un seul
+   commutateur.
+
+   Le grand chiffre et la courbe ont d'abord eu chacun le leur, et deux états :
+   on pouvait afficher le titre en brut au-dessus d'une courbe tracée en net, sur
+   le même écran, sans que rien ne le signale. Ils ont ensuite commandé la même
+   variable, ce qui réglait le mensonge sans régler la question posée — deux
+   boutons identiques à deux endroits laissent croire qu'ils font deux choses.
+
+   Il n'en reste qu'un, dans la grande carte, et il gouverne toute la page. La
+   place libérée sous le graphique porte le seul réglage qui lui appartienne en
+   propre : le périmètre, `evoFinancier` juste dessous. Deux questions, deux
+   commandes, chacune à un seul endroit. */
+let evoNet = true;    // valorisation de toute la page Aujourd'hui
+/* Le perimetre de la seule courbe d'evolution, et rien d'autre sur la page.
+
+   Financier par defaut, et c'est le point de tout le reglage : l'immobilier
+   physique pese 60 a 80 % d'un patrimoine ordinaire, sa bande ecrase l'echelle,
+   et les mouvements de placements -- la seule chose qu'on pilote vraiment --
+   deviennent un trait plat. La vue globale reste a un clic pour qui veut le
+   patrimoine entier dans le temps.
+
+   Il ne s'enregistre pas, comme le commutateur d'Allocation : un reglage de
+   lecture vit le temps d'une session. La difference avec lui est le defaut, et
+   elle est assumee dans les deux sens -- Allocation compte tout par defaut parce
+   que quelqu'un qui a oublie son reglage y lirait un patrimoine amoindri, alors
+   qu'ici le grand chiffre juste au-dessus continue d'annoncer le patrimoine
+   complet : la courbe ne peut donc tromper personne sur ce qu'il possede.
+
+   Independant de `evoNet`, qui dit comment on valorise et non ce qu'on regarde.
+   Les quatre combinaisons ont un sens, et le net financier vaut le brut financier
+   tant qu'aucune dette ne declare l'actif qu'elle finance : voir
+   `pointsEvolution()`. */
+let evoFinancier = true;
 let paceRange = '1y';        // rythme d'accumulation
 let journalOuvert = false;
 /* La ligne « Revenus » de la carte « Ou va ce que tu gagnes » ouvre ses sources.
@@ -7171,9 +7209,13 @@ const ACTIONS = {
     toast(`${trad('Versement mensuel réglé sur')} ${fmtEUR0(m)}`);
   },
   'evo-range'(btn) { evoRange = btn.dataset.range; render(); },
-  /* Les deux controles — le grand chiffre et la courbe — commandent le meme
-     reglage : `hero-base` est un alias historique de `evo-base`. */
-  'evo-base'(btn) { evoNet = !!btn.dataset.net; render(); },
+  /* Le perimetre de la courbe. Il ne touche a rien d'autre : le grand chiffre,
+     la repartition et les autres cartes lisent le patrimoine complet, et c'est
+     voulu — voir `evoFinancier`.
+
+     `evo-base` vivait ici, jumeau de `hero-base` : deux commandes pour une seule
+     variable. Elle est partie avec la bascule Net / Brut du graphique. */
+  'evo-perimetre'(btn) { evoFinancier = btn.dataset.perimetre === 'financier'; render(); },
   'alloc-base'(btn) { allocFinancier = btn.dataset.base === 'financier'; render(); },
   'proj-scenario'(btn) {
     /* La case « Personnalise » n'applique rien : elle ouvre le depliant, et
@@ -7197,6 +7239,10 @@ const ACTIONS = {
     Store.state.meta.projScenario = btn.dataset.scenario;
     Store.save(); render();
   },
+  /* Le seul commutateur Net / Brut de la page, et il la gouverne entière : le
+     grand chiffre, la répartition qui le décompose, et la courbe plus bas. Son
+     jumeau `evo-base` vivait sur le graphique, sur la même variable ; il est
+     parti, la courbe hérite. */
   'hero-base'(btn) { evoNet = !!btn.dataset.net; render(); },
   /* On change d'adresse, pas d'état : `hashchange` déclenche le rendu, et le
      bouton retour du navigateur ramène au sous-onglet précédent. */

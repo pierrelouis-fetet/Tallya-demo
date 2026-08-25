@@ -1004,6 +1004,21 @@ const horsFinancier = classe => CLASSES_HORS_FINANCIER.includes(classe);
 const SERIES_HORS_FINANCIER = ['immo', 'biens'];
 const serieHorsFinancier = cle => SERIES_HORS_FINANCIER.includes(cle);
 
+/* Les poches du graphique d'evolution, dans l'ordre ou la pile les empile.
+
+   `SERIES_PATRIMOINE()` leur donne une couleur et le nom de leur classe ;
+   l'ensemble et l'ordre viennent d'ici. Sans ca, le calcul des points et le
+   dessin porteraient deux listes ecrites a la main, et c'est exactement la faute
+   que ce depot corrige sans arret : la poche ajoutee d'un seul cote compte dans
+   un total sans avoir de bande, ou l'inverse. */
+const POCHES_EVOLUTION = ['cash', 'bourse', 'crypto', 'pe', 'immo', 'biens', 'garanti'];
+
+const CASCADE_DETTES = ['immo', 'biens', 'pe', 'crypto', 'bourse', 'garanti', 'cash'];
+
+function pochesEvolution({ financier = false } = {}) {
+  return POCHES_EVOLUTION.filter(cle => !financier || !serieHorsFinancier(cle));
+}
+
 function valeurFinanciere(compte) {
   const dehors = lignesDe(compte)
     .filter(l => horsFinancier(l.classe))
@@ -2210,6 +2225,77 @@ function historySeries({ includeNow = true } = {}) {
                total: t.brut, comment: 'Photo actuelle' });
   }
   return pts;
+}
+
+/* --- les points de la courbe d'evolution, tels que le graphique les trace ---
+
+   Deux reglages, deux questions, et ils ne se croisent jamais dans le meme sens :
+
+     `net`       comment le patrimoine est valorise -- avoirs moins credits, ou
+                 avoirs seuls. C'est le choix fait en tete de la page Aujourd'hui,
+                 sur le grand chiffre, et la courbe en herite. Elle a porte sa
+                 propre bascule Net / Brut pendant des mois : deux commutateurs
+                 pour une seule notion, dont on pouvait croire qu'ils reglaient
+                 des choses differentes.
+     `financier` quel perimetre la courbe montre. L'immobilier physique pese 60 a
+                 80 % d'un patrimoine ordinaire : sa bande ecrase l'echelle et les
+                 placements deviennent un trait plat. La vue financiere l'ecarte,
+                 avec les biens de valeur, pour rendre lisible ce qui bouge.
+
+   En net, les credits se retranchent de la poche qui porte le bien -- l'immobilier
+   d'abord, puis les biens, puis le non cote : c'est la que vivent les prets.
+   Chaque releve porte le capital restant du du mois (`dettes`), note par la photo
+   au meme titre que les montants par compte. La bande d'immobilier monte donc
+   doucement d'un mois sur l'autre, a mesure que le pret se rembourse -- c'est
+   exactement ce que le net veut montrer. Seul le dernier point utilise la dette
+   d'aujourd'hui. Les mois anterieurs a ce champ n'ont pas la donnee : ils restent
+   traces bruts plutot que de se voir appliquer une dette d'aujourd'hui qui n'etait
+   pas la leur. La courbe se corrige d'elle-meme, un releve par mois.
+
+   **En vue financiere, aucune dette ne se retranche, et c'est un choix de
+   justesse, pas un raccourci.** Une dette n'est pas rattachee a un actif dans ce
+   modele : elle vit sur un etablissement (`etabs[].dettes[]`) et ne porte aucun
+   lien vers le compte ou la ligne qu'elle finance. Retrancher les credits d'un
+   perimetre dont on vient de retirer les murs donnerait 70 000 EUR d'avoirs
+   financiers moins 150 000 EUR de credit immobilier, soit -80 000 EUR : un
+   patrimoine financier negatif chez quelqu'un qui n'a aucune dette financiere.
+   Le chiffre serait faux, et faux du cote qui alarme.
+
+   Inventer ici un rattachement -- deviner qu'un pret dont le libelle contient
+   « immo » finance un bien -- serait une convention de plus, tenue par une seule
+   fonction, que rien ne verifie. Tant que le modele ne porte pas le lien, le
+   financier net vaut le financier brut. C'est deja la regle de
+   `repartitionClasses()` en vue financiere, et deux calculs qui repondent a la
+   meme question doivent donner le meme chiffre.
+
+   Le jour ou une dette declarera l'actif qu'elle finance, c'est ici et dans
+   `repartitionClasses()` que la deduction se posera, aux deux endroits a la fois.
+
+   La vue et le montage appellent tous deux cette fonction : la legende ne peut
+   donc pas annoncer une serie que la courbe ne trace pas. */
+function pointsEvolution({ net = true, financier = false } = {}) {
+  const poches = pochesEvolution({ financier });
+  const pts = historySeries();
+  const retrancher = net && !financier;
+  const dettesAuj = retrancher ? patrimoine().dettes : 0;
+  return pts.map((p, i) => {
+    /* Une copie, jamais le point d'origine : `historySeries()` sert aussi les
+       variations et le rythme, qui comptent tout. */
+    const q = { ...p };
+    for (const cle of POCHES_EVOLUTION) if (!poches.includes(cle)) delete q[cle];
+    const dettes = retrancher ? (i === pts.length - 1 ? dettesAuj : num(p.dettes)) : 0;
+    if (dettes) {
+      let reste = dettes;
+      for (const cle of CASCADE_DETTES) {
+        const pris = Math.min(reste, q[cle] || 0);
+        q[cle] = (q[cle] || 0) - pris;
+        reste -= pris;
+      }
+      if (reste > 0.005) q.immo = (q.immo || 0) - reste;
+    }
+    q.total = poches.reduce((s, cle) => s + (q[cle] || 0), 0);
+    return q;
+  });
 }
 
 function currentMonthKey() {

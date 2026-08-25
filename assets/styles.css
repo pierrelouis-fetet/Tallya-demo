@@ -2738,6 +2738,31 @@ select.annee {
   font-weight: 650;
 }
 
+/* --------- Les deux commandes du graphique d'evolution ---------
+
+   Le perimetre (Financier / Global) et la periode (YTD / 1 an / ...). Deux
+   reglages du meme dessin, donc un seul element de flex dans l'en-tete : poses
+   separement, ils tombaient un par un a 375 px -- le perimetre restait contre le
+   titre, les periodes descendaient seules a l'autre bout de la rangee, et deux
+   commandes du meme graphique se lisaient comme deux commandes sans rapport.
+   C'est la regle deja posee pour la paire de boutons de Budget.
+
+   `flex-wrap` a l'interieur : les deux groupes font 149 px et 284 px a 375 px,
+   soit 443 px pour 311 px de carte. Ils se rangent donc l'un sous l'autre plutot
+   que de se comprimer, et rien ne deborde. Sur un ecran large ils tiennent la
+   meme ligne, cales a droite du titre.
+
+   L'ecart de 14 px entre les deux, plus large que les 6 px qui separent les
+   boutons d'un meme groupe : c'est lui qui dit qu'il y a deux questions et non
+   sept boutons a la file. */
+.evo-commandes {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  /* Il se cale a droite du titre quand la place le permet, et au depart de sa
+     ligne quand il se replie : `space-between` de l'en-tete distribue ligne par
+     ligne, un enfant seul sur la sienne part a gauche. Rien a poser. */
+  min-width: 0;
+}
+
 .barre-recherche {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 }
