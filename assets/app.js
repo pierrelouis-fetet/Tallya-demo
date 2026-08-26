@@ -3798,6 +3798,10 @@ function lignePlacement(l, compte, editable = false) {
    appelant se garde sans se maintenir, et finit par decrire un ecran qui
    n'existe plus.*/
 
+const TEINTE_CONTENANT = () => Charts.cssv('--series-10');
+const teinteEtab = (e, comptes) =>
+  (e && estEtabDeBiens(e)) ? teinteDominante(comptes) : TEINTE_CONTENANT();
+
 function viewAccounts() {
   const pat = patrimoine();
   const d = deltas();
@@ -3870,10 +3874,6 @@ function viewAccounts() {
        Les titres ne paraissent que si les deux sections existent. Un seul titre
        ne range rien, il ajoute une ligne. */
     const sansContenant = ouverts.filter(c => !c.etabId || !etabById(c.etabId));
-    const estEtabDeBiens = e => {
-      const siens = ouverts.filter(c => c.etabId === e.id);
-      return siens.length > 0 && siens.every(c => estDetenuEnDirect(typeCompte(c.type)));
-    };
     const groupeEtab = e => {
       const siens = ouverts.filter(c => c.etabId === e.id);
       const doitEncore = (e.dettes || []).reduce((s, x) => s + num(x.montant), 0);
@@ -3903,7 +3903,7 @@ function viewAccounts() {
                      : `${trad('plus aucun')} ${motContenu(e.id, 1)}`, orphelin + lignes + dette, totalE,
         `<button type="button" class="btn sm ghost" data-action="fiche-etab" data-id="${esc(e.id)}"
                  title="${trad('Ouvrir la fiche')} · ${esc(e.nom)}">${trad('Fiche')} ›</button>`,
-        teinteDominante(siens));
+        teinteEtab(e, siens));
     };
 
     const chezUnTiers = ETABS().filter(e => !estEtabDeBiens(e)).map(groupeEtab).join('');
@@ -4482,7 +4482,7 @@ function viewFicheCompte(id) {
         const siens = COMPTES().filter(x => x.etabId === et.id);
         return `<button type="button" class="btn sm ghost lien-etab"
                 data-action="fiche-etab" data-id="${esc(et.id)}"
-                style="--teinte:${teinteDominante(siens)}"
+                style="--teinte:${teinteEtab(et, siens)}"
                 title="${trad('Voir l’établissement qui tient ce compte')}">
           <span class="cpt-pastille" aria-hidden="true"></span>${esc(et.nom)} ›</button>`;
       })()}
@@ -4674,7 +4674,7 @@ function viewFicheEtab(id) {
   return `
   <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
 
-  <div class="card cpt-entete" style="--teinte:${teinteDominante(siens)}">
+  <div class="card cpt-entete" style="--teinte:${teinteEtab(e, siens)}">
     <div>
       <span class="hero-label">${esc(trad(contenantDeLEtab(e.id).titre))}</span>
       <h2 class="fiche-nom"><span class="cpt-pastille" aria-hidden="true"></span>${esc(e.nom)}</h2>
@@ -7303,7 +7303,12 @@ const ACTIONS = {
     Store.save(); render();
   },
 
-  'history-year'(btn) { historyYear = btn.dataset.year; render(); },
+  'history-year'(btn) {
+    if (btn.dataset.year === String(historyYear)) return;
+    historyYear = btn.dataset.year;
+    relanceGraphes = true;
+    render();
+  },
   'proj-use-budget'() {
     const m = suggestedMonthly();
     Store.state.meta.projMonthly = m;

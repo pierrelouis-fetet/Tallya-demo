@@ -2950,6 +2950,12 @@ function rebalanceRows() {
    Le precedent est dans `allocationByAccount`, qui colore deja un compte par sa
    classe dominante pour la meme raison : « le compte n'est qu'un contenant, c'est
    ce qu'il porte qui compte ». */
+function estEtabDeBiens(e) {
+  if (!e) return false;
+  const siens = comptesOuverts().filter(c => c.etabId === e.id);
+  return siens.length > 0 && siens.every(c => estDetenuEnDirect(typeCompte(c.type)));
+}
+
 function teinteDominante(comptes) {
   const parClasse = new Map();
   for (const c of comptes || []) {

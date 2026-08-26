@@ -4096,11 +4096,25 @@ td .empty, th .empty { background: none; border: none; }
    perimetre change, alors que la cascade des cartes ne rejoue qu'a l'arrivee.
    Rejouer la cascade a chaque clic sur une bascule ferait clignoter la page
    entiere pour un chiffre qui change. */
-.graphes-poussent :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre)
+.graphes-poussent :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre, .ml-jauge)
   > :is(i:not(.reeq-cible), div) {
   transform-origin: left center;
   animation: barre-pousse .55s cubic-bezier(.22, .61, .36, 1) .14s backwards;
 }
+
+/* La piste d'un releve mensuel est la seule a avoir son zero AU MILIEU : un mois
+   positif s'etend a droite, un negatif a gauche. Elle rejoint donc la famille
+   pour l'animation, mais pas pour l'origine — la donner a gauche ferait partir
+   les mois negatifs du mauvais cote, en s'eloignant du zero au lieu d'en sortir.
+
+   `i.up` porte `left: 50%`, donc son bord gauche EST le zero et l'origine
+   commune lui convient. `i.down` porte `right: 50%` : c'est son bord droit.
+
+   Un mois plat ne pousse pas. Ce n'est pas une barre mais un point de trois
+   pixels, pose au centre pour dire « rien ne s'est passe » plutot que « pas de
+   donnee » : il n'a aucune longueur a parcourir. */
+.graphes-poussent .ml-jauge > i.down { transform-origin: right center; }
+.graphes-poussent .ml-jauge > i.plat { animation: none; }
 
 /* Les barres des graphiques SVG poussent comme les jauges, meme courbe et meme
    retard : elles se lisent ensemble sur une meme page, et deux rythmes s'y
@@ -4131,7 +4145,7 @@ td .empty, th .empty { background: none; border: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .view.vue-entre > *,
-  .graphes-poussent :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre)
+  .graphes-poussent :is(.repart-barre, .hero-barre, .flow-bar, .goal-bar, .reeq-jauge, .role-barre, .ml-jauge)
     > :is(i:not(.reeq-cible), div),
   .graphes-poussent :is(.rb-barre, .vb-barre, .gb-barre) { animation: none; }
 }

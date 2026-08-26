@@ -2356,8 +2356,20 @@ suite('Les barres des graphiques poussent, à l’arrivée et au changement de p
        champ ferait repousser toutes les barres de la page. */
     vrai(/relanceGraphes = false;/.test(sansCom),
       'et le drapeau se consomme');
-    eq((sansCom.match(/relanceGraphes = true/g) || []).length, 2,
-      'deux bascules le lèvent : le périmètre d’Allocation et net / brut');
+    /* TROIS gestes le levent, et ils se nomment ici. Chacun remplace les
+       chiffres que les barres dessinent : le perimetre d'Allocation, la lecture
+       net / brut, et l'annee des releves. Un quatrieme devra passer par la meme
+       porte — c'est ce qui empeche « on anime aussi ce cas-la » de se glisser
+       sans qu'on ait pese la fatigue que ca ajoute. */
+    for (const geste of ["'alloc-base'(btn) {", "'hero-base'(btn) {",
+                         "'history-year'(btn) {"]) {
+      const i = sansCom.indexOf(geste);
+      vrai(i > 0, `${geste} doit être trouvable`);
+      vrai(/relanceGraphes = true/.test(sansCom.slice(i, i + 400)),
+        `${geste} fait repousser les barres`);
+    }
+    eq((sansCom.match(/relanceGraphes = true/g) || []).length, 3,
+      'trois gestes remplacent les chiffres que les barres dessinent');
   });
 
   test('les barres partent avec les jauges, et rien ne bouge si le système le refuse', () => {
@@ -2664,6 +2676,129 @@ suite('Une fiche ne réintroduit pas ce que sa carte a écarté', () => {
        rend les deux autres fiches inoffensives, et ca se verifie. */
     vrai(!CLASSES_HORS_FINANCIER.includes('liquidites'),
       'les liquidités sont dans le périmètre financier, donc « cash » ne réintroduit rien');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Les barres des relevés, et la teinte d'un contenant
+   ------------------------------------------------------------------ */
+suite('La piste d’un relevé pousse depuis son zéro, qui est au milieu', () => {
+
+  const css = () => (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  test('elle rejoint la famille des jauges', () => {
+    /* Elle n'y etait pas, et c'est tout ce qui lui manquait : les barres de
+       variation de chaque releve se posaient d'un coup au milieu d'une page ou
+       tout le reste pousse. */
+    const c = css();
+    const i = c.indexOf('.graphes-poussent :is(.repart-barre');
+    vrai(i > 0, 'la règle de la famille doit exister');
+    const sel = c.slice(i, c.indexOf('{', i));
+    vrai(sel.includes('.ml-jauge'), 'la piste des relevés est dans la famille');
+    /* Et le garde-fou du mouvement suit la MEME liste : deux listes ecrites a
+       la main auraient fini par diverger, et une barre aurait continue de
+       bouger chez quelqu'un qui demande l'arret. */
+    const blocs = c.split('@media (prefers-reduced-motion: reduce)').slice(1);
+    const garde = blocs.find(x => x.slice(0, 500).includes('.rb-barre'));
+    vrai(garde && garde.includes('.ml-jauge'),
+      'le garde-fou du mouvement porte la même liste');
+  });
+
+  test('un mois négatif pousse vers la gauche, pas vers la droite', () => {
+    /* Le zero est AU MILIEU de la piste : un mois positif s'etend a droite, un
+       negatif a gauche. L'origine commune de la famille est le bord gauche, ce
+       qui convient a `i.up` — son `left: 50%` fait de son bord gauche le zero —
+       et ferait partir `i.down` du mauvais cote, en s'eloignant du zero au lieu
+       d'en sortir. */
+    const c = css();
+    vrai(/\.graphes-poussent \.ml-jauge > i\.down \{ transform-origin: right center; \}/.test(c),
+      'la barre qui descend pousse depuis son bord droit');
+    /* La geometrie que cette regle suppose se verifie, elle ne se suppose pas. */
+    const i = c.indexOf('.ml-jauge i.up');
+    vrai(i > 0, 'les deux sens doivent être déclarés');
+    vrai(/\.ml-jauge i \{[\s\S]{0,120}position: absolute/.test(c),
+      'les barres sont positionnées dans la piste');
+    const app = lireSource('assets/app.js');
+    vrai(/part > 0 \? 'left' : 'right'\}:50%/.test(app),
+      'et c’est bien le signe qui décide du bord ancré au zéro');
+  });
+
+  test('un mois plat ne pousse pas', () => {
+    /* Ce n'est pas une barre mais un point de trois pixels, pose au centre pour
+       dire « rien ne s'est passe » plutot que « pas de donnee » : il n'a aucune
+       longueur a parcourir, et l'etirer depuis un bord le ferait glisser. */
+    vrai(/\.graphes-poussent \.ml-jauge > i\.plat \{ animation: none; \}/.test(css()),
+      'le point d’un mois plat reste immobile');
+    const app = lireSource('assets/app.js');
+    vrai(/Math\.abs\(part\) < 0\.005[\s\S]{0,80}<i class="plat"><\/i>/.test(app),
+      'et c’est bien un point, pas une barre de longueur nulle');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Une page groupée par contenant ne se peint pas par classe d'actif
+   ------------------------------------------------------------------ */
+suite('Un établissement qui tient des comptes porte la teinte du contenant', () => {
+
+  test('une seule teinte pour tous, et ce n’est celle d’aucune classe', () => {
+    /* La couleur venait de la classe d'actif dominante — rose chez l'un,
+       turquoise chez l'autre, azur chez le troisieme. Or cette page groupe par
+       CONTENANT : la couleur y parlait d'un autre axe que celui qu'on regarde,
+       et cinq teintes vives se disputaient l'attention pour une information qui
+       ne se pilote pas. On ne reequilibre pas entre ses banques, c'est deja la
+       raison pour laquelle les pourcentages ont quitte ces en-tetes. */
+    const app = lireSource('assets/app.js');
+    /* Une FONCTION et non une constante : `Charts.cssv` lit une variable CSS,
+       donc le theme courant. Figee au chargement, elle aurait garde la teinte du
+       theme de depart apres un changement de theme. */
+    const motif = /const TEINTE_CONTENANT = \(\) => Charts\.cssv\('--series-(\d+)'\);/;
+    vrai(motif.test(app), 'la teinte du contenant est nommée une fois');
+    const n = Number(app.match(motif)[1]);
+
+    /* Le controle qui compte, et il est DERIVE : la teinte du contenant ne peut
+       pas etre celle d'une classe d'actif, sinon la regle qui tient toute
+       l'application tombe — la meme chose se reconnait a la meme couleur d'un
+       ecran a l'autre. La table des classes est la seule source. */
+    const prises = new Set(Object.values(TEINTE_CLASSE));
+    vrai(!prises.has(n),
+      `--series-${n} est déjà la couleur d’une classe d’actif : elle ne peut pas dire « contenant »`);
+    /* Et elle doit exister dans les DEUX themes, sinon elle rend vide chez la
+       moitie des lecteurs. */
+    const css = lireSource('assets/styles.css');
+    eq((css.match(new RegExp(`--series-${n}:`, 'g')) || []).length, 2,
+      'la teinte est définie dans les deux thèmes');
+  });
+
+  test('les biens et espèces gardent la couleur de ce qu’ils sont', () => {
+    /* La ou il n'y a pas de contenant, la couleur redevient celle de ce qui est
+       detenu — et les deux sections de la page se distinguent d'un coup d'oeil.
+       Le predicat est celui que la page emploie deja pour se couper en deux :
+       aucune notion nouvelle, aucune liste de plus. */
+    const app = lireSource('assets/app.js');
+    vrai(/\(e && estEtabDeBiens\(e\)\) \? teinteDominante\(comptes\) : TEINTE_CONTENANT\(\)/.test(app),
+      'le contenant prend la teinte neutre, le bien garde sa classe');
+    /* Une seule ecriture, parce que trois auraient diverge : le meme
+       etablissement se peignait ardoise dans la liste et turquoise sur sa
+       fiche, et la couleur aurait cesse de designer quoi que ce soit. */
+    eq((app.match(/const teinteEtab = /g) || []).length, 1,
+      'la décision s’écrit une fois');
+    vrai((app.match(/teinteEtab\(/g) || []).length >= 3,
+      'et la liste comme les deux fiches la lisent');
+    /* Le meme predicat coupe les deux sections : une seule verite, deux usages. */
+    vrai(/ETABS\(\)\.filter\(e => !estEtabDeBiens\(e\)\)/.test(app)
+      && /ETABS\(\)\.filter\(estEtabDeBiens\)/.test(app),
+      'et c’est le prédicat qui découpe déjà la page en deux sections');
+    /* Plus aucun groupe d'etablissement ne se peint par classe dominante hors
+       de ce cas : c'etait la source du bruit. */
+    /* Et la classe dominante ne se lit plus qu'a l'interieur de cette decision :
+       aucun appelant ne la prend directement, sinon il se peindrait par classe
+       sur une page qui groupe par contenant. */
+    const fn = app.slice(app.indexOf('const teinteEtab = '),
+                         app.indexOf('function viewAccounts()'));
+    eq((fn.match(/teinteDominante\(/g) || []).length, 1,
+      'la classe dominante ne se lit qu’une fois, dans la décision');
+    vrai(!/style="--teinte:\$\{teinteDominante\(/.test(app),
+      'plus aucun balisage ne peint par classe dominante en direct');
   });
 });
 
@@ -3339,9 +3474,16 @@ suite('Pièges de source', () => {
        appels réels et non sur les mentions : deux commentaires la nomment. */
     const appels = source.slice(source.indexOf('function viewAccounts'),
                                 source.indexOf('function mountAccounts'));
-    eq((appels.match(/teinteDominante\(/g) || []).length, 3,
-      'les trois groupes de la page passent tous par elle : aucun ne se peint '
-      + 'autrement');
+    /* Les groupes d'etablissement passent desormais par `teinteEtab`, qui
+       decide entre la teinte du contenant et celle de la classe ; le groupe par
+       enveloppe et le hors-contenant lisent la classe en direct, parce qu'ils ne
+       sont pas des contenants. Le compte porte sur les DEUX portes reunies :
+       aucun groupe ne se peint autrement. */
+    const parClasse = (appels.match(/teinteDominante\(/g) || []).length;
+    const parContenant = (appels.match(/teinteEtab\(/g) || []).length;
+    eq(parClasse + parContenant, 3,
+      'les trois groupes de la page passent tous par l’une des deux : aucun ne '
+      + 'se peint autrement');
   });
 
   test('le reste à verser sur un livret plafonné', () => {
@@ -6663,8 +6805,8 @@ suite('Ce qu’on règle une fois ne reste pas ouvert', () => {
     const s = lireSource('assets/app.js') || '';
     const fiche = s.slice(s.indexOf('function viewFicheEtab'),
                           s.indexOf('function viewFicheEtab') + 3000);
-    vrai(/--teinte:\$\{teinteDominante\(siens\)\}/.test(fiche),
-      'la fiche doit tirer sa teinte de teinteDominante(), la même source que la liste');
+    vrai(/--teinte:\$\{teinteEtab\(e, siens\)\}/.test(fiche),
+      'la fiche doit tirer sa teinte de teinteEtab(), la même source que la liste');
     vrai(/class="cpt-pastille"/.test(fiche),
       'et l’afficher avec la pastille de la liste, pas une autre forme');
   });
@@ -11601,8 +11743,15 @@ suite('La page Actifs range ce qu’on tient chez un tiers et ce qu’on tient s
        emploie pour partager ses sections. Les assertions ci-dessus decrivent le
        modele et restaient vertes pendant que la page se trompait. */
     const src = lireSource('assets/app.js');
-    vrai(/siens\.every\(c => estDetenuEnDirect\(typeCompte\(c\.type\)\)\)/.test(src),
-      'la page Actifs partage ses sections sur « détenu en direct »');
+    /* La règle vit dans le MODÈLE et non dans la vue : trois écrans en dépendent
+       — la liste des comptes et les deux fiches — et la copie locale se fermait
+       de surcroît sur les comptes filtrés par la recherche, si bien que taper
+       trois lettres pouvait faire changer un groupe de section. */
+    vrai(/siens\.every\(c => estDetenuEnDirect\(typeCompte\(c\.type\)\)\)/
+      .test(lireSource('assets/store.js')),
+      'le partage en sections se décide sur « détenu en direct »');
+    vrai(!/const estEtabDeBiens = /.test(src),
+      'et la vue n’en garde pas une seconde écriture');
     vrai(!/siens\.every\(c => estUnBien\(/.test(src),
       'et surtout pas sur « se saisit comme un bien », qui range les plateformes '
       + 'de financement participatif du mauvais côté');
