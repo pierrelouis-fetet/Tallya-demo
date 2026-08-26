@@ -312,15 +312,36 @@ const motCompte = t => trad(estDetenuEnDirect(t) ? 'bien' : 'compte');
    pas se contredire. Une plateforme de financement participatif garde
    « compte » — Plateforme A en ouvre bien un. */
 const CONTENANTS = {
-  bien:   { titre: 'Bien immobilier',    question: 'À quel bien le rattacher ?',
+  /* `teinte` : la couleur d'un etablissement vient de sa FAMILLE, pas de ce
+     qu'il contient le mois ou on le regarde.
+
+     Elle venait de la classe d'actif dominante en valeur, et une minorite
+     pouvait peindre le tout : un courtier dont la plus grosse ligne est du non
+     cote se lisait « societe » alors que sa propre fiche annoncait « Banque ou
+     courtier » deux centimetres plus haut. Les mots et la couleur se
+     contredisaient dans la meme carte. Pire, la couleur bougeait avec le
+     marche : la ligne qui passe devant repeint l'etablissement.
+
+     La famille, elle, se derive des TYPES de compte. Elle ne bouge pas quand un
+     cours monte, et elle est deja ecrite au-dessus du nom.
+
+     Le choix des teintes suit ce que chaque famille tient d'habitude, ce qui
+     est demande : une banque garde l'azur des liquidites, une societe le rose
+     du non cote, un bien le mauve de l'immobilier. Un contrat d'assurance prend
+     le vert des multi-actifs, parce que c'est litteralement ce qu'il est : la
+     famille n'existe que pour les enveloppes qui melangent. */
+  bien:   { titre: 'Bien immobilier',    teinte: 'var(--series-4)',
+            question: 'À quel bien le rattacher ?',
             aide: 'Un bien déjà enregistré, ou un nouveau.',
             exemple: 'ex. Studio Lyon 3e', nouveau: 'Nouveau bien',
             contenu: 'bien' },
-  societe:{ titre: 'Société ou plateforme', question: 'À quelle société le rattacher ?',
+  societe:{ titre: 'Société ou plateforme', teinte: 'var(--series-3)',
+            question: 'À quelle société le rattacher ?',
             aide: 'Une société ou plateforme déjà enregistrée, ou une nouvelle.',
             exemple: 'ex. Plateforme A', nouveau: 'Nouvelle société ou plateforme',
             contenu: 'compte' },
-  banque: { titre: 'Banque ou courtier', question: 'Dans quelle banque le tenir ?',
+  banque: { titre: 'Banque ou courtier', teinte: 'var(--series-1)',
+            question: 'Dans quelle banque le tenir ?',
             aide: 'Une banque déjà enregistrée, ou une nouvelle.',
             exemple: 'ex. Fortuneo', nouveau: 'Nouvelle banque ou courtier',
             contenu: 'compte' },
@@ -330,7 +351,8 @@ const CONTENANTS = {
      ici est l'un des trois, et « banque » n'est pas le mot qui les couvre.
      `contenu` dit « contrat » pour la meme raison : on n'ouvre pas un compte
      chez un assureur, on souscrit. */
-  assureur:{ titre: 'Assureur ou courtier', question: 'Chez qui le contrat est-il tenu ?',
+  assureur:{ titre: 'Assureur ou courtier', teinte: 'var(--series-8)',
+            question: 'Chez qui le contrat est-il tenu ?',
             aide: 'Un organisme déjà enregistré, ou un nouveau.',
             exemple: 'ex. Linxea', nouveau: 'Nouvel assureur ou courtier',
             contenu: 'contrat' },
@@ -2954,6 +2976,18 @@ function estEtabDeBiens(e) {
   if (!e) return false;
   const siens = comptesOuverts().filter(c => c.etabId === e.id);
   return siens.length > 0 && siens.every(c => estDetenuEnDirect(typeCompte(c.type)));
+}
+
+/* La couleur d'un etablissement. Elle se lit sur LUI, pas sur ses comptes : la
+   famille est deja celle que sa fiche affiche au-dessus de son nom, et la
+   couleur cesse donc de contredire les mots qui la surplombent.
+
+   `teinteDominante`, juste dessous, garde son role la ou le groupe EST une
+   classe d'actif : l'onglet par type, et le groupe des lignes sans contenant.
+   La ou l'on regarde un contenant, c'est le contenant qui parle ; la ou l'on
+   regarde une classe, c'est la classe. */
+function teinteEtab(e) {
+  return e ? contenantDeLEtab(e.id).teinte : 'var(--border-strong)';
 }
 
 function teinteDominante(comptes) {

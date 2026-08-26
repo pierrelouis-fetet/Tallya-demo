@@ -2735,6 +2735,83 @@ suite('La piste d’un relevé pousse depuis son zéro, qui est au milieu', () =
   });
 });
 
+/* ------------------------------------------------------------------
+   La couleur d'un établissement vient de sa famille
+   ------------------------------------------------------------------ */
+suite('Un établissement porte la couleur de sa famille, pas de son contenu', () => {
+
+  test('la teinte se lit sur l’établissement, jamais sur la valeur de ses lignes', () => {
+    /* Le defaut : la couleur venait de la classe d'actif dominante EN VALEUR.
+       Une minorite pouvait donc peindre le tout — un courtier dont la plus
+       grosse ligne est du non cote se lisait « societe » alors que sa propre
+       fiche annoncait « Banque ou courtier » deux centimetres plus haut. Les
+       mots et la couleur se contredisaient dans la meme carte.
+
+       Pire : la couleur bougeait avec le marche. La ligne qui passe devant
+       repeignait l'etablissement, sans que rien n'ait change chez lui. */
+    const st = lireSource('assets/store.js');
+    const fn = st.slice(st.indexOf('function teinteEtab(e)'),
+                        st.indexOf('function teinteDominante'));
+    vrai(fn.length > 40, 'la fonction doit être trouvable');
+    vrai(/contenantDeLEtab\(e\.id\)\.teinte/.test(fn),
+      'elle lit la famille de l’établissement');
+    vrai(!/valeur|montant|teinteDominante|lignesDe/.test(fn),
+      'et jamais un montant : une couleur qui suit le marché ne dit plus rien');
+  });
+
+  test('les quatre familles ont une teinte, et elle vit avec leur nom', () => {
+    /* Un fait, un endroit : le titre affiche et la couleur qui l'accompagne
+       sont deux faces de la meme decision, elles se posent sur la meme ligne. */
+    for (const cle of ['bien', 'societe', 'banque', 'assureur']) {
+      const f = CONTENANTS[cle];
+      vrai(f && f.titre, `la famille « ${cle} » doit exister`);
+      vrai(/^var\(--series-\d+\)$/.test(f.teinte || ''),
+        `la famille « ${cle} » doit porter une teinte`);
+    }
+    /* Quatre familles, quatre couleurs : deux qui se partagent une teinte ne se
+       distingueraient plus dans la liste. */
+    const teintes = ['bien', 'societe', 'banque', 'assureur'].map(k => CONTENANTS[k].teinte);
+    eq(new Set(teintes).size, 4, 'les quatre familles se distinguent');
+  });
+
+  test('la couleur d’un établissement ne bouge pas quand ses lignes bougent', () => {
+    /* La preuve sur de vrais nombres : le studio du fixture vaut 120 000 et sa
+       dette 40 000. On fait varier ce qu'il contient, la famille ne bouge pas.
+       C'est tout l'interet du changement. */
+    Fixture.poser();
+    const bien = ETABS().find(e => e.id === 'e_bien');
+    vrai(bien, 'l’établissement du bien doit exister');
+    const avant = teinteEtab(bien);
+    eq(avant, CONTENANTS.bien.teinte, 'un bien immobilier porte la teinte des biens');
+
+    /* On multiplie la valeur de la ligne par dix : rien ne doit changer. */
+    Fixture.poser(s => {
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.lignes[0].valeur = c.lignes[0].valeur * 10;
+    });
+    eq(teinteEtab(ETABS().find(e => e.id === 'e_bien')), avant,
+      'la teinte ne suit pas la valeur');
+
+    /* Et un etablissement de comptes garde la sienne, quoi qu'il porte. */
+    Fixture.poser();
+    const courtier = ETABS().find(e => e.id === 'e_courtier');
+    eq(teinteEtab(courtier), CONTENANTS.banque.teinte,
+      'un courtier porte la teinte « banque ou courtier »');
+  });
+
+  test('la couleur dit la même chose que le mot écrit au-dessus', () => {
+    /* C'est le point entier. La fiche affiche le titre de la famille juste
+       au-dessus du nom, et la pastille juste a cote : les deux doivent venir de
+       la meme decision, sinon la carte se contredit elle-meme. */
+    Fixture.poser();
+    for (const e of ETABS()) {
+      const famille = contenantDeLEtab(e.id);
+      eq(teinteEtab(e), famille.teinte,
+        `« ${e.nom} » : la pastille doit dire « ${famille.titre} » comme le texte`);
+    }
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -3407,9 +3484,16 @@ suite('Pièges de source', () => {
        appels réels et non sur les mentions : deux commentaires la nomment. */
     const appels = source.slice(source.indexOf('function viewAccounts'),
                                 source.indexOf('function mountAccounts'));
-    eq((appels.match(/teinteDominante\(/g) || []).length, 3,
-      'les trois groupes de la page passent tous par elle : aucun ne se peint '
-      + 'autrement');
+    /* Deux portes desormais, et chacune a sa raison : un ETABLISSEMENT prend la
+       couleur de sa famille, un groupe qui EST une classe d'actif prend celle de
+       la classe. Le compte porte sur les deux reunies — aucun groupe ne se peint
+       autrement, et c'est ca qu'on verifie. */
+    const parClasse = (appels.match(/teinteDominante\(/g) || []).length;
+    const parFamille = (appels.match(/teinteEtab\(/g) || []).length;
+    eq(parClasse + parFamille, 3,
+      'les trois groupes de la page passent par l’une des deux : aucun ne se '
+      + 'peint autrement');
+    eq(parFamille, 1, 'un seul groupe est un établissement');
   });
 
   test('le reste à verser sur un livret plafonné', () => {
@@ -6731,8 +6815,8 @@ suite('Ce qu’on règle une fois ne reste pas ouvert', () => {
     const s = lireSource('assets/app.js') || '';
     const fiche = s.slice(s.indexOf('function viewFicheEtab'),
                           s.indexOf('function viewFicheEtab') + 3000);
-    vrai(/--teinte:\$\{teinteDominante\(siens\)\}/.test(fiche),
-      'la fiche doit tirer sa teinte de teinteDominante(), la même source que la liste');
+    vrai(/--teinte:\$\{teinteEtab\(e\)\}/.test(fiche),
+      'la fiche doit tirer sa teinte de teinteEtab(), la même source que la liste');
     vrai(/class="cpt-pastille"/.test(fiche),
       'et l’afficher avec la pastille de la liste, pas une autre forme');
   });

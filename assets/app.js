@@ -3899,7 +3899,7 @@ function viewAccounts() {
                      : `${trad('plus aucun')} ${motContenu(e.id, 1)}`, orphelin + lignes + dette, totalE,
         `<button type="button" class="btn sm ghost" data-action="fiche-etab" data-id="${esc(e.id)}"
                  title="${trad('Ouvrir la fiche')} · ${esc(e.nom)}">${trad('Fiche')} ›</button>`,
-        teinteDominante(siens));
+        teinteEtab(e));
     };
 
     const chezUnTiers = ETABS().filter(e => !estEtabDeBiens(e)).map(groupeEtab).join('');
@@ -4478,7 +4478,7 @@ function viewFicheCompte(id) {
         const siens = COMPTES().filter(x => x.etabId === et.id);
         return `<button type="button" class="btn sm ghost lien-etab"
                 data-action="fiche-etab" data-id="${esc(et.id)}"
-                style="--teinte:${teinteDominante(siens)}"
+                style="--teinte:${teinteEtab(et)}"
                 title="${trad('Voir l’établissement qui tient ce compte')}">
           <span class="cpt-pastille" aria-hidden="true"></span>${esc(et.nom)} ›</button>`;
       })()}
@@ -4670,7 +4670,7 @@ function viewFicheEtab(id) {
   return `
   <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
 
-  <div class="card cpt-entete" style="--teinte:${teinteDominante(siens)}">
+  <div class="card cpt-entete" style="--teinte:${teinteEtab(e)}">
     <div>
       <span class="hero-label">${esc(trad(contenantDeLEtab(e.id).titre))}</span>
       <h2 class="fiche-nom"><span class="cpt-pastille" aria-hidden="true"></span>${esc(e.nom)}</h2>
