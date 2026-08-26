@@ -2735,73 +2735,6 @@ suite('La piste d’un relevé pousse depuis son zéro, qui est au milieu', () =
   });
 });
 
-/* ------------------------------------------------------------------
-   Une page groupée par contenant ne se peint pas par classe d'actif
-   ------------------------------------------------------------------ */
-suite('Un établissement qui tient des comptes porte la teinte du contenant', () => {
-
-  test('une seule teinte pour tous, et ce n’est celle d’aucune classe', () => {
-    /* La couleur venait de la classe d'actif dominante — rose chez l'un,
-       turquoise chez l'autre, azur chez le troisieme. Or cette page groupe par
-       CONTENANT : la couleur y parlait d'un autre axe que celui qu'on regarde,
-       et cinq teintes vives se disputaient l'attention pour une information qui
-       ne se pilote pas. On ne reequilibre pas entre ses banques, c'est deja la
-       raison pour laquelle les pourcentages ont quitte ces en-tetes. */
-    const app = lireSource('assets/app.js');
-    /* Une FONCTION et non une constante : `Charts.cssv` lit une variable CSS,
-       donc le theme courant. Figee au chargement, elle aurait garde la teinte du
-       theme de depart apres un changement de theme. */
-    const motif = /const TEINTE_CONTENANT = \(\) => Charts\.cssv\('--series-(\d+)'\);/;
-    vrai(motif.test(app), 'la teinte du contenant est nommée une fois');
-    const n = Number(app.match(motif)[1]);
-
-    /* Le controle qui compte, et il est DERIVE : la teinte du contenant ne peut
-       pas etre celle d'une classe d'actif, sinon la regle qui tient toute
-       l'application tombe — la meme chose se reconnait a la meme couleur d'un
-       ecran a l'autre. La table des classes est la seule source. */
-    const prises = new Set(Object.values(TEINTE_CLASSE));
-    vrai(!prises.has(n),
-      `--series-${n} est déjà la couleur d’une classe d’actif : elle ne peut pas dire « contenant »`);
-    /* Et elle doit exister dans les DEUX themes, sinon elle rend vide chez la
-       moitie des lecteurs. */
-    const css = lireSource('assets/styles.css');
-    eq((css.match(new RegExp(`--series-${n}:`, 'g')) || []).length, 2,
-      'la teinte est définie dans les deux thèmes');
-  });
-
-  test('les biens et espèces gardent la couleur de ce qu’ils sont', () => {
-    /* La ou il n'y a pas de contenant, la couleur redevient celle de ce qui est
-       detenu — et les deux sections de la page se distinguent d'un coup d'oeil.
-       Le predicat est celui que la page emploie deja pour se couper en deux :
-       aucune notion nouvelle, aucune liste de plus. */
-    const app = lireSource('assets/app.js');
-    vrai(/\(e && estEtabDeBiens\(e\)\) \? teinteDominante\(comptes\) : TEINTE_CONTENANT\(\)/.test(app),
-      'le contenant prend la teinte neutre, le bien garde sa classe');
-    /* Une seule ecriture, parce que trois auraient diverge : le meme
-       etablissement se peignait ardoise dans la liste et turquoise sur sa
-       fiche, et la couleur aurait cesse de designer quoi que ce soit. */
-    eq((app.match(/const teinteEtab = /g) || []).length, 1,
-      'la décision s’écrit une fois');
-    vrai((app.match(/teinteEtab\(/g) || []).length >= 3,
-      'et la liste comme les deux fiches la lisent');
-    /* Le meme predicat coupe les deux sections : une seule verite, deux usages. */
-    vrai(/ETABS\(\)\.filter\(e => !estEtabDeBiens\(e\)\)/.test(app)
-      && /ETABS\(\)\.filter\(estEtabDeBiens\)/.test(app),
-      'et c’est le prédicat qui découpe déjà la page en deux sections');
-    /* Plus aucun groupe d'etablissement ne se peint par classe dominante hors
-       de ce cas : c'etait la source du bruit. */
-    /* Et la classe dominante ne se lit plus qu'a l'interieur de cette decision :
-       aucun appelant ne la prend directement, sinon il se peindrait par classe
-       sur une page qui groupe par contenant. */
-    const fn = app.slice(app.indexOf('const teinteEtab = '),
-                         app.indexOf('function viewAccounts()'));
-    eq((fn.match(/teinteDominante\(/g) || []).length, 1,
-      'la classe dominante ne se lit qu’une fois, dans la décision');
-    vrai(!/style="--teinte:\$\{teinteDominante\(/.test(app),
-      'plus aucun balisage ne peint par classe dominante en direct');
-  });
-});
-
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -3474,16 +3407,9 @@ suite('Pièges de source', () => {
        appels réels et non sur les mentions : deux commentaires la nomment. */
     const appels = source.slice(source.indexOf('function viewAccounts'),
                                 source.indexOf('function mountAccounts'));
-    /* Les groupes d'etablissement passent desormais par `teinteEtab`, qui
-       decide entre la teinte du contenant et celle de la classe ; le groupe par
-       enveloppe et le hors-contenant lisent la classe en direct, parce qu'ils ne
-       sont pas des contenants. Le compte porte sur les DEUX portes reunies :
-       aucun groupe ne se peint autrement. */
-    const parClasse = (appels.match(/teinteDominante\(/g) || []).length;
-    const parContenant = (appels.match(/teinteEtab\(/g) || []).length;
-    eq(parClasse + parContenant, 3,
-      'les trois groupes de la page passent tous par l’une des deux : aucun ne '
-      + 'se peint autrement');
+    eq((appels.match(/teinteDominante\(/g) || []).length, 3,
+      'les trois groupes de la page passent tous par elle : aucun ne se peint '
+      + 'autrement');
   });
 
   test('le reste à verser sur un livret plafonné', () => {
@@ -6805,8 +6731,8 @@ suite('Ce qu’on règle une fois ne reste pas ouvert', () => {
     const s = lireSource('assets/app.js') || '';
     const fiche = s.slice(s.indexOf('function viewFicheEtab'),
                           s.indexOf('function viewFicheEtab') + 3000);
-    vrai(/--teinte:\$\{teinteEtab\(e, siens\)\}/.test(fiche),
-      'la fiche doit tirer sa teinte de teinteEtab(), la même source que la liste');
+    vrai(/--teinte:\$\{teinteDominante\(siens\)\}/.test(fiche),
+      'la fiche doit tirer sa teinte de teinteDominante(), la même source que la liste');
     vrai(/class="cpt-pastille"/.test(fiche),
       'et l’afficher avec la pastille de la liste, pas une autre forme');
   });
