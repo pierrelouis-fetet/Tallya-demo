@@ -179,10 +179,15 @@ const Quotes = (() => {
 
   const cacheReperes = new Map();
 
-  async function reperes(famille = FAMILLE_PAR_DEFAUT, { force = false } = {}) {
+  /* Un seul chemin pour redemander : `oublierReperes()`. Cette fonction
+     acceptait un `{ force: true }` que PERSONNE ne lui passait — un drapeau mort
+     qui donnait a lire un cablage inexistant, et c'est exactement ce qui a
+     retarde le diagnostic quand le ruban restait fige. Deux portes pour un seul
+     besoin, dont une fermee : il n'en reste qu'une. */
+  async function reperes(famille = FAMILLE_PAR_DEFAUT) {
     const cle = FAMILLES_REPERES.some(f => f[0] === famille) ? famille : FAMILLE_PAR_DEFAUT;
     const garde = cacheReperes.get(cle);
-    if (garde && !force && (Date.now() - garde.at) / 1000 < 300) return garde.lignes;
+    if (garde && (Date.now() - garde.at) / 1000 < 300) return garde.lignes;
     const liste = listeFamille(cle);
     const syms = liste.map(r => r[0]).join(',');
     const r = await fetch(`${BASE}/api/quotes?symbols=${encodeURIComponent(syms)}`, { cache: 'no-store' });
@@ -220,7 +225,23 @@ const Quotes = (() => {
     return lignes;
   }
 
+  /* Jeter le cache du ruban, pour que le prochain rendu aille rechercher.
+
+     `reperes()` acceptait `{ force: true }` depuis le debut, et personne ne le
+     lui passait : le drapeau etait du code mort, et le ruban gardait donc ses
+     cinq minutes quoi qu'on fasse. Un appui sur la pastille des cours mettait
+     les lignes detenues a jour, annoncait « 6 cours mis a jour », et laissait
+     les indices sur leurs anciens chiffres — deux signaux qui se contredisent
+     dans la meme seconde.
+
+     Oublier plutot que forcer : l'appelant ne sait pas quelle famille est
+     affichee, et il n'a pas a le savoir. Le rendu suivant redemande ce qu'il
+     montre, et lui seul. */
+  function oublierReperes() {
+    cacheReperes.clear();
+  }
+
   return { health, healthData, isOnline, refresh, search, plan, resolveIsin, resolveMissing,
-           reperes, famillesReperes: () => FAMILLES_REPERES.map(([cle, nom]) => [cle, nom]),
+           reperes, oublierReperes, famillesReperes: () => FAMILLES_REPERES.map(([cle, nom]) => [cle, nom]),
            familleParDefaut: FAMILLE_PAR_DEFAUT, BASE };
 })();

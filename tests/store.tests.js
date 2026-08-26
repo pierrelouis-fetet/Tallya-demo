@@ -2812,6 +2812,75 @@ suite('Un établissement porte la couleur de sa famille, pas de son contenu', ()
   });
 });
 
+/* ------------------------------------------------------------------
+   Le ruban des indices se rafraîchit vraiment
+   ------------------------------------------------------------------ */
+suite('Les cours du marché se remettent à jour, pas seulement ceux qu’on détient', () => {
+
+  const q = () => lireSource('assets/quotes.js');
+  const app = () => lireSource('assets/app.js');
+
+  test('le ruban n’a qu’une seule façon d’être redemandé', () => {
+    /* Il en avait deux, dont une fermee : `reperes()` acceptait
+       `{ force: true }` et personne ne le lui passait. Un drapeau mort donne a
+       lire un cablage qui n'existe pas, et c'est ce qui a retarde le diagnostic
+       quand le ruban restait fige. */
+    const t = q();
+    vrai(t, 'assets/quotes.js doit être lisible');
+    vrai(/function oublierReperes\(\) \{\s*\n\s*cacheReperes\.clear\(\);/.test(t),
+      'jeter le cache est la seule porte');
+    vrai(/oublierReperes,/.test(t), 'et elle est exportée');
+    vrai(!/force/.test(t.slice(t.indexOf('async function reperes'),
+                               t.indexOf('cacheReperes.set'))),
+      'plus aucun drapeau mort dans la lecture du cache');
+  });
+
+  test('un appui sur la pastille rafraîchit aussi ce qu’on voit', () => {
+    /* Elle annoncait « 6 cours mis a jour » au-dessus d'un S&P 500 vieux de
+       quatre minutes : deux signaux qui se contredisent dans la meme seconde.
+       Le geste couvre ce qu'on voit, pas seulement ce qu'on detient. */
+    const t = app();
+    const action = t.slice(t.indexOf("async 'refresh-quotes'(btn) {"),
+                           t.indexOf("async 'cloud-push'()"));
+    vrai(action.length > 300, 'l’action doit être trouvable');
+    vrai(/Quotes\.oublierReperes\(\);/.test(action),
+      'le ruban part avec les lignes détenues');
+    /* Et avant le rendu, sinon le rendu resservirait le cache. */
+    vrai(action.indexOf('Quotes.oublierReperes();') < action.indexOf('render();'),
+      'et il est jeté AVANT le rendu qui le relit');
+  });
+
+  test('le ruban se juge sur ses propres places, pas sur celles qu’on détient', () => {
+    /* Le coeur du defaut. Le passage periodique sortait des qu'aucune ligne
+       DETENUE ne cotait : un portefeuille europeen a dix-huit heures voyait le
+       S&P 500 fige pour la soiree, Wall Street ouverte. Le ruban ne parle pas de
+       ce qu'on detient, il parle du marche. */
+    const t = app();
+    vrai(/const repereOuvert = \(\) => REPERES_AFFICHES\.some\(ouverte\);/.test(t),
+      'le ruban a sa propre garde, sur ses propres lignes');
+    vrai(/const placeOuverte = \(\) => Store\.state\.positions\.some\(ouverte\);/.test(t),
+      'les positions gardent la leur');
+    /* Un seul predicat d'ouverture pour les deux : deux copies auraient fini
+       par accepter deux etats differents. */
+    eq((t.match(/s\.cle === 'open' \|\| s\.cle === 'pre' \|\| s\.cle === 'post'/g) || []).length, 1,
+      'et « ouverte » ne s’écrit qu’une fois');
+
+    const fn = t.slice(t.indexOf('async function rafraichirSiUtile()'),
+                       t.indexOf('setInterval(rafraichirSiUtile'));
+    vrai(fn.length > 200, 'le passage périodique doit être trouvable');
+    /* Il ne sort plus tot quand les positions sont fermees : il continue vers le
+       ruban. C'est la ligne qui a change le comportement. */
+    vrai(!/if \(!placeOuverte\(\)\) return;/.test(fn),
+      'plus de sortie anticipée qui emporterait le ruban avec les positions');
+    vrai(/if \(repereOuvert\(\)\) \{ Quotes\.oublierReperes\(\); aBouge = true; \}/.test(fn),
+      'le ruban se redemande dès qu’une de ses places est ouverte');
+    /* Un seul rendu pour les deux, et aucun rendu si rien n'a bouge : un rendu
+       toutes les cinq minutes sans raison ferait clignoter la page. */
+    eq((fn.match(/render\(\);/g) || []).length, 1, 'un seul rendu');
+    vrai(/if \(aBouge\) render\(\);/.test(fn), 'et aucun si rien n’a bougé');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au

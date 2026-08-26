@@ -7963,6 +7963,7 @@ const ACTIONS = {
       coursFraichis = new Set(changes
         .filter(c => !c.error && Math.abs(num(c.to) - num(c.from)) > 1e-9)
         .map(c => c.symbol));
+      Quotes.oublierReperes();
       render();
       if (empty) { toast(trad('Aucun symbole à suivre')); return; }
       const ok = changes.filter(c => !c.error).length;
@@ -12202,19 +12203,34 @@ function applyField(f) {
   }
   render();
 
-  const placeOuverte = () => Store.state.positions.some(p => {
-    const s = marketStatus(p);
-    return s && (s.cle === 'open' || s.cle === 'pre' || s.cle === 'post');
-  });
+  const ouverte = x => {
+    const s = marketStatus(x);
+    return !!s && (s.cle === 'open' || s.cle === 'pre' || s.cle === 'post');
+  };
+  const placeOuverte = () => Store.state.positions.some(ouverte);
+  /* Le ruban a sa propre garde, et c'est le coeur du correctif.
+
+     Il portait celle des positions : rien ne se redemandait tant qu'aucune
+     ligne DETENUE ne cotait. Un portefeuille europeen a dix-huit heures voyait
+     donc le S&P 500 fige pour la soiree, Wall Street ouverte. Le ruban ne parle
+     pas de ce qu'on detient, il parle du marche : il se juge sur SES lignes.
+
+     Elles sont deja en main — `REPERES_AFFICHES` porte celles du dernier rendu,
+     avec l'etat de leur place. Aucune table d'horaires a tenir. */
+  const repereOuvert = () => REPERES_AFFICHES.some(ouverte);
 
   async function rafraichirSiUtile() {
     if (!Store.state.meta.autoRefresh) return;
     if (document.hidden || !Quotes.isOnline()) return;
+    let aBouge = false;
     const l = Store.state.quotes?.lastRun;
-    if (l && Date.now() - new Date(l) < 5 * 60 * 1000) return;
-    if (!placeOuverte()) return;
-    try { await Quotes.refresh(); render(); }
-    catch (e) { console.warn('Cours indisponibles', e); }
+    const positionsFraiches = l && Date.now() - new Date(l) < 5 * 60 * 1000;
+    if (!positionsFraiches && placeOuverte()) {
+      try { await Quotes.refresh(); aBouge = true; }
+      catch (e) { console.warn('Cours indisponibles', e); }
+    }
+    if (repereOuvert()) { Quotes.oublierReperes(); aBouge = true; }
+    if (aBouge) render();
   }
 
   setInterval(rafraichirSiUtile, 5 * 60 * 1000);
