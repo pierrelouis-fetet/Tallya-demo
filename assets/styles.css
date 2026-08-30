@@ -4504,3 +4504,13 @@ details[open]::details-content { block-size: auto; }
   letter-spacing: 0; color: var(--text-secondary);
   opacity: .8;
 }
+
+/* Le surplus d'une fiche : present dans le DOM, masque jusqu'au clic.
+
+   `display: none` et non une hauteur : les rangees d'un tableau ne s'animent
+   pas, et faire semblant couterait un conteneur de plus autour de chaque ligne.
+   La fiche defile deja, c'est elle qui donne le mouvement. */
+#modalBody .apercu-surplus { display: none; }
+#modalBody.tout-voir .apercu-surplus { display: table-row; }
+#modalBody.tout-voir .apercu-plus { display: none; }
+#modalBody .apercu-plus td { border: 0; text-align: center; padding: 12px 0 4px; }

@@ -195,7 +195,10 @@ const TYPES_COMPTE = [
      Un type nomme donc ce qu'on ouvre, une classe ce qu'on detient. « Parts de
      societe » fait la paire avec « Pret participatif » : l'un est du capital,
      l'autre du pret, et tous deux se rangent dans le non cote. */
-  { id: 'pe',      label: 'Parts de société', classes: ['nonCote'], defaut: 'investir', groupe: 'pe' },
+  /* `parts` : ce qu'on y detient se compte en titres, pas seulement en euros.
+     Le drapeau vit sur le type plutot que dans la vue, comme `prete` et
+     `titres` : un autre type qui se diviserait en parts le declarera ici. */
+  { id: 'pe',      label: 'Parts de société', classes: ['nonCote'], defaut: 'investir', groupe: 'pe', parts: true },
   { id: 'crowdfunding', label: 'Prêt participatif', classes: ['nonCote'],
     defaut: 'investir', groupe: 'pe', prete: true },
   /* `direct` : on le detient soi-meme, le contenant EST la chose.
@@ -1213,6 +1216,9 @@ const fmtCur = (v, devise = 'EUR', dec = 2) => montantsMasques ? masque(devise)
       style: 'currency', currency: devise || 'EUR',
       minimumFractionDigits: dec, maximumFractionDigits: dec,
     }).format(num(v)));
+
+const fmtPart = v => fmtCur(v, 'EUR',
+  Math.abs(num(v)) > 0 && Math.abs(num(v)) < 0.01 ? 4 : 2);
 
 function fmtCurEur(v, devise, taux) {
   if (!devise || devise === 'EUR') return fmtEUR(v);
@@ -2376,6 +2382,53 @@ function basculesEvolution({ net = true, financier = false, range = 'all' } = {}
       || !memeCourbe(courbe(true, financier), courbe(false, financier)),
     perimetre: !memeCourbe(courbe(net, true), courbe(net, false)),
   };
+}
+
+function classesDeMarche() {
+  const groupes = new Map();
+  for (const c of comptesOuverts()) {
+    for (const l of lignesDe(c)) {
+      if (l.classe !== 'actions') continue;
+      const cle = l.marche ? assetClassDe(l.marche) : 'actions';
+      const g = groupes.get(cle) || { cle, valeur: 0, n: 0 };
+      g.valeur += num(l.valeur);
+      g.n += 1;
+      groupes.set(cle, g);
+    }
+  }
+  return [...groupes.values()]
+    .map(g => ({ ...g, label: ASSET_CLASSES[g.cle] || g.cle }))
+    .sort((a, b) => b.valeur - a.valeur);
+}
+
+/* Le prix d'une part, quand on sait combien on en detient.
+
+   Rien de neuf n'est stocke : le montant investi et la valeur sont deja la, le
+   nombre de parts s'ajoute, et les deux prix s'en deduisent. Un champ « prix de
+   revient unitaire » serait une seconde ecriture du meme fait, que personne ne
+   pourrait verifier accordee a la premiere — c'est la faute que cette base de
+   code corrige le plus souvent.
+
+   Deux prix et non un seul, parce que c'est leur ECART qui sert. Un prix de
+   revient isole ne se compare a rien : une part payee 1,33 EUR n'est ni chere ni
+   bon marche. Rapporte au prix d'aujourd'hui — celui d'une levee, d'un pacte,
+   d'une offre de rachat — il dit enfin quelque chose.
+
+   `null` plutot que zero partout ou le calcul n'a pas de sens : sans nombre de
+   parts il n'y a pas de prix unitaire, et un « 0,00 EUR la part » se lirait
+   comme une mesure alors que c'est une absence de mesure. */
+function prixParPart(ligne) {
+  const parts = num(ligne && ligne.parts);
+  if (!(parts > 0)) return null;
+  const revient = num(ligne.prixDeRevient);
+  const valeur = num(ligne.valeur);
+  const u = {
+    parts,
+    revient: revient > 0.005 ? revient / parts : null,
+    valeur: valeur > 0.005 ? valeur / parts : null,
+  };
+  u.multiple = u.revient > 0 && u.valeur != null ? u.valeur / u.revient : null;
+  return u;
 }
 
 /* Le poids de chaque poche du patrimoine, et la base qui les rapporte a cent.

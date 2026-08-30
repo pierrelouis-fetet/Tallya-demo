@@ -3751,7 +3751,20 @@ function lignePlacement(l, compte, editable = false) {
   /*    Le repli `sansClasse` vivait ici : dans la vue groupee par classe,
    l'en-tete du groupe portait deja le mot, et le repeter sous chaque ligne
    remplissait la colonne de ce que le titre venait de dire.*/
+  const u = prixParPart(l);
+  const parPart = !u ? '' : (() => {
+    const combien = `${fmtNombre(u.parts)} ${trad('parts')}`;
+    if (u.revient != null && u.valeur != null
+        && Math.abs(u.valeur - u.revient) > u.revient * 0.005) {
+      return `${combien} · ${fmtPart(u.revient)} ${trad('payées,')} `
+           + `${fmtPart(u.valeur)} ${trad('aujourd’hui')}`;
+    }
+    const seul = u.valeur != null ? u.valeur : u.revient;
+    return seul == null ? combien : `${combien} · ${fmtPart(seul)} ${trad('la part')}`;
+  })();
+
   const sousTitre = [CLASSES_ACTIFS[l.classe] || l.classe, nomCompteV2(compte),
+    parPart,
     l.taux ? `${fmtNombre(num(l.taux))} % ${trad('annoncé')}` : '',
     l.echeance ? `${trad('échéance')} ${fmtJourMois(l.echeance)} ${String(l.echeance).slice(0, 4)}` : '',
     st !== 'encours' ? STATUTS_LIGNE[st] : '']
@@ -5988,6 +6001,9 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
     { cle: 'prixDeRevient', label: trad('Montant investi (€)'), type: 'nombre',
       valeur: l ? (num(l.prixDeRevient) || '') : '', exemple: '0',
       aide: trad('facultatif, il donne la plus-value') },
+    ...(type && type.parts ? [{ cle: 'parts', label: trad('Nombre de parts'),
+      type: 'nombre', valeur: l ? (num(l.parts) || '') : '', exemple: '0',
+      aide: trad('facultatif, il donne le prix de la part') }] : []),
     { cle: 'dateAcquisition', label: trad('Date d’entrée'), type: 'date',
       valeur: l ? (l.dateAcquisition || '') : todayISO() },
     ...(estime ? [{ cle: 'estimeLe', label: trad('Estimée le'), type: 'date',
@@ -6021,6 +6037,7 @@ function litPlacement(v, base) {
     valeur: num(v.valeur),
     prixDeRevient: num(v.prixDeRevient) || null,
     dateAcquisition: v.dateAcquisition || '',
+    ...(v.parts !== undefined ? { parts: num(v.parts) || null } : {}),
     ...(v.estimeLe !== undefined ? { estimeLe: v.estimeLe || '' } : {}),
     ...(v.taux !== undefined ? { taux: num(v.taux) || null } : {}),
     ...(v.echeance !== undefined ? { echeance: v.echeance || '' } : {}),
@@ -6623,6 +6640,10 @@ const ACTIONS = {
      L'etat vit donc dans le DOM du panneau, qui ne survit pas a sa fermeture —
      c'est voulu, une fenetre s'ouvre repliee ou depliee de la meme facon a
      chaque fois, sans se souvenir d'un geste fait la fois d'avant. */
+  'apercu-voir-tout'() {
+    $('#modalBody').classList.add('tout-voir');
+  },
+
   'liq-plier'(btn) {
     const section = btn.closest('.liq-groupe');
     const pli = section?.querySelector('.cpt-pli');
@@ -9784,6 +9805,19 @@ const APERCUS = {
       };
     }
 
+    if (classe === 'actions') {
+      const parts = classesDeMarche().map(g => ({
+        label: g.label, valeur: g.valeur,
+        meta: `${g.n} ${g.n > 1 ? trad('lignes') : trad('ligne')}`,
+      }));
+      return {
+        titre: CLASSES_ACTIFS[classe] || classe,
+        sous: `${parts.length} ${parts.length > 1 ? trad('classes') : trad('classe')}`,
+        total, lignes: parts,
+        vue: 'positions', ancre: '', cta: trad('Ouvrir Marchés'),
+      };
+    }
+
     {
       lignes = [];
       for (const c of comptesOuverts()) {
@@ -9800,11 +9834,13 @@ const APERCUS = {
       }
       lignes.sort((a, b) => b.valeur - a.valeur);
     }
-    const surMarche = classe === 'actions' || classe === 'obligations' || classe === 'crypto';
+    const surMarche = classe === 'obligations' || classe === 'crypto';
+    const MONTREES = 8;
     return {
       titre: CLASSES_ACTIFS[classe] || classe,
       sous: `${lignes.length} placement${lignes.length > 1 ? 's' : ''}`,
       total, lignes,
+      montrer: lignes.length > MONTREES + 2 ? MONTREES : 0,
       vue: surMarche ? 'positions' : 'accounts', ancre: '',
       cta: surMarche ? 'Ouvrir Marchés' : 'Ouvrir Actifs',
     };
@@ -10575,6 +10611,7 @@ function openApercu(cle, arg) {
      juste en dessous — et le sous-titre, lui, l'est toujours. */
   $('#modalSub').innerHTML = escMontant(a.sous) + (a.sousAction || '');
   $('#modalSub').classList.toggle('avec-action', !!a.sousAction);
+  $('#modalBody').classList.remove('tout-voir');
   $('#modalBody').innerHTML = collerAides(`
     <div class="modal-total"><b>${a.totalTexte || fmtEUR(a.total)}</b>
       <span>${escMontant(noteApercu(a))}</span></div>
@@ -10588,13 +10625,18 @@ function openApercu(cle, arg) {
           : `<input type="number" step="${c.step || 1}" data-path="${esc(c.path)}" value="${getPath(c.path) ?? ''}">`}
       </div>`).join('')}</div>` : ''}
 
-    ${a.html || `<table><tbody>${(a.lignes || []).map(l => `<tr>
+    ${a.html || `<table><tbody>${(a.lignes || []).map((l, i) => `<tr${
+      a.montrer && i >= a.montrer ? ' class="apercu-surplus"' : ''}>
       <td class="name">${nomLigneApercu(l)}${l.meta ? `<span class="sub">${escMontant(l.meta)}</span>` : ''}</td>
       <td class="${l.perf != null ? cls(l.perf) : 'muted'}">${l.perf != null ? fmtSignedPct(l.perf, 1) : ''}</td>
       <td>${l.champ
         ? `<input type="number" step="any" data-path="${esc(l.champ)}" value="${getPath(l.champ) ?? 0}" class="champ-inline">`
         : `<b>${fmtEUR(l.valeur)}</b>`}</td>
-    </tr>`).join('')}</tbody></table>`}`);
+    </tr>`).join('')}${a.montrer && (a.lignes || []).length > a.montrer ? `
+    <tr class="apercu-plus"><td colspan="3">
+      <button type="button" class="btn sm ghost" data-action="apercu-voir-tout">${
+        trad('Voir les {n} autres').replace('{n}', a.lignes.length - a.montrer)}</button>
+    </td></tr>` : ''}</tbody></table>`}`);
   /* Une fenetre ou l'on saisit porte « Enregistrer », et rien n'entre dans
      l'etat avant le clic.
 

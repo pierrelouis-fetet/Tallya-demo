@@ -2496,8 +2496,12 @@ suite('Une bascule qui ne change rien ne se montre pas', () => {
        servi sans commentaires, `indexOf` y rend -1, et `slice(a, -1)` prend tout
        le reste du fichier au lieu de rien. Le controle passait ici et tombait
        la-bas, sur une tranche qui contenait la moitie du modele. */
-    const fn = src.slice(src.indexOf('function basculesEvolution'),
-                         src.indexOf('function currentMonthKey'));
+    /* La borne de fin est la fin de CETTE fonction, pas le debut d'une autre :
+       une fonction glissee entre les deux etirait la tranche a la moitie du
+       modele, et le controle de longueur tombait sans rien dire de son vrai
+       sujet. L'accolade en colonne zero ferme la fonction, et elle seule. */
+    const deb = src.indexOf('function basculesEvolution');
+    const fn = src.slice(deb, src.indexOf('\n}', deb) + 2);
     vrai(fn.length > 200 && fn.length < 3000, 'la fonction doit être trouvable, et elle seule');
     vrai(/const courbe = \(n, f\) => limitRange\(pointsEvolution\(\{ net: n, financier: f \}\), range\);/.test(fn),
       'les deux vues se calculent vraiment');
@@ -3520,6 +3524,202 @@ suite('Tirer pour rafraîchir : les vues armées et celles qui se taisent', () =
       'le geste passe par l’action des cours, et par elle seule');
     vrai(!/Quotes\.refresh\(/.test(bloc),
       'et jamais par un second chemin qui doublerait cette action');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le prix d'une part se deduit, il ne se saisit pas
+   ------------------------------------------------------------------ */
+suite('Parts de société : un nombre saisi, deux prix déduits', () => {
+
+  test('le prix de revient d’une part est le montant divisé par leur nombre', () => {
+    /* Cinq cents parts pour deux mille euros font quatre euros la part. Ce
+       chiffre existe deja dans les donnees : rien de neuf ne se stocke. */
+    const u = prixParPart({ parts: 500, prixDeRevient: 2000, valeur: 2000 });
+    pres(u.parts, 500, 'le nombre de parts');
+    pres(u.revient, 4, 'quatre euros la part');
+    pres(u.valeur, 4, 'et elle en vaut toujours quatre');
+    pres(u.multiple, 1, 'donc le multiple vaut un');
+  });
+
+  test('c’est l’écart entre les deux prix qui sert', () => {
+    /* Un prix de revient isole ne se compare a rien. Rapporte au prix
+       d'aujourd'hui — celui d'une levee, d'un pacte — il dit enfin quelque
+       chose : la part payee quatre euros en vaut six, soit une fois et demie. */
+    const u = prixParPart({ parts: 500, prixDeRevient: 2000, valeur: 3000 });
+    pres(u.revient, 4, 'quatre euros payés');
+    pres(u.valeur, 6, 'six euros aujourd’hui');
+    pres(u.multiple, 1.5, 'une fois et demie');
+  });
+
+  test('sans nombre de parts, aucun prix unitaire n’est inventé', () => {
+    /* `null` et non zero : « 0,00 € la part » se lirait comme une mesure alors
+       que c'est une absence de mesure. */
+    eq(prixParPart({ prixDeRevient: 2000, valeur: 2000 }), null, 'aucune part déclarée');
+    eq(prixParPart({ parts: 0, prixDeRevient: 2000 }), null, 'zéro part');
+    eq(prixParPart({ parts: -10, valeur: 500 }), null, 'un nombre négatif');
+    eq(prixParPart(null), null, 'aucune ligne');
+  });
+
+  test('un montant manquant tait son prix, l’autre reste dit', () => {
+    const sansRevient = prixParPart({ parts: 500, valeur: 3000 });
+    eq(sansRevient.revient, null, 'pas de prix de revient sans montant investi');
+    pres(sansRevient.valeur, 6, 'la valeur du jour, elle, se divise');
+    eq(sansRevient.multiple, null, 'et aucun multiple ne se calcule sur rien');
+  });
+
+  test('une part à moins d’un centime garde ses décimales', () => {
+    /* Une part peut valoir 0,0012 €, et « 0,00 € » se lirait comme zero. Les
+       decimales suivent l'ordre de grandeur, et seulement quand il le faut. */
+    const u = prixParPart({ parts: 2000000, prixDeRevient: 2400, valeur: 2400 });
+    pres(u.revient, 0.0012, 'un peu plus d’un millieme d’euro');
+    vrai(/0[.,]0012/.test(fmtPart(u.revient)), 'écrit avec quatre décimales : ' + fmtPart(u.revient));
+    vrai(/^4[.,]00/.test(fmtPart(4).replace(/\s/g, '')), 'au-dessus du centime, deux : ' + fmtPart(4));
+  });
+
+  test('le type déclare qu’il se divise en parts, la vue ne le devine pas', () => {
+    /* Le drapeau vit sur le type comme `prete` et `titres` : un `id === 'pe'`
+       ecrit dans la vue aurait ete une seconde liste a tenir. */
+    const pe = TYPES_COMPTE.find(t => t.id === 'pe');
+    vrai(pe.parts, '« Parts de société » se divise en parts');
+    const pret = TYPES_COMPTE.find(t => t.id === 'crowdfunding');
+    vrai(!pret.parts, 'un prêt participatif n’a pas de parts');
+    const app = lireSource('assets/app.js');
+    vrai(/type && type\.parts \? \[\{ cle: 'parts'/.test(app),
+      'le champ suit le drapeau du type, pas un identifiant écrit dans la vue');
+    vrai(!/id === 'pe'/.test(app), 'et aucun test d’identifiant ne le double');
+  });
+
+  test('le nombre de parts se conserve, le prix unitaire jamais', () => {
+    /* Deux champs pour la meme valeur ne se verifient pas accordes : c'est la
+       faute que cette base de code corrige le plus souvent. */
+    const app = lireSource('assets/app.js');
+    const lit = app.slice(app.indexOf('function litPlacement'),
+                          app.indexOf('\n}', app.indexOf('function litPlacement')));
+    vrai(/parts: num\(v\.parts\) \|\| null/.test(lit), 'le nombre de parts s’écrit');
+    vrai(!/revientParPart|prixUnitaire|pru/i.test(lit),
+      'et aucun prix unitaire ne se stocke à côté');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Les fiches d'Apercu disent la categorie, pas l'inventaire
+   ------------------------------------------------------------------ */
+suite('Fiches d’Aperçu : une catégorie se lit sans dérouler son inventaire', () => {
+
+  test('les actifs de marché se groupent, et les groupes font le total', () => {
+    /* La regle de la maison : un total egale la somme de ses parts. Le fixture
+       porte un ETF et une ligne d'or, donc deux classes. */
+    Fixture.poser();
+    const g = classesDeMarche();
+    pres(g.reduce((s, x) => s + x.valeur, 0), patrimoine().classes.actions,
+      'les groupes font la poche « Actifs de marché »');
+    eq(g.length, 2, 'deux classes présentes');
+    eq(g[0].label, ASSET_CLASSES.actions, 'la plus grosse en tête');
+    eq(g[1].cle, 'metaux', 'puis les métaux précieux');
+    /* Et le compte de lignes est celui des lignes, pas des groupes. */
+    pres(g.reduce((s, x) => s + x.n, 0), 2, 'deux lignes en tout');
+  });
+
+  test('une classe absente ne paraît pas, une classe ajoutée paraît seule', () => {
+    /* Les groupes se derivent des lignes : aucune liste ecrite a la main. */
+    Fixture.poser(s => { s.positions = s.positions.filter(p => p.id !== 'p_or'); });
+    const g = classesDeMarche();
+    eq(g.length, 1, 'plus d’or, plus de groupe « Métaux précieux »');
+    vrai(!g.some(x => x.cle === 'metaux'), 'et il ne reste pas à zéro');
+    pres(g.reduce((s, x) => s + x.valeur, 0), patrimoine().classes.actions,
+      'la somme suit');
+  });
+
+  test('une ligne saisie à la main se range en actions', () => {
+    /* Elle n'a pas de classe de marche parce qu'elle n'a pas de cotation. La
+       laisser sans groupe la ferait disparaitre du detail sans quitter le
+       total, exactement le defaut que cette base corrige ailleurs. */
+    Fixture.poser(s => {
+      s.comptes.find(c => c.id === 'c_cto').lignes = [{ id: 'l_manuel',
+        classe: 'actions', libelle: 'Titre non coté en direct', valeur: 1500,
+        prixDeRevient: 1500, quantite: 1, dateAcquisition: '' }];
+    });
+    const g = classesDeMarche();
+    pres(g.reduce((s, x) => s + x.valeur, 0), patrimoine().classes.actions,
+      'la ligne manuelle reste dans la somme');
+    pres(g.find(x => x.cle === 'actions').valeur, 9000 + 1500,
+      'et elle se range avec les actions');
+  });
+
+  test('la fiche des actifs de marché ne liste plus les titres un par un', () => {
+    /* Le detail existe en entier sur Marches, avec le tri, la performance et
+       les cours. Le redire ici en moins bien noyait le total. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf("if (classe === 'actions') {");
+    const bloc = app.slice(i, app.indexOf('\n    }', i));
+    vrai(/classesDeMarche\(\)/.test(bloc), 'la fiche lit les groupes du modèle');
+    vrai(!/open-position/.test(bloc), 'aucune ligne ne mène à un titre');
+    vrai(/cta: trad\('Ouvrir Marchés'\)/.test(bloc),
+      'et le renvoi mène là où le détail se trouve');
+  });
+
+  test('liquidités, crypto et non coté gardent leur détail', () => {
+    /* Ce que la demande conserve explicitement : les liquidites modifiables sur
+       place, la crypto piece par piece, le non cote participation par
+       participation. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('  classe: (classe) => {');
+    const bloc = app.slice(i, app.indexOf('\n  cible:', i));
+    vrai(/if \(classe === 'liquidites'\)/.test(bloc), 'les liquidités gardent leur branche');
+    vrai(/data-path="comptes\.\$\{x\.ic\}\.cash\.\$\{x\.j\}\.montant"/.test(bloc),
+      'et leur édition sur place');
+    /* Ni la crypto ni le non cote n'ont de branche a eux : ils tombent dans le
+       cas general, celui qui liste ligne par ligne. C'est ce qu'on veut, et le
+       controle le dit plutot que de le supposer. */
+    vrai(!/if \(classe === 'crypto'\)/.test(bloc), 'la crypto reste au détail commun');
+    vrai(!/if \(classe === 'nonCote'\)/.test(bloc), 'le non coté aussi');
+    /* Le detail commun liste bien ligne par ligne, avec le nom de chacune. */
+    vrai(/lignes\.push\(\{ label: nomL,/.test(bloc),
+      'et ce détail nomme chaque placement');
+  });
+
+  test('une liste longue se replie, et seulement si ça vaut la peine', () => {
+    /* Cacher une ligne sur neuf pour offrir un bouton « voir l'autre » serait un
+       geste de plus pour rien : trois lignes masquees au minimum. */
+    const app = lireSource('assets/app.js');
+    vrai(/const MONTREES = 8;/.test(app), 'huit lignes montrées');
+    vrai(/montrer: lignes\.length > MONTREES \+ 2 \? MONTREES : 0/.test(app),
+      'et le repli ne s’arme qu’au-delà de dix lignes');
+    /* Le surplus est dans le DOM, pas jete : le bouton le deplie sur place. */
+    vrai(/a\.montrer && i >= a\.montrer \? ' class="apercu-surplus"' : ''/.test(app),
+      'le surplus se rend, masqué');
+    vrai(/data-action="apercu-voir-tout"/.test(app), 'et un bouton le déplie');
+    const css = lireSource('assets/styles.css');
+    vrai(/#modalBody \.apercu-surplus \{ display: none; \}/.test(css),
+      'masqué par le style, pas retiré du balisage');
+    vrai(/#modalBody\.tout-voir \.apercu-surplus \{ display: table-row; \}/.test(css),
+      'et rendu visible par la classe du corps');
+  });
+
+  test('le repli repart fermé à chaque ouverture', () => {
+    /* La classe vit sur le corps de la fenetre, qui est le meme noeud d'une
+       fiche a l'autre : sans remise a zero, une fiche depliee laissait la
+       suivante grande ouverte. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('function openApercu(');
+    const bloc = app.slice(i, app.indexOf("$('#modalBody').innerHTML", i));
+    vrai(/classList\.remove\('tout-voir'\)/.test(bloc),
+      'l’ouverture referme le pli');
+  });
+
+  test('chaque fiche annonce son total et son poids', () => {
+    /* Un pourcentage dit sur quelle base il est calcule. La note vit dans le
+       rendu commun : toutes les fiches la portent, aucune ne peut l'oublier. */
+    const app = lireSource('assets/app.js');
+    vrai(/const noteApercu = a => a\.totalNote/.test(app), 'la note se compose une fois');
+    vrai(/a\.total \/ patrimoine\(\)\.brut \* 100/.test(app),
+      'et le poids se rapporte aux avoirs');
+    const i = app.indexOf('function openApercu(');
+    const bloc = app.slice(i, app.indexOf('modal-champs', i));
+    vrai(/<div class="modal-total"><b>\$\{a\.totalTexte \|\| fmtEUR\(a\.total\)\}<\/b>/.test(bloc),
+      'le total est en tête de chaque fiche');
+    vrai(/escMontant\(noteApercu\(a\)\)/.test(bloc), 'et son poids juste à côté');
   });
 });
 
