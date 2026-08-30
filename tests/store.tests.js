@@ -4169,13 +4169,36 @@ suite('Ordre des charges fixes : le sien, ou celui des montants', () => {
       vrai(new RegExp(`'${e}'`).test(fn), `« ${e} » est écouté`);
     }
     vrai(!/touchstart|mousedown/.test(fn), 'et aucun second jeu d’écouteurs');
-    vrai(/setPointerCapture/.test(fn),
-      'le geste appartient à la poignée jusqu’au relâchement');
+    /* Le mouvement s'ecoute sur le DOCUMENT, et c'est ce qui fait tenir le geste
+       sur un telephone. La premiere version capturait le pointeur sur la
+       poignee ; or reordonner DEPLACE la ligne qui la contient, deplacer un
+       noeud le retire puis le reinsere, et le navigateur relache alors la
+       capture. Le geste mourait au premier reordonnancement : la ligne se
+       soulevait, puis le depot n'arrivait jamais. Rien ne le montrait sur un
+       navigateur de bureau pilote par des evenements synthetiques. */
+    vrai(!/setPointerCapture/.test(fn),
+      'aucune capture sur un nœud que le geste va déplacer');
+    vrai(/document\.addEventListener\('pointermove', bouger/.test(fn),
+      'le mouvement s’écoute sur le document');
+    vrai(/document\.removeEventListener\('pointermove', bouger\)/.test(fn),
+      'et se retire au relâchement, sinon chaque geste en laisserait un de plus');
+    vrai(/porte\.style\.transform = `translateY\(/.test(fn),
+      'la ligne suit le doigt : sans quoi on ne voit pas ce qu’on tient');
     const css = lireSource('assets/styles.css');
     vrai(/\.poignee \{[^}]*touch-action: none/.test(css),
       'sans « touch-action: none » le navigateur prendrait le geste pour un défilement');
     vrai(!/\.rang-glissant \{[^}]*touch-action: none/.test(css),
       'et la rangée entière ne le porte pas : on doit pouvoir faire défiler la page');
+    /* Un appui maintenu sur un telephone declenche la selection de texte du
+       systeme, dont les poignees prennent le geste a leur compte. */
+    vrai(/\.en-glissement, \.en-glissement \* \{[^}]*user-select: none/.test(css),
+      'la liste cesse d’être sélectionnable pendant le geste');
+    vrai(/-webkit-touch-callout: none/.test(css),
+      'et le menu contextuel du maintien ne s’ouvre pas');
+    vrai(/hote\.classList\.add\('en-glissement'\)/.test(fn)
+      && /hote\.classList\.remove\('en-glissement'\)/.test(fn),
+      'la classe se pose au départ et se retire à la fin : hors geste, le texte '
+      + 'reste sélectionnable comme partout ailleurs');
   });
 
   test('l’ordre final se lit dans le DOM, il ne se recalcule pas', () => {

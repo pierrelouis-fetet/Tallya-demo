@@ -2006,47 +2006,53 @@ let ordreCharges = 'mien';
 function monterGlissement(hote, surFin) {
   if (!hote || hote.dataset.glissant) return;
   hote.dataset.glissant = '1';
-  let porte = null, rangs = [];
+  let porte = null, departY = 0;
 
   const centre = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+
+  const bouger = e => {
+    if (!porte) return;
+    e.preventDefault();
+    porte.style.transform = `translateY(${e.clientY - departY}px)`;
+    const p = centre(porte);
+    for (const r of hote.querySelectorAll('[data-rang]')) {
+      if (r === porte) continue;
+      const c = centre(r);
+      const apres = !!(r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_FOLLOWING);
+      if (p < c && apres) hote.insertBefore(porte, r);
+      else if (p > c && !apres) hote.insertBefore(porte, r.nextSibling);
+      else continue;
+      departY = e.clientY;
+      porte.style.transform = '';
+      break;
+    }
+  };
+
+  const finir = () => {
+    if (!porte) return;
+    document.removeEventListener('pointermove', bouger);
+    document.removeEventListener('pointerup', finir);
+    document.removeEventListener('pointercancel', finir);
+    porte.style.transform = '';
+    porte.classList.remove('porte');
+    hote.classList.remove('en-glissement');
+    porte = null;
+    surFin([...hote.querySelectorAll('[data-rang]')].map(r => +r.dataset.rang));
+  };
 
   hote.addEventListener('pointerdown', e => {
     const poignee = e.target.closest('.poignee');
     if (!poignee || !hote.contains(poignee)) return;
     porte = poignee.closest('[data-rang]');
     if (!porte) return;
-    poignee.setPointerCapture(e.pointerId);
-    rangs = [...hote.querySelectorAll('[data-rang]')];
+    departY = e.clientY;
     porte.classList.add('porte');
+    hote.classList.add('en-glissement');
+    document.addEventListener('pointermove', bouger, { passive: false });
+    document.addEventListener('pointerup', finir);
+    document.addEventListener('pointercancel', finir);
     e.preventDefault();
   });
-
-  hote.addEventListener('pointermove', e => {
-    if (!porte) return;
-    e.preventDefault();
-    for (const r of rangs) {
-      if (r === porte) continue;
-      const c = centre(r);
-      const p = centre(porte);
-      if (p < c && r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_FOLLOWING) {
-        hote.insertBefore(porte, r);
-        break;
-      }
-      if (p > c && r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_PRECEDING) {
-        hote.insertBefore(porte, r.nextSibling);
-        break;
-      }
-    }
-  });
-
-  const finir = () => {
-    if (!porte) return;
-    porte.classList.remove('porte');
-    porte = null;
-    surFin([...hote.querySelectorAll('[data-rang]')].map(r => +r.dataset.rang));
-  };
-  hote.addEventListener('pointerup', finir);
-  hote.addEventListener('pointercancel', finir);
 }
 
 function poserOrdreCharges(rangs) {

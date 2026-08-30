@@ -4531,12 +4531,21 @@ details[open]::details-content { block-size: auto; }
 .rang-glissant > .mlist { min-width: 0; }
 .poignee {
   display: grid; place-items: center;
-  width: 28px; align-self: stretch;
-  color: var(--muted); font-size: 15px; line-height: 1;
-  cursor: grab; touch-action: none; user-select: none;
+  width: 34px; align-self: stretch;
+  color: var(--muted); font-size: 17px; line-height: 1;
+  cursor: grab; touch-action: none;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.en-glissement, .en-glissement * {
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 @media (hover: hover) { .poignee:hover { color: var(--text); } }
-.rang-glissant.porte { opacity: .75; cursor: grabbing; }
+.rang-glissant.porte {
+  cursor: grabbing;
+  /* Au-dessus de ses voisines pendant qu'elle les traverse, et sans transition
+     sur `transform` : la ligne doit coller au doigt, pas le poursuivre. */
+  position: relative; z-index: 2; transition: none;
+}
 .rang-glissant.porte > .mlist {
   background: var(--surface-2);
   border-radius: var(--radius-sm);
