@@ -967,7 +967,6 @@ function viewOverview() {
 
 function mountOverview() {
   monterEvolution();
-  monteTirerRafraichir();
 
   const t = nowTotals();
 
@@ -2653,7 +2652,6 @@ function mountPositions() {
 
   if (!Store.state.positions.length) return;
   mountReperes();
-  monteTirerRafraichir();
 }
 
 function fmtWhen(iso) {
@@ -10893,6 +10891,23 @@ function render() {
   }
 
   MOUNTS[key]?.();
+  /* Le tirage se monte ici, et nulle part ailleurs.
+
+     Il se montait dans deux vues, alors que la liste de celles qui s'arment vit
+     dans `VUES_TIRER` : deux listes pour une seule verite, et celle qu'on
+     oubliait de changer decidait en silence. Ajouter une vue a `VUES_TIRER`
+     sans ajouter son appel donnait un geste mort, sans erreur nulle part.
+
+     Et le defaut ne se voyait meme pas toujours : `.view` est le meme noeud pour
+     toutes les vues, donc des ecouteurs poses sur l'accueil vivaient ensuite
+     partout. Passer par l'accueil armait la page suivante ; y arriver
+     directement, par un signet ou un rechargement, ne l'armait pas. Le meme
+     ecran repondait ou non selon le chemin qu'on avait pris pour y venir.
+
+     Le garde interne empeche de les empiler, l'arme se decide au `touchstart`
+     contre `VUES_TIRER`, et cette ligne ne fait plus que garantir que les
+     ecouteurs existent. */
+  monteTirerRafraichir();
   monteAides();
   renderSidebar();
   coursFraichis = new Set();
@@ -11185,7 +11200,7 @@ let tirerMonte = null;
 /* Les vues ou le geste a un sens, nommees une fois. Le test de la vue vit dans
    `touchstart` et non au montage : `.view` est le meme noeud pour toutes les
    vues, les ecouteurs y sont poses une seule fois et vivent ensuite partout. */
-const VUES_TIRER = new Set(['positions', 'overview']);
+const VUES_TIRER = new Set(['positions', 'overview', 'allocation']);
 function monteTirerRafraichir() {
   const hote = $('.view');
   if (!hote || tirerMonte === hote) return;

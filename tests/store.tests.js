@@ -3436,6 +3436,93 @@ suite('Une seule base par mode, et la somme des parts la redonne', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Le tirage vers le bas s'arme la ou quelque chose peut changer
+   ------------------------------------------------------------------ */
+suite('Tirer pour rafraîchir : les vues armées et celles qui se taisent', () => {
+
+  test('les trois vues qui dépendent des cours sont armées', () => {
+    const app = lireSource('assets/app.js');
+    const m = app.match(/const VUES_TIRER = new Set\(\[([^\]]*)\]\);/);
+    vrai(m, 'la liste des vues armées doit être trouvable');
+    const vues = m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean);
+    /* Allocation s'y ajoute : chacune de ses parts est un rapport dont les deux
+       termes bougent avec les cours, le montant d'une poche et la base qui la
+       divise. C'est la page ou l'on reste le plus longtemps a comparer. */
+    for (const v of ['positions', 'overview', 'allocation']) {
+      vrai(vues.includes(v), `« ${v} » doit répondre au tirage`);
+    }
+  });
+
+  test('une vue armée est une vue qui existe', () => {
+    /* Une clef mal orthographiee ne casse rien : le geste ne s'arme jamais, en
+       silence, et personne ne sait dire pourquoi la page ne repond pas. */
+    const app = lireSource('assets/app.js');
+    const vues = app.match(/const VUES_TIRER = new Set\(\[([^\]]*)\]\);/)[1]
+      .split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean);
+    const connues = app.slice(app.indexOf('const VIEWS = {'),
+                              app.indexOf('const VUES_TIRER'));
+    for (const v of vues) {
+      vrai(new RegExp(`\\n  ${v}:`).test(connues), `« ${v} » doit être une vue de VIEWS`);
+    }
+  });
+
+  test('le budget ne s’arme pas, et c’est voulu', () => {
+    /* Le geste confisque le rebond natif de la page : l'armer la ou rien ne
+       vient du reseau prendrait un geste du navigateur pour ne rien rendre. */
+    const app = lireSource('assets/app.js');
+    const vues = app.match(/const VUES_TIRER = new Set\(\[([^\]]*)\]\);/)[1];
+    for (const v of ['budget', 'depenses', 'donnees', 'preferences']) {
+      vrai(!vues.includes(`'${v}'`), `« ${v} » ne vient pas du réseau`);
+    }
+  });
+
+  test('le geste se monte au point commun, pas vue par vue', () => {
+    /* Le defaut que ce controle attrape, et il ne se voyait pas : la liste des
+       vues armees vit dans `VUES_TIRER`, mais les ecouteurs se posaient depuis
+       deux fonctions de montage. Deux listes pour une seule verite. Ajouter une
+       vue a `VUES_TIRER` sans ajouter son appel donnait un geste mort, sans
+       erreur nulle part et avec la suite au vert.
+
+       Pire, le defaut etait intermittent : `.view` est le meme noeud pour toutes
+       les vues, donc des ecouteurs poses sur l'accueil vivaient ensuite partout.
+       Passer par l'accueil armait la page suivante ; y arriver directement, par
+       un signet ou un rechargement, ne l'armait pas. Le meme ecran repondait ou
+       non selon le chemin qu'on avait pris pour y venir. */
+    const app = lireSource('assets/app.js');
+    const appels = (app.match(/^\s*monteTirerRafraichir\(\);/gm) || []);
+    eq(appels.length, 1, 'un seul appel, sinon la liste se recopie');
+    /* Et il se pose au montage commun, celui que toute vue traverse. */
+    const i = app.indexOf("MOUNTS[key]?.();");
+    vrai(i > 0, 'le point de montage commun doit être trouvable');
+    const apres = app.slice(i, app.indexOf('renderSidebar();', i));
+    vrai(/monteTirerRafraichir\(\);/.test(apres),
+      'le geste se monte juste après le montage de la vue');
+    /* Aucune vue ne le monte pour son compte. */
+    for (const f of ['function mountOverview()', 'function mountPositions()',
+                     'function mountAllocation()']) {
+      const j = app.indexOf(f);
+      if (j < 0) continue;
+      const corps = app.slice(j, app.indexOf('\n}', j));
+      vrai(!/monteTirerRafraichir\(\)/.test(corps),
+        `« ${f} » ne monte plus le geste pour son compte`);
+    }
+  });
+
+  test('le tirage ne relance qu’une seule action, celle des cours', () => {
+    /* Deux chemins vers la meme actualisation finiraient par diverger : la
+       pastille de Marches et le tirage doivent appeler le meme code, sinon
+       l'un oublierait un jour d'oublier les reperes du ruban. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('function monteTirerRafraichir()');
+    const bloc = app.slice(i, app.indexOf('\n}', app.indexOf('touchcancel', i)));
+    eq((bloc.match(/ACTIONS\['refresh-quotes'\]\(\)/g) || []).length, 1,
+      'le geste passe par l’action des cours, et par elle seule');
+    vrai(!/Quotes\.refresh\(/.test(bloc),
+      'et jamais par un second chemin qui doublerait cette action');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
