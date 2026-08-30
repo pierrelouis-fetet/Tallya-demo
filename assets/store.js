@@ -4008,6 +4008,45 @@ function cashFlowBien(compte) {
   };
 }
 
+function financementIndicatif(compte) {
+  if (!compte) return null;
+  const credits = etabById(compte.etabId)?.dettes || [];
+  if (credits.length) return null;
+  const prix = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
+  const apport = num(compte.apport);
+  if (!(prix > 0) || !(apport > 0)) return null;
+  return Math.max(0, prix - apport);
+}
+
+/* Les trois montants d'une acquisition simple : prix, apport, capital emprunte
+   au depart. Quand les trois sont connus, ils doivent a peu pres s'accorder.
+
+   `null` des qu'il en manque un, et c'est important : un controle qui traite une
+   donnee absente comme un zero inventerait un ecart de la taille du prix, et
+   crierait sur tous les biens dont le capital initial n'a jamais ete saisi.
+
+   La tolerance est large, et dans les deux sens, parce qu'une acquisition simple
+   ne l'est jamais tout a fait : les frais de notaire pesent sept a huit pour
+   cent, des travaux peuvent etre finances avec le pret, un apport peut avoir
+   servi a autre chose. Quinze pour cent du prix laissent passer tout cela ; le
+   plancher evite de crier sur un arrondi quand le prix est petit.
+
+   Ce que la fonction ne fait pas : corriger. Elle rend l'ecart, la vue le dit,
+   et le detenteur tranche — c'est la meme regle que partout ici, un etat se
+   declare. */
+function coherenceAcquisition(compte) {
+  if (!compte) return null;
+  const prix = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
+  const apport = num(compte.apport);
+  const emprunte = (etabById(compte.etabId)?.dettes || [])
+    .reduce((s, d) => s + num(d.initial), 0);
+  if (!(prix > 0) || !(apport > 0) || !(emprunte > 0)) return null;
+  const ecart = apport + emprunte - prix;
+  const tolerance = Math.max(5000, prix * 0.15);
+  return { prix, apport, emprunte, ecart, tolerance,
+           coherent: Math.abs(ecart) <= tolerance };
+}
+
 const PREMIERS_PAS = [
   { cle: 'comptes',
     quoi: 'Ajoute un compte pour commencer : une banque, un livret, un compte de '

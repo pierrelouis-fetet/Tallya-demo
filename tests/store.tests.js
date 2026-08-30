@@ -2984,6 +2984,189 @@ suite('Les champs prennent la place de ce qu’ils portent', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   L'apport dit le financement de l'achat, jamais le patrimoine d'aujourd'hui
+   ------------------------------------------------------------------ */
+suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
+
+  /* Le fixture : un studio a 120 000, un credit de 40 000 chez l'etablissement
+     qui le tient. Ce qu'on possede vaut donc 80 000, et aucun apport n'est
+     saisi. Les trois notions se lisent sur ces nombres-la. */
+  const bien = () => COMPTES().find(c => c.id === 'c_immo');
+  const avecApport = (montant) => Fixture.poser(s => {
+    s.comptes.find(c => c.id === 'c_immo').apport = montant;
+  });
+
+  test('modifier l’apport ne bouge pas d’un euro le patrimoine', () => {
+    /* Le point entier. L'apport a ete verse dans le passe, et il est deja
+       dedans : la valeur du bien le contient depuis le premier jour. L'ajouter
+       aujourd'hui le compterait deux fois. */
+    Fixture.poser();
+    const sansApport = { brut: patrimoine().brut, net: patrimoine().net,
+                         bien: valeurCompte(bien()) };
+    pres(sansApport.brut, Fixture.BRUT, 'le brut du fixture');
+    pres(sansApport.net, Fixture.BRUT - Fixture.DETTE, 'et son net');
+
+    /* Un apport enorme, bien plus gros que le bien lui-meme : si le patrimoine
+       bougeait d'un centime, il le ferait ici. */
+    for (const montant of [1, 30000, 500000]) {
+      avecApport(montant);
+      pres(patrimoine().brut, sansApport.brut, `brut inchangé (apport ${montant})`);
+      pres(patrimoine().net, sansApport.net, `net inchangé (apport ${montant})`);
+      pres(valeurCompte(bien()), sansApport.bien, `valeur du bien inchangée (apport ${montant})`);
+    }
+  });
+
+  test('ce qu’on possède reste la valeur moins ce qu’on doit encore', () => {
+    /* La troisieme notion, et elle ne lit ni l'apport ni le prix paye. */
+    avecApport(90000);
+    const c = bien();
+    const dette = (etabById(c.etabId).dettes || []).reduce((s, d) => s + num(d.montant), 0);
+    pres(valeurCompte(c), 120000, 'la valeur du studio');
+    pres(dette, Fixture.DETTE, 'ce qu’il reste à devoir');
+    pres(valeurCompte(c) - dette, 80000,
+      'ce qu’on possède : la valeur moins la dette, et rien d’autre');
+  });
+
+  test('modifier l’apport ne touche pas un crédit existant', () => {
+    /* Un credit est sa propre source de verite. Rien ne doit le recalculer
+       depuis l'apport : ni son capital initial, ni son restant du, ni sa
+       mensualite, ni sa duree. */
+    Fixture.poser(s => {
+      const e = s.etabs.find(x => (x.dettes || []).length);
+      e.dettes[0].initial = 100000;
+      e.dettes[0].taux = 2;
+    });
+    const avant = JSON.stringify(etabById('e_bien').dettes);
+    for (const montant of [50000, 250000]) {
+      Fixture.poser(s => {
+        const e = s.etabs.find(x => (x.dettes || []).length);
+        e.dettes[0].initial = 100000;
+        e.dettes[0].taux = 2;
+        s.comptes.find(c => c.id === 'c_immo').apport = montant;
+      });
+      eq(JSON.stringify(etabById('e_bien').dettes), avant,
+        `le crédit est intact (apport ${montant})`);
+    }
+    /* Et aucune fonction du modele ne lit l'apport pour ecrire un credit : le
+       controle porte sur la source, parce qu'un jour quelqu'un sera tente. */
+    const st = lireSource('assets/store.js');
+    vrai(!/dettes?\[[^\]]*\][^;]*=[^;]*apport|\.initial\s*=[^;]*apport/.test(st),
+      'rien n’écrit un crédit depuis l’apport');
+  });
+
+  test('prix moins apport donne le financement à couvrir, tant qu’aucun crédit n’existe', () => {
+    /* Un montant indicatif, et rien de plus : Tallya ne cree aucun credit. */
+    Fixture.poser(s => {
+      /* On retire le credit du bien pour se placer avant son existence. */
+      s.etabs.find(x => x.id === 'e_bien').dettes = [];
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.lignes[0].prixDeRevient = 300000;
+      c.apport = 60000;
+    });
+    pres(financementIndicatif(bien()), 240000, 'trois cent mille moins soixante mille');
+
+    /* Des qu'un credit existe, la phrase se tait : c'est lui la source de
+       verite, et un montant indicatif a cote se lirait comme une consigne de le
+       corriger. */
+    Fixture.poser(s => {
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.lignes[0].prixDeRevient = 300000;
+      c.apport = 60000;
+    });
+    eq(financementIndicatif(bien()), null, 'un crédit existe : plus d’indication');
+
+    /* Et sans prix ou sans apport, rien non plus : un montant calcule sur une
+       donnee absente serait invente. */
+    Fixture.poser(s => {
+      s.etabs.find(x => x.id === 'e_bien').dettes = [];
+      s.comptes.find(x => x.id === 'c_immo').apport = 0;
+    });
+    eq(financementIndicatif(bien()), null, 'sans apport, aucune indication');
+  });
+
+  test('trois montants qui ne s’accordent pas se signalent, sans se corriger', () => {
+    /* Le cas signale : un prix, un apport et un emprunt qui ne peuvent pas
+       decrire la meme acquisition. */
+    const poser = (prix, apport, initial) => Fixture.poser(s => {
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.lignes[0].prixDeRevient = prix;
+      c.apport = apport;
+      s.etabs.find(x => x.id === 'e_bien').dettes[0].initial = initial;
+    });
+
+    poser(255000, 200000, 210000);
+    const faux = coherenceAcquisition(bien());
+    vrai(faux && !faux.coherent, 'l’écart doit être signalé');
+    pres(faux.ecart, 155000, 'et chiffré');
+    /* Rien n'est corrige : les trois montants restent tels qu'ils ont ete
+       saisis. C'est au detenteur de dire lequel est faux. */
+    pres(num(bien().apport), 200000, 'l’apport n’a pas été retouché');
+    pres(lignesDe(bien())[0].prixDeRevient, 255000, 'ni le prix');
+    pres(num(etabById('e_bien').dettes[0].initial), 210000, 'ni le capital initial');
+
+    /* Une acquisition ordinaire passe : les frais de notaire pesent sept a huit
+       pour cent, et un pret qui les couvre ne doit pas declencher l'alerte. */
+    poser(255000, 30000, 245000);
+    vrai(coherenceAcquisition(bien()).coherent,
+      'des frais financés restent dans la tolérance');
+    poser(255000, 255000, 1000);
+    vrai(coherenceAcquisition(bien()).coherent, 'un achat comptant aussi');
+  });
+
+  test('une donnée absente ne fabrique ni écart ni rendement', () => {
+    /* Traiter une donnee absente comme un zero inventerait un ecart de la
+       taille du prix, et crierait sur tous les biens dont le capital initial n'a
+       jamais ete saisi. */
+    Fixture.poser(s => {
+      s.comptes.find(x => x.id === 'c_immo').apport = 0;
+      s.etabs.find(x => x.id === 'e_bien').dettes[0].initial = 0;
+    });
+    eq(coherenceAcquisition(bien()), null, 'sans apport ni capital initial : rien à dire');
+
+    Fixture.poser(s => {
+      s.comptes.find(x => x.id === 'c_immo').apport = 50000;
+      s.etabs.find(x => x.id === 'e_bien').dettes[0].initial = 0;
+    });
+    eq(coherenceAcquisition(bien()), null, 'sans capital initial non plus');
+
+    /* Et le rendement sur apport n'existe pas sans apport : `null`, jamais un
+       zero ni un infini. */
+    Fixture.poser();
+    const cf = cashFlowBien(bien());
+    eq(cf.apport, null, 'aucun apport saisi');
+    eq(cf.cashOnCash, null, 'donc aucun rendement sur apport');
+  });
+
+  test('l’aide dit ce que l’apport ne fait pas', () => {
+    /* Le mot qui manquait : l'aide expliquait a quoi il sert, jamais ce qu'il
+       ne change pas. C'est pourtant la seule chose qu'on peut croire a tort. */
+    const app = lireSource('assets/app.js');
+    const bloc = app.slice(app.indexOf("trad('Apport à l\\'achat (€)')"),
+                           app.indexOf("data-path=\"comptes.${idx}.apport\""));
+    vrai(bloc.length > 100, 'le champ doit être trouvable');
+    vrai(/il ne change pas la valeur nette actuelle du bien/.test(bloc),
+      'l’aide dit qu’il ne change pas la valeur nette');
+    vrai(/rendement sur apport/.test(bloc), 'et à quoi il sert');
+    const cle = "Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris."
+      + " Il sert au rendement sur apport ; il ne change pas la valeur nette actuelle du bien,"
+      + " qui vaut sa valeur moins ce que tu dois encore.";
+    vrai(I18N.en[cle], 'et elle a sa traduction');
+  });
+
+  test('l’apport reste dans la zone d’acquisition', () => {
+    /* C'est une donnee d'achat, pas une metrique mensuelle : il n'a rien a faire
+       dans l'impact mensuel, le financement courant ou le cash-flow. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('data-path="comptes.${idx}.apport"');
+    vrai(i > 0, 'le champ doit exister');
+    const finZone = app.indexOf('${carteExploitation(c, idx)}');
+    vrai(finZone > i, 'le champ vit avant la carte d’exploitation');
+    const financement = app.indexOf("<h2>Financement</h2>");
+    vrai(financement > i, 'et avant la carte du financement courant');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au

@@ -4246,10 +4246,24 @@ function espaceBien(c, idx, t) {
         <dd><b>${fmtEUR(valeur - credit)}</b></dd>` : ''}
     </dl>
     <div class="field" style="margin-top:12px">
-      <label>${trad('Apport à l\'achat (€)')}${aide(trad("Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris. Il sert de base au rendement sur apport, le seul qui ne bouge pas tout seul avec le temps."))}</label>
+      <label>${trad('Apport à l\'achat (€)')}${aide(trad("Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris. Il sert au rendement sur apport ; il ne change pas la valeur nette actuelle du bien, qui vaut sa valeur moins ce que tu dois encore."))}</label>
       <input type="number" step="any" class="champ-large"
              data-path="comptes.${idx}.apport" value="${num(c.apport) || ''}"
              placeholder="${trad('facultatif')}"></div>
+    ${(() => {
+      const aFinancer = financementIndicatif(c);
+      if (aFinancer != null) {
+        return `<p class="hint" style="margin:8px 0 0">${
+          trad('Reste à financer')} <b>${fmtEUR0(aFinancer)}</b>${
+          trad(', si tu empruntes le reste. Ajoute le crédit quand il existera : Tallya n’en crée aucun toute seule.')}</p>`;
+      }
+      const co = coherenceAcquisition(c);
+      if (!co || co.coherent) return '';
+      return `<div class="note" style="margin-top:12px">⚠ <span>${
+        trad('L’apport et le montant emprunté ne correspondent pas au prix d’acquisition renseigné.')} ${
+        trad('Vérifie les montants ou les frais financés.')} <b>${
+        montantSigne(co.ecart)}</b> ${trad('d’écart')}.</span></div>`;
+    })()}
   </div>
 
   ${carteExploitation(c, idx)}

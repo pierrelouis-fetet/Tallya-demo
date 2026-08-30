@@ -123,6 +123,16 @@ const I18N = {
     'Élevée': 'High',
     'Très élevée': 'Very high',
     'Volatilité du S&P 500': 'S&P 500 volatility',
+    'Reste à financer': 'Left to finance',
+    ', si tu empruntes le reste. Ajoute le crédit quand il existera : Tallya n’en crée aucun toute seule.':
+      ', if you borrow the rest. Add the loan once it exists: Tallya never creates one on its own.',
+    'L’apport et le montant emprunté ne correspondent pas au prix d’acquisition renseigné.':
+      'The down payment and the amount borrowed do not add up to the purchase price entered.',
+    'Vérifie les montants ou les frais financés.':
+      'Check the amounts, or the fees you financed.',
+    'd’écart': 'apart',
+    "Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris. Il sert au rendement sur apport ; il ne change pas la valeur nette actuelle du bien, qui vaut sa valeur moins ce que tu dois encore.":
+      'What you paid out of pocket on purchase day, notary fees included. It feeds the return on your down payment; it does not change the property\u2019s current net value, which is its value minus what you still owe.',
     'Financier : tes placements et tes liquidités. Global : tout, immobilier et biens compris. Un crédit finance un bien, que le Financier laisse dehors : il ne s’y retire donc pas, et net et brut y donnent la même courbe.':
       'Financial: your investments and cash. Overall: everything, property and personal assets included. A loan finances an asset that Financial leaves out, so it is not subtracted there: net and gross draw the same curve.',
     'Ce qu’il mesure': 'What it measures',
