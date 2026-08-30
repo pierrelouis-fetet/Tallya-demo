@@ -124,6 +124,11 @@ const I18N = {
     'Très élevée': 'Very high',
     'Volatilité du S&P 500': 'S&P 500 volatility',
     'Reste à financer': 'Left to finance',
+    'de ce qui est investi': 'of what is invested',
+    'de dettes déjà déduites': 'of debt already subtracted',
+    'tes crédits sont déduits': 'your loans are subtracted',
+    "Une seule base sur cette page : ton patrimoine net, tout ce que tu possèdes moins ce que tu dois encore. Un bien financé y compte pour sa valeur moins son crédit, et la dette n’est retirée qu’une fois. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre.":
+      'One base on this page: your net worth, everything you own minus what you still owe. A financed asset counts for its value minus its loan, and the debt is taken out only once. Every card shares this base, so their percentages compare with one another and each total gives back the same number.',
     'de ta part arbitrable est en': 'of the part you can steer sits in',
     ', si tu empruntes le reste. Ajoute le crédit quand il existera : Tallya n’en crée aucun toute seule.':
       ', if you borrow the rest. Add the loan once it exists: Tallya never creates one on its own.',

@@ -2620,16 +2620,16 @@ suite('Une fiche ne réintroduit pas ce que sa carte a écarté', () => {
     const app = lireSource('assets/app.js');
     const carte = app.slice(app.indexOf('{ label: BASES.place.nom,'),
                             app.indexOf('...pochesLiquidites()'));
-    vrai(/value: allocFinancier \? t\.invested - horsFinancierTotal\(\) : t\.invested/.test(carte),
-      'la carte retranche ce qui sort du périmètre');
+    vrai(/value: allocFinancier \? t\.invested - horsFinancierTotal\(\)\s*\n\s*: t\.invested - num\(t\.dettes\)/.test(carte),
+      'la carte retranche les murs en financier, les dettes en global');
     /* La borne de fin repart de l'index trouve : « Voir les avoirs » existe
        aussi plus haut dans le fichier, et une tranche dont la fin precede le
        debut est vide, donc verte pour de mauvaises raisons. */
     const iFiche = app.indexOf('investiTotal: () => {');
     const fiche = app.slice(iFiche, app.indexOf("cta: trad('Voir les avoirs')", iFiche));
     vrai(fiche.length > 200, 'la fiche doit être trouvable');
-    vrai(/allocFinancier \? nowTotals\(\)\.invested - horsFinancierTotal\(\)/.test(fiche),
-      'la fiche retranche la même chose');
+    vrai(/allocFinancier \? t\.invested - horsFinancierTotal\(\)\s*\n\s*: t\.invested - num\(t\.dettes\)/.test(fiche),
+      'la fiche retranche exactement la même chose');
     vrai(/placeByAccount\(\{ financier: allocFinancier \}\)/.test(fiche),
       'et ses lignes viennent de la source filtrée, pas d’une autre');
     /* La note du haut prend la base du perimetre, pas le patrimoine entier. */
@@ -3218,6 +3218,221 @@ suite('Le diagnostic des rôles ne dit que ce qui n’est pas déjà à l’écr
       'la composition s’agrège par classe avant qu’on cherche la plus grosse');
     vrai(/const gros = \[\.\.\.parClasse\]\.sort/.test(fn),
       'et c’est bien la table agrégée qui se trie');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Allocation compte ce qu'on possède, pas ce qu'on posséderait sans dette
+   ------------------------------------------------------------------ */
+suite('Une seule base par mode, et la somme des parts la redonne', () => {
+
+  /* Le fixture : 138 250 de brut, 40 000 de dette sur le studio de 120 000.
+     Le net vaut donc 98 250, et le studio ne pèse plus que 80 000. */
+  const NET = Fixture.BRUT - Fixture.DETTE;
+
+  test('un bien financé pèse sa valeur moins son crédit, une seule fois', () => {
+    Fixture.poser();
+    const p = poidsPoches({ net: true }).find(x => x.key === 'immo');
+    vrai(p, 'la poche immobilière doit exister');
+    pres(p.value, 120000 - Fixture.DETTE, 'cent vingt mille moins quarante mille');
+    /* Une seule fois : aucune autre poche ne paie la dette. */
+    for (const x of poidsPoches({ net: true })) {
+      if (x.key === 'immo') continue;
+      pres(x.value, num(nowTotals()[x.key]),
+        `« ${x.key} » n’a rien perdu : la dette ne se déduit pas deux fois`);
+    }
+  });
+
+  test('la somme des poches fait exactement la base nette', () => {
+    /* La règle qui gouverne tout ici : un total égale la somme de ses parts. */
+    Fixture.poser();
+    const parts = poidsPoches({ net: true });
+    pres(parts.reduce((s, x) => s + x.value, 0), NET,
+      'les poches font le patrimoine net');
+    pres(parts.reduce((s, x) => s + x.pct, 0), 100, 'et leurs parts font cent');
+  });
+
+  test('les quatre catégories de la carte font aussi la base nette', () => {
+    /* « Investi moins les dettes » plus les trois poches de cash. C'est
+       l'égalité que le changement de base devait préserver, et la seule qui
+       empêche la carte de mentir. */
+    Fixture.poser();
+    const t = nowTotals();
+    const investi = t.invested - num(t.dettes);
+    const cash = pochesLiquidites().reduce((s, p) => s + num(p.value), 0);
+    pres(investi + cash, t.net, 'les quatre catégories font le patrimoine net');
+    pres(t.net, NET, 'qui est bien le net du fixture');
+  });
+
+  test('sans dette, le net vaut le brut et rien ne change', () => {
+    Fixture.poser(s => { for (const e of s.etabs) e.dettes = []; });
+    const t = nowTotals();
+    pres(t.dettes, 0, 'aucune dette');
+    pres(t.net, t.brut, 'le net vaut le brut');
+    const parts = poidsPoches({ net: true });
+    pres(parts.reduce((s, x) => s + x.value, 0), t.brut, 'et les poches le redonnent');
+    /* Et la poche immobilière retrouve sa valeur pleine. */
+    pres(parts.find(x => x.key === 'immo').value, 120000, 'le studio pèse ce qu’il vaut');
+  });
+
+  test('Financier écarte les murs et ne retranche aucun crédit', () => {
+    /* La règle déjà posée, et qu'il ne fallait surtout pas défaire en passant
+       « Tout » au net : le prêt finance le bien, qui est écarté de cette vue.
+       Retrancher un crédit immobilier d'un périmètre qui exclut l'immobilier
+       serait une double faute. */
+    Fixture.poser();
+    const parts = poidsPoches({ financier: true, net: true });
+    vrai(!parts.some(x => serieHorsFinancier(x.key)),
+      'aucune poche hors périmètre financier');
+    pres(parts.reduce((s, x) => s + x.value, 0), totalFinancier(),
+      'la somme fait le patrimoine financier');
+    /* Le point qui compte : la dette n'a ete retranchee de rien. */
+    for (const x of parts) {
+      pres(x.value, num(nowTotals()[x.key]),
+        `« ${x.key} » garde sa valeur : aucun crédit immobilier ne s’y déduit`);
+    }
+    pres(parts.reduce((s, x) => s + x.pct, 0), 100, 'et les parts font cent');
+  });
+
+  test('une base qui ne se divise pas ne fabrique aucun pourcentage', () => {
+    /* Un patrimoine net négatif est possible — un achat récent financé à
+       crédit — et diviser par lui retournerait tous les signes. */
+    Fixture.poser(s => {
+      s.etabs.find(e => (e.dettes || []).length).dettes[0].montant = Fixture.BRUT * 2;
+    });
+    vrai(nowTotals().net < 0, 'le net est négatif');
+    for (const x of poidsPoches({ net: true })) {
+      eq(x.pct, null, `« ${x.key} » : aucun pourcentage sur une base négative`);
+    }
+    /* Les montants, eux, restent vrais : on ne force rien à zéro. */
+    pres(poidsPoches({ net: true }).reduce((s, x) => s + x.value, 0), nowTotals().net,
+      'et les montants disent la vérité, aussi désagréable soit-elle');
+  });
+
+  test('la carte, le camembert et le pied lisent la même base', () => {
+    /* Le défaut d'origine : la carte comptait en brut et son pied annonçait un
+       net, sans que rien ne dise lequel portait les pourcentages. Une base par
+       mode, lue par une seule fonction. */
+    const app = lireSource('assets/app.js');
+    vrai(/const valeurBaseAlloc = \(\) => \(allocFinancier \? totalFinancier\(\) : nowTotals\(\)\.net\);/.test(app),
+      'la base de « Tout » est le patrimoine net');
+    vrai(/const baseAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.net\);/.test(app),
+      'et elle se nomme comme telle');
+    /* Les deux lectures des poches passent le même mode, et le net avec. */
+    eq((app.match(/pochesPatrimoine\(\{ financier: allocFinancier, net: true \}\)/g) || []).length, 2,
+      'le tableau et le camembert lisent la même chose');
+    /* Le pied ne dit plus qu'une ligne : trois montants sous une carte dont les
+       pourcentages portaient sur le premier, personne ne pouvait dire lequel
+       était la base. */
+    /* Quatre cartes portent un « repart-pied » : celui d'Allocation se cherche
+       depuis la carte, pas depuis le debut du fichier. Une ancre prise trop tot
+       lit une autre carte et rend un vert qui ne parle pas du bon endroit. */
+    const dep = app.indexOf('<dl class="kv repart-pied">', app.indexOf('${disponibilite.map('));
+    const pied = app.slice(dep, app.indexOf('</dl>', dep));
+    vrai(!/Patrimoine net<\/b>/.test(pied),
+      'le net ne s’écrit plus deux fois dans le même pied');
+    vrai(/de dettes déjà déduites/.test(pied),
+      'la dette descend en sous-titre, où elle explique au lieu de concurrencer');
+  });
+
+  test('le classement ligne par ligne compte sur la base de sa carte', () => {
+    /* Le defaut que ce controle attrape : passer la carte du haut en net sans
+       son classement, qui continuait a compter en brut. Le meme appartement
+       pesait alors 130 638 € dans la tranche « Immobilier » et 288 000 € dans
+       la barre juste en dessous, dans la meme carte, sous une seule base
+       annoncee. Et la carte promet explicitement que la barre la plus longue du
+       bas est une part de la plus grosse tranche du haut. */
+    Fixture.poser();
+    const lignes = allocationByAsset({ credits: false, net: true });
+    pres(lignes.reduce((s, l) => s + l.value, 0), nowTotals().net,
+      'les lignes font le patrimoine net');
+    pres(lignes.reduce((s, l) => s + l.pct, 0), 100, 'et leurs parts font cent');
+    /* La ligne du bien porte sa quote-part de credit, donc exactement ce que la
+       tranche du haut annonce. */
+    const bien = lignes.find(l => l.label === 'Studio');
+    const immo = poidsPoches({ net: true }).find(p => p.key === 'immo');
+    pres(bien.value, immo.value, 'la barre du bas est la tranche du haut');
+    pres(bien.value, 120000 - Fixture.DETTE, 'soit la valeur moins le credit');
+  });
+
+  test('une dette sans ligne a laquelle se rattacher reste comptée', () => {
+    /* Une marge de courtier n'est adossee a aucune ligne : la retrancher au
+       prorata de rien la ferait disparaitre, et la somme des parts cesserait
+       d'egaler la base sans que rien ne le dise. Elle reste donc une ligne du
+       classement. */
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_courtier').dettes =
+        [{ id: 'd_marge', libelle: 'Marge', montant: 5000, note: '' }];
+    });
+    const lignes = allocationByAsset({ credits: false, net: true });
+    pres(lignes.reduce((s, l) => s + l.value, 0), nowTotals().net,
+      'la somme fait toujours le net');
+    vrai(lignes.some(l => l.value < -0.005 || /Crédits/.test(l.label)),
+      'la dette orpheline se voit plutôt qu’elle ne s’évapore');
+  });
+
+  test('deux prêts se rangent chacun sous leur bien', () => {
+    /* Le prorata plutot qu'une poche unique : deux appartements finances par
+       deux prets doivent chacun porter le leur, sinon le premier trouve paie
+       pour les deux et les deux barres mentent. */
+    Fixture.poser(s => {
+      s.etabs.push({ id: 'e_bien2', nom: 'Maison', notes: '',
+        dettes: [{ id: 'd_pret2', libelle: 'Prêt', montant: 30000, note: '' }] });
+      s.comptes.push({ id: 'c_immo2', etabId: 'e_bien2', type: 'immo',
+        statut: 'ouvert', ouvertLe: '2024-01-01', numero: '', notes: '',
+        libelle: 'Maison', court: 'Maison', alloc: '', cash: [],
+        lignes: [{ id: 'l_immo2', classe: 'immobilier', libelle: 'Maison',
+                   valeur: 80000, prixDeRevient: 80000, quantite: 1,
+                   dateAcquisition: '' }] });
+    });
+    const lignes = allocationByAsset({ credits: false, net: true });
+    pres(lignes.find(l => l.label === 'Studio').value, 120000 - Fixture.DETTE,
+      'le studio porte son prêt, et lui seul');
+    pres(lignes.find(l => l.label === 'Maison').value, 80000 - 30000,
+      'la maison porte le sien');
+    pres(lignes.reduce((s, l) => s + l.value, 0), nowTotals().net,
+      'et les deux ensemble font le net');
+  });
+
+  test('la phrase de concentration nomme la base qu’elle divise', () => {
+    /* Elle a menti deux fois pour l'avoir oublie : « de tes avoirs » sous un
+       pourcentage financier, puis « de ton patrimoine net » sous un pourcentage
+       brut. Le libelle et le diviseur viennent donc du meme endroit. */
+    Fixture.poser();
+    const c = concentration({ net: true });
+    const lignes = allocationByAsset({ credits: false, net: true })
+      .filter(l => l.value > 0.005);
+    pres(c.premiere.pct, lignes[0].value / nowTotals().net * 100,
+      'le pourcentage se divise par le net');
+    pres(c.premiere.pct, lignes[0].pct, 'et c’est celui de la barre commentée');
+    /* En financier, le diviseur change et le libelle avec lui. */
+    const f = concentration({ financier: true, net: true });
+    const lf = allocationByAsset({ credits: false, financier: true, net: true })
+      .filter(l => l.value > 0.005);
+    pres(f.premiere.pct, lf[0].pct, 'même accord en périmètre financier');
+  });
+
+  test('la carte Répartition ne retranche pas la dette une seconde fois', () => {
+    /* Un pied « Crédits en cours / Patrimoine net » sous deux tableaux qui
+       comptent deja en net soustrairait la dette deux fois, et le total annonce
+       ne serait plus celui que composent les parts juste au-dessus. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('data-anchor="actifs"');
+    const carte = app.slice(i, app.indexOf('<div class="card"', i + 10));
+    /* Le classement se monte hors du gabarit, donc hors de cette tranche. */
+    vrai(/allocationByAsset\(\{ credits: false, financier: allocFinancier, net: true \}\)/.test(app),
+      'le classement de cette carte compte en net');
+    vrai(!/trad\('Crédits en cours'\)/.test(carte),
+      'et aucun pied ne retranche la dette une seconde fois');
+  });
+
+  test('« Placé » est devenu « Investi », partout à la fois', () => {
+    const st = lireSource('assets/store.js');
+    vrai(/place:\s+\{ nom: trad\('Investi'\),\s+de: trad\('de ce qui est investi'\) \}/.test(st),
+      'le mot se change à un seul endroit');
+    vrai(!/trad\('Placé'\)/.test(st), 'et l’ancien ne subsiste pas');
+    eq(I18N.en['Investi'], 'Invested', 'la traduction suit');
+    eq(I18N.en['de ce qui est investi'], 'of what is invested', 'et sa forme grammaticale');
   });
 });
 
@@ -23830,7 +24045,10 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
        pourquoi le controle est ici, sur le texte. La meme faute avait touche
        la definition de `pochesPatrimoine` la veille. */
     const def = src.slice(src.indexOf('const baseAlloc ='), src.indexOf('const baseAlloc =') + 200);
-    vrai(/BASES\.financier/.test(def) && /BASES\.avoirs/.test(def),
+    /* La base de « Tout » est le patrimoine NET : la page comptait en brut, si
+       bien qu'un appartement y pesait sa valeur entiere alors que la moitie
+       appartient encore a la banque. */
+    vrai(/BASES\.financier/.test(def) && /BASES\.net/.test(def),
       'la définition de baseAlloc doit nommer les deux bases : ' + def.slice(0, 70));
     vrai(!/baseAlloc\(\)/.test(def.slice(def.indexOf('=>'))),
       'la définition de baseAlloc s’appelle elle-même : la page dépasse la pile');

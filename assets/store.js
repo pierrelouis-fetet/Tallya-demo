@@ -84,7 +84,7 @@ const BASES = {
   avoirs:      { nom: trad('Tes avoirs'),         de: trad('de tes avoirs') },          // brut
   net:         { nom: trad('Patrimoine net'),     de: trad('de ton patrimoine net') },   // brut - dettes
   financier:   { nom: trad('Patrimoine financier'), de: trad('de ton patrimoine financier') },
-  place:       { nom: trad('Placé'),              de: trad('de ce qui est placé') },    // nowTotals().invested
+  place:       { nom: trad('Investi'),            de: trad('de ce qui est investi') },  // nowTotals().invested
   placeBourse: { nom: trad('Placé en bourse'),    de: trad('de ce qui est placé en bourse') },
   baseCibles:  { nom: trad('Base de tes cibles'), de: trad('de la base de tes cibles') },
   liquidites:  { nom: trad('Liquidités'),         de: trad('de tes liquidités') },      // les quatre poches
@@ -2378,6 +2378,43 @@ function basculesEvolution({ net = true, financier = false, range = 'all' } = {}
   };
 }
 
+/* Le poids de chaque poche du patrimoine, et la base qui les rapporte a cent.
+
+   Ce calcul vivait dans la vue, avec les couleurs et les libelles. Il n'y etait
+   pas testable : le harnais ne charge pas `app.js`, si bien que l'invariant qui
+   compte — la somme des parts fait la base — ne se verifiait que par expression
+   rationnelle sur la source. Le meme deplacement a deja ete fait pour les points
+   de la courbe, et pour la meme raison.
+
+   La vue garde ce qui est a elle : la couleur d'une poche, son nom traduit, la
+   note « dont tant a investir ». Le modele rend des nombres.
+
+   La dette se retranche de la poche qui la PORTE, une seule fois, et la poche se
+   cherche plutot qu'elle ne se nomme : un renommage de clef la laisserait nulle
+   part et le total cesserait d'egaler la somme de ses parts sans que rien ne le
+   dise. En vue financiere, rien ne se retranche — le pret finance le bien, qui
+   est deja ecarte.
+
+   La poche porteuse est gardee meme a zero : un bien dont la dette depasse la
+   valeur rend une part negative, et la faire disparaitre ferait mentir le total. */
+function poidsPoches({ financier = false, net = false } = {}) {
+  const t = nowTotals();
+  const dettes = net && !financier ? num(t.dettes) : 0;
+  const porteuse = dettes
+    ? (POCHES_EVOLUTION.filter(serieHorsFinancier)
+        .find(k => Math.abs(num(t[k])) > 0.005) || 'immo')
+    : null;
+  const valeur = k => num(t[k]) - (k === porteuse ? dettes : 0);
+  const base = financier ? totalFinancier() : num(t.brut) - dettes;
+  return POCHES_EVOLUTION
+    .filter(k => Math.abs(valeur(k)) > 0.005 || k === porteuse)
+    .filter(k => !financier || !serieHorsFinancier(k))
+    /* `null` et non zero quand la base ne se divise pas : un patrimoine net
+       negatif retournerait tous les signes. */
+    .map(k => ({ key: k, value: valeur(k),
+                 pct: base > 0.005 ? valeur(k) / base * 100 : null }));
+}
+
 function currentMonthKey() {
   return todayISO().slice(0, 7) + '-01';
 }
@@ -2591,7 +2628,7 @@ const libelleAlloc = p => {
    affichent le meme montant sous deux noms tant qu'aucun credit n'existe.
    La base suit le drapeau au lieu d'etre choisie par l'appelant : c'est le seul
    moyen que la somme des parts fasse toujours le total annonce. */
-function allocationByAsset({ credits = true, financier = false } = {}) {
+function allocationByAsset({ credits = true, financier = false, net = false } = {}) {
   const map = new Map();
   const teintes = new Map();
   const poches = new Map();
@@ -2606,6 +2643,45 @@ function allocationByAsset({ credits = true, financier = false } = {}) {
     }
   };
 
+  /* La dette se retranche des lignes de l'etablissement qui la porte, au prorata
+     de leur valeur, et le classement partage alors la base de la carte qui le
+     porte : la plus longue barre du bas est une part de la plus grosse tranche
+     du haut, ce que cette carte promet explicitement.
+
+     Compter les lignes en brut sous une base nette donnait un appartement a
+     178,7 % du tout. L'autre issue — poser le credit en ligne du classement,
+     ce que fait `credits` — donne la meme barre a 178,7 %, rattrapee par une
+     barre a moins 97,6 % : deux fois illisible dans un classement dont chaque
+     barre se compare a la plus longue.
+
+     Le prorata plutot qu'une poche choisie : ici l'axe est la ligne, et deux
+     appartements finances par deux prets doivent chacun porter le leur.
+
+     Un etablissement qui doit sans rien detenir en ligne — une marge de
+     courtier — ne peut rien se voir retrancher : son emprunt reste une ligne
+     du classement, sinon la somme des parts cesserait d'egaler la base sans
+     que rien ne le dise. */
+  const netLignes = net && !financier;
+  const dus = new Map();
+  const assiettes = new Map();
+  if (netLignes) {
+    for (const e of Store.state.etabs) {
+      const du = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
+      if (du > 0.005) dus.set(e.id, du);
+    }
+    for (const c of comptesOuverts()) {
+      if (!dus.has(c.etabId)) continue;
+      assiettes.set(c.etabId, (assiettes.get(c.etabId) || 0)
+        + (c.lignes || []).reduce((s, l) => s + num(l.valeur), 0));
+    }
+  }
+  const valeurNette = (c, l) => {
+    const du = netLignes ? dus.get(c.etabId) : 0;
+    const assiette = assiettes.get(c.etabId) || 0;
+    if (!du || !(assiette > 0.005)) return num(l.valeur);
+    return num(l.valeur) - du * (num(l.valeur) / assiette);
+  };
+
   for (const p of Store.state.positions) {
     const ac = assetClassDe(p);
     add(libelleAlloc(p), posValue(p), couleurClasse(ac), pocheDeClasse(ac));
@@ -2615,15 +2691,20 @@ function allocationByAsset({ credits = true, financier = false } = {}) {
   }
   for (const c of comptesOuverts()) {
     for (const l of (c.lignes || [])) {
-      add(c.alloc || l.libelle, num(l.valeur),
+      add(c.alloc || l.libelle, valeurNette(c, l),
           CLASSE_COULEURS[l.classe] || CLASSE_COULEURS.nonCote,
           pocheDeClasse(l.classe || 'nonCote'));
     }
   }
   if (credits && dettesTotal()) add(trad('Crédits en cours'), -dettesTotal(), 'var(--critical)');
+  if (netLignes) {
+    const orphelin = [...dus.entries()]
+      .reduce((s, [id, du]) => s + (assiettes.get(id) > 0.005 ? 0 : du), 0);
+    if (orphelin > 0.005) add(trad('Crédits en cours'), -orphelin, 'var(--critical)');
+  }
 
   const total = financier ? totalFinancier()
-    : credits ? nowTotals().total : nowTotals().brut;
+    : credits || net ? nowTotals().total : nowTotals().brut;
   const sousTitre = label => {
     const poche = poches.get(label);
     const n = lignes.get(label) || 0;
@@ -2752,10 +2833,10 @@ function allocationParDisponibilite({ financier = false } = {}) {
    Deux gardes. Une seule ligne fait 100 % par construction, l'annoncer
    n'apprend rien. Et les trois premieres ne se disent qu'a partir de quatre :
    a trois, elles sont le patrimoine entier. */
-function concentration({ financier = false } = {}) {
-  const base = financier ? totalFinancier() : nowTotals().brut;
+function concentration({ financier = false, net = false } = {}) {
+  const base = financier ? totalFinancier() : net ? nowTotals().net : nowTotals().brut;
   if (!(base > 0.005)) return null;
-  const lignes = allocationByAsset({ credits: false, financier })
+  const lignes = allocationByAsset({ credits: false, financier, net })
     .filter(l => l.value > 0.005);
   if (lignes.length < 2) return null;
   const tete = lignes[0];

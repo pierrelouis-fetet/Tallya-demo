@@ -2969,17 +2969,15 @@ function mountSymbolSearch() {
    de 179 985 € : 150 000 € d'immobilier manquaient à l'appel. */
 /* `financier` : sans les murs ni les objets. La regle et les deux listes de
    poches exclues vivent dans `store.js`, une seule fois. */
-function pochesPatrimoine({ financier = false } = {}) {
-  const t = nowTotals();
+function pochesPatrimoine({ financier = false, net = false } = {}) {
   const attente = num(patrimoine().investir);
-  const base = financier ? totalFinancier() : num(t.brut);
-  return SERIES_PATRIMOINE()
-    .filter(s => Math.abs(num(t[s.key])) > 0.005)
-    .filter(s => !financier || !serieHorsFinancier(s.key))
-    .map(s => ({ key: s.key, label: s.label, color: s.color,
-                 note: s.key === 'cash' && attente > 0.005
-                   ? `${trad('dont')} ${fmtEUR0(attente)} ${trad('à investir')}` : '',
-                 value: num(t[s.key]), pct: base ? num(t[s.key]) / base * 100 : 0 }));
+  const habits = new Map(SERIES_PATRIMOINE().map(s => [s.key, s]));
+  return poidsPoches({ financier, net }).map(p => {
+    const s = habits.get(p.key) || {};
+    return { key: p.key, label: s.label, color: s.color, value: p.value, pct: p.pct,
+             note: p.key === 'cash' && attente > 0.005
+               ? `${trad('dont')} ${fmtEUR0(attente)} ${trad('à investir')}` : '' };
+  });
 }
 
 const teinterParRang = items =>
@@ -2996,7 +2994,7 @@ const teinterParRang = items =>
    l'application ne connait pas. `concentration()` se tait deja quand il n'y a
    rien a dire ; ici on ne fait que rendre. */
 function phraseConcentration() {
-  const c = concentration({ financier: allocFinancier });
+  const c = concentration({ financier: allocFinancier, net: true });
   if (!c) return '';
   const base = baseAlloc().de;
   const tete = `<b>${esc(c.premiere.label)}</b> ${trad('pèse')} `
@@ -3013,7 +3011,7 @@ function viewAllocation() {
       + 'd’actifs, chez quels intermédiaires. Elle attend donc que tu déclares au moins un '
       + 'compte ou un placement.');
   }
-  const poches = pochesPatrimoine({ financier: allocFinancier });
+  const poches = pochesPatrimoine({ financier: allocFinancier, net: true });
   const byAsset = allocationByAsset({ credits: false, financier: allocFinancier });
   const byAcct = allocationByAccount({ financier: allocFinancier });
   const byType = teinterParRang(byAccountType({ financier: allocFinancier }));
@@ -3039,7 +3037,8 @@ function viewAllocation() {
                          projet: 'var(--series-5)', investir: 'var(--series-4)' };
   const disponibilite = [
     { label: BASES.place.nom,
-      value: allocFinancier ? t.invested - horsFinancierTotal() : t.invested,
+      value: allocFinancier ? t.invested - horsFinancierTotal()
+                            : t.invested - num(t.dettes),
       couleur: 'var(--series-2)', apercu: 'investiTotal' },
     ...pochesLiquidites().map(p => ({
       label: p.nom, value: p.value, couleur: teintesPoche[p.cle] || 'var(--series-1)',
@@ -3047,8 +3046,11 @@ function viewAllocation() {
       arg: p.cle === 'investir' ? '' : p.cle,
     })),
   ].filter(x => Math.abs(num(x.value)) > 0.005)
-   .map(x => ({ ...x, pct: valeurBaseAlloc()
-                  ? num(x.value) / valeurBaseAlloc() * 100 : 0 }));
+   /* `null` et non zero quand la base ne se divise pas : un patrimoine net
+      negatif retournerait tous les signes, et « 0,0 % » sous chaque ligne se
+      lirait comme une mesure alors que c'est une absence de mesure. */
+   .map(x => ({ ...x, pct: partsAllocLisibles()
+                  ? num(x.value) / valeurBaseAlloc() * 100 : null }));
 
   return `
   ${horsFinancierExiste() ? barreCommutateur([
@@ -3056,10 +3058,11 @@ function viewAllocation() {
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
-      ? trad('immobilier et biens de valeur écartés') : trad('tout est compté')}</b>${deuxPoints()}
+      ? trad('immobilier et biens de valeur écartés')
+      : trad('tes crédits sont déduits')}</b>${deuxPoints()}
     ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
       ? trad("Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.")
-      : trad("Une seule base sur cette page : « Tes avoirs », tout ce que tu possèdes, non coté et immobilier compris. Toutes les cartes la partagent, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre. La mention grise en tête de chaque carte la rappelle, avec son montant. Le patrimoine net, qui retire tes crédits, se lit sur l’accueil : ici rien n’est soustrait."))}.</span></p>
+      : trad("Une seule base sur cette page : ton patrimoine net, tout ce que tu possèdes moins ce que tu dois encore. Un bien financé y compte pour sa valeur moins son crédit, et la dette n’est retirée qu’une fois. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre."))}.</span></p>
 
   <div class="card repart">
     ${disponibilite.map(x => `
@@ -3070,16 +3073,16 @@ function viewAllocation() {
           <span class="dot" style="background:${x.couleur}"></span>
           <span class="repart-nom">${esc(trad(x.label))}</span>
           <b>${fmtEUR(x.value)}</b>
-          <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
+          <span class="repart-pct">${x.pct == null ? '' : fmtPct(x.pct, 1)}</span>
         </span>
-        <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
+        <span class="repart-barre"><i style="width:${x.pct == null ? 0 : Math.max(0, Math.min(100, x.pct)).toFixed(1)}%;background:${x.couleur}"></i></span>
       </button>`).join('')}
     <dl class="kv repart-pied">
-      <dt>${baseAlloc().nom}<span class="sub">${trad('la base des pourcentages ci-dessus')}</span></dt>
+      <dt>${baseAlloc().nom}<span class="sub">${
+        !allocFinancier && num(t.dettes) > 0.005
+          ? `${fmtEUR0(t.dettes)} ${trad('de dettes déjà déduites')}`
+          : trad('la base des pourcentages ci-dessus')}</span></dt>
         <dd>${fmtEUR(valeurBaseAlloc())}</dd>
-      ${t.dettes && !allocFinancier ? `<dt>${trad('Crédits en cours')}${aide(trad("Le capital qu’il te reste à rembourser. Chaque mensualité le réduit, donc ton patrimoine net monte d’autant, même si la valeur de tes biens ne bouge pas."))}</dt>
-        <dd class="dette">−${fmtEUR(t.dettes)}</dd>
-        <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>` : ''}
     </dl>
   </div>
 
@@ -3092,11 +3095,6 @@ function viewAllocation() {
     <h3 class="sous-titre-carte">${trad('Par catégorie d’actif')}</h3>
     <div class="chart" id="aAsset"></div>
     ${phraseConcentration()}
-    ${t.dettes && !allocFinancier ? `<dl class="kv" style="margin-top:8px">
-      <dt>${trad('Crédits en cours')}${aide(trad("Ils ne figurent pas dans les parts ci-dessus : une répartition dit où est ton argent, et un crédit n’est pas un endroit. Il se retire du total, ici, pour donner le patrimoine net."))}</dt>
-        <dd class="dette">−${fmtEUR(t.dettes)}</dd>
-      <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(t.net)}</b></dd>
-    </dl>` : ''}
   </div>
 
   <div class="card">
@@ -3123,14 +3121,15 @@ function viewAllocation() {
 }
 
 function mountAllocation() {
-  Charts.rankedBars($('#aAsset'), { items: allocationByAsset({ credits: false, financier: allocFinancier }) });
+  Charts.rankedBars($('#aAsset'),
+    { items: allocationByAsset({ credits: false, financier: allocFinancier, net: true }) });
   Charts.rankedBars($('#aAcct'), { items: allocationByAccount({ financier: allocFinancier }) });
   const t = nowTotals();
   const animAlloc = allocTransition;
   Charts.donut($('#aMacro'), {
     anime: animAlloc,
     height: 200, centerLabel: baseAlloc().nom, centerValue: valeurBaseAlloc(),
-    items: pochesPatrimoine({ financier: allocFinancier }).map(p => ({ label: p.label, value: p.value, color: p.color })),
+    items: pochesPatrimoine({ financier: allocFinancier, net: true }).map(p => ({ label: p.label, value: p.value, color: p.color })),
   });
   const bt = teinterParRang(byAccountType({ financier: allocFinancier }));
   Charts.donut($('#aType'), {
@@ -3603,8 +3602,9 @@ let relanceGraphes = false;
    Une base qui se derive a huit endroits finit par en oublier un. Elle se
    nomme donc ici, et un test interdit desormais `BASES.avoirs` ailleurs dans
    cette page. */
-const baseAlloc = () => (allocFinancier ? BASES.financier : BASES.avoirs);
-const valeurBaseAlloc = () => (allocFinancier ? totalFinancier() : nowTotals().brut);
+const baseAlloc = () => (allocFinancier ? BASES.financier : BASES.net);
+const valeurBaseAlloc = () => (allocFinancier ? totalFinancier() : nowTotals().net);
+const partsAllocLisibles = () => valeurBaseAlloc() > 0.005;
 let compteRecherche = '';
 /* L'etat vit dans `meta`, pas dans une variable qui le recopie : le `Set`
    etait construit au chargement du script, donc avant que le store soit lu —
@@ -10036,8 +10036,9 @@ const APERCUS = {
      totalise pas cent, et c'est la faute que cette base de code traque depuis le
      debut. `baseAlloc().de` porte deja la forme grammaticale des deux cas. */
   investiTotal: () => {
-    const place = allocFinancier ? nowTotals().invested - horsFinancierTotal()
-                                 : nowTotals().invested;
+    const t = nowTotals();
+    const place = allocFinancier ? t.invested - horsFinancierTotal()
+                                 : t.invested - num(t.dettes);
     const base = valeurBaseAlloc();
     return {
       titre: BASES.place.nom, sous: trad('Tout sauf les liquidités'),
