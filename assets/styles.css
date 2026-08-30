@@ -4514,3 +4514,32 @@ details[open]::details-content { block-size: auto; }
 #modalBody.tout-voir .apercu-surplus { display: table-row; }
 #modalBody.tout-voir .apercu-plus { display: none; }
 #modalBody .apercu-plus td { border: 0; text-align: center; padding: 12px 0 4px; }
+
+.liste-ordre { display: flex; justify-content: flex-end; margin: 0 0 10px; }
+
+/* Une ligne qu'on peut deplacer, et sa poignee.
+
+   La poignee vit hors du bouton de la ligne : un bouton dans un bouton n'existe
+   pas. La rangee est donc une grille de deux colonnes, la poignee puis la ligne,
+   et c'est la ligne qui prend toute la place restante.
+
+   `touch-action: none` sur la poignee, et lui seul : sans cette declaration le
+   navigateur lit le mouvement du doigt comme un defilement et la ligne ne suit
+   jamais. La poser sur la rangee entiere empecherait de faire defiler la page en
+   partant d'une ligne, ce qui est le geste le plus courant de cet ecran. */
+.rang-glissant { display: grid; grid-template-columns: auto 1fr; align-items: center; }
+.rang-glissant > .mlist { min-width: 0; }
+.poignee {
+  display: grid; place-items: center;
+  width: 28px; align-self: stretch;
+  color: var(--muted); font-size: 15px; line-height: 1;
+  cursor: grab; touch-action: none; user-select: none;
+}
+@media (hover: hover) { .poignee:hover { color: var(--text); } }
+.rang-glissant.porte { opacity: .75; cursor: grabbing; }
+.rang-glissant.porte > .mlist {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 18px rgb(0 0 0 / .28);
+}
+@media (prefers-reduced-motion: reduce) { .rang-glissant.porte { opacity: 1; } }

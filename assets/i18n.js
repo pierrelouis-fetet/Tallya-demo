@@ -125,6 +125,10 @@ const I18N = {
     'Volatilité du S&P 500': 'S&P 500 volatility',
     'Reste à financer': 'Left to finance',
     'Nombre de parts': 'Number of shares',
+    'Mon ordre': 'My order',
+    'Du plus cher': 'Priciest first',
+    'Déplacer cette ligne': 'Move this line',
+    'Glisser pour déplacer': 'Drag to move',
     'Version en ligne reprise. Ta saisie est dans les sauvegardes.':
       'Online version taken. Your entry is in the backups.',
     'Une autre version existe en ligne. Elle sera reprise dès que le réseau reviendra.':

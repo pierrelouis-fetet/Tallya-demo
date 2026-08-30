@@ -1987,6 +1987,83 @@ function sortPositions(entries) {
    La ligne porte `avec-jauge` : c'est cette classe qui deplace la croissance du
    nom du mois vers la piste, et elle seule. `ligneListe` sert a six ecrans, et
    les cinq autres gardent leur mise en page. */
+let ordreCharges = 'mien';
+
+/* Glisser une ligne pour la deplacer.
+
+   `pointerdown` et non `touchstart` : le meme code sert la souris et le doigt,
+   et c'est la seule facon d'avoir un geste identique sur telephone et sur
+   bureau. La poignee porte `touch-action: none`, sans quoi le navigateur prend
+   le mouvement pour un defilement et la ligne ne suit jamais.
+
+   Le rang se lit dans le DOM plutot que calcule : pendant le geste, la ligne
+   deplacee est reellement inseree entre ses voisines, donc l'ordre affiche EST
+   l'ordre final. Rien a reconcilier au relachement, et ce qu'on voit est ce
+   qu'on obtient.
+
+   La poignee vit hors du bouton de la ligne : un bouton dans un bouton n'existe
+   pas, et c'est la meme raison qui a donne sa forme aux lignes de compte. */
+function monterGlissement(hote, surFin) {
+  if (!hote || hote.dataset.glissant) return;
+  hote.dataset.glissant = '1';
+  let porte = null, rangs = [];
+
+  const centre = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+
+  hote.addEventListener('pointerdown', e => {
+    const poignee = e.target.closest('.poignee');
+    if (!poignee || !hote.contains(poignee)) return;
+    porte = poignee.closest('[data-rang]');
+    if (!porte) return;
+    poignee.setPointerCapture(e.pointerId);
+    rangs = [...hote.querySelectorAll('[data-rang]')];
+    porte.classList.add('porte');
+    e.preventDefault();
+  });
+
+  hote.addEventListener('pointermove', e => {
+    if (!porte) return;
+    e.preventDefault();
+    for (const r of rangs) {
+      if (r === porte) continue;
+      const c = centre(r);
+      const p = centre(porte);
+      if (p < c && r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        hote.insertBefore(porte, r);
+        break;
+      }
+      if (p > c && r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_PRECEDING) {
+        hote.insertBefore(porte, r.nextSibling);
+        break;
+      }
+    }
+  });
+
+  const finir = () => {
+    if (!porte) return;
+    porte.classList.remove('porte');
+    porte = null;
+    surFin([...hote.querySelectorAll('[data-rang]')].map(r => +r.dataset.rang));
+  };
+  hote.addEventListener('pointerup', finir);
+  hote.addEventListener('pointercancel', finir);
+}
+
+function poserOrdreCharges(rangs) {
+  const arr = Store.state.budget.fixedCharges || [];
+  if (rangs.length !== arr.length) return;         // rendu concurrent : on ne touche a rien
+  const neuf = rangs.map(i => arr[i]);
+  if (neuf.some(x => !x)) return;
+  Store.state.budget.fixedCharges = neuf;
+  Store.save();
+  render();
+}
+
+const poigneeCharge = () => ordreCharges !== 'mien' ? ''
+  : `<span class="poignee" role="button" tabindex="-1"
+           aria-label="${trad('Déplacer cette ligne')}"
+           title="${trad('Glisser pour déplacer')}">⠿</span>`;
+
 function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, jauge }) {
   const part = jauge == null ? null : Math.max(-1, Math.min(1, num(jauge)));
   return `
@@ -5361,6 +5438,7 @@ function viewBudget(section = 'depenses') {
       <div class="card-head"><h2>${trad('Charges fixes')}</h2>
         <div class="row">
           <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} ${trad('des revenus')}</span>
+
           <button class="btn sm ghost" data-action="add-contributor">+ ${trad('Personne')}</button>
           <button class="btn sm ghost" data-action="add-charge">${trad('+ Ligne')}</button>
         </div>
@@ -5369,8 +5447,17 @@ function viewBudget(section = 'depenses') {
         const gens = contributors();
         const st = sharedTotals();
         return `
-      <div class="liste-mobile">
-        ${b.fixedCharges.map((c, i) => ligneListe({
+      ${b.fixedCharges.length > 1 ? `<div class="liste-ordre">
+        <span class="segmented seg-mini">
+          ${ORDRES_CHARGES.map(([cle, lib]) => `<button data-action="charges-ordre"
+            data-ordre="${cle}" class="${ordreCharges === cle ? 'on' : ''}"
+            >${trad(lib)}</button>`).join('')}
+        </span>
+      </div>` : ''}
+
+      <div class="liste-mobile" id="chargesListe">
+        ${chargesOrdonnees(ordreCharges).map(({ c, i }) => `<div class="rang-glissant" data-rang="${i}">${
+          poigneeCharge()}${ligneListe({
           action: 'edit-charge', index: i,
           titre: c.label || 'Sans nom',
           sous: [c.provider || '', chargePeriode(c) === 'mois' ? ''
@@ -5385,7 +5472,7 @@ function viewBudget(section = 'depenses') {
             })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
           second: gens.length ? `${fmtEUR(myShareMensuelle(c))} ${trad('à ma charge')}` : '',
-        })).join('')}
+        })}</div>`).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
           ${gens.length ? `<dt><b>${trad('À ma charge')}</b></dt><dd><b>${fmtEUR(st.mine)}</b></dd>` : ''}
@@ -5415,7 +5502,7 @@ function viewBudget(section = 'depenses') {
             <th title="${trad('Ce qui sort réellement de ton compte, ramené au mois')}">${trad('À ma charge')}</th>
             <th>Organisme</th><th></th>
           </tr></thead>
-          <tbody>${b.fixedCharges.map((c, i) => `<tr class="ligne-ouvre"
+          <tbody>${chargesOrdonnees(ordreCharges).map(({ c, i }) => `<tr class="ligne-ouvre"
               data-action="edit-charge" data-i="${i}"
               title="Modifier ${guill(esc(c.label || 'Sans nom'))}">
             <td class="name sticky-col"><span class="mois-lien">${esc(c.label || 'Sans nom')}</span></td>
@@ -6359,6 +6446,11 @@ const ACTIONS = {
             : depSort.dir === 'desc' ? { key, dir: 'asc' } : null;
     render();
   },
+  'charges-ordre'(btn) {
+    ordreCharges = btn.dataset.ordre === 'cher' ? 'cher' : 'mien';
+    render();
+  },
+
   'monter-category'(btn) {
     if (deplacerCategorie(btn.dataset.cat, -1)) { Store.save(); render(); }
   },
@@ -8133,6 +8225,9 @@ const MOUNTS = {
   budget: () => {
     if (sousOngletActif.budget === 'releves') mountHistory();
     else if (sousOngletActif.budget === 'depenses') mountBudget();
+    else if (sousOngletActif.budget === 'cadre' && ordreCharges === 'mien') {
+      monterGlissement($('#chargesListe'), poserOrdreCharges);
+    }
   },
   /* `objective` n'est plus une vue mais un onglet de `overview`, dont le montage
      ci-dessus appelle `mountObjective()`. L'entree reste : `#/objective` est

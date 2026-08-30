@@ -3681,6 +3681,33 @@ function expenseCategories() {
 /*    Deplace une categorie d'un cran. L'ordre de `budget.categories` EST l'ordre
    des colonnes du detail mensuel, de la fenetre de saisie, des graphiques et
    des exports : une seule liste, donc un seul geste pour tous ces ecrans.*/
+/* Les charges fixes, dans l'ordre ou on veut les lire.
+
+   Deux ordres, et un seul est modifiable : celui du detenteur, qui est l'ordre
+   du tableau lui-meme. « Du plus cher » est une LECTURE, calculee a l'affichage
+   et jamais ecrite — trier en reecrivant la liste detruirait l'ordre choisi a la
+   main, et il n'y aurait plus moyen d'y revenir.
+
+   Chaque entree garde `i`, son rang reel dans le tableau. La vue s'en sert pour
+   ouvrir, modifier et supprimer : sans lui, trier par montant ferait porter un
+   clic sur la ligne voisine, et le defaut ne se verrait qu'en supprimant la
+   mauvaise charge. */
+const ORDRES_CHARGES = [['mien', 'Mon ordre'], ['cher', 'Du plus cher']];
+
+function chargesOrdonnees(ordre = 'mien') {
+  const l = (Store.state.budget.fixedCharges || []).map((c, i) => ({ c, i }));
+  if (ordre === 'cher') l.sort((a, b) => chargeMensuelle(b.c) - chargeMensuelle(a.c));
+  return l;
+}
+
+function deplacerCharge(de, vers) {
+  const arr = Store.state.budget.fixedCharges || [];
+  if (!Number.isInteger(de) || !Number.isInteger(vers)) return false;
+  if (de < 0 || de >= arr.length || vers < 0 || vers >= arr.length || de === vers) return false;
+  arr.splice(vers, 0, arr.splice(de, 1)[0]);
+  return true;
+}
+
 function deplacerCategorie(cat, delta) {
   if (!Array.isArray(Store.state.budget.categories) || !Store.state.budget.categories.length) {
     Store.state.budget.categories = [...expenseCategories()];

@@ -4065,6 +4065,151 @@ suite('Synchronisation : c’est toujours la version en ligne', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Les charges fixes se rangent : a la main, ou du plus cher
+   ------------------------------------------------------------------ */
+suite('Ordre des charges fixes : le sien, ou celui des montants', () => {
+
+  const poser = () => {
+    Fixture.poser();
+    Store.state.budget.fixedCharges = [
+      { label: 'Loyer', amount: 900, period: 'mois' },
+      { label: 'Assurance', amount: 600, period: 'an' },      // 50 / mois
+      { label: 'Mobile', amount: 15, period: 'mois' },
+      { label: 'Streaming', amount: 60, period: 'trimestre' }, // 20 / mois
+    ];
+  };
+
+  test('déplacer décale, ça n’échange pas deux lignes', () => {
+    /* Glisser la derniere ligne en tete doit decaler toutes les autres d'un
+       cran. Un echange troquerait la premiere contre la derniere et melangerait
+       tout le reste : c'est le defaut classique de ce geste. */
+    poser();
+    vrai(deplacerCharge(3, 0), 'le déplacement se fait');
+    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' '),
+      'Streaming Loyer Assurance Mobile', 'la dernière passe en tête, les autres décalent');
+  });
+
+  test('un déplacement hors bornes ne touche à rien', () => {
+    poser();
+    const avant = Store.state.budget.fixedCharges.map(c => c.label).join(' ');
+    for (const [de, vers] of [[-1, 0], [0, 9], [9, 0], [2, 2], [0.5, 1]]) {
+      vrai(!deplacerCharge(de, vers), `« ${de} → ${vers} » se refuse`);
+    }
+    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' '), avant,
+      'et la liste est intacte');
+  });
+
+  test('le tri se fait sur l’équivalent mensuel, pas sur le montant saisi', () => {
+    /* Une assurance a 600 € l'an pese 50 € par mois. La ranger devant un
+       abonnement a 60 € trimestriels — 20 € par mois — est juste ; la ranger
+       d'apres les 600 dirait le contraire de la colonne affichee a cote. */
+    poser();
+    const cher = chargesOrdonnees('cher').map(x => x.c.label);
+    eq(cher.join(' '), 'Loyer Assurance Streaming Mobile',
+      'du plus cher au moins cher, au mois');
+    const m = chargesOrdonnees('cher').map(x => chargeMensuelle(x.c));
+    vrai(m.every((v, k) => k === 0 || m[k - 1] >= v), 'et la suite est décroissante');
+  });
+
+  test('trier est une lecture : le tableau ne bouge pas', () => {
+    /* Trier en reecrivant la liste detruirait l'ordre choisi a la main, et il
+       n'y aurait plus moyen d'y revenir. */
+    poser();
+    const avant = Store.state.budget.fixedCharges.map(c => c.label).join(' ');
+    chargesOrdonnees('cher');
+    chargesOrdonnees('mien');
+    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' '), avant,
+      'l’ordre du détenteur survit au tri');
+  });
+
+  test('chaque ligne garde son rang réel, quel que soit l’ordre', () => {
+    /* La vue s'en sert pour ouvrir, modifier et supprimer. Sans lui, trier par
+       montant ferait porter un clic sur la ligne voisine — et le defaut ne se
+       verrait qu'en supprimant la mauvaise charge. */
+    poser();
+    for (const ordre of ['mien', 'cher']) {
+      const l = chargesOrdonnees(ordre);
+      eq(l.length, 4, `« ${ordre} » rend toutes les lignes`);
+      for (const { c, i } of l) {
+        eq(Store.state.budget.fixedCharges[i], c,
+          `« ${ordre} » : le rang ${i} désigne bien « ${c.label} »`);
+      }
+      eq([...l.map(x => x.i)].sort().join(','), '0,1,2,3', 'et aucun rang ne manque');
+    }
+  });
+
+  test('une liste vide ou d’une ligne se range sans rien casser', () => {
+    Fixture.poser();
+    Store.state.budget.fixedCharges = [];
+    eq(chargesOrdonnees('cher').length, 0, 'aucune ligne');
+    Store.state.budget.fixedCharges = [{ label: 'Seule', amount: 10, period: 'mois' }];
+    eq(chargesOrdonnees('cher').length, 1, 'une ligne');
+    vrai(!deplacerCharge(0, 0), 'qu’on ne peut pas déplacer sur elle-même');
+  });
+
+  test('la poignée ne paraît qu’en ordre manuel', () => {
+    /* Sous un tri calcule, glisser une ligne ne voudrait rien dire : le tri la
+       remettrait ou il veut au rendu suivant. */
+    const app = lireSource('assets/app.js');
+    vrai(/const poigneeCharge = \(\) => ordreCharges !== 'mien' \? ''/.test(app),
+      'la poignée se tait dès que l’ordre est calculé');
+    /* Et le geste ne s'arme pas non plus. */
+    vrai(/sousOngletActif\.budget === 'cadre' && ordreCharges === 'mien'/.test(app),
+      'le glissement ne se monte qu’en ordre manuel');
+  });
+
+  test('le geste sert la souris et le doigt du même code', () => {
+    /* `pointerdown` et non `touchstart` : c'est la seule facon d'avoir un geste
+       identique sur telephone et sur bureau. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('function monterGlissement(');
+    const fn = app.slice(i, app.indexOf('\n}', i));
+    for (const e of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+      vrai(new RegExp(`'${e}'`).test(fn), `« ${e} » est écouté`);
+    }
+    vrai(!/touchstart|mousedown/.test(fn), 'et aucun second jeu d’écouteurs');
+    vrai(/setPointerCapture/.test(fn),
+      'le geste appartient à la poignée jusqu’au relâchement');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.poignee \{[^}]*touch-action: none/.test(css),
+      'sans « touch-action: none » le navigateur prendrait le geste pour un défilement');
+    vrai(!/\.rang-glissant \{[^}]*touch-action: none/.test(css),
+      'et la rangée entière ne le porte pas : on doit pouvoir faire défiler la page');
+  });
+
+  test('l’ordre final se lit dans le DOM, il ne se recalcule pas', () => {
+    /* Pendant le geste la ligne est reellement inseree entre ses voisines :
+       l'ordre affiche EST l'ordre final, donc rien a reconcilier au
+       relachement. Ce qu'on voit est ce qu'on obtient. */
+    const app = lireSource('assets/app.js');
+    vrai(/surFin\(\[\.\.\.hote\.querySelectorAll\('\[data-rang\]'\)\]\.map\(r => \+r\.dataset\.rang\)\)/.test(app),
+      'le relâchement lit les rangs affichés');
+    const i = app.indexOf('function poserOrdreCharges(');
+    const fn = app.slice(i, app.indexOf('\n}', i));
+    vrai(/if \(rangs\.length !== arr\.length\) return;/.test(fn),
+      'un rendu concurrent ne peut pas tronquer la liste');
+    vrai(/if \(neuf\.some\(x => !x\)\) return;/.test(fn),
+      'ni un rang inconnu la trouer');
+  });
+
+  test('un seul réglage pour les deux listes', () => {
+    /* La liste du telephone et le tableau du bureau : deux controles pour un
+       meme reglage finiraient par dire deux choses. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/data-action="charges-ordre"/g) || []).length, 1,
+      'un seul contrôle, dans un seul balisage');
+    eq((app.match(/chargesOrdonnees\(ordreCharges\)/g) || []).length, 2,
+      'et les deux listes le lisent');
+  });
+
+  test('les mots se traduisent', () => {
+    eq(I18N.en['Mon ordre'], 'My order', 'l’ordre du détenteur');
+    vrai(I18N.en['Du plus cher'], 'le tri par montant');
+    vrai(I18N.en['Glisser pour déplacer'], 'l’infobulle de la poignée');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
