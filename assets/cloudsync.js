@@ -22,7 +22,7 @@ const CloudSync = (() => {
      prochaine ecriture, et il doit donc se poser aussi quand on adopte l'etat du
      cloud sans l'avoir ecrit : sinon la sauvegarde suivante declare avoir lu une
      version qui n'est plus en place, et se fait refuser sans raison. */
-  const noterVersionLue = at => markSynced(at);
+  const noterVersionLue = at => { markSynced(at); status.conflict = null; };
 
   async function probe() {
     const d = await Quotes.healthData();

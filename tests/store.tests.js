@@ -3966,6 +3966,105 @@ suite('Actifs terminaux : pas de placement dans un placement', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   La version en ligne est reprise, sans question et sans perte seche
+   ------------------------------------------------------------------ */
+suite('Synchronisation : c’est toujours la version en ligne', () => {
+
+  const adoption = () => {
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('async function prendreVersionEnLigne(');
+    return app.slice(i, app.indexOf('\n  }', i));
+  };
+
+  test('l’application ne demande plus quelle version garder', () => {
+    /* Le detenteur a tranche : c'est toujours celle en ligne. La seule question
+       qui restait vivait au demarrage, quand cet appareil portait des
+       modifications jamais envoyees et que le cloud avait bouge. */
+    const app = lireSource('assets/app.js');
+    vrai(!/Deux versions différentes de tes données/.test(app),
+      'la fenêtre d’arbitrage a disparu du code');
+    vrai(!/Charger celle en ligne/.test(app), 'et son bouton avec elle');
+    const st = lireSource('assets/store.js');
+    vrai(!/Choisis laquelle garder/.test(st),
+      'la cloche ne réclame plus d’arbitrage non plus');
+    vrai(/Elle sera reprise dès que le réseau reviendra/.test(st),
+      'elle annonce ce qui va se passer');
+  });
+
+  test('les trois chemins passent par la même porte', () => {
+    /* L'appareil simplement en retard, celui qui portait une modification, et
+       l'ecriture refusee : trois chemins, une seule facon d'adopter. Trois
+       ecritures a la main auraient fini par diverger, et c'est deja arrive ici
+       — l'une d'elles sauvegardait sous un autre nom que les autres. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/prendreVersionEnLigne\(/g) || []).length, 4,
+      'une définition et trois appels');
+    vrai(!/Store\.addBackup\('avant chargement cloud'\)/.test(app),
+      'plus de seconde écriture de la même adoption');
+  });
+
+  test('la sauvegarde précède le remplacement, jamais l’inverse', () => {
+    /* C'est tout ce qui rend le geste reversible. Prendre la version en ligne
+       efface la modification locale qui n'etait pas partie : sans point de
+       retour, elle n'aurait jamais existe. L'ordre n'est pas un detail — une
+       sauvegarde posee apres le remplacement copierait la version en ligne. */
+    const fn = adoption();
+    const iSauve = fn.indexOf("Store.addBackup('avant adoption de la version en ligne')");
+    const iEtat = fn.indexOf('Store.state = donnees;');
+    vrai(iSauve > 0, 'la sauvegarde existe');
+    vrai(iEtat > 0, 'le remplacement aussi');
+    vrai(iSauve < iEtat, 'et la sauvegarde vient avant');
+  });
+
+  test('la version prise devient la base des écritures suivantes', () => {
+    /* Sans ce reperage, la sauvegarde suivante declarerait avoir lu une version
+       qui n'est plus en place, et le serveur la refuserait sans raison. */
+    const fn = adoption();
+    vrai(/CloudSync\.noterVersionLue\(quand\);/.test(fn),
+      'la version lue se note');
+    const cs = lireSource('assets/cloudsync.js');
+    vrai(/const noterVersionLue = at => \{ markSynced\(at\); status\.conflict = null; \};/.test(cs),
+      'et noter la version lue clôt le conflit : il n’y a plus rien à arbitrer');
+  });
+
+  test('le message dit où retrouver ce qui a été remplacé', () => {
+    /* Une sauvegarde que personne ne sait chercher ne repare rien. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/'Version en ligne reprise\. Ta saisie est dans les sauvegardes\.'/g) || []).length, 2,
+      'les deux cas qui coûtent quelque chose le disent');
+    const cle = 'Version en ligne reprise. Ta saisie est dans les sauvegardes.';
+    vrai(I18N.en[cle], 'la clef se traduit');
+    vrai(/backups/.test(I18N.en[cle]), 'et l’anglais nomme aussi les sauvegardes : ' + I18N.en[cle]);
+  });
+
+  test('une écriture refusée va chercher ce qui est en ligne', () => {
+    /* Un refus veut dire qu'un autre appareil a enregistre depuis. Le corps du
+       409 ne porte que des dates, pas les donnees : il faut donc les lire. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('CloudSync.setOnConflit(');
+    const bloc = app.slice(i, app.indexOf('\n  });', i));
+    vrai(/await CloudSync\.pull\(\)/.test(bloc), 'elle lit la version en ligne');
+    vrai(/prendreVersionEnLigne\(distant,/.test(bloc), 'et la prend');
+    /* Le repli, qui compte autant : hors ligne, une lecture n'aboutit pas, et
+       c'est justement le cas courant quand une ecriture vient d'echouer. */
+    vrai(/catch \(e\) \{/.test(bloc), 'un échec de lecture est rattrapé');
+    vrai(/Modification gardée ici/.test(bloc),
+      'et l’on garde alors ce qu’on a plutôt que de le perdre');
+  });
+
+  test('le serveur garde son garde-fou : rien n’est écrasé à l’aveugle', () => {
+    /* Prendre la version en ligne est un choix de LECTURE, cote client. Le
+       serveur, lui, continue de refuser une ecriture qui declare avoir lu une
+       version qui n'est plus en place — sinon un onglet ouvert depuis des
+       heures ecraserait ce qu'un autre appareil vient d'enregistrer. */
+    const w = lireSource('_worker.js');
+    vrai(/if \(prevAt && base !== prevAt\)/.test(w),
+      'le serveur compare toujours la version lue à celle en place');
+    vrai(/error: 'conflit'/.test(w), 'et refuse quand elles diffèrent');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -11125,11 +11224,18 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
     /* L'adoption silencieuse remplace le patrimoine entier sur la foi d'un
        repère. Le repère a déjà menti une fois ; une sauvegarde rend l'erreur
        réparable au lieu d'être définitive, et ne coûte rien. */
+    /* La sauvegarde a demenage dans la porte commune, celle que les trois
+       chemins d'adoption empruntent desormais. Le controle porte donc sur la
+       delegation : c'est elle qui garantit qu'aucun chemin ne remplace l'etat
+       sans passer par le point de retour. */
     const app = lireSource('assets/app.js');
     const bloc = app.match(/if \(cloud\.adopted\) \{[\s\S]*?\n    \} else/);
     vrai(bloc, 'la branche d’adoption doit être trouvable');
-    vrai(/Store\.addBackup\(/.test(bloc[0]),
-      'une adoption silencieuse doit poser une sauvegarde avant de tout remplacer');
+    vrai(/prendreVersionEnLigne\(/.test(bloc[0]),
+      'elle passe par la porte commune plutôt que de remplacer elle-même');
+    const porte = app.slice(app.indexOf('async function prendreVersionEnLigne('));
+    vrai(/Store\.addBackup\(/.test(porte.slice(0, 600)),
+      'et cette porte pose une sauvegarde avant de tout remplacer');
   });
 
   /* « J'ai encore mis des trucs aujourd'hui, des nouveaux montants. J'ai cliqué
@@ -11209,13 +11315,15 @@ suite('La synchronisation ne se déclare pas alignée sans l’être', () => {
        place, et se fait refuser sans raison : le correctif se retournerait contre
        le detenteur qui vient de choisir la version en ligne. */
     const src = sourceSync();
-    vrai(/const noterVersionLue = at => markSynced\(at\)/.test(src),
+    vrai(/const noterVersionLue = at => \{ markSynced\(at\);/.test(src),
       'cloudsync expose de quoi noter une version lue');
+    /* Plus de branche « charger celle en ligne » : il n'y a plus de question, et
+       les trois chemins passent par la meme porte. C'est elle qui note. */
     const app = lireSource('assets/app.js');
-    const bloc = app.match(/if \(ok\) \{[\s\S]*?Store\.save\(\);/);
-    vrai(bloc, 'la branche « charger celle en ligne » doit être trouvable');
-    vrai(/CloudSync\.noterVersionLue\(cloud\.at\)/.test(bloc[0]),
-      'et elle note la version adoptée avant d’enregistrer');
+    const i = app.indexOf('async function prendreVersionEnLigne(');
+    const porte = app.slice(i, app.indexOf('\n  }', i));
+    vrai(/CloudSync\.noterVersionLue\(quand\);/.test(porte),
+      'la porte commune note la version adoptée');
   });
 
   test('un refus se voit ailleurs que sur la page Données', () => {

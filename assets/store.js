@@ -5336,7 +5336,7 @@ function healthChecks() {
   if (typeof CloudSync !== 'undefined' && CloudSync.isAvailable()) {
     const c = CloudSync.status().conflict;
     if (c) add('error', trad('Ta dernière modification n’est pas partie'),
-      trad('Une autre version existe en ligne. Choisis laquelle garder.'), 'data');
+      trad('Une autre version existe en ligne. Elle sera reprise dès que le réseau reviendra.'), 'data');
   }
 
   sujet = 'credits';

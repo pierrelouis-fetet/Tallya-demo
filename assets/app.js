@@ -12189,8 +12189,45 @@ function applyField(f) {
 
   if (location.protocol === 'file:') showFileModeBanner();
 
+  /* Prendre la version en ligne, et rien d'autre.
+
+     Trois chemins y menent — l'appareil simplement en retard, l'appareil en
+     retard qui portait une modification, et l'ecriture refusee — et ils
+     faisaient trois choses differentes, dont deux posaient une question. Le
+     detenteur a tranche : c'est toujours la version en ligne, sans demander.
+
+     Ce que ce choix coute, et il faut l'ecrire ici : la modification locale qui
+     n'etait pas partie disparait de l'ecran. La sauvegarde qui precede n'est
+     donc pas une precaution de confort, c'est la seule chose qui rende le geste
+     reversible — Donnees, puis la liste des sauvegardes. Le message le dit, sans
+     quoi personne ne saurait ou chercher.
+
+     `noterVersionLue` fait deux choses et les deux comptent : la version prise
+     devient la base des ecritures suivantes, sinon la prochaine sauvegarde se
+     ferait refuser pour avoir declare une version qui n'est plus en place ; et
+     le conflit se clot, sinon la cloche reclamerait un arbitrage deja rendu. */
+  async function prendreVersionEnLigne(donnees, quand, mot) {
+    Store.addBackup('avant adoption de la version en ligne');
+    Store.state = donnees;
+    Store.migrate();
+    refreshAccounts();
+    CloudSync.noterVersionLue(quand);
+    try { localStorage.setItem(cleStockage(), JSON.stringify(Store.state)); } catch (e) {}
+    render();
+    toast(trad(mot));
+  }
+
   CloudSync.setOnChange(() => { if (currentView() === 'data') render(); });
-  CloudSync.setOnConflit(() => {
+  CloudSync.setOnConflit(async d => {
+    try {
+      const distant = await CloudSync.pull();
+      if (distant) {
+        await prendreVersionEnLigne(distant,
+          distant?.meta?.savedAt || d.remoteSavedAt,
+          'Version en ligne reprise. Ta saisie est dans les sauvegardes.');
+        return;
+      }
+    } catch (e) { /* hors ligne : on garde ce qu'on a, et la cloche le dira */ }
     toast(trad('Modification gardée ici : une autre version existe en ligne'));
     render();
   });
@@ -12206,34 +12243,10 @@ function applyField(f) {
          construction, donc la seule chose qui rende l'erreur réparable est un
          point de retour : Données → sauvegardes. Elle ne coûte rien et elle
          couvre le jour où ce raisonnement se trompera encore. */
-      Store.addBackup('avant adoption de la version en ligne');
-      Store.state = cloud.data;
-      Store.migrate();
-      refreshAccounts();
-      try { localStorage.setItem(cleStockage(), JSON.stringify(Store.state)); } catch (e) {}
-      render();
-      toast(trad('Données à jour depuis le cloud'));
+      await prendreVersionEnLigne(cloud.data, cloud.at, 'Données à jour depuis le cloud');
     } else if (cloud.newer) {
-      const ok = await askConfirm(
-        trad('Deux versions différentes de tes données') + '\n\n'
-        + trad("Cet appareil a des modifications qui n'ont jamais été envoyées, et une "
-        + 'version plus récente existe en ligne.') + '\n\n'
-        + `${trad('En ligne :')} ${new Date(cloud.at).toLocaleString(locale())}\n`
-        + `${trad('Ici :')} ${cloud.localAt ? new Date(cloud.localAt).toLocaleString(locale()) : trad('inconnue')}\n\n`
-        + trad("Charger la version en ligne ? (Annuler garde celle de cet appareil et l'envoie.)"),
-        { danger: false, ok: 'Charger celle en ligne' });
-      if (ok) {
-        Store.addBackup('avant chargement cloud');
-        Store.state = cloud.data;
-        Store.migrate();
-        /* La version qu'on vient de lire devient la base des ecritures suivantes.
-           Sans ce reperage, le `Store.save()` juste apres declarerait avoir lu une
-           version qui n'est plus en place, et le serveur le refuserait. */
-        CloudSync.noterVersionLue(cloud.at);
-        Store.save();
-      }
-      else { await CloudSync.push({ force: true }); }
-      render();
+      await prendreVersionEnLigne(cloud.data, cloud.at,
+        'Version en ligne reprise. Ta saisie est dans les sauvegardes.');
     } else if (cloud.aEnvoyer) {
       /* Cet appareil est en avance : il porte des modifications que le cloud
          n'a pas encore. Elles partent maintenant, sans attendre la prochaine
