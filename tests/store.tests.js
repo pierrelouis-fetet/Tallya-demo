@@ -4573,6 +4573,107 @@ suite('Fonds non coté : une valeur publiée, pas estimée', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Une charge porte une echeance ; la periodicite deduit les suivantes
+   ------------------------------------------------------------------ */
+suite('Échéance des charges fixes : une date déclarée, les suivantes calculées', () => {
+
+  const p = (date, per, auj) => prochaineEcheance({ echeanceLe: date, period: per }, auj);
+
+  test('la suivante se déduit de la périodicité', () => {
+    /* Un equivalent mensuel dit combien, jamais quand. Une charge semestrielle
+       de 480 € pese 80 € par mois dans le budget et n'en sort aucun onze mois
+       sur douze. */
+    eq(p('2026-01-15', 'trimestre', '2026-03-01'), '2026-04-15', 'trimestre suivant');
+    eq(p('2026-01-15', 'trimestre', '2026-04-20'), '2026-07-15', 'et celui d’après');
+    eq(p('2026-02-15', 'an', '2026-08-30'), '2027-02-15', 'l’an prochain');
+    eq(p('2026-01-05', 'semaine', '2026-01-20'), '2026-01-26', 'la semaine se compte en jours');
+  });
+
+  test('un 31 ne déborde pas sur le mois suivant', () => {
+    /* Le 31 janvier plus un mois n'est pas le 3 mars. `setMonth()` reporte le
+       debordement en silence, et une charge partant d'un 31 derivait d'un jour
+       a chaque saut. */
+    eq(p('2026-01-31', 'mois', '2026-02-01'), '2026-02-28', 'février se borne à son dernier jour');
+    eq(p('2026-01-31', 'semestre', '2026-03-01'), '2026-07-31', 'et juillet retrouve le 31');
+    /* Un 29 fevrier bissextile, vu une annee ordinaire. */
+    eq(p('2024-02-29', 'an', '2026-01-01'), '2026-02-28', 'le 29 février se borne au 28');
+  });
+
+  test('le calcul repart de l’origine, jamais de la précédente', () => {
+    /* Additionner des mois de proche en proche ferait deriver le jour des qu'un
+       mois court est traverse : un 31 janvier deviendrait 28 fevrier, puis 28
+       mars, puis 28 avril. En repartant de l'origine, mars retrouve son 31. */
+    eq(p('2026-01-31', 'mois', '2026-03-01'), '2026-03-31',
+      'mars revient au 31 après un février borné');
+    eq(p('2026-01-31', 'mois', '2026-04-01'), '2026-04-30', 'avril n’a que 30 jours');
+    eq(p('2026-01-31', 'mois', '2026-05-01'), '2026-05-31', 'et mai retrouve le 31');
+  });
+
+  test('une date déjà à venir ne bouge pas, et aucune n’est inventée', () => {
+    eq(p('2027-05-10', 'an', '2026-08-30'), '2027-05-10', 'une date future se rend telle quelle');
+    eq(p('2026-08-30', 'an', '2026-08-30'), '2026-08-30', 'le jour même compte encore');
+    eq(p('', 'an', '2026-08-30'), null, 'sans date, rien à déduire');
+    eq(prochaineEcheance(null, '2026-08-30'), null, 'ni pour une charge absente');
+    eq(p('pas-une-date', 'an', '2026-08-30'), null, 'ni pour une saisie illisible');
+  });
+
+  test('la date déclarée n’est jamais réécrite', () => {
+    /* Stocker « la prochaine » et la faire avancer toute seule reviendrait a
+       ecrire dans les donnees du detenteur sans qu'il l'ait demande, et une date
+       qu'on n'a pas saisie soi-meme ne se verifie plus. Meme parti que la
+       projection d'un credit : on rejoue, on propose, on n'ecrit pas. */
+    const c = { echeanceLe: '2026-01-15', period: 'trimestre' };
+    prochaineEcheance(c, '2027-06-01');
+    eq(c.echeanceLe, '2026-01-15', 'la charge est intacte après le calcul');
+    const st = lireSource('assets/store.js');
+    const i = st.indexOf('function prochaineEcheance(');
+    const fn = st.slice(i, st.indexOf('\n}', i));
+    vrai(!/c\.echeanceLe =/.test(fn), 'et la fonction n’écrit nulle part');
+  });
+
+  test('les trois fenêtres de charge portent le champ', () => {
+    /* Les trois ecrivent dans `budget.fixedCharges` : une seule liste, donc le
+       meme champ partout. Celle qui l'aurait oublie aurait cree des lignes que
+       les deux autres savent dater et pas elle. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/cle: 'echeanceLe', label: trad\('Prochaine échéance'\)/g) || []).length, 3,
+      'création, édition, et charge d’un bien');
+    eq((app.match(/echeanceLe: v\.echeanceLe \|\| ''/g) || []).length, 2,
+      'les deux créations l’enregistrent');
+    vrai(/c\.echeanceLe = v\.echeanceLe \|\| '';/.test(app), 'et l’édition aussi');
+  });
+
+  test('la périodicité se traduit et s’accorde', () => {
+    /* Deux defauts en un mot. Le libelle n'etait pas traduit : l'interface
+       anglaise affichait « billed annuel ». Et « facturee semestriel »
+       n'accorde pas — la table porte des adjectifs masculins, justes dans le
+       menu « Facturé : semestriel », faux apres un participe feminin. */
+    for (const [cle, lib] of CHARGE_PERIODES) {
+      vrai(I18N.en[lib], `« ${lib} » (${cle}) doit avoir un anglais`);
+    }
+    const app = lireSource('assets/app.js');
+    vrai(/: trad\(CHARGE_PERIODE_LABEL\[chargePeriode\(c\)\]\),/.test(app),
+      'le sous-titre traduit la périodicité');
+    vrai(!/trad\('facturée'\) \} \$\{CHARGE_PERIODE_LABEL/.test(app),
+      'et ne la fait plus suivre un participe qu’elle n’accorde pas');
+  });
+
+  test('une date d’une autre année dit son année, une seule fois', () => {
+    /* « 31 janv. » lu un 30 aout ne dit pas s'il s'agit du 31 janvier passe ou
+       du prochain, et l'ecart est de onze mois. Un seul appelant l'ajoutait a
+       la main en tranchant la chaine ISO ; la regle vit dans le formateur. */
+    const st = lireSource('assets/store.js');
+    const i = st.indexOf('function fmtJourMois(');
+    const fn = st.slice(i, st.indexOf('\n}', i));
+    vrai(/a !== new Date\(\)\.getFullYear\(\)/.test(fn),
+      'l’année ne paraît que si elle n’est pas celle-ci');
+    const app = lireSource('assets/app.js');
+    vrai(!/fmtJourMois\([^)]*\)\} \$\{String\([^)]*\)\.slice\(0, 4\)\}/.test(app),
+      'et plus personne ne la recolle à la main');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au

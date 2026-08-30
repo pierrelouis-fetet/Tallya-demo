@@ -1319,8 +1319,9 @@ function fmtDate(iso) {
 }
 function fmtJourMois(iso) {
   if (!iso) return '';
-  const [, m, d] = iso.split('-').map(Number);
-  return `${d} ${moisCourts()[m - 1] || ''}`.trim();
+  const [a, m, d] = String(iso).split('-').map(Number);
+  const jourMois = `${d} ${moisCourts()[m - 1] || ''}`.trim();
+  return a && a !== new Date().getFullYear() ? `${jourMois} ${a}` : jourMois;
 }
 
 /* Quand ce cours a-t-il ete imprime par la place ? En secondes, comme
@@ -3536,6 +3537,52 @@ const CHARGE_PERIODE_LABEL = Object.fromEntries(
 const chargePeriode = c => (c && CHARGE_MOIS_COUVERTS[c.period]) ? c.period : 'mois';
 const auMois = (valeur, c) => num(valeur) / CHARGE_MOIS_COUVERTS[chargePeriode(c)];
 const chargeMensuelle = c => auMois(c.amount, c);
+
+/* La date au format des cles, sans passer par l'UTC.
+
+   `toISOString()` convertit en UTC : a Paris, une date construite a minuit local
+   recule d'une ou deux heures et rend la veille pendant la moitie de l'annee.
+   On lit donc les composantes locales, qui sont celles qu'on vient de poser. */
+const isoDeDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  + `-${String(d.getDate()).padStart(2, '0')}`;
+
+/* Ajouter des mois a une date sans la faire deborder.
+
+   Le 31 janvier plus un mois n'est pas le 3 mars. `setMonth()` reporte le
+   debordement sur le mois suivant en silence, et une charge trimestrielle
+   partant d'un 31 derivait alors d'un jour a chaque saut. On borne au dernier
+   jour du mois vise, ce que fait n'importe quel echeancier reel. */
+function ajouterMois(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return null;
+  const voulu = d.getDate();
+  const r = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const dernier = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(voulu, dernier));
+  return r;
+}
+
+function prochaineEcheance(c, aujourdhui = todayISO()) {
+  const depart = c && c.echeanceLe;
+  if (!depart) return null;
+  const jour = new Date(depart + 'T00:00:00');
+  const cible = new Date(aujourdhui + 'T00:00:00');
+  if (isNaN(jour) || isNaN(cible)) return null;
+  if (jour >= cible) return depart;
+
+  const per = chargePeriode(c);
+  if (per === 'semaine') {
+    const pas = 7 * 864e5;
+    return isoDeDate(new Date(jour.getTime() + Math.ceil((cible - jour) / pas) * pas));
+  }
+  const mois = CHARGE_MOIS_COUVERTS[per];
+  const ecart = (cible.getFullYear() - jour.getFullYear()) * 12
+              + (cible.getMonth() - jour.getMonth());
+  let n = Math.max(0, Math.ceil(ecart / mois));
+  let d = ajouterMois(depart, n * mois);
+  if (d < cible) d = ajouterMois(depart, ++n * mois);
+  return isoDeDate(d);
+}
 
 function fixedTotal() {
   return B().fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0);

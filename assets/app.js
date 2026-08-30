@@ -3909,7 +3909,7 @@ function lignePlacement(l, compte, editable = false, sansNom = false) {
   const sousTitre = [...(sansNom ? [] : [CLASSES_ACTIFS[l.classe] || l.classe, nomCompteV2(compte)]),
     parPart,
     l.taux ? `${fmtNombre(num(l.taux))} % ${trad('annoncé')}` : '',
-    l.echeance ? `${trad('échéance')} ${fmtJourMois(l.echeance)} ${String(l.echeance).slice(0, 4)}` : '',
+    l.echeance ? `${trad('échéance')} ${fmtJourMois(l.echeance)}` : '',
     st !== 'encours' ? STATUTS_LIGNE[st] : '']
     .filter((x, i, t) => x && !pareil(x, libelle)
                            && t.indexOf(t.find(y => y && pareil(y, x))) === i)
@@ -5512,7 +5512,9 @@ function viewBudget(section = 'depenses') {
           action: 'edit-charge', index: i,
           titre: c.label || 'Sans nom',
           sous: [c.provider || '', chargePeriode(c) === 'mois' ? ''
-            : `${trad('facturée')} ${CHARGE_PERIODE_LABEL[chargePeriode(c)]}`,
+            : trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]),
+            prochaineEcheance(c)
+              ? `${trad('prochaine le')} ${fmtJourMois(prochaineEcheance(c))}` : '',
             (() => {
               if (!c.creditId) return '';
               const cr = creditsEnCours().lignes.find(x => x.id === c.creditId);
@@ -5559,7 +5561,8 @@ function viewBudget(section = 'depenses') {
               title="Modifier ${guill(esc(c.label || 'Sans nom'))}">
             <td class="name sticky-col"><span class="mois-lien">${esc(c.label || 'Sans nom')}</span></td>
             <td>${fmtEUR(num(c.amount))}</td>
-            <td>${esc(CHARGE_PERIODE_LABEL[chargePeriode(c)])}</td>
+            <td>${esc(trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]))}${prochaineEcheance(c)
+              ? `<span class="sub">${trad('prochaine le')} ${fmtJourMois(prochaineEcheance(c))}</span>` : ''}</td>
             <td class="${chargePeriode(c) === 'mois' ? 'muted' : ''}">${fmtEUR(chargeMensuelle(c))}</td>
             <td class="muted">${fmtPct(f.fixed ? chargeMensuelle(c) / f.fixed * 100 : 0, 1)}</td>
             ${gens.map(p => `<td>${shareOf(c, p.id) ? fmtEUR(shareOf(c, p.id)) : ''}</td>`).join('')}
@@ -7369,6 +7372,8 @@ const ACTIONS = {
         { cle: 'amount', label: 'Montant', type: 'nombre', exemple: '0' },
         { cle: 'period', label: 'Facturé', type: 'liste', options: CHARGE_PERIODES,
           valeur: proposes[0][1] },
+        { cle: 'echeanceLe', label: trad('Prochaine échéance'), type: 'date',
+          aide: trad('une échéance, passée ou à venir : les suivantes se déduisent de la périodicité') },
         { cle: 'provider', label: 'Organisme', type: 'texte', exemple: 'ex. Trésor public',
           suggestions: valeursConnues('organisme') },
       ],
@@ -7376,6 +7381,7 @@ const ACTIONS = {
     if (!v) return;
     Store.state.budget.fixedCharges.push({
       label: v.label, amount: num(v.amount), period: v.period,
+      echeanceLe: v.echeanceLe || '',
       provider: v.provider || '', shares: {}, creditId: null, bienId: c.id,
     });
     Store.save(); render();
@@ -7969,6 +7975,8 @@ const ACTIONS = {
           { cle: 'label', label: 'Poste', type: 'texte', requis: true, exemple: 'ex. Assurance habitation' },
           { cle: 'amount', label: 'Montant', type: 'nombre', exemple: '0' },
           { cle: 'period', label: 'Facturé', type: 'liste', options: CHARGE_PERIODES, valeur: 'mois' },
+          { cle: 'echeanceLe', label: trad('Prochaine échéance'), type: 'date',
+            aide: trad('une échéance, passée ou à venir : les suivantes se déduisent de la périodicité') },
           { cle: 'provider', label: 'Organisme', type: 'texte', exemple: 'ex. MAIF',
             suggestions: valeursConnues('organisme') },
           ...(creditsEnCours().lignes.length ? [{ cle: 'creditId', type: 'liste',
@@ -7987,6 +7995,7 @@ const ACTIONS = {
       for (const p of gens) if (v[`part_${p.id}`]) shares[p.id] = v[`part_${p.id}`];
       Store.state.budget.fixedCharges.push({
         label: v.label, amount: v.amount, period: v.period, provider: v.provider, shares,
+        echeanceLe: v.echeanceLe || '',
         creditId: v.creditId || null, bienId: v.bienId || null,
       });
       Store.save(); render();
@@ -8013,6 +8022,9 @@ const ACTIONS = {
         { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX, valeur: c.label },
         { cle: 'amount', label: 'Montant', type: 'nombre', valeur: num(c.amount) },
         { cle: 'period', label: 'Facturé', type: 'liste', options: CHARGE_PERIODES, valeur: chargePeriode(c) },
+        { cle: 'echeanceLe', label: trad('Prochaine échéance'), type: 'date',
+          valeur: c.echeanceLe || '',
+          aide: trad('une échéance, passée ou à venir : les suivantes se déduisent de la périodicité') },
         { cle: 'provider', label: 'Organisme', type: 'texte', valeur: c.provider || '',
           suggestions: valeursConnues('organisme') },
         ...(creditsEnCours().lignes.length || c.creditId ? [{ cle: 'creditId', type: 'liste',
@@ -8040,6 +8052,7 @@ const ACTIONS = {
       return;
     }
     c.label = v.label; c.amount = v.amount; c.period = v.period; c.provider = v.provider;
+    c.echeanceLe = v.echeanceLe || '';
     if (v.creditId !== undefined) c.creditId = v.creditId || null;
     if (v.bienId !== undefined) c.bienId = v.bienId || null;
     c.shares = c.shares || {};
