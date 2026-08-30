@@ -198,9 +198,17 @@ const TYPES_COMPTE = [
   /* `parts` : ce qu'on y detient se compte en titres, pas seulement en euros.
      Le drapeau vit sur le type plutot que dans la vue, comme `prete` et
      `titres` : un autre type qui se diviserait en parts le declarera ici. */
-  { id: 'pe',      label: 'Parts de société', classes: ['nonCote'], defaut: 'investir', groupe: 'pe', parts: true },
+  /* `terminal` : le compte EST le placement, il n'en contient pas d'autres.
+
+     Sans ce drapeau, la fiche d'une participation portait une carte
+     « Placements detenus » ou figurait la participation elle-meme, sous son
+     propre nom : un actif qui se contient lui-meme, et un « + Placement » qui
+     invitait a en ranger un second dedans. `direct` dit la meme chose pour ce
+     qu'on detient physiquement ; celui-ci le dit pour ce qui est detenu par un
+     tiers mais ne se subdivise pas. */
+  { id: 'pe',      label: 'Parts de société', classes: ['nonCote'], defaut: 'investir', groupe: 'pe', parts: true, terminal: true },
   { id: 'crowdfunding', label: 'Prêt participatif', classes: ['nonCote'],
-    defaut: 'investir', groupe: 'pe', prete: true },
+    defaut: 'investir', groupe: 'pe', prete: true, terminal: true },
   /* `direct` : on le detient soi-meme, le contenant EST la chose.
 
      `bienImmo` : ce type EST un bien immobilier, il ne fait pas qu'en porter.
@@ -300,6 +308,14 @@ const estUnBien = t => !!t && !t.titres && t.groupe === 'pe';
    detention. Le drapeau `direct` vit donc sur le type, declare une fois dans
    `TYPES_COMPTE`, la ou vivent deja `sansEtab`, `prete` et `interne`. */
 const estDetenuEnDirect = t => !!t && !!t.direct;
+/* Un actif terminal : le contenant EST la chose, il ne porte pas de sous-lignes.
+
+   Deux facons de l'etre, et une seule question : ce qu'on detient soi-meme
+   (`direct`, un appartement, une montre) et ce qu'un tiers detient pour nous
+   sans que cela se subdivise (`terminal`, une participation, un pret). Un CTO
+   ou une assurance-vie, eux, sont des contenants : plusieurs lignes y vivent, et
+   c'est tout leur objet. */
+const estActifTerminal = t => !!t && (!!t.direct || !!t.terminal);
 const motDateCompte = t => trad(estUnBien(t) ? 'Date d’achat' : 'Date d’ouverture');
 
 /* « compte » ou « bien », selon ce dont on parle.

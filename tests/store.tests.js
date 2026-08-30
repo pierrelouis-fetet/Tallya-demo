@@ -3800,6 +3800,172 @@ suite('Écarts du patrimoine : un montant, et sa réserve', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   La carte Patrimoine se lit, elle ne se touche pas
+   ------------------------------------------------------------------ */
+suite('Carte Patrimoine : une synthèse, sans porte cachée', () => {
+
+  const carte = () => {
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('<div class="hero">');
+    return app.slice(i, app.indexOf('<div class="card repart">', i));
+  };
+
+  test('aucune couverture cliquable ne recouvre la carte', () => {
+    /* Elle ouvrait la repartition par actif sans que rien ne l'annonce : ni
+       chevron, ni intitule, ni bordure. Un ecran entier qui reagit au doigt sans
+       le dire est une navigation cachee, et le premier appui d'un lecteur tombe
+       justement sur le grand chiffre. */
+    const c = carte();
+    vrai(c.length > 500, 'la carte doit être trouvable : ' + c.length);
+    vrai(!/card-couvre/.test(c), 'aucun bouton de couverture');
+    vrai(!/card-cliquable/.test(c), 'ni la classe qui l’accompagnait');
+    /* Le controle porte sur CETTE carte : une autre vue porte aussi une carte
+       « hero », qui elle ouvre vraiment quelque chose et l'annonce. */
+    const app = lireSource('assets/app.js');
+    vrai(/<div class="hero">/.test(app), 'la carte d’Aperçu se rend sans elle');
+  });
+
+  test('ni le montant, ni la barre, ni les écarts ne portent d’action', () => {
+    const c = carte();
+    /* Le grand chiffre. */
+    const val = c.slice(c.indexOf('<div class="hero-value">'),
+                        c.indexOf('</div>', c.indexOf('<div class="hero-value">')));
+    vrai(!/data-action/.test(val), 'le montant ne répond pas');
+    /* Les deux ecarts : leur balisage vient de deltaBlock, hors de cette
+       tranche, donc on le juge la ou il vit. */
+    const app = lireSource('assets/app.js');
+    const bloc = app.slice(app.indexOf('const deltaBlock = (label, x)'),
+                           app.indexOf("` : '';", app.indexOf('const deltaBlock = (label, x)')));
+    vrai(!/data-action/.test(bloc), 'les écarts ne répondent pas');
+    vrai(!/<button/.test(bloc), 'et ne sont pas des boutons');
+    /* La barre de repartition. */
+    const barre = c.slice(c.indexOf('<div class="hero-barre"'),
+                          c.indexOf('</div>', c.indexOf('<div class="hero-barre"')));
+    vrai(!/data-action/.test(barre), 'la barre ne répond pas');
+    vrai(/role="img"/.test(barre), 'elle s’annonce comme une image');
+  });
+
+  test('les pastilles d’aide restent, et elles seules', () => {
+    /* La seule exception voulue : expliquer un chiffre sans naviguer. La
+       bascule Net / Brut reste elle aussi, mais c'est un reglage de lecture
+       affiche comme tel, pas une porte vers un autre ecran. */
+    const c = carte();
+    const actions = (c.match(/data-action="([^"]+)"/g) || [])
+      .map(x => x.replace(/.*="|"$/g, ''));
+    for (const a of actions) {
+      vrai(a === 'hero-base', `« ${a} » n’a rien à faire dans cette carte`);
+    }
+    vrai(/aide\(AIDE_ECART\)/.test(lireSource('assets/app.js')),
+      'les écarts gardent leur bulle');
+  });
+
+  test('la fiche que plus rien n’ouvrait s’en est allée', () => {
+    /* Une fonction sans appelant se garde sans se maintenir, et finit par
+       decrire un ecran qui n'existe plus. */
+    const app = lireSource('assets/app.js');
+    vrai(!/patrimoineTotal/.test(app),
+      'ni la fiche « patrimoineTotal », ni un appel vers elle');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un actif terminal ne se contient pas lui-meme
+   ------------------------------------------------------------------ */
+suite('Actifs terminaux : pas de placement dans un placement', () => {
+
+  test('un contenant contient, un actif terminal non', () => {
+    /* La question est la meme pour les deux familles : ce compte porte-t-il
+       plusieurs lignes, ou EST-il la ligne ? */
+    for (const id of ['pe', 'crowdfunding', 'immo', 'bienValeur']) {
+      vrai(estActifTerminal(typeCompte(id)), `« ${id} » est un actif terminal`);
+    }
+    for (const id of ['cto', 'pea', 'av', 'per', 'crypto']) {
+      vrai(!estActifTerminal(typeCompte(id)), `« ${id} » est un contenant`);
+    }
+  });
+
+  test('le drapeau vit sur le type, pas dans la vue', () => {
+    /* Un identifiant ecrit dans la vue aurait ete une seconde liste a tenir :
+       le jour ou un type devient terminal, il le declare ici et tous les ecrans
+       suivent. */
+    const st = lireSource('assets/store.js');
+    vrai(/const estActifTerminal = t => !!t && \(!!t\.direct \|\| !!t\.terminal\);/.test(st),
+      'les deux façons de l’être se lisent au même endroit');
+    vrai(/id: 'pe',[^\n]*terminal: true/.test(st), '« Parts de société » le déclare');
+    vrai(/prete: true, terminal: true/.test(st), '« Prêt participatif » aussi');
+    const app = lireSource('assets/app.js');
+    vrai(!/type\.id === 'pe'|t\.id === 'pe'/.test(app),
+      'et aucune vue ne teste un identifiant à la main');
+  });
+
+  test('la fiche d’un actif terminal n’offre pas de sous-placement', () => {
+    /* Le defaut : la fiche d'une participation portait une carte « Placements
+       detenus » ou figurait cette meme participation, sous son propre nom. Un
+       actif qui se contient lui-meme, et un « + Placement » qui invitait a en
+       ranger un second dedans. */
+    const app = lireSource('assets/app.js');
+    vrai(/const seule = estActifTerminal\(t\) && !estBien\(t\) && lignes\.length === 1/.test(app),
+      'la fiche repère son placement unique');
+    vrai(/\$\{estBien\(t\) \|\| seule \|\|/.test(app),
+      'et la carte « Placements détenus » se tait alors');
+    /* Le bouton d'ajout vit dans cette carte : il part avec elle. */
+    const i = app.indexOf("${estBien(t) || seule ||");
+    const bloc = app.slice(i, app.indexOf('</div>`}', i));
+    vrai(/ajouter-placement/.test(bloc),
+      'le bouton d’ajout vit bien dans la carte qui se tait');
+  });
+
+  test('une seule condition décide, pas deux écritures', () => {
+    /* Deux conditions ecrites a la main auraient fini par diverger, et l'ecran
+       aurait montre les deux cartes ou aucune. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/estActifTerminal\(t\)/g) || []).length, 1,
+      'la condition ne s’écrit qu’une fois dans la vue');
+    vrai(/espaceTerminal\(c, idx, t, seule\)/.test(app),
+      'et la carte reçoit son résultat plutôt que de le recalculer');
+  });
+
+  test('un actif terminal à plusieurs lignes garde sa liste', () => {
+    /* Masquer la liste rendrait ces lignes injoignables : retirer un ecran ne
+       doit jamais emporter ce que quelqu'un y a saisi. */
+    const app = lireSource('assets/app.js');
+    vrai(/lignes\.length === 1\s*\n?\s*\? lignes\[0\] : null/.test(app),
+      'le repli ne vaut que pour le cas d’une ligne unique');
+    const i = app.indexOf('function espaceTerminal');
+    const fn = app.slice(i, app.indexOf('\n}', i));
+    vrai(/if \(!seule\) return '';/.test(fn),
+      'et la carte se tait quand il n’y a pas de ligne unique');
+  });
+
+  test('la ligne unique ne redit pas le nom de sa fiche', () => {
+    /* Le nom du compte est celui de la fiche, ecrit deux fois plus haut. La
+       ligne prend celui de sa classe, qui dit quelque chose de neuf. */
+    const app = lireSource('assets/app.js');
+    vrai(/function lignePlacement\(l, compte, editable = false, sansNom = false\)/.test(app),
+      'la ligne sait se rendre sans son nom');
+    vrai(/const libelle = sansNom \? trad\(CLASSES_ACTIFS\[l\.classe\] \|\| l\.classe\)/.test(app),
+      'elle porte alors le nom de sa classe');
+    vrai(/\.\.\.\(sansNom \? \[\] : \[CLASSES_ACTIFS\[l\.classe\] \|\| l\.classe, nomCompteV2\(compte\)\]\)/.test(app),
+      'et son sous-titre ne répète ni la classe ni le compte');
+    vrai(/lignePlacement\(seule, c, true, true\)/.test(app),
+      'la carte du placement terminal s’en sert');
+  });
+
+  test('l’architecture ne bouge pas : établissement, puis compte', () => {
+    /* C'est le niveau de trop qui part, pas un niveau reel. Un compte terminal
+       reste un compte, rattache a son etablissement, et sa valeur reste celle
+       de sa ligne. */
+    Fixture.poser();
+    const c = COMPTES().find(x => x.type === 'crowdfunding');
+    vrai(c, 'le fixture porte un prêt participatif');
+    vrai(estActifTerminal(typeCompte(c.type)), 'qui est terminal');
+    vrai(c.etabId, 'et qui garde son établissement');
+    pres(valeurCompte(c), 2000, 'sa valeur reste celle de sa ligne');
+    eq(lignesDe(c).length, 1, 'une ligne, une seule');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -12442,15 +12608,15 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
     const fn = src.slice(debut, debut + 5000);
     vrai(/nomLignePlacement\(l, compte\)/.test(fn),
       'la ligne tire son nom de la fonction qui en décide, une seule fois');
-    /* Le repli `sansClasse` et la vue groupee par classe sont partis ensemble le
-       8 aout 2026 : cet onglet redisait ce que la carte « Repartition » de
-       l'accueil dit deja, avec sa part et sa base en plus. Le dernier appelant
-       de `lignePlacement()` est la fiche d'un compte, ou la classe de chaque
-       ligne est au contraire l'information utile. */
-    vrai(/function lignePlacement\(l, compte, editable = false\) \{/.test(src),
-      'le paramètre est parti avec sa vue : trois arguments, plus quatre');
-    eq((src.match(/[^m]lignePlacement\(/g) || []).length, 2,
-      'une déclaration et un seul appelant : la fiche d’un compte');
+    /* Le quatrieme parametre ne dit plus « tais la classe » mais « tais le
+       nom » : sur la fiche d'un actif terminal, le nom de la ligne EST celui de
+       la fiche, et la classe devient au contraire ce qu'elle apporte. Un
+       parametre d'affichage se juge donc sur ce qu'il tait, jamais sur le
+       nombre d'arguments. */
+    vrai(/function lignePlacement\(l, compte, editable = false, sansNom = false\) \{/.test(src),
+      'le quatrième argument dit lequel des deux noms se tait');
+    eq((src.match(/[^m]lignePlacement\(/g) || []).length, 3,
+      'une déclaration et deux appelants : la liste d’un compte, et sa ligne unique');
 
     /* Le repli vit cote store, et les vues le partagent : la liste, la fenetre
        d'apercu d'une classe, et tout ce qui viendra. Une seule des deux le
@@ -17138,7 +17304,9 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
        relatives dans la vue, pas sur un numero de ligne. */
     const vue = src.slice(src.indexOf('function viewOverview()'),
                           src.indexOf('function mountOverview()'));
-    const iHero = vue.indexOf('class="hero card-cliquable"');
+    /* La carte du haut ne porte plus de couverture cliquable : elle se lit.
+       L'ancre porte donc sur la carte elle-meme, pas sur son ancien geste. */
+    const iHero = vue.indexOf('<div class="hero">');
     const iEvo = vue.indexOf('${carteEvolution()}');
     const iAcc = vue.indexOf('${carteAccumulation()}');
     const iRythme = vue.indexOf("trad('Rythme d\\'accumulation')");

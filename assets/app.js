@@ -763,10 +763,7 @@ function viewOverview() {
     ${sortiesRappel('depenses', depEnAttente.label)}
   </div>` : ''}
 
-  <div class="hero card-cliquable">
-    <button type="button" class="card-couvre" data-action="apercu" data-apercu="patrimoineTotal"
-            aria-label="${trad('Voir la répartition du patrimoine par actif')}"
-            title="${trad('Voir la répartition par actif')}"></button>
+  <div class="hero">
     <div>
       <div class="hero-label">
         <span>${trad('Patrimoine')}</span>
@@ -3714,7 +3711,17 @@ function ligneCompte(c, avecEtab = true) {
   </div>`;
 }
 
-function lignePlacement(l, compte, editable = false) {
+function espaceTerminal(c, idx, t, seule) {
+  if (!seule) return '';
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Le placement')}</h2>
+      <span class="hint">${esc(trad(t.label))}</span></div>
+    ${lignePlacement(seule, c, true, true)}
+  </div>`;
+}
+
+function lignePlacement(l, compte, editable = false, sansNom = false) {
   const mob = mobiliteLigne(l, compte);
   const gain = l.prixDeRevient ? l.valeur - l.prixDeRevient : null;
   /* La disponibilite se lit comme une pastille, pas comme un menu deroulant.
@@ -3742,7 +3749,14 @@ function lignePlacement(l, compte, editable = false) {
       </select>
     </span>` : badgeMobilisable(mob);
   const st = statutLigne(l);
-  const libelle = nomLignePlacement(l, compte);
+  /* Le nom affiche de la ligne.
+
+     `sansNom` : sur la fiche d'un actif terminal, ce nom est celui de la fiche
+     elle-meme, ecrit deux fois plus haut. La ligne prend alors le nom de sa
+     classe, qui dit quelque chose de neuf, et le sous-titre garde ce qui ne se
+     lit nulle part ailleurs. */
+  const libelle = sansNom ? trad(CLASSES_ACTIFS[l.classe] || l.classe)
+                          : nomLignePlacement(l, compte);
   const replie = x => String(x || '').trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
   const pareil = (a, b) => {
@@ -3764,7 +3778,7 @@ function lignePlacement(l, compte, editable = false) {
     return seul == null ? combien : `${combien} · ${fmtPart(seul)} ${trad('la part')}`;
   })();
 
-  const sousTitre = [CLASSES_ACTIFS[l.classe] || l.classe, nomCompteV2(compte),
+  const sousTitre = [...(sansNom ? [] : [CLASSES_ACTIFS[l.classe] || l.classe, nomCompteV2(compte)]),
     parPart,
     l.taux ? `${fmtNombre(num(l.taux))} % ${trad('annoncé')}` : '',
     l.echeance ? `${trad('échéance')} ${fmtJourMois(l.echeance)} ${String(l.echeance).slice(0, 4)}` : '',
@@ -4469,6 +4483,8 @@ function viewFicheCompte(id) {
   const t = typeCompte(c.type);
   memoriserFiche(`compte:${c.id}`, c);
   const lignes = lignesDe(c);
+  const seule = estActifTerminal(t) && !estBien(t) && lignes.length === 1
+    ? lignes[0] : null;
   const parClasse = new Map();
   for (const e of (c.cash || [])) parClasse.set('liquidites', (parClasse.get('liquidites') || 0) + num(e.montant));
   for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
@@ -4528,6 +4544,7 @@ function viewFicheCompte(id) {
   </div>
 
   ${espaceBien(c, idx, t)}
+  ${espaceTerminal(c, idx, t, seule)}
 
   ${(t.sansCash || !t.classes.includes('liquidites')) && !(c.cash || []).length ? '' : `
   <div class="card">
@@ -4551,7 +4568,7 @@ function viewFicheCompte(id) {
         : trad('Pas d’argent déclaré sur ce compte. « Scinder » ajoute une première part.')}</p>`}
   </div>`}
 
-  ${estBien(t) || (!t.classes.some(x => x !== 'liquidites') && !lignes.length) ? '' : `
+  ${estBien(t) || seule || (!t.classes.some(x => x !== 'liquidites') && !lignes.length) ? '' : `
   <div class="card">
     <div class="card-head"><h2>${trad(t.melange ? 'Supports du contrat'
       : t.titres ? 'Lignes de titres' : 'Placements détenus')}</h2>
@@ -9960,12 +9977,6 @@ const APERCUS = {
     };
   },
 
-  patrimoineTotal: () => ({
-    titre: trad('Patrimoine total'), sous: trad('Toutes poches confondues'),
-    total: nowTotals().total,
-    lignes: allocationByAsset().map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
-    vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
-  }),
   baseProjection: () => {
     const t = nowTotals();
     const s = projectionSettings();
