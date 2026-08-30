@@ -730,11 +730,12 @@ function viewOverview() {
      rend `null` quand la base de comparaison est nulle, negative, ou que le
      patrimoine a traverse zero entre les deux dates. L'euro, lui, reste exact
      dans tous les cas. */
+  const AIDE_ECART = trad('Variation du patrimoine, apports et retraits inclus. '
+    + 'Ce n’est pas un rendement d’investissement.');
   const deltaBlock = (label, x) => x ? `
     <div class="hero-delta">
-      <span>${esc(label)}</span>
-      <b class="${cls(x.eur)}">${arrow(x.eur)} ${fmtSigned(x.eur)}${x.pct == null ? ''
-        : ` <span class="small">(${fmtSignedPct(x.pct, 1)})</span>`}</b>
+      <span>${esc(label)}${aide(AIDE_ECART)}</span>
+      <b class="${cls(x.eur)}">${arrow(x.eur)} ${fmtSigned(x.eur)}</b>
     </div>` : '';
 
   const moisEnAttente = currentMonthPending();

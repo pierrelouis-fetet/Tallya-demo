@@ -3723,6 +3723,83 @@ suite('Fiches d’Aperçu : une catégorie se lit sans dérouler son inventaire'
   });
 });
 
+/* ------------------------------------------------------------------
+   Les deux ecarts du haut disent des euros, et ce qu'ils ne sont pas
+   ------------------------------------------------------------------ */
+suite('Écarts du patrimoine : un montant, et sa réserve', () => {
+
+  const bloc = () => {
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const deltaBlock = (label, x)');
+    return app.slice(i, app.indexOf("` : '';", i));
+  };
+
+  test('aucun pourcentage à côté des deux montants', () => {
+    /* Le pourcentage divisait l'ecart par le patrimoine du depart, apports
+       compris : verser mille euros par mois affichait « +18 % » sans qu'aucun
+       placement ait rien rapporte, et retirer faisait plonger un rendement que
+       rien ne degradait. Un pourcentage pose a cote d'un montant se lit comme
+       une performance, et c'est la seule chose que celui-la ne mesurait pas. */
+    const b = bloc();
+    vrai(!/fmtSignedPct/.test(b), 'le bloc n’écrit plus de pourcentage');
+    vrai(!/x\.pct/.test(b), 'et ne lit même plus celui du modèle');
+    vrai(/fmtSigned\(x\.eur\)/.test(b), 'le montant reste, signé');
+  });
+
+  test('le modèle continue de calculer, c’est l’affichage qui se tait', () => {
+    /* La demande disait « ne change aucun calcul » : `deltas()` rend toujours
+       ses pourcentages, et d'autres ecrans les lisent. */
+    Fixture.poser();
+    const d = deltas();
+    vrai('pct' in d.all, 'deltas() rend toujours un pourcentage');
+    vrai(Math.abs(num(d.all.eur)) > 0.005, 'et un montant');
+    const app = lireSource('assets/app.js');
+    vrai(/fmtSignedPct/.test(app), 'd’autres écrans en affichent encore');
+  });
+
+  test('la réserve se dit là où le chiffre se lit', () => {
+    /* Une ligne de prose sous la carte aurait ete lue par personne. La bulle
+       vit sur l'intitule de chaque ecart : les deux montants portent la meme
+       reserve, et chacun se lit seul. */
+    const b = bloc();
+    vrai(/\$\{esc\(label\)\}\$\{aide\(AIDE_ECART\)\}/.test(b),
+      'chaque intitulé porte sa bulle');
+    const app = lireSource('assets/app.js');
+    const texte = app.slice(app.indexOf('const AIDE_ECART'),
+                            app.indexOf('const deltaBlock'));
+    vrai(/apports et retraits inclus/.test(texte),
+      'la réserve nomme ce que le montant contient');
+    vrai(/n’est pas un rendement d’investissement/.test(texte),
+      'et ce qu’il n’est pas');
+    /* L'apostrophe s'ecrit, elle ne s'echappe pas : sous forme d'echappement
+       JavaScript, une recherche sur l'apostrophe typographique ne la trouve
+       pas, et c'est ainsi qu'une chaine echappe aux controles de langue. */
+    vrai(!/AIDE_ECART[\s\S]{0,200}u2019/.test(app),
+      'sans échappement, sinon les contrôles de langue la manquent');
+  });
+
+  test('la réserve se traduit', () => {
+    const cle = 'Variation du patrimoine, apports et retraits inclus. '
+      + 'Ce n’est pas un rendement d’investissement.';
+    vrai(I18N.en[cle], 'la clef existe en anglais');
+    vrai(/not an investment return/.test(I18N.en[cle]),
+      'et dit la même chose : ' + I18N.en[cle]);
+  });
+
+  test('les deux écarts partagent une seule écriture', () => {
+    /* Deux blocs ecrits a la main auraient fini par diverger : l'un garderait
+       son pourcentage, l'autre pas, et personne ne verrait lequel a raison. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/deltaBlock\(/g) || []).length, 2,
+      'deux appels, pas un balisage recopié');
+    eq((app.match(/const deltaBlock = /g) || []).length, 1, 'et une seule définition');
+    vrai(/deltaBlock\(trad\('depuis le 1er janvier'\), d\.ytd\)/.test(app),
+      'depuis le 1er janvier');
+    vrai(/deltaBlock\(trad\('depuis le début'\), d\.all\)/.test(app),
+      'depuis le début');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au

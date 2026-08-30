@@ -125,6 +125,8 @@ const I18N = {
     'Volatilité du S&P 500': 'S&P 500 volatility',
     'Reste à financer': 'Left to finance',
     'Nombre de parts': 'Number of shares',
+    'Variation du patrimoine, apports et retraits inclus. Ce n’est pas un rendement d’investissement.':
+      'Change in net worth, contributions and withdrawals included. This is not an investment return.',
     'Voir les {n} autres': 'Show the other {n}',
     'classes': 'classes',
     'classe': 'class',
