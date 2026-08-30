@@ -785,6 +785,15 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
+/* Le premier `textarea` de l'application. Deux endroits en avaient besoin : une
+   adresse et la note d'un mois, deux textes qu'une ligne coupait en plein
+   milieu — l'adresse du fixture demande 359 px pour 311 disponibles, et rien ne
+   disait qu'il en manquait.
+
+   `resize: vertical` et non `both` : elargir un champ au-dela de sa carte le
+   ferait deborder d'une mise en page qui ne l'attend pas. La hauteur, elle, se
+   regle sans rien casser. */
+textarea { resize: vertical; line-height: 1.45; }
 
 /* `hidden` doit primer : une règle de classe comme `.field { display: flex }`
    l'emporte sinon sur le `display: none` du navigateur, et l'élément reste
@@ -2967,6 +2976,25 @@ td .empty, th .empty { background: none; border: none; }
    C'est le meme defaut que `.kv-texte` corrige pour les listes entierement en
    prose ; celle-ci est mixte, donc la permission se pose sur la valeur. */
 .kv dd.phrase { white-space: normal; }
+/* Et sur un ecran etroit, elle prend sa PROPRE ligne.
+
+   Laisser une phrase se replier ne suffisait pas : la colonne des valeurs est en
+   `auto`, elle se dimensionne donc sur ce que la phrase demande une fois pliee,
+   et c'est encore beaucoup. Mesure a 375 px sur le bloc d'un credit : 80 px pour
+   les libelles contre 221 pour les valeurs, et les CINQ intitules replies sur
+   deux lignes — dont trois qui n'ont qu'un montant en face.
+
+   Une seule valeur affamait toute la grille, comme la fois d'avant ; la
+   permission de se replier ne l'avait qu'attenue. Sortie de la colonne, elle
+   cesse de la dimensionner : les libelles passent a 252 px, plus aucun ne se
+   replie, et le bloc raccourcit de 193 a 169 px.
+
+   Le seuil est mesure et non choisi : la famine cesse quand la carte atteint
+   520 px, soit une fenetre d'environ 585. 640 laisse une marge, et au-dessus la
+   phrase reste sur la ligne de son libelle, ou elle a la place. */
+@media (max-width: 640px) {
+  .kv dd.phrase { grid-column: 1 / -1; text-align: left; }
+}
 /* Variante pour les listes qui portent du texte et non des montants : le
    `nowrap` ci-dessus existe pour qu'un montant ne se coupe jamais entre le
    nombre et sa devise, mais applique a une phrase il elargit la grille jusqu'a
@@ -3511,6 +3539,20 @@ td .empty, th .empty { background: none; border: none; }
   .view { padding: 14px 16px 48px; gap: 14px; }
   .sous-onglets { padding: 0 0 6px; }
   .g-2, .g-3, .g-4 { grid-template-columns: minmax(0, 1fr); }
+  /* Sauf deux champs COURTS, qui restent cote a cote.
+
+     C'est l'argument deja retenu deux lignes plus bas pour `.g-tuiles` : un
+     chiffre et son etiquette tiennent tres bien dans une demi-largeur. Une
+     surface et une part, une valeur et un prix d'achat, ne demandent pas trois
+     cent onze pixels chacun. Mesure sur la fiche d'un bien : les trois grilles
+     passent de 398 px de haut a 191, sans un pixel de debordement, avec un seul
+     libelle sur deux lignes et un champ jamais plus etroit que 148 px.
+
+     La classe se pose au cas par cas et non sur `.g-2` en general : la meme
+     mesure sur Preferences donne un champ a 76 px, ou deux colonnes ne sont
+     plus une economie mais une gene. La specificite fait le reste — deux
+     classes contre une, l'ordre ne decide de rien. */
+  .grid.g-paire { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .g-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .g-tuiles > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .g-tuiles .tile { padding: 12px 13px; }

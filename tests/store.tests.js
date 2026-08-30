@@ -2881,6 +2881,109 @@ suite('Les cours du marché se remettent à jour, pas seulement ceux qu’on dé
   });
 });
 
+/* ------------------------------------------------------------------
+   Un texte long a la place qu'il lui faut, un champ court celle qu'il mérite
+   ------------------------------------------------------------------ */
+suite('Les champs prennent la place de ce qu’ils portent', () => {
+
+  const css = () => (lireSource('assets/styles.css') || '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const app = () => lireSource('assets/app.js');
+
+  test('une valeur en phrase sort de la colonne qu’elle affamait', () => {
+    /* La colonne des valeurs est en `auto` : elle se dimensionne sur ce que la
+       phrase demande, meme repliee. Mesure a 375 px sur le bloc d'un credit :
+       80 px pour les libelles contre 221 pour les valeurs, et les CINQ intitules
+       replies sur deux lignes — dont trois qui n'ont qu'un montant en face.
+       Sortie de la colonne, la phrase cesse de la dimensionner : 252 px pour les
+       libelles, aucun replie, et le bloc raccourcit de 193 a 169 px. */
+    const c = css();
+    vrai(/\.kv dd\.phrase \{ grid-column: 1 \/ -1; text-align: left; \}/.test(c),
+      'la phrase prend sa propre ligne');
+    /* Le seuil est MESURE : la famine cesse quand la carte atteint 520 px, soit
+       une fenetre d'environ 585. Au-dela, la phrase reste sur la ligne de son
+       libelle, ou elle a la place. */
+    const i = c.indexOf('.kv dd.phrase { grid-column');
+    const avant = c.slice(0, i);
+    vrai(/@media \(max-width: 640px\) \{\s*$/.test(avant.slice(-40)),
+      'et seulement en dessous de 640 px');
+    /* La permission de se replier reste : sans elle, un nowrap sur une phrase
+       reduisait deja la colonne des libelles a zero. Les deux regles se
+       completent, elles ne se remplacent pas. */
+    vrai(/\.kv dd\.phrase \{ white-space: normal; \}/.test(c),
+      'la phrase garde le droit de se replier');
+  });
+
+  test('deux champs courts restent côte à côte sur un téléphone', () => {
+    /* `.g-2` passe a une colonne sous 900 px, et c'est juste pour deux champs
+       qui portent une phrase. Pour deux nombres, c'est du gachis : mesure sur la
+       fiche d'un bien, les trois grilles passent de 398 px de haut a 191, sans
+       debordement, avec un seul libelle sur deux lignes.
+
+       La classe se pose au cas par cas : la meme mesure sur Preferences donne un
+       champ a 76 px, ou deux colonnes ne sont plus une economie. */
+    const c = css();
+    vrai(/\.grid\.g-paire \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/.test(c),
+      'la paire serrée existe');
+    /* Deux classes contre une : la specificite decide, pas l'ordre. C'est ce qui
+       la rend sure a poser n'importe ou. */
+    const iCollapse = c.indexOf('.g-2, .g-3, .g-4 { grid-template-columns: minmax(0, 1fr); }');
+    const iPaire = c.indexOf('.grid.g-paire {');
+    vrai(iCollapse > 0 && iPaire > iCollapse,
+      'elle vit dans la même règle mobile, après le repli qu’elle corrige');
+
+    /* Et elle est posee la ou la mesure l'a justifiee : les trois grilles de la
+       fiche d'un bien, qui ne portent que des nombres et un menu. */
+    const t = app();
+    const bloc = t.slice(t.indexOf("<div class=\"field\"><label>${trad('Nom du bien')}</label>"),
+                         t.indexOf('<div class="field"><label>Adresse</label>'));
+    vrai(bloc.length > 500, 'le bloc du bien doit être trouvable');
+    eq((bloc.match(/<div class="grid g-2 g-paire">/g) || []).length, 3,
+      'les trois grilles du bien la portent');
+    vrai(!/<div class="grid g-2">/.test(bloc),
+      'et aucune n’est restée en arrière');
+  });
+
+  test('une adresse et une note du mois tiennent sur trois lignes', () => {
+    /* Une ligne les coupait en plein milieu sans le dire : l'adresse du jeu
+       d'essai demande 359 px pour les 311 d'une carte a 375. */
+    const t = app();
+    for (const [quoi, motif] of [
+      ['adresse', /<textarea rows="3" data-path="comptes\.\$\{idx\}\.lignes\.\$\{i\}\.adresse"/],
+      ['note du mois', /<textarea id="depNote" rows="3"/],
+    ]) {
+      vrai(motif.test(t), `« ${quoi} » doit être un textarea de trois lignes`);
+    }
+    /* Le piege du `textarea` : sa valeur vit dans son CORPS, pas dans un
+       attribut `value`. Ecrite en attribut, elle serait silencieusement perdue —
+       le champ s'afficherait vide et la sauvegarde ecraserait le texte. */
+    for (const bout of ['style="text-align:left">${esc(l.adresse || \'\')}</textarea>',
+                        '\')}">${esc(r.note || \'\')}</textarea>']) {
+      vrai(t.includes(bout), 'la valeur est écrite dans le corps du textarea');
+    }
+    vrai(!/<textarea[^>]*value=/.test(t),
+      'et jamais dans un attribut value, qu’un textarea ignore');
+
+    /* Le premier `textarea` de l'application a besoin de sa regle : sans elle il
+       se redimensionne dans les deux sens, et l'elargir le ferait sortir de sa
+       carte. */
+    vrai(/textarea \{ resize: vertical; line-height: 1\.45; \}/.test(css()),
+      'il ne se redimensionne qu’en hauteur');
+  });
+
+  test('l’écouteur d’écriture voit les textarea comme les input', () => {
+    /* Il cherche `closest('[data-path]')`, donc la balise ne compte pas — mais
+       c'est la condition pour que l'adresse s'enregistre a la frappe comme le
+       reste de la fiche. Un champ qui ne s'ecrit pas est pire qu'un champ
+       absent : on croit avoir saisi. */
+    const t = app();
+    eq((t.match(/const f = e\.target\.closest\('\[data-path\]'\);/g) || []).length, 2,
+      'les deux écouteurs passent par le même sélecteur');
+    /* Et le style de base couvre deja les trois balises. */
+    vrai(/input, select, textarea \{/.test(css()),
+      'le textarea hérite du même habillage');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -22567,8 +22670,14 @@ suite('La cible se compare au patrimoine, et se date au mois', () => {
        a l'annee du point precedent : en aout 2026, une cible franchie six mois
        plus tard s'annoncait « 2026 (+6 mois) » au lieu de fevrier 2027. Le mois
        de depart est desormais le vrai mois courant. */
-    const attendu = new Date();
-    attendu.setMonth(attendu.getMonth() + 6);
+    /* Le mois attendu se calcule sur le JOUR 1, jamais par `setMonth` sur la
+       date du jour. Ce raccourci deborde des que le mois vise est plus court :
+       le 30 aout, `setMonth(+6)` vise le 30 fevrier, que JavaScript reporte au
+       2 mars — le test reclamait alors mars quand le modele disait fevrier, a
+       juste titre. Il tombait donc les 29, 30 et 31, et passait le reste du
+       mois : un rouge qui depend du calendrier n'apprend rien. */
+    const maintenant = new Date();
+    const attendu = new Date(maintenant.getFullYear(), maintenant.getMonth() + 6, 1);
     const r = moteurProjection(cfg({ marche: 0, monthly: 1000, rate: 0, target: 6000 }));
     eq(r.atteinte.monthsFromNow, 6, 'six versements de mille euros font six mille');
     eq(r.atteinte.year, attendu.getFullYear(), 'l’année est celle du sixième mois à venir');
@@ -22578,8 +22687,9 @@ suite('La cible se compare au patrimoine, et se date au mois', () => {
   test('une cible franchie dans plusieurs années donne l’année juste', () => {
     const r = moteurProjection(cfg({ marche: 0, monthly: 1000, rate: 0, target: 120000 }));
     eq(r.atteinte.monthsFromNow, 120, 'cent vingt versements');
-    const attendu = new Date();
-    attendu.setMonth(attendu.getMonth() + 120);
+    /* Meme regle que ci-dessus : jour 1, pour que le mois vise ne deborde pas. */
+    const maintenant = new Date();
+    const attendu = new Date(maintenant.getFullYear(), maintenant.getMonth() + 120, 1);
     eq(r.atteinte.year, attendu.getFullYear(), 'soit dix ans plus tard, au mois près');
     pres(r.atteinte.yearsFromNow, 10, 'et dix ans de durée');
   });

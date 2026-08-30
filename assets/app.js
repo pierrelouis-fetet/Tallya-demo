@@ -4188,7 +4188,7 @@ function espaceBien(c, idx, t) {
         <div class="field"><label>${trad('Nom du bien')}</label>
           <input data-action-change="renommer-bien" data-compte="${esc(c.id)}"
                  value="${esc(l.libelle || '')}" placeholder="${trad('ex. Studio Lyon 3e')}"></div>
-        <div class="grid g-2">
+        <div class="grid g-2 g-paire">
           <div class="field"><label>${trad('Valeur estimée aujourd\'hui (€)')}${aide(trad("Ce qu'un acheteur te paierait aujourd'hui, frais de notaire exclus : ceux-là sont partis en taxes le jour de l'achat et ne se revendent pas. C'est pour ça qu'un achat récent financé à crédit peut afficher un patrimoine net négatif, sans que rien ne soit faux."))}</label>
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.valeur" value="${num(l.valeur)}"></div>
@@ -4196,7 +4196,7 @@ function espaceBien(c, idx, t) {
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.prixDeRevient" value="${num(l.prixDeRevient) || ''}"></div>
         </div>
-        <div class="grid g-2">
+        <div class="grid g-2 g-paire">
           <div class="field"><label>${trad('Date d\'acquisition')}</label>
             <input type="date" data-path="comptes.${idx}.lignes.${i}.dateAcquisition"
                    value="${esc(l.dateAcquisition || '')}"></div>
@@ -4204,7 +4204,7 @@ function espaceBien(c, idx, t) {
             <input type="number" step="any" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>
         </div>
-        <div class="grid g-2">
+        <div class="grid g-2 g-paire">
           <div class="field"><label>${trad('Usage')}${aide(trad("Il décide de ce que la fiche te montre : un logement mis en location a un rendement, celui que tu habites a un coût. Ta résidence principale sort aussi des avoirs mobilisables en quelques mois, parce que la vendre veut dire te reloger."))}</label>
             <select data-path="comptes.${idx}.lignes.${i}.usage" class="annee">
               <option value="">${trad('à préciser')}</option>
@@ -4219,8 +4219,9 @@ function espaceBien(c, idx, t) {
               trad('Une part va de 0 à 100. Au-delà, le bien compte en entier.')}</p>` : ''}</div>
         </div>
         <div class="field"><label>Adresse</label>
-          <input data-path="comptes.${idx}.lignes.${i}.adresse" value="${esc(l.adresse || '')}"
-                 placeholder="${trad('facultatif')}" style="text-align:left"></div>
+          <textarea rows="3" data-path="comptes.${idx}.lignes.${i}.adresse"
+                    placeholder="${trad('facultatif')}"
+                    style="text-align:left">${esc(l.adresse || '')}</textarea></div>
       </div>`).join('')}
     ${(() => {
       const surface = biens.reduce((s, { l }) => s + num(l.surface), 0);
@@ -9207,7 +9208,8 @@ function askExpenseMonth(index) {
       </div>
       <div class="field" style="margin-top:12px">
         <label>${trad('Note du mois')}</label>
-        <input id="depNote" value="${esc(r.note || '')}" placeholder="${trad('Ce qui explique ce mois-là…')}">
+        <textarea id="depNote" rows="3"
+                  placeholder="${trad('Ce qui explique ce mois-là…')}">${esc(r.note || '')}</textarea>
       </div>`;
     $('#modalFoot').innerHTML =
       `<button class="btn ghost sm" id="depAutres" type="button">${trad('Autres mois')}</button>
