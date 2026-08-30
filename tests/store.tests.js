@@ -3167,6 +3167,60 @@ suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Une phrase ne redit pas ce que la carte montre déjà
+   ------------------------------------------------------------------ */
+suite('Le diagnostic des rôles ne dit que ce qui n’est pas déjà à l’écran', () => {
+
+  test('la part du socle n’est plus récitée : la barre la porte', () => {
+    /* Elle l'annoncait en toutes lettres — « le core represente 55,0 % de la
+       base de tes cibles » — trente pixels au-dessus d'une barre qui affiche
+       « Core · 55,0 % » avec son montant, sous un en-tete qui nomme deja la
+       base. Trois exemplaires du meme fait sur un ecran de telephone. */
+    const app = lireSource('assets/app.js');
+    const fn = app.slice(app.indexOf('function diagnosticRoles(rr)'),
+                         app.indexOf('function viewRebalance()'));
+    vrai(fn.length > 300, 'la fonction doit être trouvable');
+    vrai(!/trad\('représente'\)/.test(fn),
+      'la part du socle ne se récite plus');
+    vrai(!/BASES\.baseCibles\.de/.test(fn),
+      'et la base non plus : l’en-tête de la carte la nomme');
+    /* Ce que la carte ne montre nulle part, en revanche, reste dit. */
+    vrai(/de ta part arbitrable est en/.test(fn),
+      'la composition de la part arbitrable reste, elle');
+  });
+
+  test('sans concentration, la phrase disparaît au lieu de meubler', () => {
+    /* Une part arbitrable repartie sur trois classes n'a rien a signaler. La
+       carte garde ses barres ; une phrase qui les paraphrase serait du bruit.
+       C'est le meme principe que les bascules : ce qui n'apprend rien ne
+       s'affiche pas. */
+    const app = lireSource('assets/app.js');
+    const fn = app.slice(app.indexOf('function diagnosticRoles(rr)'),
+                         app.indexOf('function viewRebalance()'));
+    vrai(/if \(!gros \|\| partGros < 50\) return '';/.test(fn),
+      'en dessous du seuil, rien ne se rend');
+    /* Et le seuil ne s'ecrit qu'une fois : deux valeurs auraient fini par
+       diverger entre la garde et la phrase. */
+    eq((fn.match(/partGros/g) || []).length, 3,
+      'le seuil, la garde et l’affichage lisent la même variable');
+  });
+
+  test('la classe nommée pèse bien la classe entière', () => {
+    /* Regle deja acquise, et qu'il ne faut pas perdre en simplifiant : la
+       composition est indexee par classe ET par nature, si bien qu'« actions en
+       direct » et « actions en fonds » y sont deux entrees. Prendre la premiere
+       annoncerait un pourcentage juste sous un intitule qui ment. */
+    const app = lireSource('assets/app.js');
+    const fn = app.slice(app.indexOf('function diagnosticRoles(rr)'),
+                         app.indexOf('function viewRebalance()'));
+    vrai(/parClasse\.set\(p\.classe, \(parClasse\.get\(p\.classe\) \|\| 0\) \+ p\.value\)/.test(fn),
+      'la composition s’agrège par classe avant qu’on cherche la plus grosse');
+    vrai(/const gros = \[\.\.\.parClasse\]\.sort/.test(fn),
+      'et c’est bien la table agrégée qui se trie');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au

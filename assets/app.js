@@ -3166,12 +3166,9 @@ function diagnosticRoles(rr) {
   }
   const gros = [...parClasse].sort((a, b) => b[1] - a[1])[0];
   const partGros = gros && sat.value ? gros[1] / sat.value * 100 : 0;
-  const phrases = [`${trad('Le')} ${ROLES.core.toLowerCase()} ${trad('représente')} <b>${fmtPct(socle.pct, 1)}</b> ${BASES.baseCibles.de}.`];
-  if (gros && partGros >= 50) {
-    phrases.push(`${trad('La part arbitrable est à')} <b>${fmtPct(partGros, 0)}</b> ${
-      esc(gros[0].toLowerCase())}${trad(' : une seule classe en porte l’essentiel.')}`);
-  }
-  return `<p class="plan-phrase" style="font-size:13.5px">${phrases.join(' ')}</p>`;
+  if (!gros || partGros < 50) return '';
+  return `<p class="plan-phrase" style="font-size:13.5px"><b>${fmtPct(partGros, 0)}</b> ${
+    trad('de ta part arbitrable est en')} ${esc(gros[0].toLowerCase())}.</p>`;
 }
 
 function viewRebalance() {

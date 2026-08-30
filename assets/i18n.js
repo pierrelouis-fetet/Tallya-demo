@@ -124,6 +124,7 @@ const I18N = {
     'Très élevée': 'Very high',
     'Volatilité du S&P 500': 'S&P 500 volatility',
     'Reste à financer': 'Left to finance',
+    'de ta part arbitrable est en': 'of the part you can steer sits in',
     ', si tu empruntes le reste. Ajoute le crédit quand il existera : Tallya n’en crée aucun toute seule.':
       ', if you borrow the rest. Add the loan once it exists: Tallya never creates one on its own.',
     'L’apport et le montant emprunté ne correspondent pas au prix d’acquisition renseigné.':
