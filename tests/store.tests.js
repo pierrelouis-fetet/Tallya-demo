@@ -4226,6 +4226,121 @@ suite('Ordre des charges fixes : le sien, ou celui des montants', () => {
       'et les deux listes le lisent');
   });
 
+  test('les voisines rejoignent leur place au lieu d’y sauter', () => {
+    /* Le navigateur ne sait pas animer un changement d'ordre du DOM : pour lui
+       la ligne a disparu d'un endroit et reparu ailleurs. On note donc ou sont
+       les voisines AVANT de deplacer, on les repose visuellement a leur ancienne
+       place, et on les laisse revenir. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const glisserVoisines = avant =>');
+    const fn = app.slice(i, app.indexOf('\n  };', i));
+    vrai(i > 0, 'la fonction d’animation doit être trouvable');
+    vrai(/const d = y0 - x\.getBoundingClientRect\(\)\.top;/.test(fn),
+      'l’écart se mesure entre l’ancienne place et la nouvelle');
+    vrai(/x\.animate\(/.test(fn), 'et la voisine revient de cet écart');
+    /* La mesure se prend avant le deplacement, sinon elle ne mesure rien. */
+    const b = app.indexOf('const bouger = e =>');
+    const bloc = app.slice(b, app.indexOf('\n  };', b));
+    const iMesure = bloc.indexOf('avant.set(x, x.getBoundingClientRect().top)');
+    const iBouge = bloc.indexOf('hote.insertBefore(porte, r)');
+    vrai(iMesure > 0 && iBouge > 0, 'les deux gestes existent');
+    vrai(iMesure < iBouge, 'et la mesure précède le déplacement');
+    /* La ligne portee suit le doigt : ce n'est pas a une animation de la placer. */
+    vrai(/if \(x !== porte\) avant\.set\(/.test(bloc),
+      'la ligne portée est exclue de l’animation');
+  });
+
+  test('deux animations ne se superposent pas sur la même ligne', () => {
+    /* Un glissement rapide fait traverser plusieurs voisines par seconde. Deux
+       animations sur le meme element donnent un tremblement, pas un mouvement. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const glisserVoisines = avant =>');
+    const fn = app.slice(i, app.indexOf('\n  };', i));
+    vrai(/if \(x\.__glisse\) x\.__glisse\.cancel\(\);/.test(fn),
+      'la précédente s’annule avant que la suivante parte');
+    /* Et tout meurt avec le geste : la liste se redessine juste apres, et une
+       voisine encore en mouvement sur un element qui va etre remplace laisse un
+       clignotement. */
+    const f = app.indexOf('const finir = () => {');
+    const fin = app.slice(f, app.indexOf('\n  };', f));
+    vrai(/x\.__glisse\.cancel\(\); x\.__glisse = null;/.test(fin),
+      'et le relâchement les annule toutes');
+  });
+
+  test('le mouvement réduit est respecté, et relu à chaque geste', () => {
+    /* Une valeur figee au chargement continuerait d'animer chez quelqu'un qui
+       vient de demander l'arret. Meme convention que les graphiques. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const glisserVoisines = avant =>');
+    const fn = app.slice(i, app.indexOf('\n  };', i));
+    vrai(/matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches\) return;/.test(fn),
+      'l’animation se tait quand le mouvement est refusé');
+    vrai(fn.indexOf('matchMedia') < fn.indexOf('x.animate('),
+      'et la garde vient avant l’animation, pas après');
+  });
+
+  test('les montants gardent leur colonne, poignée ou pas', () => {
+    /* Sans poignee — le cas des que l'ordre est calcule — la ligne devenait le
+       premier enfant de la rangee et tombait dans la colonne `auto`, qui se
+       dimensionne au contenu. Chaque rangee prenait la largeur de son propre
+       libelle : les montants partaient en escalier et les chevrons avec eux. */
+    const css = lireSource('assets/styles.css');
+    vrai(/\.rang-glissant > \.poignee \{ grid-column: 1; \}/.test(css),
+      'la poignée est placée par sa colonne');
+    vrai(/\.rang-glissant > \.mlist \{ grid-column: 2;/.test(css),
+      'la ligne aussi, et non par son rang parmi les enfants');
+    vrai(/\.rang-glissant \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)/.test(css),
+      '« minmax(0, 1fr) » : un libellé long ne repousse pas la piste');
+  });
+
+  test('le tableau du bureau se glisse aussi', () => {
+    /* La poignee ne vivait que dans la liste du telephone, laquelle est masquee
+       au-dessus de 768 px : sur un ecran large, il n'y avait aucun moyen de
+       reordonner. Le meme mecanisme sert les deux. */
+    const app = lireSource('assets/app.js');
+    vrai(/<tbody id="chargesTable">/.test(app), 'le corps du tableau est nommé');
+    vrai(/data-action="edit-charge" data-i="\$\{i\}" data-rang="\$\{i\}"/.test(app),
+      'chaque rangée porte son rang');
+    vrai(/monterGlissement\(\$\('#chargesListe'\), poserOrdreCharges\);\s*\n\s*monterGlissement\(\$\('#chargesTable'\), poserOrdreCharges\);/.test(app),
+      'les deux listes s’arment du même mécanisme');
+  });
+
+  test('la colonne des poignées paraît et disparaît sur les trois étages', () => {
+    /* Un tableau dont l'en-tete, le corps et le pied ne comptent pas le meme
+       nombre de colonnes se decale, et le total finit sous la mauvaise. */
+    const app = lireSource('assets/app.js');
+    eq((app.match(/ordreCharges === 'mien' \? '<th><\/th>' : ''/g) || []).length, 1,
+      'l’en-tête suit l’ordre');
+    eq((app.match(/ordreCharges === 'mien' \? `<td class="cell-poignee">/g) || []).length, 1,
+      'le corps aussi');
+    vrai(/colspan="\$\{ordreCharges === 'mien' \? 3 : 2\}"/.test(app),
+      'et le pied compte une colonne de plus quand elle existe');
+  });
+
+  test('un clic parti de la poignée n’ouvre pas la ligne', () => {
+    /* Sur le tableau, la rangee entiere porte `data-action` : sans garde, chaque
+       prise de poignee ouvrait la fenetre d'edition au relachement. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('function monterGlissement(');
+    const fn = app.slice(i, app.indexOf('\n}', i));
+    vrai(/if \(e\.target\.closest\('\.poignee'\)\) \{ e\.stopPropagation\(\); e\.preventDefault\(\); \}/.test(fn),
+      'le clic de la poignée est avalé');
+    vrai(/\}, true\);/.test(fn),
+      'en phase de capture, donc avant que l’action déléguée ne le voie');
+  });
+
+  test('la poignée ferme la rangée du tableau, elle ne l’ouvre pas', () => {
+    /* La premiere colonne est epinglee au defilement horizontal : une poignee y
+       aurait pris la place du seul nom qui doit rester visible. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('<tbody id="chargesTable">');
+    const rangee = app.slice(i, app.indexOf('</tr>`).join(\'\')}</tbody>', i));
+    const iNom = rangee.indexOf('sticky-col');
+    const iPoignee = rangee.indexOf('cell-poignee');
+    vrai(iNom > 0 && iPoignee > 0, 'les deux cellules existent');
+    vrai(iNom < iPoignee, 'le nom épinglé reste en tête de rangée');
+  });
+
   test('les mots se traduisent', () => {
     eq(I18N.en['Mon ordre'], 'My order', 'l’ordre du détenteur');
     vrai(I18N.en['Du plus cher'], 'le tri par montant');

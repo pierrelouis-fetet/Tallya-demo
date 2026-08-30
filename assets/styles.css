@@ -4515,6 +4515,13 @@ details[open]::details-content { block-size: auto; }
 #modalBody.tout-voir .apercu-plus { display: none; }
 #modalBody .apercu-plus td { border: 0; text-align: center; padding: 12px 0 4px; }
 
+.cell-poignee { width: 34px; padding: 0 !important; }
+.cell-poignee .poignee { width: 100%; height: 100%; min-height: 28px; }
+/* Une rangee de tableau qu'on souleve. `position: relative` la place au-dessus
+   de ses voisines pendant qu'elle les traverse. */
+tr.ligne-ouvre.porte { position: relative; z-index: 2; transition: none; }
+tr.ligne-ouvre.porte > td { background: var(--surface-2); }
+
 .liste-ordre { display: flex; justify-content: flex-end; margin: 0 0 10px; }
 
 /* Une ligne qu'on peut deplacer, et sa poignee.
@@ -4527,8 +4534,19 @@ details[open]::details-content { block-size: auto; }
    navigateur lit le mouvement du doigt comme un defilement et la ligne ne suit
    jamais. La poser sur la rangee entiere empecherait de faire defiler la page en
    partant d'une ligne, ce qui est le geste le plus courant de cet ecran. */
-.rang-glissant { display: grid; grid-template-columns: auto 1fr; align-items: center; }
-.rang-glissant > .mlist { min-width: 0; }
+/* La rangee place ses deux enfants par leur COLONNE, jamais par leur ordre.
+
+   Sans poignee — c'est le cas des que l'ordre est calcule — la ligne devenait le
+   premier enfant et tombait donc dans la colonne `auto`, qui se dimensionne au
+   contenu. Chaque rangee prenait alors la largeur de son propre libelle : les
+   montants partaient en escalier et les chevrons avec eux, alors qu'ils forment
+   une colonne dans tous les autres ecrans de l'application.
+
+   `minmax(0, 1fr)` et non `1fr` : une ligne de flex qui deborde impose sinon sa
+   largeur minimale a la piste, et un libelle long relancerait le decalage. */
+.rang-glissant { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+.rang-glissant > .poignee { grid-column: 1; }
+.rang-glissant > .mlist { grid-column: 2; min-width: 0; }
 .poignee {
   display: grid; place-items: center;
   width: 34px; align-self: stretch;

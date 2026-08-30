@@ -2010,6 +2010,34 @@ function monterGlissement(hote, surFin) {
 
   const centre = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
 
+  /* Les voisines rejoignent leur nouvelle place au lieu d'y sauter.
+
+     C'est le motif « FLIP » : on note ou elles sont AVANT de deplacer la ligne,
+     puis on les repose visuellement a leur ancienne place et on les laisse
+     revenir. Le navigateur ne sait pas animer un changement d'ordre du DOM —
+     pour lui, la ligne a simplement disparu d'un endroit et reparu ailleurs.
+
+     `element.animate()` plutot qu'une transition CSS : l'animation se nettoie
+     seule, ne laisse aucun style en ligne derriere elle, et se remplace
+     proprement quand la voisine bouge de nouveau avant la fin. Une transition
+     aurait demande de poser puis retirer `transform` a la main, sur des elements
+     que le geste continue de deplacer.
+
+     `cancel()` avant chaque nouvelle : un glissement rapide fait traverser
+     plusieurs voisines par seconde, et deux animations superposees sur le meme
+     element donnent un tremblement au lieu d'un mouvement. */
+  const glisserVoisines = avant => {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    for (const [x, y0] of avant) {
+      const d = y0 - x.getBoundingClientRect().top;
+      if (Math.abs(d) < 0.5) continue;
+      if (x.__glisse) x.__glisse.cancel();
+      x.__glisse = x.animate(
+        [{ transform: `translateY(${d}px)` }, { transform: 'none' }],
+        { duration: 180, easing: 'cubic-bezier(.22, .61, .36, 1)' });
+    }
+  };
+
   const bouger = e => {
     if (!porte) return;
     e.preventDefault();
@@ -2019,17 +2047,25 @@ function monterGlissement(hote, surFin) {
       if (r === porte) continue;
       const c = centre(r);
       const apres = !!(r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_FOLLOWING);
-      if (p < c && apres) hote.insertBefore(porte, r);
-      else if (p > c && !apres) hote.insertBefore(porte, r.nextSibling);
-      else continue;
+      if (!((p < c && apres) || (p > c && !apres))) continue;
+      const avant = new Map();
+      for (const x of hote.querySelectorAll('[data-rang]')) {
+        if (x !== porte) avant.set(x, x.getBoundingClientRect().top);
+      }
+      if (p < c) hote.insertBefore(porte, r);
+      else hote.insertBefore(porte, r.nextSibling);
       departY = e.clientY;
       porte.style.transform = '';
+      glisserVoisines(avant);
       break;
     }
   };
 
   const finir = () => {
     if (!porte) return;
+    for (const x of hote.querySelectorAll('[data-rang]')) {
+      if (x.__glisse) { x.__glisse.cancel(); x.__glisse = null; }
+    }
     document.removeEventListener('pointermove', bouger);
     document.removeEventListener('pointerup', finir);
     document.removeEventListener('pointercancel', finir);
@@ -2039,6 +2075,15 @@ function monterGlissement(hote, surFin) {
     porte = null;
     surFin([...hote.querySelectorAll('[data-rang]')].map(r => +r.dataset.rang));
   };
+
+  /* Un clic parti de la poignee n'ouvre pas la ligne.
+
+     Sur le tableau du bureau, la rangee entiere porte `data-action` : sans cette
+     garde, chaque prise de poignee ouvrait la fenetre d'edition au relachement.
+     En phase de capture, donc avant que l'action deleguee ne le voie. */
+  hote.addEventListener('click', e => {
+    if (e.target.closest('.poignee')) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
 
   hote.addEventListener('pointerdown', e => {
     const poignee = e.target.closest('.poignee');
@@ -5507,9 +5552,10 @@ function viewBudget(section = 'depenses') {
                       title="Retirer ${esc(p.name)}">✕</button></th>`).join('')}
             <th title="${trad('Ce qui sort réellement de ton compte, ramené au mois')}">${trad('À ma charge')}</th>
             <th>Organisme</th><th></th>
+            ${ordreCharges === 'mien' ? '<th></th>' : ''}
           </tr></thead>
-          <tbody>${chargesOrdonnees(ordreCharges).map(({ c, i }) => `<tr class="ligne-ouvre"
-              data-action="edit-charge" data-i="${i}"
+          <tbody id="chargesTable">${chargesOrdonnees(ordreCharges).map(({ c, i }) => `<tr class="ligne-ouvre"
+              data-action="edit-charge" data-i="${i}" data-rang="${i}"
               title="Modifier ${guill(esc(c.label || 'Sans nom'))}">
             <td class="name sticky-col"><span class="mois-lien">${esc(c.label || 'Sans nom')}</span></td>
             <td>${fmtEUR(num(c.amount))}</td>
@@ -5520,12 +5566,13 @@ function viewBudget(section = 'depenses') {
             <td><b>${fmtEUR(myShareMensuelle(c))}</b></td>
             <td class="name">${esc(c.provider || '')}</td>
             <td><button class="btn icon" data-action="del-charge" data-i="${i}" title="${trad('Supprimer')}">✕</button></td>
+            ${ordreCharges === 'mien' ? `<td class="cell-poignee">${poigneeCharge()}</td>` : ''}
           </tr>`).join('')}</tbody>
           <tfoot><tr>
             <td class="sticky-col">Total / mois</td><td colspan="2"></td>
             <td>${fmtEUR(st.total)}</td><td>${fmtPct(100)}</td>
             ${st.parPersonne.map(p => `<td>${fmtEUR(p.total)}</td>`).join('')}
-            <td><b>${fmtEUR(st.mine)}</b></td><td colspan="2"></td>
+            <td><b>${fmtEUR(st.mine)}</b></td><td colspan="${ordreCharges === 'mien' ? 3 : 2}"></td>
           </tr></tfoot>
         </table>
       </div>
@@ -8233,6 +8280,7 @@ const MOUNTS = {
     else if (sousOngletActif.budget === 'depenses') mountBudget();
     else if (sousOngletActif.budget === 'cadre' && ordreCharges === 'mien') {
       monterGlissement($('#chargesListe'), poserOrdreCharges);
+      monterGlissement($('#chargesTable'), poserOrdreCharges);
     }
   },
   /* `objective` n'est plus une vue mais un onglet de `overview`, dont le montage
