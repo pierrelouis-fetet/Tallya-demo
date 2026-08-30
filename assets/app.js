@@ -6146,7 +6146,22 @@ const EXEMPLE_PLACEMENT = {
 
 function champsPlacement(classe, l = null, prete = false, type = null) {
   const echeancier = !!prete;
+  /* Trois notions voisines, et les confondre s'est deja paye : une valeur qu'on
+     ESTIME soi-meme (une montre, un appartement), une valeur qu'un tiers PUBLIE
+     (la VL d'un fonds), et le fait qu'une valeur porte une DATE — vrai des deux
+     cotes, faux pour un pret dont le nominal ne bouge pas.
+
+     `estime` commande le nom du montant : « Valeur estimee » pour ce qu'on
+     apprecie soi-meme, « Valeur aujourd'hui » pour ce qu'on lit quelque part.
+     Une VL rangee sous « Valeur estimee » aurait fait passer un chiffre publie
+     pour une opinion, ce qui est exactement l'inverse de ce qu'il est.
+
+     `datee` commande la presence du champ de date, et `publiee` son nom et sa
+     peremption. Un seul champ pour les deux natures : la date a laquelle ce
+     chiffre a ete etabli. Un second aurait ete deux ecritures du meme fait. */
+  const publiee = !!(type && type.vl);
   const estime = estDetenuEnDirect(type);
+  const datee = estime || publiee;
   return [
     { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
       valeur: l ? (l.libelle || '') : '',
@@ -6155,7 +6170,8 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
       label: `${estime ? 'Valeur estimée' : 'Valeur aujourd’hui'} (€)`, type: 'nombre',
       valeur: l ? num(l.valeur) : '', exemple: '0',
       aide: estime ? 'ce que tu en tirerais en le vendant aujourd’hui'
-                   : 'ce que la ligne vaut, capital et intérêts courus compris' },
+          : publiee ? 'la dernière valeur liquidative publiée, pour les parts que tu détiens'
+                    : 'ce que la ligne vaut, capital et intérêts courus compris' },
     { cle: 'prixDeRevient', label: trad('Montant investi (€)'), type: 'nombre',
       valeur: l ? (num(l.prixDeRevient) || '') : '', exemple: '0',
       aide: trad('facultatif, il donne la plus-value') },
@@ -6164,9 +6180,14 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
       aide: trad('facultatif, il donne le prix de la part') }] : []),
     { cle: 'dateAcquisition', label: trad('Date d’entrée'), type: 'date',
       valeur: l ? (l.dateAcquisition || '') : todayISO() },
-    ...(estime ? [{ cle: 'estimeLe', label: trad('Estimée le'), type: 'date',
+    ...(datee ? [{ cle: 'estimeLe',
+      label: trad(publiee ? 'VL du' : 'Estimée le'), type: 'date',
       valeur: l ? (l.estimeLe || '') : todayISO(),
-      aide: trad('la cloche te rappellera de la revoir dans un an') }] : []),
+      aide: trad(publiee ? 'la date de la dernière valeur liquidative publiée'
+                         : 'la cloche te rappellera de la revoir dans un an') }] : []),
+    ...(publiee ? [{ cle: 'vlPeriode', label: trad('Publiée'), type: 'liste',
+      options: VL_PERIODES, valeur: l ? (l.vlPeriode || 'trimestre') : 'trimestre',
+      aide: trad('à quelle fréquence le fonds publie sa valeur') }] : []),
     ...(echeancier ? [
       { cle: 'taux', label: trad('Taux annoncé (%)'), type: 'nombre',
         valeur: l ? (num(l.taux) || '') : '', exemple: '0',
@@ -6196,6 +6217,7 @@ function litPlacement(v, base) {
     prixDeRevient: num(v.prixDeRevient) || null,
     dateAcquisition: v.dateAcquisition || '',
     ...(v.parts !== undefined ? { parts: num(v.parts) || null } : {}),
+    ...(v.vlPeriode !== undefined ? { vlPeriode: v.vlPeriode || 'trimestre' } : {}),
     ...(v.estimeLe !== undefined ? { estimeLe: v.estimeLe || '' } : {}),
     ...(v.taux !== undefined ? { taux: num(v.taux) || null } : {}),
     ...(v.echeance !== undefined ? { echeance: v.echeance || '' } : {}),

@@ -4428,6 +4428,151 @@ suite('Non coté : une aide qui cite ce qui existe', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Un fonds non cote a une VL, et elle se perime a sa cadence
+   ------------------------------------------------------------------ */
+suite('Fonds non coté : une valeur publiée, pas estimée', () => {
+
+  const ilYA = n => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+
+  test('trois types pour trois choses réellement différentes', () => {
+    /* Du capital dans une entreprise nommee, des parts d'un fonds, un pret a
+       taux et echeance. Le troisieme type ne double pas le premier : ce qu'on
+       detient n'est pas la meme chose, et les champs qu'il faut le disent. */
+    const f = typeCompte('fondsNonCote'), pe = typeCompte('pe'), pr = typeCompte('crowdfunding');
+    for (const t of [f, pe, pr]) {
+      eq(t.classes.join(), 'nonCote', `« ${t.label} » tient du non coté`);
+      vrai(estActifTerminal(t), `« ${t.label} » ne porte pas de sous-placement`);
+    }
+    vrai(f.vl && !pe.vl && !pr.vl, 'seul le fonds publie une valeur liquidative');
+    vrai(pr.prete && !f.prete && !pe.prete, 'seul le prêt se rembourse à une date');
+    vrai(f.parts && pe.parts && !pr.parts, 'les deux capitaux se comptent en parts');
+  });
+
+  test('le nom dit la structure, jamais le thème', () => {
+    /* « Private equity » aurait ete plus reconnaissable et plus faux : ces fonds
+       vont du capital-risque a l'infrastructure, et le meme contenant les porte
+       tous. Un type nomme ce qu'on ouvre. */
+    eq(typeCompte('fondsNonCote').label, 'Fonds non coté', 'le français');
+    eq(I18N.en['Fonds non coté'], 'Private markets fund', 'et l’anglais');
+    vrai(!TYPES_COMPTE.some(t => /private equity/i.test(t.label)),
+      'aucun type ne porte le nom d’un thème');
+  });
+
+  test('une VL se lit, elle ne s’estime pas', () => {
+    /* La ranger sous « Valeur estimée » ferait passer un chiffre publie pour une
+       opinion, ce qui est exactement l'inverse de ce qu'il est.
+
+       Le harnais ne charge pas la vue : ces controles-la lisent la source. */
+    const app = lireSource('assets/app.js');
+    vrai(/const estime = estDetenuEnDirect\(type\);/.test(app),
+      '« estimé » ne vaut que pour ce qu’on apprécie soi-même');
+    vrai(/const publiee = !!\(type && type\.vl\);/.test(app),
+      'et « publié » est une autre question');
+    vrai(/const datee = estime \|\| publiee;/.test(app),
+      'la date, elle, vaut pour les deux');
+    vrai(/publiee \? 'la dernière valeur liquidative publiée/.test(app),
+      'l’aide du montant nomme la VL quand c’en est une');
+  });
+
+  test('le champ de date porte le nom de ce qu’il date', () => {
+    const app = lireSource('assets/app.js');
+    vrai(/label: trad\(publiee \? 'VL du' : 'Estimée le'\)/.test(app),
+      'le champ porte le nom de ce qu’il date');
+    /* Il ne parait que sur ce qui porte une valeur datee : un pret n'en a pas,
+       son nominal ne bouge pas. */
+    vrai(/\.\.\.\(datee \? \[\{ cle: 'estimeLe'/.test(app),
+      'et seulement là où une valeur est datée');
+    /* Un seul champ pour les deux natures : un second serait deux ecritures du
+       meme fait, la date a laquelle ce chiffre a ete etabli. */
+    vrai(!/cle: 'vlLe'|cle: 'dateVL'/.test(app), 'aucun second champ de date');
+  });
+
+  test('la cadence n’est demandée qu’à ce qui publie', () => {
+    const app = lireSource('assets/app.js');
+    vrai(/\.\.\.\(publiee \? \[\{ cle: 'vlPeriode'/.test(app),
+      'la cadence suit le drapeau du type');
+    vrai(/valeur: l \? \(l\.vlPeriode \|\| 'trimestre'\) : 'trimestre'/.test(app),
+      'et le trimestre est le défaut');
+    /* Un seul type publie une VL aujourd'hui, et le drapeau le dit. */
+    eq(TYPES_COMPTE.filter(t => t.vl).map(t => t.id).join(), 'fondsNonCote',
+      'et lui seul porte le drapeau');
+    for (const id of ['pe', 'crowdfunding', 'bienValeur', 'immo']) {
+      vrai(!typeCompte(id).vl, `« ${typeCompte(id).label} » ne publie rien`);
+    }
+  });
+
+  test('une VL se périme au rythme où elle est publiée', () => {
+    /* Sans cadence, un fonds mensuel serait declare a jour pendant onze mois.
+       Avec, la peremption suit ce que le fonds fait vraiment. */
+    const f = typeCompte('fondsNonCote');
+    vrai(!valeurPerimee({ estimeLe: ilYA(30), vlPeriode: 'mois' }, f),
+      'une VL mensuelle d’il y a un mois est fraîche');
+    vrai(valeurPerimee({ estimeLe: ilYA(60), vlPeriode: 'mois' }, f),
+      'à deux mois elle est dépassée');
+    vrai(!valeurPerimee({ estimeLe: ilYA(60), vlPeriode: 'trimestre' }, f),
+      'une trimestrielle à deux mois ne l’est pas');
+    vrai(valeurPerimee({ estimeLe: ilYA(120), vlPeriode: 'trimestre' }, f),
+      'à quatre mois, si');
+    /* La marge d'un cycle : une VL trimestrielle publiee fin mars n'est pas
+       perimee le 1er juillet, elle attend la publication suivante. */
+    vrai(!valeurPerimee({ estimeLe: ilYA(95), vlPeriode: 'trimestre' }, f),
+      'et elle attend la publication suivante avant d’être dite dépassée');
+  });
+
+  test('la règle d’un an tient pour ce qui s’estime', () => {
+    /* Le fonds ne devait pas emporter le reste avec lui : une montre se revoit
+       une fois l'an, et c'est toujours vrai. */
+    const b = typeCompte('bienValeur');
+    vrai(!valeurPerimee({ estimeLe: ilYA(200) }, b), 'une montre à six mois va bien');
+    vrai(valeurPerimee({ estimeLe: ilYA(500) }, b), 'à seize mois elle se revoit');
+    /* Sans date, on ne sait pas : donc a revoir. */
+    vrai(valeurPerimee({}, b), 'sans date, à revoir');
+    vrai(valeurPerimee(null, b), 'et une ligne absente ne fait pas tomber le calcul');
+    /* Un fonds sans cadence declaree retombe sur le trimestre. */
+    vrai(valeurPerimee({ estimeLe: ilYA(120) }, typeCompte('fondsNonCote')),
+      'un fonds sans cadence suit le trimestre');
+  });
+
+  test('un seul endroit décide de la péremption', () => {
+    /* Deux ecrans la lisent : la carte de la plus-value non cotee et le compte
+       « a revoir » qui la surmonte. Ecrite deux fois, l'une aurait garde le
+       seuil d'un an pendant que l'autre suivait la cadence, et le compte aurait
+       cesse d'egaler la liste qu'il annonce. */
+    const st = lireSource('assets/store.js');
+    eq((st.match(/function valeurPerimee\(/g) || []).length, 1, 'une seule définition');
+    vrai(/vieille: valeurPerimee\(l, typeCompte\(c\.type\)\)/.test(st),
+      'et la carte la lit plutôt que de refaire le calcul');
+    vrai(!/ageAnnees\(l\.estimeLe\) >= 1/.test(st),
+      'plus de seuil d’un an écrit à la main à côté');
+  });
+
+  test('la valeur perdue se compte comme la liste qu’elle annonce', () => {
+    /* Un total egale la somme de ses parts, ici aussi : « 2 à revoir » doit
+       designer exactement deux lignes de la liste. */
+    Fixture.poser(s => {
+      const c = s.comptes.find(x => x.id === 'c_pe');
+      c.type = 'fondsNonCote';
+      c.lignes = [
+        { id: 'f1', classe: 'nonCote', libelle: 'Fonds A', valeur: 1000,
+          prixDeRevient: 900, quantite: 1, estimeLe: ilYA(20), vlPeriode: 'mois' },
+        { id: 'f2', classe: 'nonCote', libelle: 'Fonds B', valeur: 2000,
+          prixDeRevient: 1800, quantite: 1, estimeLe: ilYA(200), vlPeriode: 'mois' },
+      ];
+    });
+    const d = latentNonCote();
+    eq(d.aRevoir, d.lignes.filter(x => x.vieille).length,
+      'le compte annoncé est celui des lignes marquées');
+    /* Sur les deux fonds seulement : le fixture porte par ailleurs un bien sans
+       date d'estimation, qui est a revoir lui aussi et pour une autre raison. */
+    const fonds = d.lignes.filter(x => /^Fonds /.test(x.nom));
+    eq(fonds.length, 2, 'les deux fonds sont dans la carte');
+    eq(fonds.filter(x => x.vieille).length, 1,
+      'une seule de leurs deux VL mensuelles est dépassée');
+    vrai(fonds.find(x => x.nom === 'Fonds B').vieille, 'celle de deux cents jours');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
@@ -13601,10 +13746,17 @@ suite('Un bien se crée seul, s’estime, et se modifie par un bouton', () => {
     vrai(!/t\.classes\.includes\('bienValeur'\) \? 'Valeur estimée'/.test(src),
       'plus de test sur une classe en particulier');
 
-    /* Et la date d'estimation suit le meme drapeau : c'est elle qui rend
-       l'intitule honnete, un chiffre estime sans date ne disant pas de quand. */
-    vrai(/\.\.\.\(estime \? \[\{ cle: 'estimeLe'/.test(src),
-      'la date d’estimation accompagne toujours la valeur estimée');
+    /* Et la date suit, parce que c'est elle qui rend l'intitule honnete : un
+       chiffre estime sans date ne dit pas de quand.
+
+       La condition s'est elargie sans rien perdre. Une valeur DATEE couvre deux
+       natures — celle qu'on estime soi-meme et celle qu'un tiers publie — et
+       `datee` contient `estime` par construction, ce que la ligne suivante
+       exige. Un chiffre estime porte donc toujours sa date, comme avant. */
+    vrai(/const datee = estime \|\| publiee;/.test(src),
+      'une valeur datée, c’est une valeur estimée ou une valeur publiée');
+    vrai(/\.\.\.\(datee \? \[\{ cle: 'estimeLe'/.test(src),
+      'la date accompagne toujours la valeur estimée');
   });
 
   test('la fiche appelle un bien un bien', () => {

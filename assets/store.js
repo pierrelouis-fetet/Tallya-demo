@@ -207,6 +207,21 @@ const TYPES_COMPTE = [
      qu'on detient physiquement ; celui-ci le dit pour ce qui est detenu par un
      tiers mais ne se subdivise pas. */
   { id: 'pe',      label: 'Parts de société', classes: ['nonCote'], defaut: 'investir', groupe: 'pe', parts: true, terminal: true },
+  /* `vl` : sa valeur ne s'estime pas, elle se PUBLIE. C'est la difference qui
+     vaut un type a part plutot qu'un rangement dans « Parts de societe ».
+
+     Une part de societe, on la valorise soi-meme — une levee, un pacte, une
+     offre de rachat — et l'application rappelle d'y revenir une fois l'an, comme
+     pour une montre. Un fonds publie une valeur liquidative a sa cadence, et
+     celle-ci se perime au rythme de cette cadence : une VL mensuelle a un an est
+     douze fois depassee. Le rappel suit donc la cadence declaree, et c'est tout
+     l'objet du drapeau.
+
+     Le nom dit la STRUCTURE et non le theme. « Private equity » aurait ete plus
+     reconnaissable et plus faux : ces fonds vont du capital-risque a
+     l'infrastructure, et le meme contenant les porte tous. */
+  { id: 'fondsNonCote', label: 'Fonds non coté', classes: ['nonCote'],
+    defaut: 'investir', groupe: 'pe', parts: true, terminal: true, vl: true },
   { id: 'crowdfunding', label: 'Prêt participatif', classes: ['nonCote'],
     defaut: 'investir', groupe: 'pe', prete: true, terminal: true },
   /* `direct` : on le detient soi-meme, le contenant EST la chose.
@@ -659,6 +674,23 @@ function entreesInvestir() {
     });
   });
   return out;
+}
+
+const VL_PERIODES = [['mois', 'Mensuelle'], ['trimestre', 'Trimestrielle'],
+                     ['semestre', 'Semestrielle'], ['an', 'Annuelle']];
+const VL_JOURS = { mois: 45, trimestre: 105, semestre: 200, an: 400 };
+
+function joursDepuis(iso) {
+  if (!iso) return Infinity;
+  return (Date.now() - new Date(iso)) / (24 * 3600e3);
+}
+
+function valeurPerimee(ligne, type) {
+  if (!ligne || !ligne.estimeLe) return true;    // sans date, on ne sait pas : a revoir
+  const jours = type && type.vl
+    ? (VL_JOURS[ligne.vlPeriode] || VL_JOURS.trimestre)
+    : VL_JOURS.an;
+  return joursDepuis(ligne.estimeLe) > jours;
 }
 
 function ageAnnees(iso) {
@@ -4702,7 +4734,7 @@ function latentNonCote() {
         pnl: num(l.valeur) - invested,
         pct: (num(l.valeur) / invested - 1) * 100,
         estimeLe: l.estimeLe || null,
-        vieille: l.estimeLe ? ageAnnees(l.estimeLe) >= 1 : true,
+        vieille: valeurPerimee(l, typeCompte(c.type)),
       });
     }
   }
