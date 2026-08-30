@@ -4786,9 +4786,9 @@ function viewFicheCompte(id) {
           + 'à tout moment : l’historique des relevés suit le compte, il ne se '
           + 'perd pas. Un changement qui laisserait un placement sans place est '
           + 'refusé, en disant lequel déplacer. '
-          + 'Non coté : deux types, deux métiers. « Parts de société » pour des '
-          + 'parts de société ou un pacte d’associés : on sort au rachat, '
-          + 'pas à une date. « Prêt participatif » pour un prêt à un taux, '
+          + 'Non coté : deux types, deux métiers. « Parts de société » pour du '
+          + 'private equity, des parts de société ou un pacte d’associés : on '
+          + 'sort au rachat, pas à une date. « Prêt participatif » pour un prêt à un taux, '
           + 'avec une échéance et un état : ces lignes-là portent une date de '
           + 'remboursement, et l’application te rappelle celles qui l’ont dépassée.'))}</dt>
         <dd>${esc(trad(t.label))}${t.interne ? trad(', sans établissement') : ''}</dd>

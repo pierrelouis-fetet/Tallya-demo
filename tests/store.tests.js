@@ -4348,6 +4348,86 @@ suite('Ordre des charges fixes : le sien, ou celui des montants', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Le non cote se nomme avec les mots qui sont a l'ecran
+   ------------------------------------------------------------------ */
+suite('Non coté : une aide qui cite ce qui existe', () => {
+
+  const aideType = () => {
+    const fr = Object.keys(FR).concat(Object.keys(I18N.en))
+      .find(k => /Non coté : deux types/.test(k));
+    return { fr, en: I18N.en[fr] };
+  };
+
+  test('l’aide ne cite que des libellés réellement affichés', () => {
+    /* Elle citait « Unlisted » et « Participating loan », qui ne sont ni l'un ni
+       l'autre a l'ecran : la classe s'appelle « Private assets » et le type
+       « Crowdlending ». Une aide qui nomme des mots absents envoie chercher
+       quelque chose qui n'existe pas — c'est ce qui fait douter du modele. */
+    const { fr, en } = aideType();
+    vrai(fr && en, 'l’aide du type de compte doit exister dans les deux langues');
+    /* Les libelles se prennent a leur SOURCE, jamais traduits : `CLASSES_ACTIFS`
+       passe par `trad()`, donc il rend l'anglais quand l'application tourne en
+       anglais — et le controle exigeait alors que l'aide francaise cite un mot
+       anglais. Les tables de types, elles, portent le francais brut. */
+    const CLASSE_FR = 'Non coté';
+    for (const [langue, texte, mots] of [
+      ['français', fr, [CLASSE_FR,
+                        typeCompte('pe').label, typeCompte('crowdfunding').label]],
+      ['anglais', en, [I18N.en[CLASSE_FR],
+                       I18N.en[typeCompte('pe').label],
+                       I18N.en[typeCompte('crowdfunding').label]]],
+    ]) {
+      for (const mot of mots) {
+        vrai(texte.includes(mot),
+          `l’aide en ${langue} doit citer « ${mot} », qui est à l’écran`);
+      }
+    }
+  });
+
+  test('elle porte le mot que le détenteur a en tête', () => {
+    /* « Parts de société » est le nom juste, mais personne ne dit ça : on dit
+       private equity. Le mot manquait la ou la question se pose, et faire
+       chercher un type qui n'existe pas est le symptome. */
+    const { fr, en } = aideType();
+    vrai(/private equity/i.test(fr), 'le français dit « private equity »');
+    vrai(/private equity/i.test(en), 'l’anglais aussi');
+  });
+
+  test('« Company shares » ne se lit plus comme des actions cotées', () => {
+    /* Le libelle anglais ne disait pas que ces parts ne cotent pas. Sous une
+       classe qui s'appelle « Private assets », il fallait deviner. */
+    eq(I18N.en['Parts de société'], 'Private company shares', 'le type le dit');
+    vrai(/^Private/.test(I18N.en['Non coté']), 'et la classe le disait déjà');
+    /* Le libelle francais ne bouge pas : « Parts de société » est le nom juste,
+       et c'est celui qu'on choisit dans la liste. */
+    eq(typeCompte('pe').label, 'Parts de société', 'le français reste');
+  });
+
+  test('une seule aide, pas deux qui se contredisent', () => {
+    /* Une clef perimee decrivait encore « Placements non cotés » et
+       « Financement participatif », deux noms de types qui n'existent plus. Une
+       traduction sans emploi se garde sans se maintenir, et celle-la nommait de
+       surcroit une plateforme reelle dans un fichier qui part en ligne. */
+    const toutes = Object.keys(I18N.en).filter(k => /Non coté : deux types/.test(k));
+    eq(toutes.length, 1, 'une seule clef pour cette aide');
+    vrai(!Object.keys(I18N.en).some(k => /« Placements non cotés » pour/.test(k)),
+      'et plus aucune qui décrive des types disparus');
+  });
+
+  test('les deux types du non coté restent distincts', () => {
+    /* La raison de ne PAS avoir un type « private equity » : il faudrait un nom
+       coherent pour son jumeau. Capital d'un cote, pret de l'autre — l'un sort
+       au rachat, l'autre a une echeance et un etat. */
+    const pe = typeCompte('pe'), pret = typeCompte('crowdfunding');
+    eq(pe.classes.join(), 'nonCote', '« Parts de société » tient du non coté');
+    eq(pret.classes.join(), 'nonCote', '« Prêt participatif » aussi');
+    vrai(!pe.prete, 'le capital ne se rembourse pas à une date');
+    vrai(pret.prete, 'le prêt, si');
+    vrai(pe.parts && !pret.parts, 'et seul le capital se compte en parts');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
