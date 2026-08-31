@@ -2878,13 +2878,62 @@ function allocationByAccount({ financier = false } = {}) {
    La base suit le perimetre elle aussi : un pourcentage calcule sur le patrimoine
    entier au-dessus d'une liste qui n'en montre qu'une part ne totaliserait pas
    cent. */
-function placeByAccount({ financier = false } = {}) {
-  const base = financier ? nowTotals().invested - horsFinancierTotal()
-                         : nowTotals().invested;
-  return allocationByAccount({ financier })
+/* Ce qui est investi, compte par compte.
+
+   `net` retranche les dettes, comme la carte qui ouvre cette fiche. Sans lui,
+   l'en-tete annoncait « investi moins les dettes » au-dessus de lignes qui les
+   ignoraient : avec un pret de 150 000 EUR, le total disait 155 271 EUR et ses
+   parts en faisaient 305 271. Un total egale la somme de ses parts, et cet
+   ecart-la ne se voyait pas chez qui n'a pas de credit.
+
+   La dette se retranche des comptes de l'etablissement qui la porte, au prorata
+   de leur valeur investie — meme regle que le classement ligne par ligne, et
+   volontairement la meme ecriture.
+
+   Un etablissement qui doit sans porter aucun compte investi — une marge de
+   courtier adossee a du cash — ne peut rien se voir retrancher : son emprunt
+   reste une ligne, sinon la somme cesserait d'egaler le total sans que rien ne
+   le dise. */
+function placeByAccount({ financier = false, net = false } = {}) {
+  const t = nowTotals();
+  const dettes = net && !financier ? num(t.dettes) : 0;
+  const base = (financier ? t.invested - horsFinancierTotal() : t.invested) - dettes;
+
+  const lignes = allocationByAccount({ financier })
     .map(r => ({ ...r, value: r.value - cashCompte(compteById(r.id)) }))
-    .filter(r => Math.abs(r.value) > 0.005)
-    .map(r => ({ ...r, pct: base ? r.value / base * 100 : 0 }))
+    .filter(r => Math.abs(r.value) > 0.005);
+
+  const dus = new Map();
+  const assiettes = new Map();
+  if (dettes) {
+    for (const e of Store.state.etabs) {
+      const du = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
+      if (du > 0.005) dus.set(e.id, du);
+    }
+    for (const r of lignes) {
+      const c = compteById(r.id);
+      if (!c || !dus.has(c.etabId)) continue;
+      assiettes.set(c.etabId, (assiettes.get(c.etabId) || 0) + r.value);
+    }
+  }
+  const apresDette = r => {
+    const c = compteById(r.id);
+    const du = c && dus.get(c.etabId);
+    const assiette = c ? (assiettes.get(c.etabId) || 0) : 0;
+    if (!du || !(assiette > 0.005)) return r.value;
+    return r.value - du * (r.value / assiette);
+  };
+
+  const out = lignes.map(r => ({ ...r, value: apresDette(r) }));
+  if (dettes) {
+    const orphelin = [...dus.entries()]
+      .reduce((s, [id, du]) => s + (assiettes.get(id) > 0.005 ? 0 : du), 0);
+    if (orphelin > 0.005) {
+      out.push({ id: null, label: trad('Crédits en cours'), value: -orphelin });
+    }
+  }
+  return out
+    .map(r => ({ ...r, pct: base > 0.005 ? r.value / base * 100 : null }))
     .sort((a, b) => b.value - a.value);
 }
 

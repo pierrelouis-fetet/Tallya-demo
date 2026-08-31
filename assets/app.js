@@ -10270,12 +10270,22 @@ const APERCUS = {
                                  : t.invested - num(t.dettes);
     const base = valeurBaseAlloc();
     return {
-      titre: BASES.place.nom, sous: trad('Tout sauf les liquidités'),
+      titre: BASES.place.nom,
+      sous: trad('Par compte'),
       total: place,
       totalNote: `${fmtPct(base ? place / base * 100 : 0)} ${baseAlloc().de}`,
-      lignes: placeByAccount({ financier: allocFinancier })
-        .map(l => ({ label: l.label, meta: fmtPct(l.pct, 1), valeur: l.value })),
-      vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
+      lignes: placeByAccount({ financier: allocFinancier, net: true }).map(l => {
+        const c = l.id && compteById(l.id);
+        const t = c && typeCompte(c.type);
+        return {
+          label: l.label,
+          meta: [t ? trad(t.label) : '', c ? nomEtabDe(c) : '',
+                 l.pct == null ? '' : `${fmtPct(l.pct, 1)} ${trad('de l’investi')}`]
+            .filter(Boolean).join(' · '),
+          valeur: l.value,
+        };
+      }),
+      vue: 'accounts', ancre: '', cta: trad('Voir les comptes'),
     };
   },
 

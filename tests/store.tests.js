@@ -2630,12 +2630,15 @@ suite('Une fiche ne réintroduit pas ce que sa carte a écarté', () => {
        aussi plus haut dans le fichier, et une tranche dont la fin precede le
        debut est vide, donc verte pour de mauvaises raisons. */
     const iFiche = app.indexOf('investiTotal: () => {');
-    const fiche = app.slice(iFiche, app.indexOf("cta: trad('Voir les avoirs')", iFiche));
+    const fiche = app.slice(iFiche, app.indexOf("cta: trad('Voir les comptes')", iFiche));
     vrai(fiche.length > 200, 'la fiche doit être trouvable');
     vrai(/allocFinancier \? t\.invested - horsFinancierTotal\(\)\s*\n\s*: t\.invested - num\(t\.dettes\)/.test(fiche),
       'la fiche retranche exactement la même chose');
-    vrai(/placeByAccount\(\{ financier: allocFinancier \}\)/.test(fiche),
-      'et ses lignes viennent de la source filtrée, pas d’une autre');
+    /* `net: true` : les lignes retranchent les dettes comme l'en-tete le fait.
+       Sans lui, le total annoncait « investi moins les dettes » au-dessus de
+       lignes qui les ignoraient, et l'ecart valait la dette entiere. */
+    vrai(/placeByAccount\(\{ financier: allocFinancier, net: true \}\)/.test(fiche),
+      'et ses lignes viennent de la source filtrée, comptée comme l’en-tête');
     /* La note du haut prend la base du perimetre, pas le patrimoine entier. */
     vrai(/const base = valeurBaseAlloc\(\);/.test(fiche),
       'le pourcentage se calcule sur la base de la page');
@@ -4770,6 +4773,119 @@ suite('Aperçu : une aide seulement quand le wording ne suffit pas', () => {
     const rev = carte.indexOf("trad('Revenus fixes')");
     vrai(!/\$\{aide\(/.test(carte.slice(rev, carte.indexOf('</dt>', rev))),
       'un montant saisi n’explique rien');
+  });
+});
+
+/* ------------------------------------------------------------------
+   La fiche « Investi » se lit par compte, et ses parts font son total
+   ------------------------------------------------------------------ */
+suite('Investi par compte : un total qui égale la somme de ses parts', () => {
+
+  test('les comptes font le total, dettes comprises', () => {
+    /* Le defaut corrige : l'en-tete annoncait « investi moins les dettes »
+       au-dessus de lignes qui les ignoraient. Avec le pret du fixture, le total
+       disait une chose et ses parts en faisaient une autre, l'ecart valant la
+       dette entiere. Invisible chez qui n'a pas de credit. */
+    Fixture.poser();
+    const t = nowTotals();
+    const attendu = t.invested - num(t.dettes);
+    const lignes = placeByAccount({ net: true });
+    pres(lignes.reduce((s, l) => s + l.value, 0), attendu,
+      'les comptes font « investi moins les dettes »');
+    pres(lignes.reduce((s, l) => s + l.pct, 0), 100, 'et leurs parts font cent');
+    vrai(num(t.dettes) > 0, 'le fixture porte bien une dette, sinon le contrôle ne dit rien');
+  });
+
+  test('la dette se retranche du compte qui la porte, une seule fois', () => {
+    /* Meme regle que le classement ligne par ligne, et volontairement la meme
+       ecriture : au prorata, sur les comptes de l'etablissement endette. */
+    Fixture.poser();
+    const lignes = placeByAccount({ net: true });
+    const bien = lignes.find(l => /Studio/.test(l.label));
+    pres(bien.value, 120000 - Fixture.DETTE, 'le bien porte son prêt');
+    /* Et aucun autre compte n'en paie une part. */
+    const sansDette = placeByAccount({ net: false });
+    for (const l of lignes) {
+      if (l === bien) continue;
+      const avant = sansDette.find(x => x.id === l.id);
+      if (!avant) continue;
+      pres(l.value, avant.value, `« ${l.label} » n’a rien perdu`);
+    }
+  });
+
+  test('une dette sans compte investi reste comptée', () => {
+    /* Une marge de courtier adossee a du cash ne peut se retrancher de rien :
+       elle reste une ligne, sinon la somme cesserait d'egaler le total. */
+    Fixture.poser(s => {
+      s.etabs.find(e => e.id === 'e_banque').dettes =
+        [{ id: 'd_marge', libelle: 'Marge', montant: 3000, note: '' }];
+    });
+    const t = nowTotals();
+    const lignes = placeByAccount({ net: true });
+    pres(lignes.reduce((s, l) => s + l.value, 0), t.invested - num(t.dettes),
+      'la somme fait toujours le total');
+    vrai(lignes.some(l => l.value < -0.005 || /Crédits/.test(l.label)),
+      'la dette orpheline se voit plutôt qu’elle ne s’évapore');
+  });
+
+  test('en périmètre financier, aucune dette ne se retranche', () => {
+    /* Le pret finance le bien, qui est ecarte de cette vue. */
+    Fixture.poser();
+    const fin = placeByAccount({ financier: true, net: true });
+    pres(fin.reduce((s, l) => s + l.value, 0),
+      nowTotals().invested - horsFinancierTotal(),
+      'la somme fait l’investi financier');
+    pres(fin.reduce((s, l) => s + l.pct, 0), 100, 'et les parts font cent');
+    vrai(!fin.some(l => /Crédits/.test(l.label)), 'aucune ligne de crédit');
+  });
+
+  test('une base qui ne se divise pas ne fabrique aucune part', () => {
+    Fixture.poser(s => {
+      s.etabs.find(e => (e.dettes || []).length).dettes[0].montant = Fixture.BRUT * 3;
+    });
+    for (const l of placeByAccount({ net: true })) {
+      eq(l.pct, null, `« ${l.label} » : aucun pourcentage sur une base négative`);
+    }
+  });
+
+  test('la fiche annonce son axe et sa base, sans les confondre', () => {
+    /* Deux bases sur un meme ecran : le patrimoine net en tete, la poche dans
+       les lignes. Rien ne disait laquelle portait les lignes — c'est le defaut
+       que ce projet a corrige trois fois ailleurs. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('  investiTotal: () => {');
+    const fiche = app.slice(i, app.indexOf('\n  },', i));
+    vrai(/titre: BASES\.place\.nom/.test(fiche), 'le titre vient de la base, une seule fois');
+    vrai(/sous: trad\('Par compte'\)/.test(fiche), 'le sous-titre dit l’axe');
+    vrai(/totalNote: `\$\{fmtPct\(base \? place \/ base \* 100 : 0\)\} \$\{baseAlloc\(\)\.de\}`/.test(fiche),
+      'l’en-tête rapporte le total à la base de la page');
+    vrai(/\$\{fmtPct\(l\.pct, 1\)\} \$\{trad\('de l’investi'\)\}/.test(fiche),
+      'et chaque ligne nomme la sienne');
+    vrai(/placeByAccount\(\{ financier: allocFinancier, net: true \}\)/.test(fiche),
+      'les lignes comptent comme la carte qui les ouvre');
+  });
+
+  test('chaque ligne dit le compte, son type et son établissement', () => {
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('  investiTotal: () => {');
+    const fiche = app.slice(i, app.indexOf('\n  },', i));
+    vrai(/label: l\.label,/.test(fiche), 'le nom du compte');
+    vrai(/t \? trad\(t\.label\) : ''/.test(fiche), 'son type');
+    vrai(/c \? nomEtabDe\(c\) : ''/.test(fiche), 'et son établissement');
+    /* Une ligne sans compte — le credit orphelin — ne doit pas faire tomber le
+       rendu en cherchant un type qui n'existe pas. */
+    vrai(/const c = l\.id && compteById\(l\.id\);/.test(fiche),
+      'et une ligne sans compte ne cherche pas de type');
+  });
+
+  test('le renvoi mène aux comptes, dans les deux langues', () => {
+    const app = lireSource('assets/app.js');
+    vrai(/cta: trad\('Voir les comptes'\)/.test(app), 'le libellé');
+    eq(I18N.en['Voir les comptes'], 'View accounts', 'et son anglais');
+    eq(I18N.en['Par compte'], 'By account', 'comme le sous-titre');
+    eq(I18N.en['de l’investi'], 'of what is invested', 'et la base des lignes');
+    /* La fleche vient du rendu commun : la coller au libelle en donnerait deux. */
+    vrai(!/Voir les comptes →/.test(app), 'la flèche reste au rendu commun');
   });
 });
 
@@ -7822,7 +7938,7 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
     /* La tranche se ferme sur du code et non sur une longueur : sept cents
        caracteres etaient un nombre choisi, et le bloc a grandi. */
     const i = src.indexOf('investiTotal:');
-    const bloc = src.slice(i, src.indexOf("cta: trad('Voir les avoirs')", i));
+    const bloc = src.slice(i, src.indexOf("cta: trad('Voir les comptes')", i));
     vrai(bloc.length > 200 && bloc.length < 2000, 'le bloc doit être trouvable, et lui seul');
     vrai(/placeByAccount\(/.test(bloc),
       '« Placé » doit dériver ses lignes de placeByAccount()');
