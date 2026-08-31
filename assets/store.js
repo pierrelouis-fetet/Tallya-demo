@@ -3486,6 +3486,48 @@ function objectiveStatus() {
    `meta.expectedInflow` reste dans l'etat sans lecteur, comme `budget
    .supplements` : un export d'avant doit continuer de se relire. */
 
+/* La variation sur douze mois glissants, et rien d'autre.
+
+   « Depuis le 1er janvier » disait une chose differente en janvier et en
+   decembre : en janvier elle mesurait trois semaines, en decembre onze mois. Un
+   meme intitule pour une fenetre qui s'allonge toute l'annee ne se compare pas a
+   lui-meme d'un mois sur l'autre, et c'est pourtant l'usage qu'on en fait. Douze
+   mois glissants mesurent toujours douze mois.
+
+   Le releve retenu est le plus proche de douze mois en arriere, avec une
+   tolerance : au-dela de trois mois d'ecart, l'intitule mentirait. Un historique
+   troue — un releve d'il y a un mois, le suivant d'il y a trente — n'a aucun
+   point a douze mois, et « sur 1 an » y aurait qualifie une variation d'un mois.
+   Ce cas retombe sur « depuis le debut », qui est vrai.
+
+   Et rien ne s'invente : sans releve exploitable, la fonction rend `null` et la
+   carte n'affiche pas de variation du tout. Un patrimoine sans historique n'a
+   pas varie de zero, il n'a pas de variation connue. */
+const TOLERANCE_AN = 3;                  // mois d'ecart admis autour de douze
+
+function variationAn(aujourdhui = todayISO()) {
+  const pts = historySeries({ includeNow: false });
+  if (!pts.length) return null;
+  const enMois = iso => {
+    const [a, m] = String(iso).split('-').map(Number);
+    return a * 12 + m;
+  };
+  const maintenant = enMois(aujourdhui);
+  const age = p => maintenant - enMois(p.date);
+  const t = nowTotals();
+
+  let choisi = null;
+  for (const p of pts) {
+    if (Math.abs(age(p) - 12) > TOLERANCE_AN) continue;
+    if (!choisi || Math.abs(age(p) - 12) < Math.abs(age(choisi) - 12)) choisi = p;
+  }
+  if (choisi) return { eur: t.total - num(choisi.net), depuis: choisi.date, sur: 'an' };
+
+  const premier = pts[0];
+  if (age(premier) < 1) return null;
+  return { eur: t.total - num(premier.net), depuis: premier.date, sur: 'debut' };
+}
+
 function deltas() {
   const pts = historySeries({ includeNow: false });
   const t = nowTotals();

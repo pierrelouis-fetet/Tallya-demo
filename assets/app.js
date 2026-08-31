@@ -730,11 +730,15 @@ function viewOverview() {
      rend `null` quand la base de comparaison est nulle, negative, ou que le
      patrimoine a traverse zero entre les deux dates. L'euro, lui, reste exact
      dans tous les cas. */
-  const deltaBlock = (label, x) => x ? `
-    <div class="hero-delta">
-      <span>${esc(label)} · ${trad('apports inclus')}</span>
-      <b class="${cls(x.eur)}">${arrow(x.eur)} ${fmtSigned(x.eur)}</b>
-    </div>` : '';
+  const varAn = variationAn();
+  const blocVariation = !varAn ? '' : `
+    <div class="hero-deltas">
+      <div class="hero-delta">
+        <b class="${cls(varAn.eur)}">${fmtSigned(varAn.eur)} <span>${
+          trad(varAn.sur === 'an' ? 'sur 1 an' : 'depuis le début')}</span></b>
+        <span>${trad('apports inclus')}</span>
+      </div>
+    </div>`;
 
   const moisEnAttente = currentMonthPending();
   const depEnAttente = depensesEnAttente();
@@ -777,10 +781,7 @@ function viewOverview() {
         dont ${fmtEUR0(patrimoine().dettes)} de crédits à rembourser</div>` : ''}
       ${invitePremierPas('comptes')}
     </div>
-    <div class="hero-deltas">
-      ${deltaBlock(trad('depuis le 1er janvier'), d.ytd)}
-      ${deltaBlock(trad('depuis le début'), d.all)}
-    </div>
+    ${blocVariation}
     ${(() => {
       const parts = repartitionClasses({ net: evoNet });
       if (!parts.length) return '';

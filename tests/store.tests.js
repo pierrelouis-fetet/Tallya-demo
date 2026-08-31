@@ -3724,73 +3724,114 @@ suite('Fiches d’Aperçu : une catégorie se lit sans dérouler son inventaire'
 });
 
 /* ------------------------------------------------------------------
-   Les deux ecarts du haut disent des euros, et ce qu'ils ne sont pas
+   Une seule variation, sur douze mois glissants
    ------------------------------------------------------------------ */
-suite('Écarts du patrimoine : un montant, et sa réserve', () => {
+suite('Variation du patrimoine : douze mois glissants, ou rien', () => {
 
-  const bloc = () => {
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('const deltaBlock = (label, x)');
-    return app.slice(i, app.indexOf("` : '';", i));
+  const idc = () => Store.state.comptes[0].id;
+  const poserReleves = (paires) => {
+    Fixture.poser();
+    const id = idc();
+    Store.state.monthly = paires.map(([d, v]) =>
+      ({ date: d, comment: '', dettes: 0, v: { [id]: v } }));
   };
+  const AUJ = '2026-08-30';
 
-  test('aucun pourcentage à côté des deux montants', () => {
-    /* Le pourcentage divisait l'ecart par le patrimoine du depart, apports
-       compris : verser mille euros par mois affichait « +18 % » sans qu'aucun
-       placement ait rien rapporte, et retirer faisait plonger un rendement que
-       rien ne degradait. Un pourcentage pose a cote d'un montant se lit comme
-       une performance, et c'est la seule chose que celui-la ne mesurait pas. */
-    const b = bloc();
-    vrai(!/fmtSignedPct/.test(b), 'le bloc n’écrit plus de pourcentage');
-    vrai(!/x\.pct/.test(b), 'et ne lit même plus celui du modèle');
-    vrai(/fmtSigned\(x\.eur\)/.test(b), 'le montant reste, signé');
+  test('le relevé retenu est le plus proche de douze mois', () => {
+    /* « Depuis le 1er janvier » disait une chose differente en janvier et en
+       decembre : trois semaines d'un cote, onze mois de l'autre. Un intitule
+       dont la fenetre s'allonge toute l'annee ne se compare pas a lui-meme. */
+    poserReleves([['2025-06-01', 500], ['2025-08-01', 1000], ['2026-07-01', 9000]]);
+    const v = variationAn(AUJ);
+    eq(v.sur, 'an', 'la fenêtre est l’année glissante');
+    eq(v.depuis, '2025-08-01', 'et le relevé retenu est celui d’il y a douze mois');
+    pres(v.eur, nowTotals().total - 1000, 'l’écart se compte depuis celui-là');
   });
 
-  test('le modèle continue de calculer, c’est l’affichage qui se tait', () => {
-    /* La demande disait « ne change aucun calcul » : `deltas()` rend toujours
-       ses pourcentages, et d'autres ecrans les lisent. */
+  test('moins de douze mois d’historique : depuis le début', () => {
+    poserReleves([['2026-02-01', 1000], ['2026-07-01', 9000]]);
+    const v = variationAn(AUJ);
+    eq(v.sur, 'debut', 'l’intitulé le dit');
+    eq(v.depuis, '2026-02-01', 'et part du plus ancien');
+    pres(v.eur, nowTotals().total - 1000, 'l’écart aussi');
+  });
+
+  test('un historique troué ne fabrique pas une année', () => {
+    /* Un releve d'il y a trente mois, le suivant d'il y a un mois : aucun point
+       a douze mois. Sans tolerance, « sur 1 an » aurait qualifie une variation
+       d'un mois — le plus proche de douze parmi ce qui existe. */
+    poserReleves([['2024-02-01', 500], ['2026-07-01', 9000]]);
+    const v = variationAn(AUJ);
+    eq(v.sur, 'debut', 'le repli est honnête');
+    eq(v.depuis, '2024-02-01', 'et porte sur toute la période connue');
+  });
+
+  test('la tolérance encadre douze mois, elle ne s’étire pas', () => {
+    /* Trois mois d'ecart admis de part et d'autre, bornes comprises : neuf et
+       quinze mois passent, huit et seize retombent sur « depuis le debut ». */
+    for (const [date, attendu] of [['2025-09-01', 'an'], ['2025-05-01', 'an'],
+                                   ['2025-11-01', 'an'],
+                                   ['2025-04-01', 'debut'], ['2025-12-01', 'debut']]) {
+      poserReleves([[date, 1000]]);
+      eq(variationAn(AUJ).sur, attendu,
+        `un relevé du ${date} donne « ${attendu} »`);
+    }
+  });
+
+  test('rien à comparer, rien d’affiché', () => {
+    /* Un patrimoine sans historique n'a pas varie de zero : il n'a pas de
+       variation connue, et « +0 € » serait une mesure inventee. */
+    poserReleves([]);
+    eq(variationAn(AUJ), null, 'aucun relevé');
+    poserReleves([['2026-08-01', 1000]]);
+    eq(variationAn(AUJ), null, 'un seul relevé, du mois en cours');
+    const app = lireSource('assets/app.js');
+    vrai(/const blocVariation = !varAn \? '' :/.test(app),
+      'et la carte ne rend alors aucun bloc');
+  });
+
+  test('ni pourcentage ni pastille', () => {
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const blocVariation = !varAn');
+    const bloc = app.slice(i, app.indexOf('`;', app.indexOf('</div>`', i)));
+    vrai(!/fmtPct|fmtSignedPct|%/.test(bloc), 'aucun pourcentage');
+    vrai(!/aide\(/.test(bloc), 'aucune pastille');
+    /* La fenetre est fixe et la reserve est ecrite : il ne reste rien a
+       expliquer au doigt. */
+    vrai(/trad\('apports inclus'\)/.test(bloc), 'la réserve reste, en toutes lettres');
+  });
+
+  test('le montant précède sa fenêtre, la réserve vient dessous', () => {
+    /* C'est le montant qu'on lit ; « sur 1 an » ne fait que le qualifier. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('const blocVariation = !varAn');
+    const bloc = app.slice(i, app.indexOf('`;', app.indexOf('</div>`', i)));
+    const iMontant = bloc.indexOf('fmtSigned(varAn.eur)');
+    const iFenetre = bloc.indexOf("varAn.sur === 'an' ? 'sur 1 an'");
+    const iReserve = bloc.indexOf("trad('apports inclus')");
+    vrai(iMontant > 0 && iFenetre > iMontant, 'la fenêtre suit le montant');
+    vrai(iReserve > iFenetre, 'et la réserve vient après les deux');
+  });
+
+  test('une seule écriture, et les deux fenêtres se traduisent', () => {
+    const app = lireSource('assets/app.js');
+    vrai(!/deltaBlock/.test(app), 'plus de bloc à deux exemplaires');
+    /* Le motif porte sur du CODE : la phrase survit dans le commentaire qui
+       explique pourquoi elle est partie, et c'est sa place. */
+    vrai(!/trad\('depuis le 1er janvier'\)/.test(app),
+      'ni la fenêtre qui changeait de sens');
+    eq(I18N.en['sur 1 an'], 'over 1 year', 'l’année glissante');
+    vrai(I18N.en['depuis le début'], 'et le repli');
+    eq(I18N.en['apports inclus'], 'contributions included', 'la réserve');
+  });
+
+  test('le modèle continue de calculer le reste', () => {
+    /* `deltas()` rend toujours ses trois horizons : la page Actifs et la barre
+       laterale les lisent. C'est l'affichage de l'accueil qui se resserre, pas
+       le modele qui se vide. */
     Fixture.poser();
     const d = deltas();
-    vrai('pct' in d.all, 'deltas() rend toujours un pourcentage');
-    vrai(Math.abs(num(d.all.eur)) > 0.005, 'et un montant');
-    const app = lireSource('assets/app.js');
-    vrai(/fmtSignedPct/.test(app), 'd’autres écrans en affichent encore');
-  });
-
-  test('la réserve se dit dans l’intitulé, pas dans une bulle', () => {
-    /* Elle a vecu dans une pastille, sur chacun des deux ecarts. Deux mots
-       suffisent : « apports inclus » dit que ce montant n'est pas un rendement,
-       ce que la bulle mettait deux phrases a expliquer. Sur l'ecran qu'on ouvre
-       le plus souvent, une pastille qu'un adjectif remplace est du bruit — et il
-       y en avait deux cote a cote, disant la meme chose.
-
-       La reserve ne disparait pas : elle change de forme. C'est ce que ce
-       controle garde. */
-    const b = bloc();
-    vrai(/\$\{esc\(label\)\} · \$\{trad\('apports inclus'\)\}/.test(b),
-      'chaque intitulé porte la réserve');
-    vrai(!/aide\(/.test(b), 'et plus aucune pastille');
-    const app = lireSource('assets/app.js');
-    vrai(!/AIDE_ECART/.test(app), 'la constante s’en va avec elle');
-    vrai(!Object.keys(I18N.en).some(k => /apports et retraits inclus/.test(k)),
-      'et sa traduction aussi : une clef sans emploi ne se maintient pas');
-  });
-
-  test('la réserve se traduit', () => {
-    eq(I18N.en['apports inclus'], 'contributions included', 'deux mots, deux langues');
-  });
-
-  test('les deux écarts partagent une seule écriture', () => {
-    /* Deux blocs ecrits a la main auraient fini par diverger : l'un garderait
-       son pourcentage, l'autre pas, et personne ne verrait lequel a raison. */
-    const app = lireSource('assets/app.js');
-    eq((app.match(/deltaBlock\(/g) || []).length, 2,
-      'deux appels, pas un balisage recopié');
-    eq((app.match(/const deltaBlock = /g) || []).length, 1, 'et une seule définition');
-    vrai(/deltaBlock\(trad\('depuis le 1er janvier'\), d\.ytd\)/.test(app),
-      'depuis le 1er janvier');
-    vrai(/deltaBlock\(trad\('depuis le début'\), d\.all\)/.test(app),
-      'depuis le début');
+    for (const k of ['month', 'ytd', 'all']) vrai(k in d, `deltas() garde « ${k} »`);
   });
 });
 

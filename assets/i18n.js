@@ -126,6 +126,7 @@ const I18N = {
     'Reste à financer': 'Left to finance',
     'Nombre de parts': 'Number of shares',
     'apports inclus': 'contributions included',
+    'sur 1 an': 'over 1 year',
     'moyenne de l’année': 'average for the year',
     'aucune dépense saisie': 'no spending entered',
     'Prochaine échéance': 'Next due date',
