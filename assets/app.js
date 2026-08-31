@@ -664,9 +664,8 @@ function carteAccumulation() {
      l'annoncer « observees » dirait une formule que le moteur n'a pas jouee. */
   const nomDepenses = rec.spendObserved
     ? trad('− Dépenses observées') : trad('− Objectif de dépenses');
-  const aideDepenses = trad(rec.spendObserved
-    ? 'La moyenne de tes dépenses saisies cette année.'
-    : 'Aucune dépense saisie cette année : c’est ton objectif qui sert de base.');
+  const sousDepenses = trad(rec.spendObserved
+    ? 'moyenne de l’année' : 'aucune dépense saisie');
   const aideCapacite = trad(rec.spendObserved
       ? 'Revenus − charges fixes − dépenses observées.'
       : 'Revenus − charges fixes − objectif de dépenses.')
@@ -685,7 +684,8 @@ function carteAccumulation() {
     <dl class="kv kv-accumul">
       <dt>${trad('Revenus fixes')}</dt><dd>${fmtEUR0(rec.income)}</dd>
       <dt>${trad('− Charges fixes')}</dt><dd>${aEcran(-rec.fixed)}</dd>
-      <dt>${esc(nomDepenses)}${aide(aideDepenses)}</dt><dd>${aEcran(-rec.spend)}</dd>
+      <dt>${esc(nomDepenses)}<span class="sub">${esc(sousDepenses)}</span></dt>
+        <dd>${aEcran(-rec.spend)}</dd>
       <dt class="somme"><b>${trad('= Capacité d’épargne')}</b>${aide(aideCapacite)}</dt>
         <dd class="somme">${aEcran(rec.investable)}</dd>
       <dt>${trad('+ Capital remboursé')}${aide(trad('La part de tes mensualités qui rembourse le capital de tes crédits. Elle réduit ta dette, donc elle augmente ton patrimoine net.'))}</dt>
@@ -704,7 +704,7 @@ function carteAccumulation() {
         <dd class="${cls(rec.gap)}">${aEcran(rec.gap)}</dd>
     </dl>
     <p class="small muted" style="margin:12px 0 0">${trad('Croissance observée calculée sur les')}
-      ${rec.monthsSpan} ${rec.monthsSpan > 1 ? trad('derniers mois clos') : trad('dernier mois clos')}${aide(trad('Le mois en cours est écarté : il est incomplet, et il ferait bouger le chiffre chaque jour.'))}</p>`}
+      ${rec.monthsSpan} ${rec.monthsSpan > 1 ? trad('derniers mois clos') : trad('dernier mois clos')}</p>`}
   </div>`;
 }
 
@@ -730,11 +730,9 @@ function viewOverview() {
      rend `null` quand la base de comparaison est nulle, negative, ou que le
      patrimoine a traverse zero entre les deux dates. L'euro, lui, reste exact
      dans tous les cas. */
-  const AIDE_ECART = trad('Variation du patrimoine, apports et retraits inclus. '
-    + 'Ce n’est pas un rendement d’investissement.');
   const deltaBlock = (label, x) => x ? `
     <div class="hero-delta">
-      <span>${esc(label)}${aide(AIDE_ECART)}</span>
+      <span>${esc(label)} · ${trad('apports inclus')}</span>
       <b class="${cls(x.eur)}">${arrow(x.eur)} ${fmtSigned(x.eur)}</b>
     </div>` : '';
 

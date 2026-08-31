@@ -3757,33 +3757,27 @@ suite('Écarts du patrimoine : un montant, et sa réserve', () => {
     vrai(/fmtSignedPct/.test(app), 'd’autres écrans en affichent encore');
   });
 
-  test('la réserve se dit là où le chiffre se lit', () => {
-    /* Une ligne de prose sous la carte aurait ete lue par personne. La bulle
-       vit sur l'intitule de chaque ecart : les deux montants portent la meme
-       reserve, et chacun se lit seul. */
+  test('la réserve se dit dans l’intitulé, pas dans une bulle', () => {
+    /* Elle a vecu dans une pastille, sur chacun des deux ecarts. Deux mots
+       suffisent : « apports inclus » dit que ce montant n'est pas un rendement,
+       ce que la bulle mettait deux phrases a expliquer. Sur l'ecran qu'on ouvre
+       le plus souvent, une pastille qu'un adjectif remplace est du bruit — et il
+       y en avait deux cote a cote, disant la meme chose.
+
+       La reserve ne disparait pas : elle change de forme. C'est ce que ce
+       controle garde. */
     const b = bloc();
-    vrai(/\$\{esc\(label\)\}\$\{aide\(AIDE_ECART\)\}/.test(b),
-      'chaque intitulé porte sa bulle');
+    vrai(/\$\{esc\(label\)\} · \$\{trad\('apports inclus'\)\}/.test(b),
+      'chaque intitulé porte la réserve');
+    vrai(!/aide\(/.test(b), 'et plus aucune pastille');
     const app = lireSource('assets/app.js');
-    const texte = app.slice(app.indexOf('const AIDE_ECART'),
-                            app.indexOf('const deltaBlock'));
-    vrai(/apports et retraits inclus/.test(texte),
-      'la réserve nomme ce que le montant contient');
-    vrai(/n’est pas un rendement d’investissement/.test(texte),
-      'et ce qu’il n’est pas');
-    /* L'apostrophe s'ecrit, elle ne s'echappe pas : sous forme d'echappement
-       JavaScript, une recherche sur l'apostrophe typographique ne la trouve
-       pas, et c'est ainsi qu'une chaine echappe aux controles de langue. */
-    vrai(!/AIDE_ECART[\s\S]{0,200}u2019/.test(app),
-      'sans échappement, sinon les contrôles de langue la manquent');
+    vrai(!/AIDE_ECART/.test(app), 'la constante s’en va avec elle');
+    vrai(!Object.keys(I18N.en).some(k => /apports et retraits inclus/.test(k)),
+      'et sa traduction aussi : une clef sans emploi ne se maintient pas');
   });
 
   test('la réserve se traduit', () => {
-    const cle = 'Variation du patrimoine, apports et retraits inclus. '
-      + 'Ce n’est pas un rendement d’investissement.';
-    vrai(I18N.en[cle], 'la clef existe en anglais');
-    vrai(/not an investment return/.test(I18N.en[cle]),
-      'et dit la même chose : ' + I18N.en[cle]);
+    eq(I18N.en['apports inclus'], 'contributions included', 'deux mots, deux langues');
   });
 
   test('les deux écarts partagent une seule écriture', () => {
@@ -3856,8 +3850,10 @@ suite('Carte Patrimoine : une synthèse, sans porte cachée', () => {
     for (const a of actions) {
       vrai(a === 'hero-base', `« ${a} » n’a rien à faire dans cette carte`);
     }
-    vrai(/aide\(AIDE_ECART\)/.test(lireSource('assets/app.js')),
-      'les écarts gardent leur bulle');
+    /* Les ecarts ont perdu la leur : leur reserve tient dans l'intitule. La
+       carte ne porte donc plus une seule pastille, ce qui est le bout du chemin
+       pour une carte qui doit se lire sans rien ouvrir. */
+    vrai(!/aide\(/.test(c), 'et la carte n’en porte plus aucune');
   });
 
   test('la fiche que plus rien n’ouvrait s’en est allée', () => {
@@ -4671,6 +4667,68 @@ suite('Échéance des charges fixes : une date déclarée, les suivantes calcul�
     const app = lireSource('assets/app.js');
     vrai(!/fmtJourMois\([^)]*\)\} \$\{String\([^)]*\)\.slice\(0, 4\)\}/.test(app),
       'et plus personne ne la recolle à la main');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Deux a quatre mots valent mieux qu'une pastille
+   ------------------------------------------------------------------ */
+suite('Aperçu : une aide seulement quand le wording ne suffit pas', () => {
+
+  test('« mois clos » se suffit, la justification s’en va', () => {
+    /* « Clos » porte deja le fait : le mois en cours ne compte pas. La bulle
+       n'ajoutait que la justification — il est incomplet, il bougerait chaque
+       jour — et une justification ne se lit pas sur l'ecran d'accueil.
+
+       C'est un retour sur un choix pose au meme endroit, et assume : le choix
+       d'alors etait de sortir la justification de la prose vers l'aide, pas de
+       garantir qu'elle merite un point d'interrogation sur cet ecran. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf("trad('Croissance observée calculée sur les')");
+    vrai(i > 0, 'la note de méthode doit être trouvable');
+    const note = app.slice(i, app.indexOf('</p>', i));
+    vrai(/derniers mois clos/.test(note), 'le mot « clos » reste');
+    vrai(!/aide\(/.test(note), 'et la pastille qui le justifiait s’en va');
+    /* Le motif se veut EXACT : une autre clef, toujours en usage ailleurs,
+       contient la meme phrase dans un texte plus long. Un controle trop large
+       aurait reclame la suppression d'une traduction vivante. */
+    vrai(!Object.keys(I18N.en).some(k =>
+      k.includes('Le mois en cours est écarté : il est incomplet')),
+      'sa traduction part avec elle');
+  });
+
+  test('« observées » dit sur quoi, en trois mots', () => {
+    /* « Depenses observees » ne disait pas observees sur quoi : c'est cela qui
+       manquait, pas une phrase. Un sous-titre le dit sans rien a ouvrir. */
+    const app = lireSource('assets/app.js');
+    vrai(/const sousDepenses = trad\(rec\.spendObserved\s*\n?\s*\? 'moyenne de l’année' : 'aucune dépense saisie'\);/.test(app),
+      'le sous-titre remplace la bulle');
+    vrai(/\$\{esc\(nomDepenses\)\}<span class="sub">\$\{esc\(sousDepenses\)\}<\/span>/.test(app),
+      'et se rend sous l’intitulé');
+    eq(I18N.en['moyenne de l’année'], 'average for the year', 'il se traduit');
+    eq(I18N.en['aucune dépense saisie'], 'no spending entered', 'dans ses deux branches');
+  });
+
+  test('ce qui reste expliqué l’est parce qu’un libellé n’y suffit pas', () => {
+    /* La regle : une pastille survit quand elle porte un CALCUL avec ses
+       nombres, une convention de mesure, ou une notion technique. Pas quand
+       deux mots la remplacent. Les quatre retirees etaient du second genre ;
+       celles qui restent montrent leur arithmetique ou definissent une moyenne
+       sur une fenetre. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('function carteAccumulation()');
+    const carte = app.slice(i, app.indexOf('\n}', app.indexOf('return `', i)));
+    /* Les trois aides qui montrent leur calcul le montent avec le formateur
+       texte, jamais avec celui qui rend du balisage. */
+    for (const cle of ['aideCapacite', 'aideTotal', 'aideTaux']) {
+      vrai(new RegExp(`const ${cle} =`).test(app), `« ${cle} » reste`);
+    }
+    vrai(/aide\(trad\('La part de tes mensualités qui rembourse le capital/.test(carte),
+      'l’amortissement d’un crédit garde son aide');
+    /* Et les intitules qui ne sont que des montants saisis n'en ont jamais eu. */
+    const rev = carte.indexOf("trad('Revenus fixes')");
+    vrai(!/\$\{aide\(/.test(carte.slice(rev, carte.indexOf('</dt>', rev))),
+      'un montant saisi n’explique rien');
   });
 });
 
@@ -18242,8 +18300,12 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
       const i = c.indexOf(rendu[ligne] || `trad('${ligne}')`);
       vrai(i > 0, `« ${ligne} » doit être rendu`);
       const fin = c.indexOf('</dt>', i);
-      vrai(fin > i && /\$\{aide\(/.test(c.slice(i, fin)),
-        `« ${ligne} » doit porter une aide`);
+      /* Une bulle OU un sous-titre : ce qui compte est que la ligne dise d'ou
+         elle vient, pas le composant qui le dit. « Depenses observees » se
+         contente de « moyenne de l'annee » sous son intitule — trois mots la ou
+         une phrase demandait un geste. */
+      vrai(fin > i && /\$\{aide\(|class="sub"/.test(c.slice(i, fin)),
+        `« ${ligne} » doit dire d’où elle vient`);
     }
     /* Les deux montants saisis n'en portent pas. */
     const revenus = c.indexOf("trad('Revenus fixes')");
@@ -18343,7 +18405,7 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
        `montantSigne` prend son formateur en argument plutot que d'exister en
        deux exemplaires. */
     const c = carte();
-    vrai((c.match(/\$\{aide\(/g) || []).length >= 7,
+    vrai((c.match(/\$\{aide\(/g) || []).length >= 6,
       'les aides de la cascade et de la confrontation doivent être trouvables');
     /* Les aides composees vivent dans des constantes au-dessus du gabarit : on
        controle donc la carte entiere, hors du rendu des `<dd>`. */
