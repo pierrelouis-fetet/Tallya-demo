@@ -19645,7 +19645,7 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
       + `accumulation, rythme, objectif : ${l.join(' < ')}`);
     /* Au quatrieme rang, un mur de zeros serait du bruit : la carte ne parait
        pas sans une seule ligne de titres. */
-    const garde = vue.indexOf("${!Store.state.positions.length ? '' : `");
+    const garde = vue.indexOf("${!aDesPositionsMarche() ? '' : `");
     vrai(garde > 0 && garde < vue.indexOf('class="pf-corps"'),
       'et sans une seule ligne de titres, elle ne paraît pas du tout');
   });
@@ -27043,5 +27043,162 @@ suite('La carte du portefeuille raconte une phrase', () => {
                           '"Performance"', '"non calculée"',
                           '"Plus / moins-value latente"'])
       vrai(en.indexOf(partie) < 0, `${partie} n’a plus d’appelant`);
+  });
+});
+
+/* Marches ne se montre qu'a qui a des titres. La condition vit dans le modele,
+   les ecrans la lisent : c'est ce couple que cette suite garde. */
+suite('Marchés n’existe que pour qui a des titres', () => {
+
+  /* Un compte n'est jamais un argument : on en pose de toutes sortes, vides,
+     pour verifier qu'aucun ne fait apparaitre l'onglet a lui seul. */
+  const compte = (id, type) => ({ id, type, label: id, broker: 'Courtier',
+                                  statut: 'ouvert', lignes: [], cash: [] });
+  const titre = (id, classe) => ({ id, name: id, symbol: id.toUpperCase(), isin: '',
+    qty: 2, price: 100, buyPrice: 90, currency: 'EUR', fx: 1,
+    account: 'c_cto', assetClass: classe, role: 'satellite', manual: false });
+
+  const etat = (positions, comptes) => {
+    Fixture.poser();
+    Store.state.positions = positions;
+    Store.state.comptes = comptes;
+    return aDesPositionsMarche();
+  };
+
+  test('sans une seule ligne cotée, Marchés n’existe pas', () => {
+    /* Les cinq premiers etats de la liste : rien, du cash, du cash et de la
+       pierre, un patrimoine de biens, un PEA vide. Aucun ne porte de position. */
+    eq(etat([], []), false, 'utilisateur vierge');
+    eq(etat([], [compte('c1', 'courant')]), false, 'du cash seulement');
+    eq(etat([], [compte('c1', 'courant'), compte('c2', 'bienImmo')]),
+      false, 'du cash et de l’immobilier');
+    eq(etat([], [compte('c1', 'courant'), compte('c2', 'bienImmo'),
+                 compte('c3', 'objet')]),
+      false, 'un patrimoine de biens, sans un seul titre');
+    eq(etat([], [compte('c_pea', 'pea')]), false, 'un PEA vide');
+  });
+
+  test('le type de compte ne décide de rien, dans un sens comme dans l’autre', () => {
+    /* C'est la faute a ne pas commettre : un compte-titres vide n'est pas un
+       investisseur, et un PEA qui porte un ETF en est un. */
+    eq(etat([], [compte('c_cto', 'cto')]), false,
+      'un compte-titres vide : pas de Marchés');
+    eq(etat([], [compte('c_pea', 'pea'), compte('c_cto', 'cto')]), false,
+      'deux enveloppes vides non plus');
+    eq(etat([titre('etf', 'actions')], [compte('c_pea', 'pea')]), true,
+      'un PEA avec un ETF monde, sans aucun compte-titres : Marchés');
+    eq(etat([titre('meta', 'actions')], [compte('c_cto', 'cto')]), true,
+      'un compte-titres avec une action : Marchés');
+    eq(etat([titre('etf', 'actions')],
+            [compte('c_pea', 'pea'), compte('c_cto', 'cto')]), true,
+      'un PEA garni et un compte-titres vide : Marchés');
+  });
+
+  test('toute classe posée dans les positions déclenche Marchés', () => {
+    /* La vue Marches rend `Store.state.positions` en entier, sans filtrer sur la
+       classe : crypto, obligation cotee, fonciere, metal par ETC y paraissent
+       comme une action. Filtrer ici tiendrait une seconde liste a cote de la
+       premiere, et celle qu'on oublie de completer dit le contraire de l'autre. */
+    for (const classe of Object.keys(ASSET_CLASSES))
+      eq(etat([titre('x', classe)], [compte('c_cto', 'cto')]), true,
+        `une ligne « ${classe} » suffit`);
+  });
+
+  test('la dernière ligne supprimée fait disparaître Marchés', () => {
+    Fixture.poser();
+    Store.state.comptes = [compte('c_cto', 'cto')];
+    Store.state.positions = [titre('a', 'actions'), titre('b', 'obligations')];
+    vrai(aDesPositionsMarche(), 'deux lignes');
+    Store.state.positions.pop();
+    vrai(aDesPositionsMarche(), 'une de moins : l’onglet reste');
+    Store.state.positions.pop();
+    eq(aDesPositionsMarche(), false, 'la dernière partie : l’onglet s’en va');
+    Store.state.positions.push(titre('c', 'crypto'));
+    vrai(aDesPositionsMarche(), 'et la première revenue le ramène');
+  });
+
+  test('une seule condition, lue par tout ce qui en dépend', () => {
+    /* Cinq surfaces la lisent. Cinq `positions.length` recopies finiraient par
+       ne plus dire la meme chose : c'est le defaut qui revient le plus souvent
+       dans cette base de code. */
+    const store = lireSource('assets/store.js');
+    const src = lireSource('assets/app.js');
+    vrai(/function aDesPositionsMarche\(\) \{/.test(store),
+      'la condition vit dans le modèle');
+    vrai(/function majVisibiliteMarches\(\) \{/.test(src),
+      'et les écrans passent par une seule porte');
+
+    const f = src.slice(src.indexOf('function majVisibiliteMarches()'),
+                        src.indexOf('function majOnglets()'));
+    vrai(/aDesPositionsMarche\(\)/.test(f), 'qui lit la condition du modèle');
+    vrai(/#nav a\[data-view="positions"\], #tabbar a\[data-view="positions"\]/.test(f),
+      'et vise les deux barres du même geste : deux conditions se désaccordent');
+
+    vrai(/\$\{!aDesPositionsMarche\(\) \? '' : `/.test(src),
+      'la carte de l’accueil lit la même condition');
+    vrai(!/!Store\.state\.positions\.length \? '' :/.test(src),
+      'et plus une variante locale');
+    vrai(/a\.vue !== 'positions' \|\| aDesPositionsMarche\(\)/.test(src),
+      'aucun panneau ne renvoie vers un onglet absent de la barre');
+  });
+
+  test('un onglet masqué ne laisse ni trou ni place réservée', () => {
+    const css = lireSource('assets/styles.css');
+    vrai(css, 'assets/styles.css doit être lisible pour ce contrôle');
+    /* Les colonnes se derivent des enfants rendus : un onglet en `display: none`
+       n'est pas un element de grille. `repeat(5, 1fr)` gardait un cinquieme de
+       barre en noir. */
+    vrai(/grid-auto-flow: column; grid-auto-columns: 1fr;/.test(css),
+      'la barre compte ses colonnes sur ce qu’elle rend');
+    /* L'assertion porte sur la DECLARATION et non sur le motif seul : celui-ci
+       se lit aussi dans le commentaire qui explique pourquoi il est parti, et le
+       controle tombait ici en passant sur l'arbre publie, ou les commentaires
+       sont retires. */
+    vrai(!/grid-template-columns: repeat\(5, 1fr\)/.test(css),
+      'et non sur un nombre écrit en dur');
+    vrai(/width: calc\(100% \/ var\(--n-onglets, 5\) - 4px\)/.test(css),
+      'la pastille mesure une case, quel que soit leur nombre');
+    vrai(/\.tabbar:has\(> \[hidden\]\) \{ --n-onglets: 4; \}/.test(css),
+      'et le nombre se lit dans le DOM');
+    vrai(/\.tabbar:has\(> \[hidden\]\):has\(> :nth-child\(5\)\.on\) \{ --onglet: 3; \}/
+      .test(css), 'le dernier onglet devient le quatrième quand Marchés part');
+
+    const src = lireSource('assets/app.js');
+    vrai(/\$\$\('#tabbar a:not\(\[hidden\]\)'\)/.test(src),
+      'un onglet masqué n’est plus une place dans la barre : la vue qu’il '
+      + 'desservait devient orpheline et gagne son chevron de retour');
+  });
+
+  test('la porte vers la première position reste ouverte', () => {
+    /* Le bouton « + Titre cote » de la fiche d'un compte a titres mene a
+       `#/positions` : c'est la seule porte vers la premiere ligne. Rediriger
+       cette adresse quand il n'y a pas de position la fermerait, et l'onglet ne
+       reapparaitrait donc jamais. La route reste, seul l'onglet se masque. */
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf("'ajouter-ligne'(btn) {"),
+                        src.indexOf("'ajouter-ligne'(btn) {") + 320);
+    vrai(/location\.hash = '#\/positions'/.test(f),
+      'le geste mène à la vue, depuis la fiche du compte');
+    const cv = src.slice(src.indexOf('function currentView()'),
+                         src.indexOf('function currentView()') + 900);
+    vrai(!/aDesPositionsMarche/.test(cv),
+      'et le routeur ne détourne pas cette adresse');
+  });
+
+  test('la carte du portefeuille disparaît avec l’onglet', () => {
+    /* L'accueil ne doit pas garder « 0 €, 0 ligne, 0,00 % » quand Marches n'est
+       plus la : la carte n'existe pas, elle ne se vide pas. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewOverview()'),
+                          src.indexOf('function mountOverview()'));
+    const garde = vue.indexOf("${!aDesPositionsMarche() ? '' : `");
+    vrai(garde > 0, 'la carte porte la condition centrale');
+    vrai(garde < vue.indexOf('class="pf-corps"'), 'et elle la porte avant elle');
+    /* Aucune autre carte de l'accueil ne depend des positions : le patrimoine,
+       les poches, la courbe, l'accumulation, le rythme, l'autonomie et
+       l'objectif parlent du patrimoine entier et restent. */
+    const dehors = vue.slice(0, garde) + vue.slice(vue.indexOf('carteEvolution()'));
+    vrai(!/dayPerformance\(\)/.test(dehors),
+      'la performance du jour ne vit que dans la carte conditionnelle');
   });
 });

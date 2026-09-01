@@ -838,7 +838,7 @@ function viewOverview() {
       + 'revenus, ton portefeuille. Tout part des comptes que tu déclares.')}</p>
   </div>`
   : `
-  ${!Store.state.positions.length ? '' : `
+  ${!aDesPositionsMarche() ? '' : `
   <div class="card">
     <div class="card-head"><h2>${trad('Portefeuille')}</h2>
       <a class="hint lien-vue" href="#/positions">${trad('Voir les positions')} →</a></div>
@@ -10873,7 +10873,8 @@ function openApercu(cle, arg) {
   const saisissable = $$('#modalBody [data-path]').length > 0;
   $('#modalBody').dataset.differe = saisissable ? 'propre' : '';
   if (!saisissable) delete $('#modalBody').dataset.differe;
-  const ailleurs = a.vue && a.vue !== currentView() && !saisissable;
+  const ailleurs = a.vue && a.vue !== currentView() && !saisissable
+    && (a.vue !== 'positions' || aDesPositionsMarche());
   $('#modalFoot').innerHTML =
     `<button class="btn ghost" data-action="modal-close">${trad('Fermer')}</button>
      ${saisissable ? `<button class="btn" data-action="apercu-enregistrer">${trad('Enregistrer')}</button>` : ''}
@@ -11025,6 +11026,11 @@ function render() {
   const bandeau = $('#bandeauDemo');
   if (bandeau) bandeau.hidden = !modeDemo();
 
+  /* Avant le chevron de retour, qui lit la barre : une entree masquee n'y est
+     plus une place, donc la vue qu'elle desservait devient orpheline et gagne
+     son chevron. Pose ici plutot que dans `majOnglets()`, qui vient apres. */
+  majVisibiliteMarches();
+
   /* Le retour de l'en-tête. Deux sortes d'écrans le portent, et leur retour n'est
      pas le même.
 
@@ -11042,7 +11048,7 @@ function render() {
      a rien au-dessus. */
   const retour = $('#btnRetour');
   if (retour) {
-    const dansBarre = $$('#tabbar a').map(a => a.dataset.view);
+    const dansBarre = $$('#tabbar a:not([hidden])').map(a => a.dataset.view);
     const parent = key !== v.cle && VIEWS[v.cle] ? v.cle : null;
     const orpheline = !parent && v.cle !== 'overview' && !dansBarre.includes(v.cle);
     retour.hidden = !parent && !orpheline;
@@ -11238,11 +11244,32 @@ function basculeNotifs() {
   $('#btnCloche')?.setAttribute('aria-expanded', String(ouvrir));
 }
 
+/* Marches ne se montre qu'a qui a des titres.
+
+   Les deux barres portent la meme entree, ecrite en dur dans `index.html` :
+   c'est ici qu'on la fait paraitre ou non, au meme endroit et sur la meme
+   condition. Sans cela il y aurait deux conditions a tenir d'accord, et la
+   barre du bas et le menu lateral finiraient par se contredire.
+
+   La ROUTE, elle, reste ouverte, et ce n'est pas un oubli : le bouton
+   « + Titre cote » de la fiche d'un compte a titres mene a `#/positions` pour
+   y poser la ligne. Rediriger cette adresse fermerait la seule porte vers la
+   premiere position, et l'onglet ne reapparaitrait donc jamais. Qui y arrive
+   ainsi y arrive volontairement, et le chevron de retour l'en sort — la vue ne
+   figure plus dans la barre, elle est donc traitee comme une page orpheline. */
+function majVisibiliteMarches() {
+  const montrer = aDesPositionsMarche();
+  for (const a of $$('#nav a[data-view="positions"], #tabbar a[data-view="positions"]'))
+    a.hidden = !montrer;
+  return montrer;
+}
+
 function majOnglets() {
   const barre = $('#tabbar');
   if (!barre) return;
+  majVisibiliteMarches();
   const key = currentView();
-  const directs = [...barre.querySelectorAll('a')].map(a => a.dataset.view);
+  const directs = [...barre.querySelectorAll('a:not([hidden])')].map(a => a.dataset.view);
   const ouvert = document.body.classList.contains('nav-open');
 
   for (const a of barre.querySelectorAll('a')) {
@@ -11253,7 +11280,7 @@ function majOnglets() {
   const trancher = () => titre && titre.classList.toggle('sans-suite', restants === 0);
   for (const el of $$('#nav > *')) {
     if (el.classList.contains('nav-groupe')) { trancher(); titre = el; restants = 0; continue; }
-    if (!el.matches('a[data-view]')) continue;
+    if (!el.matches('a[data-view]') || el.hidden) continue;
     const double = directs.includes(el.dataset.view);
     el.classList.toggle('dans-barre', double);
     if (!double) restants++;

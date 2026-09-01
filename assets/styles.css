@@ -3977,7 +3977,11 @@ td .empty, th .empty { background: none; border: none; }
      portent `background: var(--page)` : le canvas est deja peint de la couleur de
      la page, rien ne peut y virer au noir. */
   .tabbar {
-    display: grid; grid-template-columns: repeat(5, 1fr);
+    /* Les colonnes se creent a partir des enfants RENDUS, jamais d'un compte
+       ecrit ici : un onglet masque est en `display: none`, il n'est donc pas un
+       element de grille et ne laisse pas sa colonne vide. `repeat(5, 1fr)`
+       gardait un cinquieme de barre en noir des que Marches disparaissait. */
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
     position: fixed; z-index: 65;
     left: 10px; right: 10px;
     /* La zone de gestes ecarte la pilule du bord par `bottom` et non par
@@ -4064,7 +4068,7 @@ td .empty, th .empty { background: none; border: none; }
        quand ils etaient dans le remplissage etait juste ; les garder
        maintenant remonterait la pastille au-dessus des libelles. */
     top: 5px; bottom: 5px; left: 2px;
-    width: calc(20% - 4px);
+    width: calc(100% / var(--n-onglets, 5) - 4px);
     border-radius: var(--radius-pill);
     background: color-mix(in oklab, var(--text-primary) 10%, transparent);
     transform: translateX(calc(var(--onglet, 0) * (100% + 4px)));
@@ -4081,6 +4085,13 @@ td .empty, th .empty { background: none; border: none; }
   .tabbar:has(> :nth-child(3).on) { --onglet: 2; }
   .tabbar:has(> :nth-child(4).on) { --onglet: 3; }
   .tabbar:has(> :nth-child(5).on) { --onglet: 4; }
+  /* Marches masque : quatre cases, et le dernier onglet devient le quatrieme.
+     Deux regles, lues dans le DOM comme les cinq du dessus — aucune variable a
+     poser depuis le script, donc rien qui puisse se desaccorder de la classe
+     `.on`. Le quatrieme onglet ne peut pas etre actif quand il est masque, donc
+     sa regle n'a pas de jumelle. */
+  .tabbar:has(> [hidden]) { --n-onglets: 4; }
+  .tabbar:has(> [hidden]):has(> :nth-child(5).on) { --onglet: 3; }
   .tabbar:not(:has(> .on))::before { opacity: 0; }
   @media (prefers-reduced-motion: reduce) {
     .tabbar::before { transition: none; }

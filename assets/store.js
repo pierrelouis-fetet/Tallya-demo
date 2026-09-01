@@ -4777,6 +4777,29 @@ function salesCumulative(range) {
   });
 }
 
+/* Y a-t-il au moins une position de marche ?
+
+   Une position de marche, c'est une ligne de `Store.state.positions` : celle
+   dont le cours arrive du marche, par opposition aux placements dont c'est le
+   detenteur qui donne la valeur et qui vivent dans `compte.lignes`.
+
+   Le TYPE DE COMPTE ne dit rien, et c'est le piege a eviter : un PEA qui porte
+   un ETF monde en a une, un compte-titres vide n'en a aucune. Un compte a
+   titres ouvert se voit poser une entree de liquidites a investir, mais dans
+   `compte.cash` et jamais dans `positions` : un compte vide reste vide.
+
+   La CLASSE non plus : actions, obligations, foncieres cotees, metaux par ETC,
+   fonds cotes, crypto vivent toutes dans cette liste, et la vue Marches les
+   rend toutes sans distinction. Filtrer par classe reviendrait a tenir une
+   seconde liste a cote de la premiere, et c'est le defaut qui revient le plus
+   souvent ici.
+
+   Une fonction plutot qu'un `positions.length` recopie : la condition se lit a
+   cinq endroits, et cinq variantes finissent par ne plus dire la meme chose. */
+function aDesPositionsMarche() {
+  return (Store.state.positions || []).length > 0;
+}
+
 function latentPnl() {
   const ps = Store.state.positions;
   /* La valeur est connue de toutes les lignes ; le resultat, non.
