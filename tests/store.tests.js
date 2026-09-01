@@ -2556,135 +2556,6 @@ suite('Une bascule qui ne change rien ne se montre pas', () => {
   });
 });
 
-/* ------------------------------------------------------------------
-   Le détail d'une catégorie reste dans le périmètre de la carte
-   ------------------------------------------------------------------ */
-suite('Une fiche ne réintroduit pas ce que sa carte a écarté', () => {
-
-  /* Le fixture : 138 250 de brut, dont 6 500 de liquidités et 120 000 de murs.
-     Ce qui est placé vaut donc 131 750 en global et 11 750 en financier —
-     9 000 d'actions, 750 de métaux, 2 000 de non coté. */
-  const PLACE_GLOBAL = 131750;
-  const PLACE_FINANCIER = 11750;
-
-  test('en vue financière, les murs quittent aussi la liste', () => {
-    /* Le defaut signale : la carte « Place » retranchait les murs, la fiche
-       qu'elle ouvre ne les retranchait pas. Le meme intitule donnait deux
-       montants a un clic d'ecart, et le bien reapparaissait en tete de liste. */
-    Fixture.poser();
-    pres(nowTotals().invested, PLACE_GLOBAL, 'ce qui est placé, tout compris');
-    pres(horsFinancierTotal(), 120000, 'les murs du fixture');
-
-    const global = placeByAccount();
-    const financier = placeByAccount({ financier: true });
-    pres(global.reduce((s, r) => s + r.value, 0), PLACE_GLOBAL,
-      'la liste globale fait le total global');
-    pres(financier.reduce((s, r) => s + r.value, 0), PLACE_FINANCIER,
-      'et la liste financière fait le total financier');
-    pres(PLACE_GLOBAL - PLACE_FINANCIER, horsFinancierTotal(),
-      'l’écart entre les deux listes EST ce que le périmètre écarte');
-
-    /* Le compte qui porte les murs disparait, il ne se contente pas de maigrir. */
-    vrai(global.some(r => r.id === 'c_immo'), 'le studio est dans la vue globale');
-    vrai(!financier.some(r => r.id === 'c_immo'),
-      'et il n’est nulle part dans la vue financière');
-    for (const r of financier) {
-      vrai(Math.abs(r.value) > 0.005, `« ${r.label} » ne pèse rien : il n’a rien à faire dans la liste`);
-    }
-  });
-
-  test('les pourcentages de la fiche font cent, dans les deux vues', () => {
-    /* Une base plus large que la liste qu'elle surmonte ne totalise pas cent, et
-       c'est la faute que ce depot traque depuis le debut. */
-    Fixture.poser();
-    for (const financier of [false, true]) {
-      const l = placeByAccount({ financier });
-      pres(l.reduce((s, r) => s + r.pct, 0), 100,
-        `les parts totalisent cent (financier : ${financier})`);
-    }
-  });
-
-  test('sans actif hors périmètre, les deux listes se confondent', () => {
-    Fixture.poser(s => {
-      s.comptes = s.comptes.filter(c => c.id !== 'c_immo');
-      for (const m of s.monthly) delete m.v.c_immo;
-    });
-    pres(horsFinancierTotal(), 0, 'plus rien hors périmètre');
-    const a = placeByAccount(), b = placeByAccount({ financier: true });
-    eq(a.length, b.length, 'les deux listes ont le même nombre de lignes');
-    for (let i = 0; i < a.length; i++) {
-      eq(a[i].id, b[i].id, `même compte au rang ${i}`);
-      pres(b[i].value, a[i].value, `même montant pour « ${a[i].label} »`);
-    }
-  });
-
-  test('la fiche et sa carte lisent la même expression', () => {
-    /* Deux ecritures d'un meme montant finissent par diverger, et c'est
-       exactement ce qui s'est passe. Elles doivent etre litteralement la meme. */
-    const app = lireSource('assets/app.js');
-    const carte = app.slice(app.indexOf('{ label: BASES.place.nom,'),
-                            app.indexOf('...pochesLiquidites()'));
-    vrai(/value: allocFinancier \? t\.invested - horsFinancierTotal\(\)\s*\n\s*: t\.invested - num\(t\.dettes\)/.test(carte),
-      'la carte retranche les murs en financier, les dettes en global');
-    /* La borne de fin repart de l'index trouve : « Voir les avoirs » existe
-       aussi plus haut dans le fichier, et une tranche dont la fin precede le
-       debut est vide, donc verte pour de mauvaises raisons. */
-    const iFiche = app.indexOf('investiTotal: () => {');
-    const fiche = app.slice(iFiche, app.indexOf("cta: trad('Voir les comptes')", iFiche));
-    vrai(fiche.length > 200, 'la fiche doit être trouvable');
-    vrai(/allocFinancier \? t\.invested - horsFinancierTotal\(\)\s*\n\s*: t\.invested - num\(t\.dettes\)/.test(fiche),
-      'la fiche retranche exactement la même chose');
-    /* `net: true` : les lignes retranchent les dettes comme l'en-tete le fait.
-       Sans lui, le total annoncait « investi moins les dettes » au-dessus de
-       lignes qui les ignoraient, et l'ecart valait la dette entiere. */
-    vrai(/placeByAccount\(\{ financier: allocFinancier, net: true \}\)/.test(fiche),
-      'et ses lignes viennent de la source filtrée, comptée comme l’en-tête');
-    /* La note du haut prend la base du perimetre, pas le patrimoine entier. */
-    vrai(/const base = valeurBaseAlloc\(\);/.test(fiche),
-      'le pourcentage se calcule sur la base de la page');
-    vrai(!/nowTotals\(\)\.total/.test(fiche),
-      'et plus sur le patrimoine entier, qui ne totaliserait pas cent');
-  });
-
-  test('l’écran n’ouvre que trois fiches, et on sait lesquelles', () => {
-    /* Une barriere, pas un inventaire. Chaque fiche atteignable depuis cette
-       page herite du perimetre ou n'a rien a en faire :
-
-       - `investiTotal` melange les deux mondes, donc elle recoit le mode ;
-       - `cash` et `cashInvestir` ne portent que des liquidites, une classe qui
-         n'est jamais hors perimetre — elles ne peuvent rien reintroduire.
-
-       Une quatrieme ajoutee demain tombera sur ce controle, et il faudra dire
-       de quel cote elle est. C'est le seul moyen de ne pas refaire ce defaut. */
-    const app = lireSource('assets/app.js');
-    const vue = app.slice(app.indexOf('function viewAllocation()'),
-                          app.indexOf('function mountAllocation'));
-    vrai(vue.length > 1000, 'la vue doit être trouvable');
-    /* Une fiche se designe par un litteral, mais pas toujours seule : les
-       poches de cash choisissent entre deux noms sur la meme ligne. On lit donc
-       tous les litteraux qui suivent `apercu:` jusqu'a la fin de l'expression,
-       sinon la moitie des fiches echappe au recensement. */
-    const noms = new Set([...vue.matchAll(/apercu: (.+)/g)].flatMap(m => {
-      /* Un ternaire porte sa CONDITION avant le « ? » : « p.cle === 'investir' »
-         n'est pas un nom de fiche, c'est la clef d'une poche de cash. On ne lit
-         donc que la partie qui désigne. */
-      const q = m[1].indexOf('?');
-      const designe = q >= 0 ? m[1].slice(q) : m[1];
-      return [...designe.matchAll(/'([a-zA-Z]+)'/g)].map(x => x[1]);
-    }));
-    eq([...noms].sort().join(','), 'cash,cashInvestir,investiTotal',
-      'trois fiches, et chacune a été jugée sur le périmètre');
-    /* Et le seul point d'entree reste celui-la : aucune autre action de cette
-       page n'ouvre quoi que ce soit. */
-    const actions = new Set([...vue.matchAll(/data-action="([a-z-]+)"/g)].map(m => m[1]));
-    eq([...actions].join(','), 'apercu',
-      'un seul geste ouvre un détail sur cet écran');
-    /* Les liquidites ne sortent jamais du perimetre financier : c'est ce qui
-       rend les deux autres fiches inoffensives, et ca se verifie. */
-    vrai(!CLASSES_HORS_FINANCIER.includes('liquidites'),
-      'les liquidités sont dans le périmètre financier, donc « cash » ne réintroduit rien');
-  });
-});
 
 /* ------------------------------------------------------------------
    Les barres des relevés, et la teinte d'un contenant
@@ -4776,116 +4647,98 @@ suite('Aperçu : une aide seulement quand le wording ne suffit pas', () => {
   });
 });
 
+
 /* ------------------------------------------------------------------
-   La fiche « Investi » se lit par compte, et ses parts font son total
+   La premiere carte d'Allocation se lit, elle ne se touche pas
    ------------------------------------------------------------------ */
-suite('Investi par compte : un total qui égale la somme de ses parts', () => {
+suite('Allocation : une carte de synthèse, sans porte', () => {
 
-  test('les comptes font le total, dettes comprises', () => {
-    /* Le defaut corrige : l'en-tete annoncait « investi moins les dettes »
-       au-dessus de lignes qui les ignoraient. Avec le pret du fixture, le total
-       disait une chose et ses parts en faisaient une autre, l'ecart valant la
-       dette entiere. Invisible chez qui n'a pas de credit. */
-    Fixture.poser();
-    const t = nowTotals();
-    const attendu = t.invested - num(t.dettes);
-    const lignes = placeByAccount({ net: true });
-    pres(lignes.reduce((s, l) => s + l.value, 0), attendu,
-      'les comptes font « investi moins les dettes »');
-    pres(lignes.reduce((s, l) => s + l.pct, 0), 100, 'et leurs parts font cent');
-    vrai(num(t.dettes) > 0, 'le fixture porte bien une dette, sinon le contrôle ne dit rien');
-  });
-
-  test('la dette se retranche du compte qui la porte, une seule fois', () => {
-    /* Meme regle que le classement ligne par ligne, et volontairement la meme
-       ecriture : au prorata, sur les comptes de l'etablissement endette. */
-    Fixture.poser();
-    const lignes = placeByAccount({ net: true });
-    const bien = lignes.find(l => /Studio/.test(l.label));
-    pres(bien.value, 120000 - Fixture.DETTE, 'le bien porte son prêt');
-    /* Et aucun autre compte n'en paie une part. */
-    const sansDette = placeByAccount({ net: false });
-    for (const l of lignes) {
-      if (l === bien) continue;
-      const avant = sansDette.find(x => x.id === l.id);
-      if (!avant) continue;
-      pres(l.value, avant.value, `« ${l.label} » n’a rien perdu`);
-    }
-  });
-
-  test('une dette sans compte investi reste comptée', () => {
-    /* Une marge de courtier adossee a du cash ne peut se retrancher de rien :
-       elle reste une ligne, sinon la somme cesserait d'egaler le total. */
-    Fixture.poser(s => {
-      s.etabs.find(e => e.id === 'e_banque').dettes =
-        [{ id: 'd_marge', libelle: 'Marge', montant: 3000, note: '' }];
-    });
-    const t = nowTotals();
-    const lignes = placeByAccount({ net: true });
-    pres(lignes.reduce((s, l) => s + l.value, 0), t.invested - num(t.dettes),
-      'la somme fait toujours le total');
-    vrai(lignes.some(l => l.value < -0.005 || /Crédits/.test(l.label)),
-      'la dette orpheline se voit plutôt qu’elle ne s’évapore');
-  });
-
-  test('en périmètre financier, aucune dette ne se retranche', () => {
-    /* Le pret finance le bien, qui est ecarte de cette vue. */
-    Fixture.poser();
-    const fin = placeByAccount({ financier: true, net: true });
-    pres(fin.reduce((s, l) => s + l.value, 0),
-      nowTotals().invested - horsFinancierTotal(),
-      'la somme fait l’investi financier');
-    pres(fin.reduce((s, l) => s + l.pct, 0), 100, 'et les parts font cent');
-    vrai(!fin.some(l => /Crédits/.test(l.label)), 'aucune ligne de crédit');
-  });
-
-  test('une base qui ne se divise pas ne fabrique aucune part', () => {
-    Fixture.poser(s => {
-      s.etabs.find(e => (e.dettes || []).length).dettes[0].montant = Fixture.BRUT * 3;
-    });
-    for (const l of placeByAccount({ net: true })) {
-      eq(l.pct, null, `« ${l.label} » : aucun pourcentage sur une base négative`);
-    }
-  });
-
-  test('la fiche annonce son axe et sa base, sans les confondre', () => {
-    /* Deux bases sur un meme ecran : le patrimoine net en tete, la poche dans
-       les lignes. Rien ne disait laquelle portait les lignes — c'est le defaut
-       que ce projet a corrige trois fois ailleurs. */
+  const carte = () => {
     const app = lireSource('assets/app.js');
-    const i = app.indexOf('  investiTotal: () => {');
-    const fiche = app.slice(i, app.indexOf('\n  },', i));
-    vrai(/titre: BASES\.place\.nom/.test(fiche), 'le titre vient de la base, une seule fois');
-    vrai(/sous: trad\('Par compte'\)/.test(fiche), 'le sous-titre dit l’axe');
-    vrai(/totalNote: `\$\{fmtPct\(base \? place \/ base \* 100 : 0\)\} \$\{baseAlloc\(\)\.de\}`/.test(fiche),
-      'l’en-tête rapporte le total à la base de la page');
-    vrai(/\$\{fmtPct\(l\.pct, 1\)\} \$\{trad\('de l’investi'\)\}/.test(fiche),
-      'et chaque ligne nomme la sienne');
-    vrai(/placeByAccount\(\{ financier: allocFinancier, net: true \}\)/.test(fiche),
-      'les lignes comptent comme la carte qui les ouvre');
+    const i = app.indexOf('const disponibilite = [');
+    return app.slice(i, app.indexOf('<dl class="kv repart-pied">', i));
+  };
+
+  test('le libellé de la première poche suit le périmètre', () => {
+    /* La poche n'est pas la meme chose des deux cotes. En vue financiere elle ne
+       contient que du placement, et « Investi » la nomme juste. En vue globale
+       elle porte aussi les murs, la montre et la voiture : les appeler
+       « investi » ferait passer un logement pour un placement, ce qu'il n'est
+       pas pour qui l'habite. */
+    vrai(/label: allocFinancier \? BASES\.place\.nom : trad\('Placements et biens'\)/.test(carte()),
+      'le nom dépend du périmètre affiché');
+    eq(I18N.en['Placements et biens'], 'Investments & assets', 'et se traduit');
+    eq(I18N.en['Investi'], 'Invested', 'comme son jumeau financier');
+    /* `BASES.place.nom` ne bouge pas : deux autres fiches le lisent, et il y
+       designe bien de l'investi. */
+    const st = lireSource('assets/store.js');
+    vrai(/place:\s+\{ nom: trad\('Investi'\)/.test(st), 'la base garde son nom');
   });
 
-  test('chaque ligne dit le compte, son type et son établissement', () => {
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('  investiTotal: () => {');
-    const fiche = app.slice(i, app.indexOf('\n  },', i));
-    vrai(/label: l\.label,/.test(fiche), 'le nom du compte');
-    vrai(/t \? trad\(t\.label\) : ''/.test(fiche), 'son type');
-    vrai(/c \? nomEtabDe\(c\) : ''/.test(fiche), 'et son établissement');
-    /* Une ligne sans compte — le credit orphelin — ne doit pas faire tomber le
-       rendu en cherchant un type qui n'existe pas. */
-    vrai(/const c = l\.id && compteById\(l\.id\);/.test(fiche),
-      'et une ligne sans compte ne cherche pas de type');
+  test('aucune des quatre rangées n’ouvre quoi que ce soit', () => {
+    /* Elles etaient des boutons : chacune ouvrait une fiche, et la page gagnait
+       un niveau de navigation dont elle n'a pas besoin. Le detail par classe vit
+       dans le camembert juste dessous, la gestion des comptes appartient a
+       Actifs. Une page qui sert a lire une repartition n'est pas un menu. */
+    const c = carte();
+    vrai(/<div class="repart-ligne repart-inerte">/.test(c), 'ce sont des div');
+    vrai(!/<button[^>]*repart-ligne/.test(c), 'et non des boutons');
+    vrai(!/data-action/.test(c), 'aucune action');
+    vrai(!/data-apercu/.test(c), 'aucune fiche à ouvrir');
+    vrai(!/apercu: '/.test(c), 'ni dans la description des lignes');
+    /* Ni une infobulle qui promettrait un detail. */
+    vrai(!/Voir le détail de/.test(c), 'ni infobulle qui promette un détail');
   });
 
-  test('le renvoi mène aux comptes, dans les deux langues', () => {
+  test('rien ne s’annonce comme une porte : ni curseur, ni survol, ni focus', () => {
+    /* Des balises neutres et non des boutons desactives : un bouton inactif
+       reste un bouton pour qui navigue au clavier, et un bouton dont on retire
+       seulement l'action garde son curseur, son survol et son focus. */
+    const c = carte();
+    vrai(!/tabindex/.test(c), 'aucun élément focalisable');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.repart-inerte \{ cursor: default; \}/.test(css), 'le curseur reste neutre');
+    vrai(/\.repart-inerte:hover \.repart-nom \{ color: inherit; \}/.test(css),
+      'et le survol ne colore rien');
+    /* La classe de base est partagee avec la liste de l'accueil, qui ouvre bien
+       une fiche : son curseur et son survol ne doivent pas disparaitre. */
+    vrai(/\.repart-ligne \{[^}]*cursor: pointer/.test(css),
+      'la liste de l’accueil garde les siens');
+  });
+
+  test('la fiche et la fonction qu’elle seule appelait ont disparu', () => {
+    /* Une fonction sans appelant se garde sans se maintenir, et finit par
+       decrire un ecran qui n'existe plus. */
     const app = lireSource('assets/app.js');
-    vrai(/cta: trad\('Voir les comptes'\)/.test(app), 'le libellé');
-    eq(I18N.en['Voir les comptes'], 'View accounts', 'et son anglais');
-    eq(I18N.en['Par compte'], 'By account', 'comme le sous-titre');
-    eq(I18N.en['de l’investi'], 'of what is invested', 'et la base des lignes');
-    /* La fleche vient du rendu commun : la coller au libelle en donnerait deux. */
-    vrai(!/Voir les comptes →/.test(app), 'la flèche reste au rendu commun');
+    const st = lireSource('assets/store.js');
+    vrai(!/investiTotal/.test(app), 'la fiche s’en va');
+    vrai(!/placeByAccount/.test(app + st),
+      'et la fonction dont elle était le seul appelant');
+    /* Les deux blocs de prose qui la decrivaient partent avec elle : ils ne
+       portaient pas son nom, une recherche par identifiant les manquait. */
+    vrai(!/Le meme decoupage par compte/.test(st), 'sa prose aussi');
+  });
+
+  test('tout ce que la carte montrait, elle le montre encore', () => {
+    const c = carte();
+    vrai(/fmtEUR\(x\.value\)/.test(c), 'les montants');
+    vrai(/fmtPct\(x\.pct, 1\)/.test(c), 'les pourcentages');
+    vrai(/class="repart-barre"/.test(c), 'les barres');
+    /* Les trois poches de cash, nommees par le modele et non ecrites ici. */
+    vrai(/pochesLiquidites\(\)\.map/.test(c), 'les trois poches de liquidités');
+    /* Et la base, sous la carte. */
+    const app = lireSource('assets/app.js');
+    vrai(/\$\{baseAlloc\(\)\.nom\}/.test(app), 'la base reste nommée sous la carte');
+  });
+
+  test('le reste de la page ne bouge pas', () => {
+    const app = lireSource('assets/app.js');
+    vrai(/id="aMacro"/.test(app), 'le camembert Répartition reste');
+    vrai(/id="aAsset"/.test(app), 'le classement par catégorie aussi');
+    /* La bascule ne s'ecrit pas en `data-action` dans la vue : elle passe son
+       action au composant qui la rend. On la cherche donc telle qu'elle est
+       ecrite, pas telle qu'elle sortira. */
+    vrai(/'alloc-base', 'base'\)/.test(app), 'et la bascule Tout / Financier');
   });
 });
 
@@ -7641,9 +7494,19 @@ suite('Rappels de saisie', () => {
     /* Un etat ecrit avant le report ne porte que des cles de mois : il doit
        continuer de se taire, sinon la mise a jour rallume tous les rappels
        que l'on avait eteints. */
+    /* Le mois se masque SOUS la date simulee, pas sous celle de l'horloge.
+
+       `currentMonthKey()` lu hors du `auJour` rend le mois reel : un premier
+       septembre, il masquait « 2026-09 » puis le controle verifiait « 2026-08 »,
+       et le rappel se rallumait. Le test tombait donc a chaque changement de
+       mois, sans que rien n'ait bouge dans le code. C'est la meme faute qu'un
+       `setMonth()` sur un 31, deja notee ici : une date lue a un endroit et
+       employee a un autre. */
     Fixture.poser();
-    masquerRappel('releve', currentMonthKey());
-    auJour('2026-08-04', () => reporterRappel('depenses'));
+    auJour('2026-08-04', () => {
+      masquerRappel('releve', currentMonthKey());
+      reporterRappel('depenses');
+    });
     auJour('2026-08-04', () => {
       eq(currentMonthPending().missing, false, 'la clé de mois tait toujours');
       eq(depensesEnAttente().missing, false, 'le report tait aussi');
@@ -7896,55 +7759,6 @@ suite('Les trois lectures par enveloppe s’accordent', () => {
     pres(parType, patrimoine().brut, 'et cette base est le brut');
   });
 
-  test('« Placé » ne liste que ce qui est placé', () => {
-    /* Le panneau annonçait `invested`, le brut moins toutes les liquidités, et
-       listait `allocationByAccount()`, qui les compte. Ses lignes sommaient donc
-       le brut sous un total qui ne le vaut pas : mesuré chez le détenteur,
-       28 332,93 EUR annoncés pour 35 212,93 EUR de lignes, l'écart valant à
-       l'euro ses 6 880 EUR de liquidités. La règle cardinale du projet prise à
-       l'envers, sur la carte la plus regardée de l'accueil. */
-    Fixture.poser();
-    const lignes = placeByAccount();
-    pres(lignes.reduce((s, x) => s + x.value, 0), nowTotals().invested,
-      'la somme des lignes fait le total annoncé');
-    pres(lignes.reduce((s, x) => s + x.pct, 0), 100, 'les parts font 100 %');
-
-    /* Un compte entièrement liquide n'a rien de placé : il quitte la liste, il
-       n'y figure pas à zéro. Une ligne à 0,00 EUR sous « Placé » ferait chercher
-       pourquoi elle est là. */
-    const cash = comptesOuverts().filter(c => typeCompte(c.type).groupe === 'cash');
-    vrai(cash.length, 'la fixture porte bien des comptes de liquidités');
-    for (const c of cash) {
-      if (lignesDe(c).length) continue;
-      vrai(!lignes.some(l => l.label === nomCompteV2(c)),
-        `${nomCompteV2(c)} n’est que du cash : il ne peut pas figurer sous « Placé »`);
-    }
-
-    /* Et le cash posé sur un compte-titres s'en retire aussi : c'est le cas que
-       le détenteur a signalé, son cash à investir dormant sur le PEA. */
-    const titres = comptesOuverts().find(c => cashCompte(c) && lignesDe(c).length);
-    vrai(titres, 'la fixture porte bien un compte-titres avec des espèces dessus');
-    const vue = lignes.find(l => l.label === nomCompteV2(titres));
-    pres(vue.value, valeurCompte(titres) - cashCompte(titres),
-      'ses espèces sortent de la ligne, ses titres restent');
-  });
-
-  test('le panneau « Placé » lit la liste qui exclut le cash', () => {
-    /* Le calcul juste ne sert à rien si la vue appelle l'autre liste. Les deux
-       existent, elles ne different que par les especes, et leurs noms se
-       ressemblent : c'est exactement la confusion qui a produit le defaut. */
-    const src = lireSource('assets/app.js');
-    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    /* La tranche se ferme sur du code et non sur une longueur : sept cents
-       caracteres etaient un nombre choisi, et le bloc a grandi. */
-    const i = src.indexOf('investiTotal:');
-    const bloc = src.slice(i, src.indexOf("cta: trad('Voir les comptes')", i));
-    vrai(bloc.length > 200 && bloc.length < 2000, 'le bloc doit être trouvable, et lui seul');
-    vrai(/placeByAccount\(/.test(bloc),
-      '« Placé » doit dériver ses lignes de placeByAccount()');
-    vrai(!/allocationByAccount\(/.test(bloc),
-      'allocationByAccount() compte les espèces : elle ne peut pas servir ici');
-  });
 
   test('les cinq paliers y sont, le toit et le bloqué compris', () => {
     /* Le piege de cette carte, et il aurait ete silencieux : l'autonomie

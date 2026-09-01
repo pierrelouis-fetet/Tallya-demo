@@ -2140,6 +2140,8 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 }
 .repart-ligne:last-child { border-bottom: none; }
 @media (hover: hover) { .repart-ligne:hover .repart-nom { color: var(--accent); } }
+.repart-inerte { cursor: default; }
+@media (hover: hover) { .repart-inerte:hover .repart-nom { color: inherit; } }
 .repart-haut { display: flex; align-items: baseline; gap: 9px; }
 .repart-haut .dot { margin: 0; flex: none; }
 .repart-nom { font-weight: 600; min-width: 0; overflow-wrap: break-word; }

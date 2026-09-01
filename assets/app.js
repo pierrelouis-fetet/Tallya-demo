@@ -3159,14 +3159,21 @@ function viewAllocation() {
   const teintesPoche = { courant: 'var(--series-1)', precaution: 'var(--series-7)',
                          projet: 'var(--series-5)', investir: 'var(--series-4)' };
   const disponibilite = [
-    { label: BASES.place.nom,
+    /* Le nom suit le perimetre, parce que la poche n'est pas la meme chose des
+       deux cotes. En vue financiere elle ne contient que du placement, et
+       « Investi » la nomme juste. En vue globale elle porte aussi les murs, la
+       montre et la voiture : les appeler « investi » ferait passer un logement
+       pour un placement, ce qu'il n'est pas pour qui l'habite.
+
+       `BASES.place.nom` ne bouge pas pour autant : deux autres fiches le lisent,
+       et il y designe bien de l'investi. C'est ce libelle-ci, et lui seul, qui
+       depend du perimetre affiche. */
+    { label: allocFinancier ? BASES.place.nom : trad('Placements et biens'),
       value: allocFinancier ? t.invested - horsFinancierTotal()
                             : t.invested - num(t.dettes),
-      couleur: 'var(--series-2)', apercu: 'investiTotal' },
+      couleur: 'var(--series-2)' },
     ...pochesLiquidites().map(p => ({
       label: p.nom, value: p.value, couleur: teintesPoche[p.cle] || 'var(--series-1)',
-      apercu: p.cle === 'investir' ? 'cashInvestir' : 'cash',
-      arg: p.cle === 'investir' ? '' : p.cle,
     })),
   ].filter(x => Math.abs(num(x.value)) > 0.005)
    /* `null` et non zero quand la base ne se divise pas : un patrimoine net
@@ -3189,9 +3196,7 @@ function viewAllocation() {
 
   <div class="card repart">
     ${disponibilite.map(x => `
-      <button type="button" class="repart-ligne" data-action="apercu"
-              data-apercu="${esc(x.apercu)}"${x.arg ? ` data-arg="${esc(x.arg)}"` : ''}
-              title="${trad('Voir le détail de')} ${esc(trad(x.label))}">
+      <div class="repart-ligne repart-inerte">
         <span class="repart-haut">
           <span class="dot" style="background:${x.couleur}"></span>
           <span class="repart-nom">${esc(trad(x.label))}</span>
@@ -3199,7 +3204,7 @@ function viewAllocation() {
           <span class="repart-pct">${x.pct == null ? '' : fmtPct(x.pct, 1)}</span>
         </span>
         <span class="repart-barre"><i style="width:${x.pct == null ? 0 : Math.max(0, Math.min(100, x.pct)).toFixed(1)}%;background:${x.couleur}"></i></span>
-      </button>`).join('')}
+      </div>`).join('')}
     <dl class="kv repart-pied">
       <dt>${baseAlloc().nom}<span class="sub">${
         !allocFinancier && num(t.dettes) > 0.005
@@ -10226,13 +10231,6 @@ const APERCUS = {
       vue: 'accounts', ancre: '', cta: trad('Voir les avoirs'),
     };
   },
-  /* Les lignes viennent de `placeByAccount()` et non d'`allocationByAccount()` :
-     celle-la compte les especes, ce total les exclut. Un compte de liquidites
-     entier figurait donc sous un total qui ne le contient pas.
-
-     Le sous-titre suit : `invested` retire toutes les liquidites, pas seulement
-     celles du quotidien, et la carte qui ouvre ce panneau montre l'epargne de
-     precaution et le cash a investir comme deux parts distinctes de « Place ». */
   capaciteEpargne: () => {
     const rec = savingsReconciliation();
     return {
@@ -10264,30 +10262,6 @@ const APERCUS = {
      pourcentage calcule sur une base plus large que la liste qu'il surmonte ne
      totalise pas cent, et c'est la faute que cette base de code traque depuis le
      debut. `baseAlloc().de` porte deja la forme grammaticale des deux cas. */
-  investiTotal: () => {
-    const t = nowTotals();
-    const place = allocFinancier ? t.invested - horsFinancierTotal()
-                                 : t.invested - num(t.dettes);
-    const base = valeurBaseAlloc();
-    return {
-      titre: BASES.place.nom,
-      sous: trad('Par compte'),
-      total: place,
-      totalNote: `${fmtPct(base ? place / base * 100 : 0)} ${baseAlloc().de}`,
-      lignes: placeByAccount({ financier: allocFinancier, net: true }).map(l => {
-        const c = l.id && compteById(l.id);
-        const t = c && typeCompte(c.type);
-        return {
-          label: l.label,
-          meta: [t ? trad(t.label) : '', c ? nomEtabDe(c) : '',
-                 l.pct == null ? '' : `${fmtPct(l.pct, 1)} ${trad('de l’investi')}`]
-            .filter(Boolean).join(' · '),
-          valeur: l.value,
-        };
-      }),
-      vue: 'accounts', ancre: '', cta: trad('Voir les comptes'),
-    };
-  },
 
   /* Les lignes de cibles, tresorerie comprise quand elle est suivie. Cinq
      endroits lisaient `[...r.classes, r.cash]` en supposant `r.cash` toujours

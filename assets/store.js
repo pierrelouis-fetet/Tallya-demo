@@ -2843,7 +2843,7 @@ function allocationByAccount({ financier = false } = {}) {
       const parClasse = new Map([['liquidites', cashCompte(c)]]);
       for (const l of lignes) parClasse.set(l.classe, (parClasse.get(l.classe) || 0) + l.valeur);
       const dominante = [...parClasse.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      return { id: c.id, label: nomCompteV2(c),
+            return { id: c.id, label: nomCompteV2(c),
                value: financier ? valeurFinanciere(c) : valeurCompte(c),
                etab: nomEtabDe(c), type: trad(typeCompte(c.type).label),
                couleur: CLASSE_COULEURS[dominante] || CLASSE_COULEURS.nonCote };
@@ -2853,31 +2853,6 @@ function allocationByAccount({ financier = false } = {}) {
     .sort((a, b) => b.value - a.value);
 }
 
-/* Le meme decoupage par compte, mais sur ce qui est place : la valeur du compte
-   moins ses especes.
-
-   `allocationByAccount()` ne peut pas servir ici. Sa base est le brut, especes
-   comprises, et c'est voulu depuis qu'Allocation montre le liquide. Le panneau
-   « Place » a pour total `invested`, qui vaut le brut moins tout le cash : il
-   listait donc des comptes de liquidites entiers sous un total qui les exclut,
-   et ses lignes sommaient le brut. Mesure faite, l'ecart valait a l'euro les
-   liquidites du detenteur.
-
-   La soustraction est la meme des deux cotes — `invested` retire `g.cash`, cette
-   liste retire `cashCompte()` compte par compte — donc la somme des lignes fait
-   le total, et un controle l'exige. */
-/* Le perimetre se passe, il ne se suppose pas.
-
-   Cette fonction ignorait la vue financiere quand sa voisine `allocationByAccount`
-   la connaissait deja : la carte « Place » retranchait les murs, la fiche qu'elle
-   ouvre ne les retranchait pas, et le meme intitule donnait deux montants a un
-   clic d'ecart. C'est exactement ce que ce depot s'interdit — un total doit
-   egaler la somme de ses parts, et deux ecrans qui nomment la meme chose doivent
-   l'evaluer pareil.
-
-   La base suit le perimetre elle aussi : un pourcentage calcule sur le patrimoine
-   entier au-dessus d'une liste qui n'en montre qu'une part ne totaliserait pas
-   cent. */
 /* Ce qui est investi, compte par compte.
 
    `net` retranche les dettes, comme la carte qui ouvre cette fiche. Sans lui,
@@ -2894,48 +2869,6 @@ function allocationByAccount({ financier = false } = {}) {
    courtier adossee a du cash — ne peut rien se voir retrancher : son emprunt
    reste une ligne, sinon la somme cesserait d'egaler le total sans que rien ne
    le dise. */
-function placeByAccount({ financier = false, net = false } = {}) {
-  const t = nowTotals();
-  const dettes = net && !financier ? num(t.dettes) : 0;
-  const base = (financier ? t.invested - horsFinancierTotal() : t.invested) - dettes;
-
-  const lignes = allocationByAccount({ financier })
-    .map(r => ({ ...r, value: r.value - cashCompte(compteById(r.id)) }))
-    .filter(r => Math.abs(r.value) > 0.005);
-
-  const dus = new Map();
-  const assiettes = new Map();
-  if (dettes) {
-    for (const e of Store.state.etabs) {
-      const du = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
-      if (du > 0.005) dus.set(e.id, du);
-    }
-    for (const r of lignes) {
-      const c = compteById(r.id);
-      if (!c || !dus.has(c.etabId)) continue;
-      assiettes.set(c.etabId, (assiettes.get(c.etabId) || 0) + r.value);
-    }
-  }
-  const apresDette = r => {
-    const c = compteById(r.id);
-    const du = c && dus.get(c.etabId);
-    const assiette = c ? (assiettes.get(c.etabId) || 0) : 0;
-    if (!du || !(assiette > 0.005)) return r.value;
-    return r.value - du * (r.value / assiette);
-  };
-
-  const out = lignes.map(r => ({ ...r, value: apresDette(r) }));
-  if (dettes) {
-    const orphelin = [...dus.entries()]
-      .reduce((s, [id, du]) => s + (assiettes.get(id) > 0.005 ? 0 : du), 0);
-    if (orphelin > 0.005) {
-      out.push({ id: null, label: trad('Crédits en cours'), value: -orphelin });
-    }
-  }
-  return out
-    .map(r => ({ ...r, pct: base > 0.005 ? r.value / base * 100 : null }))
-    .sort((a, b) => b.value - a.value);
-}
 
 /* Le troisieme axe de la meme somme : apres « ce que c'est » et « ou c'est
    pose », en combien de temps ça sort.
