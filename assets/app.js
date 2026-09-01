@@ -9662,6 +9662,7 @@ function appliquerReleve(index, saisi) {
   row.v = saisi.v;
   row.comment = saisi.comment;
   row.dettes = round2(num(saisi.dettes));
+  row.poches = pochesDuReleve(saisi.v);
   historyYear = String(row.date).slice(0, 4);
   Store.save(); render();
   return true;

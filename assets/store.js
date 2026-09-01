@@ -2205,8 +2205,54 @@ function nowTotals() {
            invested: brut - g.cash };
 }
 
+/* La poche du graphique d'evolution, pour chaque classe d'actif.
+
+   Une seule table, et un controle exige qu'elle s'accorde avec `nowByGroup()`
+   sur le fixture : deux listes ecrites a la main pour une meme verite finissent
+   toujours par se contredire, et c'est le defaut qui revient le plus souvent
+   ici. Toute classe connue y a sa poche, et toute poche citee existe dans
+   POCHES_EVOLUTION. */
+const POCHE_EVOLUTION_DE_CLASSE = {
+  liquidites: 'cash',
+  actions: 'bourse',
+  obligations: 'bourse',
+  garanti: 'garanti',
+  crypto: 'crypto',
+  nonCote: 'pe',
+  immobilier: 'immo',
+  bienValeur: 'biens',
+};
+
+function pochesDuReleve(v) {
+  const g = Object.fromEntries(POCHES_EVOLUTION.map(k => [k, 0]));
+  for (const a of ACCOUNTS) {
+    const total = num(v[a.id]);
+    if (!total) continue;
+    const defaut = a.gAff || a.group;
+    const parts = {};
+    const ajoute = (poche, montant) => {
+      if (montant) parts[poche] = (parts[poche] || 0) + montant;
+    };
+    ajoute('cash', cashCompte(a.compte));
+    for (const l of lignesDe(a.compte))
+      ajoute(POCHE_EVOLUTION_DE_CLASSE[l.classe] || defaut, num(l.valeur));
+    const somme = Object.values(parts).reduce((s, x) => s + x, 0);
+    if (somme > 0.005) for (const k of Object.keys(parts)) g[k] += total * parts[k] / somme;
+    else g[defaut] += total;
+  }
+  for (const k of Object.keys(g)) g[k] = round2(g[k]);
+  return g;
+}
+
 function rowGroups(row) {
-  const g = { cash: 0, bourse: 0, crypto: 0, pe: 0, immo: 0, biens: 0 };
+  const g = Object.fromEntries(POCHES_EVOLUTION.map(k => [k, 0]));
+  if (row.poches) {
+    for (const k of Object.keys(g)) g[k] += num(row.poches[k]);
+    return g;
+  }
+  /* Sinon, le repli d'avant : la poche vient du type du compte. La cle
+     `garanti` existe desormais dans l'objet, sans quoi un compte range la y
+     ajoutait un nombre a `undefined`. */
   for (const a of ACCOUNTS) g[a.gAff || a.group] += num(row.v[a.id]);
   return g;
 }

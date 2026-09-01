@@ -27308,3 +27308,103 @@ suite('Marchés n’existe que pour qui a des titres', () => {
       'la performance du jour ne vit que dans la carte conditionnelle');
   });
 });
+
+/* Un releve note sa propre ventilation en poches. Sans elle, la poche se
+   deduisait du TYPE du compte, et le cash qui dort chez un courtier comptait en
+   actifs de marche dans l'historique quand l'ecran d'aujourd'hui le range en
+   liquidites : le meme argent dans deux poches selon le point de la courbe. */
+suite('Un relevé note sa propre ventilation', () => {
+
+  /* Ce que « prendre la photo » inscrit : un montant par compte, tel que
+     `nowValue` le rend. */
+  const photo = () => Object.fromEntries(
+    ACCOUNTS.map(a => [a.id, round2(nowValue(a.id))]));
+  const somme = o => Object.values(o).reduce((s, x) => s + num(x), 0);
+
+  test('la somme des poches fait le total du relevé', () => {
+    /* La regle cardinale de la maison, et c'est elle qui attrape une poche
+       oubliee : un montant range nulle part disparait d'une bande sans quitter
+       le total, ou l'inverse. */
+    Fixture.poser();
+    const v = photo();
+    pres(somme(pochesDuReleve(v)), somme(v), 'sur une photo de l’état courant');
+
+    /* Et sur des montants saisis a la main, qui ne sont pas ceux du jour. */
+    const saisi = Object.fromEntries(Object.entries(v).map(([k, m]) => [k, num(m) * 1.5]));
+    pres(somme(pochesDuReleve(saisi)), somme(saisi), 'sur des montants saisis');
+  });
+
+  test('le cash qui dort chez un courtier ne compte pas en actifs de marché', () => {
+    /* Le defaut, sur des nombres. Un compte-titres qui porte une ligne et du
+       cash a investir : la poche du compte les rangeait tous les deux en
+       bourse, puisqu'elle se deduisait du type. */
+    Fixture.poser();
+    const cpt = Store.state.comptes.find(c => typeCompte(c.type).titres);
+    vrai(!!cpt, 'le fixture doit porter un compte à titres');
+    Store.state.positions = [{ id: 'p_x', name: 'ETF', symbol: 'X', qty: 10, price: 100,
+      buyPrice: 90, currency: 'EUR', fx: 1, account: cpt.id,
+      assetClass: 'actions', manual: false }];
+    cpt.cash = [{ montant: 400, affectation: 'investir' }];
+    Store.state.comptes = [cpt];
+    refreshAccounts();
+
+    const g = pochesDuReleve(photo());
+    pres(g.bourse, 1000, 'la ligne cotée compte en actifs de marché');
+    pres(g.cash, 400, 'et le cash à investir en liquidités, pas avec elle');
+  });
+
+  test('un relevé pris aujourd’hui s’accorde avec « Auj. », poche par poche', () => {
+    /* C'est la couture, et c'est ce que le detenteur voit : le dernier point
+       enregistre et le point du jour doivent parler le meme langage. Ils
+       differaient exactement du montant a investir. */
+    Fixture.poser();
+    const g = pochesDuReleve(photo());
+    const now = nowByGroup();
+    for (const poche of POCHES_EVOLUTION)
+      pres(g[poche], round2(num(now[poche])), `la poche « ${poche} » s’accorde`);
+  });
+
+  test('la table des poches se dérive, et n’oublie personne', () => {
+    /* Deux listes ecrites a la main pour une meme verite finissent par se
+       contredire : celle-ci doit couvrir toutes les classes connues, et ne
+       citer que des poches que le graphique trace. */
+    for (const classe of Object.keys(CLASSES_ACTIFS))
+      vrai(POCHE_EVOLUTION_DE_CLASSE[classe],
+        `la classe « ${classe} » doit avoir une poche`);
+    for (const poche of Object.values(POCHE_EVOLUTION_DE_CLASSE))
+      vrai(POCHES_EVOLUTION.includes(poche),
+        `la poche « ${poche} » doit être tracée par le graphique`);
+  });
+
+  test('un relevé qui porte sa ventilation la donne ; les anciens gardent l’ancienne', () => {
+    Fixture.poser();
+    const v = photo();
+    const notee = pochesDuReleve(v);
+
+    /* Le releve porte son champ : c'est lui qu'on lit, mot pour mot. */
+    const g = rowGroups({ date: '2026-01-31', v, poches: notee });
+    for (const poche of POCHES_EVOLUTION)
+      pres(g[poche], notee[poche], `« ${poche} » vient du relevé lui-même`);
+
+    /* Sans le champ, le repli d'avant : la poche vient du type du compte. Il
+       reste juste sur le total, et c'est tout ce qu'on peut lui demander. */
+    const ancien = rowGroups({ date: '2025-01-31', v });
+    pres(somme(ancien), somme(v), 'un ancien relevé totalise encore juste');
+    for (const poche of POCHES_EVOLUTION)
+      vrai(typeof ancien[poche] === 'number' && !Number.isNaN(ancien[poche]),
+        `« ${poche} » vaut un nombre, jamais undefined`);
+  });
+
+  test('l’enregistrement note la ventilation avec les montants', () => {
+    /* Elle ne peut se calculer qu'a cet instant : apres coup, la ligne ne garde
+       qu'un total par compte et rien ne dit plus ce qui dormait en liquidites. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const f = src.slice(src.indexOf('function appliquerReleve('),
+                        src.indexOf('async function viderOuSupprimerMois'));
+    vrai(/row\.poches = pochesDuReleve\(saisi\.v\);/.test(f),
+      'la ventilation se note au moment où le relevé s’écrit');
+    vrai(f.indexOf('row.v = saisi.v') < f.indexOf('row.poches ='),
+      'après les montants dont elle se calcule');
+  });
+});
