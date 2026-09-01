@@ -5807,6 +5807,31 @@ function viewData() {
     </dl>
   </details>
 
+  ${(() => {
+    const { libres, retenus } = comptesClosDetaches();
+    if (!libres.length && !retenus.length) return '';
+    return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Comptes clos')}</h2>
+      <span class="hint">${libres.length} ${trad('à retirer')}</span></div>
+    <p class="small muted" style="margin:0 0 12px">${trad('Un compte clos '
+      + 'qu’aucun relevé ne mentionne n’apporte plus rien : il allonge la liste du '
+      + 'relevé mensuel, et c’est tout. Ceux qu’un relevé porte restent, sans quoi '
+      + 'leur montant quitterait le total de ce mois-là.')}</p>
+    ${!libres.length
+      ? `<p class="empty" style="margin:0">${trad('Aucun compte clos à retirer.')}</p>`
+      : `<p class="small" style="margin:0 0 12px">${esc(libres.map(x => x.label).join(', '))}</p>
+    <div class="row fiche-actes apres-champs">
+      <button class="btn sm ghost" data-action="retirer-comptes-clos">${
+        trad('Retirer les {n} comptes').replace('{n}', libres.length)}</button>
+    </div>`}
+    ${!retenus.length ? '' : `
+    <p class="small muted" style="margin:12px 0 0">${trad('Gardés, un relevé les porte :')} ${
+      esc(retenus.map(r => r.label + (r.mois.length
+        ? ` (${fmtMonth(r.mois[0].date)})` : ` (${trad('valeur actuelle')})`)).join(', '))}</p>`}
+  </div>`;
+  })()}
+
   <div class="card">
     <div class="card-head"><h2>${trad('Repartir de zéro')}</h2>
       <span class="hint">${trad('Pour qu\'une autre personne parte de ses propres chiffres')}</span>
@@ -6600,6 +6625,24 @@ const ACTIONS = {
     refreshAccounts();
     render();
     toast(trad('Retour à tes données'));
+  },
+
+  async 'retirer-comptes-clos'() {
+    const { libres, retenus } = comptesClosDetaches();
+    if (!libres.length) return;
+    if (!await askConfirm(
+      trad('Retirer {n} comptes clos ?').replace('{n}', libres.length) + '\n\n'
+      + libres.map(x => x.label).join(', ') + '\n\n'
+      + (retenus.length
+          ? trad('{k} restent : un relevé porte leur montant.').replace('{k}', retenus.length)
+            + '\n\n' : '')
+      + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
+      { ok: 'Retirer', danger: true })) return;
+    Store.addBackup('avant nettoyage des comptes clos');
+    const n = retirerComptesClos();
+    Store.save();
+    render();
+    toast(trad('{n} comptes clos retirés').replace('{n}', n));
   },
 
   async 'start-blank'() {

@@ -1180,6 +1180,45 @@ function refreshAccounts() {
   HOLDING_ACCOUNTS = ACCOUNTS.filter(a => a.holdings).map(a => a.id);
 }
 
+/* Les comptes clos, tries entre ceux que rien ne retient et ceux qu'un releve
+   reclame.
+
+   La garde n'est pas une precaution de style : `rowTotal` se derive de
+   `rowGroups`, qui parcourt ACCOUNTS. Retirer un compte qu'un releve mentionne
+   retrancherait donc son montant du TOTAL de ce mois-la, sans que rien ne le
+   dise — et les mois suivants se compareraient a un passe qui a maigri.
+
+   Deux sortes de comptes clos, et la meme regle vaut pour les deux : un compte
+   archive, qui vit dans `comptes` avec `statut: 'archive'`, et une entree
+   orpheline de l'ancien modele, qui vit dans `accounts` sans compte
+   correspondant. Le premier peut encore porter de la valeur aujourd'hui, ce qui
+   le retient au meme titre.
+
+   Un montant nul ne retient rien : un champ laisse vide n'est pas de l'argent. */
+function comptesClosDetaches() {
+  const libres = [], retenus = [];
+  for (const a of ACCOUNTS) {
+    if (!a.legacy) continue;
+    const mois = (Store.state.monthly || [])
+      .filter(r => Math.abs(num(r.v && r.v[a.id])) > 0.005)
+      .map(r => ({ date: r.date, montant: round2(num(r.v[a.id])) }));
+    const aujourdhui = a.compte ? round2(valeurCompte(a.compte)) : 0;
+    if (mois.length || Math.abs(aujourdhui) > 0.005)
+      retenus.push({ id: a.id, label: a.label, mois, aujourdhui });
+    else libres.push({ id: a.id, label: a.label, fantome: !!a.fantome });
+  }
+  return { libres, retenus };
+}
+
+function retirerComptesClos() {
+  const ids = new Set(comptesClosDetaches().libres.map(x => x.id));
+  if (!ids.size) return 0;
+  Store.state.comptes = (Store.state.comptes || []).filter(c => !ids.has(c.id));
+  Store.state.accounts = (Store.state.accounts || []).filter(a => !ids.has(a.id));
+  refreshAccounts();
+  return ids.size;
+}
+
 function accountTypes() { return Store.state.accountTypes; }
 function accountType(id) {
   return accountTypes().find(t => t.id === id)

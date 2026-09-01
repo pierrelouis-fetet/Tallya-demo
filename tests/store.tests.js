@@ -27408,3 +27408,124 @@ suite('Un relevé note sa propre ventilation', () => {
       'après les montants dont elle se calcule');
   });
 });
+
+/* Retirer un compte clos, c'est effacer une donnee : la suite porte surtout sur
+   ce qu'on ne retire PAS. */
+suite('Un compte clos ne part que si rien ne le retient', () => {
+
+  /* Un etat minimal : un compte ouvert, un compte archive, et une entree
+     orpheline de l'ancien modele. */
+  const poser = ({ archiveValeur = 0, dansReleve = {} } = {}) => {
+    Fixture.poser();
+    Store.state.comptes = [
+      { id: 'c_ouvert', type: 'courant', label: 'Courant', statut: 'ouvert',
+        cash: [{ montant: 1000, affectation: 'courant' }], lignes: [] },
+      { id: 'c_clos', type: 'courant', label: 'Ancien livret', statut: 'archive',
+        cash: archiveValeur ? [{ montant: archiveValeur, affectation: 'courant' }] : [],
+        lignes: [] },
+    ];
+    Store.state.accounts = [{ id: 'c_fantome', label: 'aaa', group: 'cash' }];
+    Store.state.positions = [];
+    Store.state.monthly = [{ date: '2026-01-31', v: { c_ouvert: 1000, ...dansReleve },
+                             comment: '', dettes: 0 }];
+    refreshAccounts();
+  };
+  const noms = l => l.map(x => x.id).sort().join(',');
+
+  test('un compte clos qu’aucun relevé ne mentionne est libre', () => {
+    poser();
+    const { libres, retenus } = comptesClosDetaches();
+    eq(noms(libres), 'c_clos,c_fantome', 'les deux sortes de comptes clos sont libres');
+    eq(retenus.length, 0, 'rien ne les retient');
+  });
+
+  test('un relevé qui porte un montant le retient', () => {
+    /* La garde, et la raison d'etre de tout ce qui precede : `rowTotal` se
+       derive de `rowGroups`, qui parcourt ACCOUNTS. Retirer ce compte-la ferait
+       maigrir le total du mois, en silence. */
+    poser({ dansReleve: { c_fantome: 250 } });
+    const { libres, retenus } = comptesClosDetaches();
+    eq(noms(libres), 'c_clos', 'l’autre reste libre');
+    eq(noms(retenus), 'c_fantome', 'celui du relevé est retenu');
+    eq(retenus[0].mois.length, 1, 'et le mois qui le retient se nomme');
+    pres(retenus[0].mois[0].montant, 250, 'avec son montant');
+  });
+
+  test('un montant nul ne retient rien', () => {
+    /* Un champ laisse vide n'est pas de l'argent : sans cette nuance, un compte
+       cite une fois a zero resterait pour toujours. */
+    poser({ dansReleve: { c_fantome: 0 } });
+    eq(noms(comptesClosDetaches().libres), 'c_clos,c_fantome',
+      'zéro n’est pas un montant');
+  });
+
+  test('un compte archivé qui porte encore de la valeur est retenu', () => {
+    /* Archive ne veut pas dire vide : celui-la compte dans le patrimoine du
+       jour, et le retirer changerait le grand chiffre. */
+    poser({ archiveValeur: 400 });
+    const { libres, retenus } = comptesClosDetaches();
+    eq(noms(libres), 'c_fantome', 'le fantôme part');
+    eq(noms(retenus), 'c_clos', 'le compte archivé garni reste');
+    pres(retenus[0].aujourdhui, 400, 'et sa valeur du jour se dit');
+  });
+
+  test('aucun total de relevé ne bouge après le retrait', () => {
+    /* L'invariant qui compte, et celui que le detenteur redoutait : « laisse le
+       champ s'il a ete enregistre dans un historique, sinon ça degage les mois
+       suivants ». On mesure avant et apres. */
+    poser({ dansReleve: { c_fantome: 250 }, archiveValeur: 400 });
+    const avant = Store.state.monthly.map(r => round2(rowTotal(r)));
+    const brutAvant = round2(patrimoine().brut);
+
+    const n = retirerComptesClos();
+    eq(n, 0, 'ici rien n’est libre : les deux sont retenus');
+
+    poser({ dansReleve: { c_fantome: 250 } });
+    const avant2 = Store.state.monthly.map(r => round2(rowTotal(r)));
+    const brut2 = round2(patrimoine().brut);
+    eq(retirerComptesClos(), 1, 'seul le compte archivé vide part');
+    pres(Store.state.monthly.map(r => round2(rowTotal(r)))[0], avant2[0],
+      'le total du mois ne bouge pas d’un centime');
+    pres(round2(patrimoine().brut), brut2, 'ni le patrimoine du jour');
+    vrai(avant.length && brutAvant >= 0, 'les deux mesures ont bien été prises');
+  });
+
+  test('un compte ouvert n’est jamais candidat', () => {
+    poser();
+    const tous = [...comptesClosDetaches().libres, ...comptesClosDetaches().retenus];
+    vrai(!tous.some(x => x.id === 'c_ouvert'),
+      'seuls les comptes clos entrent dans le tri');
+    retirerComptesClos();
+    vrai(Store.state.comptes.some(c => c.id === 'c_ouvert'),
+      'et il survit au retrait');
+  });
+
+  test('le retrait vide les deux listes où un compte clos peut vivre', () => {
+    /* Un compte archive vit dans `comptes`, une entree de l'ancien modele dans
+       `accounts` : n'en nettoyer qu'une laisserait l'autre reparaitre. */
+    poser();
+    eq(retirerComptesClos(), 2, 'les deux partent');
+    vrai(!(Store.state.comptes || []).some(c => c.id === 'c_clos'),
+      'le compte archivé quitte comptes');
+    vrai(!(Store.state.accounts || []).some(a => a.id === 'c_fantome'),
+      'et le fantôme quitte accounts');
+    eq(comptesClosDetaches().libres.length, 0, 'il ne reste plus rien à retirer');
+  });
+
+  test('le geste prend une sauvegarde et nomme ce qui part', () => {
+    /* La meme ceinture que la remise a zero : rien de ce qu'on retire ne se
+       redemande, donc le dialogue doit dire quoi, et Ctrl+Z doit pouvoir. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const f = src.slice(src.indexOf("async 'retirer-comptes-clos'()"),
+                        src.indexOf("async 'start-blank'()"));
+    vrai(f.length > 300, 'l’action doit être trouvable');
+    vrai(/askConfirm\(/.test(f), 'elle demande avant');
+    vrai(/libres\.map\(x => x\.label\)\.join\(', '\)/.test(f),
+      'et nomme les comptes qui partent');
+    vrai(/Store\.addBackup\(/.test(f), 'une sauvegarde est prise avant');
+    vrai(f.indexOf('Store.addBackup(') < f.indexOf('retirerComptesClos()'),
+      'avant le retrait, pas après');
+    vrai(/danger: true/.test(f), 'et le dialogue s’annonce comme destructeur');
+  });
+});
