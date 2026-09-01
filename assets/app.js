@@ -857,12 +857,12 @@ function viewOverview() {
           const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
           if (pct == null) return `
         <div class="pf-mesure pf-muet">
-          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
+          <span class="pf-lab">${trad('Plus-value latente')}</span>
           <span class="pf-val"><b>${trad('prix de revient manquant')}</b></span>
         </div>`;
           return `
         <button type="button" class="pf-mesure" data-action="apercu" data-apercu="pnlLatent">
-          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
+          <span class="pf-lab">${trad('Plus-value latente')}</span>
           <span class="pf-val"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
             <span class="pf-pct ${cls(pnl.pnl)}">${pct}</span></span>
         </button>`;
@@ -2407,7 +2407,7 @@ function viewPositions() {
       <dt>${trad('Prix de revient des titres')}</dt>
         <dd><button type="button" class="mois-lien" data-action="apercu" data-apercu="investiTitres"
                     title="${trad('Voir le prix de revient ligne par ligne')}">${fmtEUR(pnl.invested)}</button></dd>
-      <dt><b>${trad('Gain depuis l’achat')}</b></dt>
+      <dt><b>${trad('Plus-value latente')}</b></dt>
         <dd><button type="button" class="mois-lien ${cls(pnl.pnl)}" data-action="apercu" data-apercu="pnlLatent"
                     title="${trad('Voir le détail par ligne')}"><b>${fmtSigned(pnl.pnl)}</b>
               ${pnl.pct == null ? '' : `<span class="muted">·</span> ${fmtSignedPct(pnl.pct)}`}</button></dd>
@@ -10681,7 +10681,7 @@ const APERCUS = {
     const pnl = portfolioPnl();
     const j = dayPerformance();
     return {
-      titre: trad('Gain depuis l’achat'),
+      titre: trad('Plus-value latente'),
       sous: [pnl.pct == null ? trad('prix de revient non renseigné') : fmtSignedPct(pnl.pct),
              j.lignes.length ? `${fmtSigned(j.eur)} ${trad('aujourd’hui')}` : trad('pas de cours du jour')].join(' · '),
       total: pnl.pnl,

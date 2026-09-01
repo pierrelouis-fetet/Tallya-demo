@@ -304,7 +304,6 @@ const I18N = {
     "Plafond de versement (€)": "Contribution cap (€)",
     "Plus ou moins-value réalisée (€)": "Realised gain or loss (€)",
     "Plus-value encaissée": "Realised gain",
-    "Gain depuis l’achat": "Gain since purchase",
     "Plus-value latente": "Unrealised gain",
     "Pour mémoire : rien d’autre ne bouge, ni cash ni patrimoine": "For the record: nothing else moves, neither cash nor wealth",
     "Prix de revient unitaire": "Unit cost price",

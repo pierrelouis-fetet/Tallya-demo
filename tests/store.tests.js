@@ -26933,7 +26933,7 @@ suite('La carte du portefeuille raconte une phrase', () => {
       + 'l’euro se tait avec le pourcentage');
     vrai(/trad\('prix de revient manquant'\)/.test(bloc),
       'la mesure muette dit pourquoi elle se tait');
-    vrai(/trad\('Gain depuis l’achat'\)/.test(bloc),
+    vrai(/trad\('Plus-value latente'\)/.test(bloc),
       'et le gain porte sa base dans son nom, au lieu de « Performance »');
   });
 
@@ -27034,7 +27034,7 @@ suite('La carte du portefeuille raconte une phrase', () => {
     for (const [fr, ang] of [['Investissements de marché', 'Market investments'],
                              ['Voir les positions', 'View holdings'],
                              ['Valeur actuelle', 'Current value'],
-                             ['Gain depuis l’achat', 'Gain since purchase'],
+                             ['Plus-value latente', 'Unrealised gain'],
                              ['prix de revient manquant', 'cost basis missing']])
       vrai(en.indexOf(`"${fr}": "${ang}"`) > 0, `« ${fr} » doit se traduire`);
     /* Une clef sans appelant est du code mort comme un autre. */
