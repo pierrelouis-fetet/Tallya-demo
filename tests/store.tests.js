@@ -3675,8 +3675,14 @@ suite('Variation du patrimoine : douze mois glissants, ou rien', () => {
     vrai(/trad\('apports inclus'\)/.test(bloc), 'la réserve reste, en toutes lettres');
   });
 
-  test('le montant précède sa fenêtre, la réserve vient dessous', () => {
-    /* C'est le montant qu'on lit ; « sur 1 an » ne fait que le qualifier. */
+  test('les trois parts tiennent sur une ligne, dans l’ordre', () => {
+    /* « +15 287 € sur 1 an, apports inclus » : le montant d'abord parce que
+       c'est lui qu'on lit, sa fenetre ensuite parce qu'elle le qualifie, la
+       reserve en dernier parce qu'elle nuance les deux.
+
+       Sur une seule ligne, et non deux : le bloc en portait une seconde pour la
+       seule reserve, ce qui donnait a trois mots la hauteur d'un chiffre. Une
+       virgule fait le meme travail. */
     const app = lireSource('assets/app.js');
     const i = app.indexOf('const blocVariation = !varAn');
     const bloc = app.slice(i, app.indexOf('`;', app.indexOf('</div>`', i)));
@@ -3685,6 +3691,14 @@ suite('Variation du patrimoine : douze mois glissants, ou rien', () => {
     const iReserve = bloc.indexOf("trad('apports inclus')");
     vrai(iMontant > 0 && iFenetre > iMontant, 'la fenêtre suit le montant');
     vrai(iReserve > iFenetre, 'et la réserve vient après les deux');
+    /* La virgule les relie, et un seul `span` les porte : un second enfant du
+       bloc les remettrait sur deux lignes. */
+    vrai(/, \$\{\s*trad\('apports inclus'\)\}<\/span>/.test(bloc),
+      'une virgule les relie dans le même span');
+    eq((bloc.match(/<span>/g) || []).length, 1, 'un seul span, donc une seule ligne');
+    /* La composition tient en anglais : « over 1 year, contributions included ». */
+    vrai(I18N.en['sur 1 an'] && I18N.en['apports inclus'],
+      'les deux morceaux se traduisent séparément, la virgule les rejoint');
   });
 
   test('une seule écriture, et les deux fenêtres se traduisent', () => {

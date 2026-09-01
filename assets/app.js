@@ -735,8 +735,8 @@ function viewOverview() {
     <div class="hero-deltas">
       <div class="hero-delta">
         <b class="${cls(varAn.eur)}">${fmtSigned(varAn.eur)} <span>${
-          trad(varAn.sur === 'an' ? 'sur 1 an' : 'depuis le début')}</span></b>
-        <span>${trad('apports inclus')}</span>
+          trad(varAn.sur === 'an' ? 'sur 1 an' : 'depuis le début')}, ${
+          trad('apports inclus')}</span></b>
       </div>
     </div>`;
 
