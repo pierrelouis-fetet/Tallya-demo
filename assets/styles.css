@@ -4573,11 +4573,18 @@ tr.ligne-ouvre.porte > td { background: var(--surface-2); }
 }
 @media (prefers-reduced-motion: reduce) { .rang-glissant.porte { opacity: 1; } }
 
-.tete-droite {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
-  margin-left: auto;
-}
-.tete-droite > .row { justify-content: flex-end; }
+/* Une tete a trois blocs : le titre, un chiffre, les commandes.
+
+   `.card-head` est en `nowrap` partout ailleurs, et c'est juste : deux blocs y
+   tiennent toujours. A trois, il faut le laisser passer a la ligne, sinon les
+   commandes se compriment contre le chiffre sur un ecran de telephone.
+
+   Le chiffre monte donc a hauteur du titre — `margin-left: auto` le pousse au
+   bord droit — et les commandes prennent la ligne suivante entiere, ou elles
+   retrouvent la place qu'elles avaient avant qu'un chiffre ne s'invite. */
+.tete-triple { flex-wrap: wrap; }
+.tete-triple > .tete-variation { margin-left: auto; }
+.tete-triple > .row { flex-basis: 100%; }
 .tete-variation { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .tete-variation span { font-size: 11px; color: var(--muted); }
 .tete-variation b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }

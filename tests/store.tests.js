@@ -4834,9 +4834,14 @@ suite('Variation de l’année : la somme des écarts qu’on a sous les yeux', 
     /* La couleur et le montant venaient de deux `reduce` identiques : deux
        ecritures d'un meme nombre finissent par diverger le jour ou l'une est
        modifiee seule. */
+    /* L'ancre porte sur le bloc du chiffre, pas sur la colonne qui l'entourait :
+       celle-ci a disparu quand le chiffre est monte a hauteur du titre. */
     const app = lireSource('assets/app.js');
-    const i = app.indexOf('<div class="tete-droite">');
-    const bloc = app.slice(i, app.indexOf('</div>\n    </div>', i));
+    const i = app.indexOf('<div class="card-head tete-triple">');
+    vrai(i > 0, 'la tête doit être trouvable');
+    /* La borne de fin est du CODE : le depot public est servi sans
+       commentaires, et une tranche bornee par l'un d'eux y serait vide. */
+    const bloc = app.slice(i, app.indexOf("${pasAFaire('comptes')", i));
     eq((bloc.match(/lignes\.reduce\(/g) || []).length, 1, 'un seul reduce');
     vrai(/const variation = lignes\.reduce\(\(s, x\) => s \+ x\.dlt, 0\);/.test(bloc),
       'et il se nomme');
@@ -4847,21 +4852,35 @@ suite('Variation de l’année : la somme des écarts qu’on a sous les yeux', 
     vrai(!/tous\.reduce\(/.test(bloc), 'et sur les lignes de l’année affichée');
   });
 
-  test('elle se pose en haut à droite, au-dessus des commandes', () => {
+  test('elle se pose tout en haut à droite, à hauteur du titre', () => {
+    /* Elle a d'abord vecu dans une colonne au-dessus des commandes, ce qui la
+       laissait a mi-hauteur de la carte. Sa place est la ligne du titre : c'est
+       le chiffre qui resume la liste, il se lit avant elle.
+
+       La tete porte donc trois blocs — titre, chiffre, commandes — et
+       `.card-head` est en `nowrap` partout ailleurs, a juste titre : deux blocs
+       y tiennent toujours. A trois, il faut le laisser passer a la ligne, sinon
+       les commandes se compriment contre le chiffre sur un telephone. */
     const app = lireSource('assets/app.js');
-    const i = app.indexOf('<div class="tete-droite">');
-    const bloc = app.slice(i, app.indexOf('</div>\n    </div>', i));
-    vrai(bloc.indexOf('tete-variation') < bloc.indexOf('class="row"'),
-      'la variation précède les commandes');
+    const i = app.indexOf('<div class="card-head tete-triple">');
+    vrai(i > 0, 'la tête déclare qu’elle porte trois blocs');
+    const tete = app.slice(i, app.indexOf("${pasAFaire('comptes')", i));
+    vrai(tete.indexOf('tete-titre') < tete.indexOf('tete-variation'),
+      'le titre vient avant le chiffre');
+    vrai(tete.indexOf('tete-variation') < tete.indexOf('class="row"'),
+      'et le chiffre avant les commandes');
+    vrai(!/tete-droite/.test(app), 'la colonne intermédiaire a disparu');
+
     const css = lireSource('assets/styles.css');
-    vrai(/\.tete-droite \{[\s\S]{0,400}align-items: flex-end/.test(css),
-      'la colonne aligne ses enfants à droite');
-    vrai(/margin-left: auto;/.test(css.slice(css.indexOf('.tete-droite {'),
-                                             css.indexOf('.tete-variation {'))),
-      'et se pousse au bord droit');
-    vrai(/\.tete-droite > \.row \{ justify-content: flex-end; \}/.test(css),
-      'les commandes s’alignent avec elle : deux alignements dans un bloc se '
-      + 'lisent comme un oubli');
+    vrai(/\.tete-triple \{ flex-wrap: wrap; \}/.test(css),
+      'cette tête-là passe à la ligne');
+    vrai(/\.tete-triple > \.tete-variation \{ margin-left: auto; \}/.test(css),
+      'le chiffre se pousse au bord droit');
+    vrai(/\.tete-triple > \.row \{ flex-basis: 100%; \}/.test(css),
+      'et les commandes prennent la ligne suivante entière');
+    /* La regle reste locale : les autres en-tetes ne passent pas a la ligne. */
+    vrai(!/^\.card-head \{[^}]*flex-wrap/m.test(css),
+      'les autres en-têtes gardent leur nowrap');
   });
 
   test('le mot se traduit', () => {
