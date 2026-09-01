@@ -911,52 +911,52 @@ function viewOverview() {
 
   </div>
 
-  <div class="grid g-3">
-      <div class="card">
-        <div class="card-head"><h2>${trad('Portefeuille titres')}</h2>
-          <a class="hint lien-vue" href="#/positions">${trad('Marchés')} →</a></div>
-        <div class="mlist-groupe">
-          ${(() => {
-            const j = dayPerformance();
-            if (!j.lignes.length || j.toutHorsSeance) return `
-          <div class="mlist" style="cursor:default">
-            <span class="ml-nom">${trad('Aujourd’hui')}<span class="sub">${j.lignes.length
-              ? `${trad('aucune ligne n’a coté depuis minuit')}${j.asOfMarche
-                  ? ` · ${trad('cours')} ${esc(fmtCoursQuand(j.asOfMarche))}` : ''}`
-              : trad('pas de clôture de veille en mémoire')}</span></span>
-            <span class="ml-chiffres"><b class="muted">${trad('hors séance')}</b></span>
-          </div>`;
-            return `
-          <button type="button" class="mlist" data-action="apercu" data-apercu="jourTitres">
-            <span class="ml-nom">${trad('Aujourd’hui')}<span class="sub">${j.hausse} ${trad('en hausse')}, ${
-              j.baisse} ${trad('en baisse')}${j.sansDonnee ? `, ${j.sansDonnee} ${trad('sans cours de veille')}` : ''}${
-              j.horsSeance ? `, ${j.horsSeance} ${trad('sans cours du jour')}` : ''}</span></span>
-            <span class="ml-chiffres"><b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
-              <span class="${cls(j.eur)}">${fmtSignedPct(j.pct)}</span></span>
-            <span class="ml-chev" aria-hidden="true">›</span>
-          </button>`;
-          })()}
-          <button type="button" class="mlist" data-action="apercu" data-apercu="portefeuille">
-            <span class="ml-nom">${trad('Valeur')}<span class="sub">${Store.state.positions.length} ${
-              Store.state.positions.length > 1 ? trad('lignes de titres') : trad('ligne de titres')}</span></span>
-            <span class="ml-chiffres"><b>${fmtEUR(pnl.value)}</b></span>
-            <span class="ml-chev" aria-hidden="true">›</span>
-          </button>
-          <button type="button" class="mlist" data-action="apercu" data-apercu="investiTitres">
-            <span class="ml-nom">${trad('Investi')}<span class="sub">${trad('ce que ces lignes t’ont coûté')}</span></span>
-            <span class="ml-chiffres"><b>${fmtEUR(pnl.invested)}</b></span>
-            <span class="ml-chev" aria-hidden="true">›</span>
-          </button>
-          <button type="button" class="mlist" data-action="apercu" data-apercu="pnlLatent">
-            <span class="ml-nom">${trad('Plus-value latente')}<span class="sub">${trad('tant que tu ne vends pas')}</span></span>
-            <span class="ml-chiffres"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
-              ${pnl.pct == null ? '' : `<span class="${cls(pnl.pnl)}">${fmtSignedPct(pnl.pct)}</span>`}</span>
-            <span class="ml-chev" aria-hidden="true">›</span>
-          </button>
-        </div>
+  <div class="card">
+    <div class="card-head"><h2>${trad('Portefeuille')}</h2>
+      <a class="hint lien-vue" href="#/positions">${trad('Voir les positions')} →</a></div>
+    <div class="pf-corps">
+      <button type="button" class="pf-total" data-action="apercu" data-apercu="portefeuille">
+        <b>${fmtEUR0(pnl.value)}</b>
+        <span>${Store.state.positions.length} ${Store.state.positions.length > 1
+          ? trad('lignes de titres') : trad('ligne de titres')}</span>
+      </button>
+      <div class="pf-mesures">
+        ${(() => {
+          const j = dayPerformance();
+          if (!j.lignes.length || j.toutHorsSeance) return `
+        <div class="pf-mesure pf-muet">
+          <span class="pf-lab">${trad('Aujourd’hui')}</span>
+          <b>${trad('hors séance')}</b>
+          <span class="pf-sous">${j.lignes.length
+            ? trad('aucune ligne n’a coté depuis minuit')
+            : trad('pas de clôture de veille en mémoire')}</span>
+        </div>`;
+          return `
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="jourTitres">
+          <span class="pf-lab">${trad('Aujourd’hui')}</span>
+          <b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
+          <span class="pf-sous ${cls(j.eur)}">${fmtSignedPct(j.pct)}</span>
+        </button>`;
+        })()}
+        ${(() => {
+          const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
+          if (pct == null) return `
+        <div class="pf-mesure pf-muet">
+          <span class="pf-lab">${trad('Performance')}</span>
+          <b>${trad('non calculée')}</b>
+          <span class="pf-sous">${trad('aucun prix de revient saisi')}</span>
+        </div>`;
+          return `
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="pnlLatent">
+          <span class="pf-lab">${trad('Performance')}</span>
+          <b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
+          <span class="pf-sous ${cls(pnl.pnl)}">${pct}</span>
+        </button>`;
+        })()}
       </div>
-
+    </div>
   </div>
+
 `}
   ${carteObjectif()}
 `;

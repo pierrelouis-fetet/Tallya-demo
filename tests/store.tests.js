@@ -26817,3 +26817,142 @@ suite('La démonstration ne porte aucune enveloppe française', () => {
     }
   });
 });
+
+/* La carte du portefeuille sur l'accueil : ce qu'elle montre, ce qu'elle tait,
+   et la place qu'elle prend. */
+suite('La carte du portefeuille dit trois choses, pas quatre', () => {
+
+  test('sans aucun prix de revient, la « plus-value » est le portefeuille entier', () => {
+    /* C'est la raison d'etre de la garde. `invested` vaut zero, donc `pnl`
+       vaut `value` : le chiffre existe, il est arithmetiquement juste, et il
+       ne veut rien dire. Le pourcentage se taisait deja ; l'euro, lui,
+       s'affichait comme un gain. */
+    Fixture.poser();
+    Store.state.positions = [
+      { id: 'ptf-a', symbol: 'AAA', qty: 10, price: 50 },
+      { id: 'ptf-b', symbol: 'BBB', qty: 4, price: 25 },
+    ];
+    const p = latentPnl();
+    pres(p.value, 600, 'la valeur se calcule sans prix de revient');
+    pres(p.invested, 0, 'aucune ligne ne dit ce qu’elle a coûté');
+    pres(p.pnl, p.value, 'la « plus-value » vaut alors la valeur entière');
+    eq(p.pct, null, 'et aucun pourcentage n’existe sur une base nulle');
+  });
+
+  test('l’écran se tait alors sur l’euro comme sur le pourcentage', () => {
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const i = src.indexOf('<div class="pf-mesures">');
+    vrai(i > 0, 'le bloc des deux mesures doit être trouvable');
+    const bloc = src.slice(i, src.indexOf('</div>\n    </div>', i));
+    vrai(bloc.length > 200, 'et la tranche doit contenir les deux mesures');
+
+    /* La garde se nomme au lieu de s'etaler sur les deux branches du balisage :
+       le controle « les ecrans se taisent avec le calcul » la cherche dans ce
+       qui precede immediatement l'impression, et trois cents caracteres de
+       balisage l'en eloignaient. */
+    vrai(/const pct = pnl\.pct == null \? null : fmtSignedPct\(pnl\.pct\);/.test(bloc),
+      'la garde porte un nom, juste au-dessus de ce qu’elle protège');
+    eq((bloc.match(/fmtSigned\(pnl\.pnl\)/g) || []).length, 1,
+      'un seul endroit imprime la plus-value en euros');
+    vrai(bloc.indexOf('if (pct == null) return') < bloc.indexOf('fmtSigned(pnl.pnl)'),
+      'et il vit dans la branche que la garde n’atteint pas : sans base, '
+      + 'l’euro se tait avec le pourcentage');
+    vrai(/trad\('aucun prix de revient saisi'\)/.test(bloc),
+      'la mesure muette dit pourquoi elle se tait');
+  });
+
+  test('sans séance, la mesure du jour le dit au lieu d’afficher zéro', () => {
+    /* Deux causes, deux phrases : aucune cloture de reference en memoire, ou
+       des cours qui datent tous d'avant minuit. La refonte ne devait en perdre
+       aucune — un « +0 € » sur une journee sans cours est un chiffre faux. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const i = src.indexOf('<div class="pf-mesures">');
+    const bloc = src.slice(i, src.indexOf('</div>\n    </div>', i));
+    vrai(/!j\.lignes\.length \|\| j\.toutHorsSeance/.test(bloc),
+      'deux causes gardent la mesure du jour');
+    vrai(/trad\('pas de clôture de veille en mémoire'\)/.test(bloc),
+      'la première se nomme');
+    vrai(/trad\('aucune ligne n’a coté depuis minuit'\)/.test(bloc),
+      'la seconde aussi');
+    vrai(/trad\('hors séance'\)/.test(bloc),
+      'et la mesure porte « hors séance » plutôt qu’un montant');
+  });
+
+  test('une seule destination explicite, et aucun chevron', () => {
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const i = src.indexOf('<div class="pf-corps">');
+    vrai(i > 0, 'le corps de la carte doit être trouvable');
+    const corps = src.slice(i, src.indexOf('</div>\n    </div>', i));
+    eq((corps.match(/ml-chev/g) || []).length, 0,
+      'aucun chevron : quatre lignes de liste en portaient quatre');
+    eq((corps.match(/href="#\//g) || []).length, 0,
+      'la seule destination explicite vit dans l’en-tête');
+    eq((corps.match(/data-action="apercu"/g) || []).length, 3,
+      'trois ouvreurs, et trois seulement : le montant, l’écart du jour, '
+      + 'la performance');
+    /* Le renvoi de l'en-tete mene aux lignes, pas aux « marches » : c'est son
+       portefeuille que le detenteur veut voir. */
+    const tete = src.slice(src.lastIndexOf('<div class="card-head">', i), i);
+    vrai(/href="#\/positions"/.test(tete), 'l’en-tête mène aux positions');
+    vrai(/trad\('Voir les positions'\)/.test(tete),
+      'et le dit avec le mot que l’écran d’arrivée emploie');
+  });
+
+  test('retirer la ligne « Investi » ne laisse pas un panneau sans porte', () => {
+    /* La moitie qu'on oublie en retirant un affichage. Le panneau garde un
+       ouvreur ailleurs, donc il reste vivant ; s'il n'en avait plus, c'est le
+       panneau qu'il aurait fallu retirer avec la ligne. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    vrai((src.match(/data-apercu="investiTitres"/g) || []).length >= 1,
+      'le panneau « Investi » s’ouvre encore depuis ailleurs');
+    const i = src.indexOf('<div class="pf-corps">');
+    const corps = src.slice(i, src.indexOf('</div>\n    </div>', i));
+    vrai(!/investiTitres/.test(corps),
+      'mais plus depuis l’accueil : le prix de revient n’y est pas la question');
+  });
+
+  test('la carte occupe la largeur au lieu de la laisser vide', () => {
+    /* Elle etait seule dans une grille de trois colonnes — ses deux voisines
+       sont parties, la grille est restee — et tenait donc dans un tiers de la
+       ligne. La largeur se remplit par la mise en page interieure, pas par
+       deux cartes inventees pour la remplir. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('<div class="pf-corps">');
+    vrai(i > 0, 'le corps de la carte doit être trouvable');
+    const entre = src.slice(src.lastIndexOf('<div class="card">', i), i);
+    vrai(!/class="grid/.test(entre),
+      'aucune grille ne s’ouvre entre la carte et son corps');
+
+    const css = lireSource('assets/styles.css');
+    vrai(css, 'assets/styles.css doit être lisible pour ce contrôle');
+    vrai(/\.pf-corps \{[^}]*display: flex/.test(css),
+      'le montant garde sa largeur naturelle, les mesures prennent le reste');
+    vrai(/\.pf-mesures \{[^}]*margin-left: auto/.test(css),
+      'et les mesures se poussent au bord droit');
+    /* Sous 768 px elles passent sous le montant, mais restent cote a cote :
+       un chiffre et son etiquette tiennent dans une demi-largeur. */
+    vrai(/\.pf-mesures \{ flex-basis: 100%; max-width: none; margin-left: 0;/.test(css),
+      'sur un téléphone elles prennent la ligne entière');
+    vrai(/\.pf-mesures \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(css),
+      'les mesures sont une grille de deux colonnes');
+  });
+
+  test('les intitulés nouveaux ont leur clé anglaise, et l’ancienne part', () => {
+    const en = lireSource('assets/i18n.js');
+    vrai(en, 'assets/i18n.js doit être lisible pour ce contrôle');
+    for (const [fr, ang] of [['Portefeuille', 'Investment portfolio'],
+                             ['Voir les positions', 'View holdings'],
+                             ['Performance', 'Total return'],
+                             ['non calculée', 'not available'],
+                             ['aucun prix de revient saisi', 'no cost basis entered']])
+      vrai(en.indexOf(`"${fr}": "${ang}"`) > 0, `« ${fr} » doit se traduire`);
+    /* Une clef sans appelant est du code mort comme un autre. */
+    for (const partie of ['"Portefeuille titres"', '"ce que ces lignes t’ont coûté"',
+                          '"tant que tu ne vends pas"'])
+      vrai(en.indexOf(partie) < 0, `${partie} n’a plus d’appelant`);
+  });
+});
