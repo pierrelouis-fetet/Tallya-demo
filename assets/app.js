@@ -838,6 +838,56 @@ function viewOverview() {
       + 'revenus, ton portefeuille. Tout part des comptes que tu déclares.')}</p>
   </div>`
   : `
+  ${!Store.state.positions.length ? '' : `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Portefeuille')}</h2>
+      <a class="hint lien-vue" href="#/positions">${trad('Voir les positions')} →</a></div>
+    <div class="pf-corps">
+      <button type="button" class="pf-total" data-action="apercu" data-apercu="portefeuille">
+        <b>${fmtEUR0(pnl.value)}</b>
+        <span>${trad('Valeur actuelle')} · ${Store.state.positions.length} ${
+          Store.state.positions.length > 1 ? trad('lignes de titres') : trad('ligne de titres')}</span>
+      </button>
+      <div class="pf-mesures">
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="investiTitres">
+          <span class="pf-lab">${trad('Investi')}</span>
+          <span class="pf-val"><b>${fmtEUR0(pnl.invested)}</b></span>
+        </button>
+        ${(() => {
+          const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
+          if (pct == null) return `
+        <div class="pf-mesure pf-muet">
+          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
+          <span class="pf-val"><b>${trad('prix de revient manquant')}</b></span>
+        </div>`;
+          return `
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="pnlLatent">
+          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
+          <span class="pf-val"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
+            <span class="pf-pct ${cls(pnl.pnl)}">${pct}</span></span>
+        </button>`;
+        })()}
+        ${(() => {
+          const j = dayPerformance();
+          if (!j.lignes.length || j.toutHorsSeance) return `
+        <div class="pf-mesure pf-muet">
+          <span class="pf-lab">${trad('Aujourd’hui')}</span>
+          <span class="pf-val"><b>${trad('hors séance')}</b>
+            <span class="pf-sous">${j.lignes.length
+              ? trad('aucune ligne n’a coté depuis minuit')
+              : trad('pas de clôture de veille en mémoire')}</span></span>
+        </div>`;
+          return `
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="jourTitres">
+          <span class="pf-lab">${trad('Aujourd’hui')}</span>
+          <span class="pf-val"><b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
+            <span class="pf-pct ${cls(j.eur)}">${fmtSignedPct(j.pct)}</span></span>
+        </button>`;
+        })()}
+      </div>
+    </div>
+  </div>`}
+
   <div class="grid">
     ${carteEvolution()}
   </div>
@@ -909,55 +959,6 @@ function viewOverview() {
     })()}
   </div>
 
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>${trad('Portefeuille')}</h2>
-      <a class="hint lien-vue" href="#/positions">${trad('Voir les positions')} →</a></div>
-    <div class="pf-corps">
-      <button type="button" class="pf-total" data-action="apercu" data-apercu="portefeuille">
-        <b>${fmtEUR0(pnl.value)}</b>
-        <span>${trad('Valeur actuelle')} · ${Store.state.positions.length} ${
-          Store.state.positions.length > 1 ? trad('lignes de titres') : trad('ligne de titres')}</span>
-      </button>
-      <div class="pf-mesures">
-        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="investiTitres">
-          <span class="pf-lab">${trad('Investi')}</span>
-          <span class="pf-val"><b>${fmtEUR0(pnl.invested)}</b></span>
-        </button>
-        ${(() => {
-          const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
-          if (pct == null) return `
-        <div class="pf-mesure pf-muet">
-          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
-          <span class="pf-val"><b>${trad('prix de revient manquant')}</b></span>
-        </div>`;
-          return `
-        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="pnlLatent">
-          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
-          <span class="pf-val"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
-            <span class="pf-pct ${cls(pnl.pnl)}">${pct}</span></span>
-        </button>`;
-        })()}
-        ${(() => {
-          const j = dayPerformance();
-          if (!j.lignes.length || j.toutHorsSeance) return `
-        <div class="pf-mesure pf-muet">
-          <span class="pf-lab">${trad('Aujourd’hui')}</span>
-          <span class="pf-val"><b>${trad('hors séance')}</b>
-            <span class="pf-sous">${j.lignes.length
-              ? trad('aucune ligne n’a coté depuis minuit')
-              : trad('pas de clôture de veille en mémoire')}</span></span>
-        </div>`;
-          return `
-        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="jourTitres">
-          <span class="pf-lab">${trad('Aujourd’hui')}</span>
-          <span class="pf-val"><b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
-            <span class="pf-pct ${cls(j.eur)}">${fmtSignedPct(j.pct)}</span></span>
-        </button>`;
-        })()}
-      </div>
-    </div>
   </div>
 
 `}

@@ -19617,6 +19617,39 @@ suite('Une page s’ouvre sur son sujet, et se corrige à la fin', () => {
       'et la carte des notes est partie : le journal les porte, ligne par ligne');
   });
 
+  test('Aperçu : le patrimoine, sa répartition, puis ce qui bouge aujourd’hui', () => {
+    /* La carte du portefeuille vivait en avant-derniere position, sous quatre
+       cartes qui se comptent en mois : la courbe, l'accumulation, le rythme,
+       l'autonomie. Elle porte le seul chiffre de la page qui bouge le jour
+       meme, sur un onglet qui s'appelle « Aujourd'hui », et la ligne « Actifs
+       de marche » de la carte des poches porte exactement son montant. Elle
+       suit donc les poches, dont elle est le detail. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewOverview()'),
+                          src.indexOf('function mountOverview()'));
+    vrai(vue.length > 1000, 'la vue doit être trouvable');
+    const l = positions(vue,
+      'class="hero"',
+      'class="card repart"',
+      'class="pf-corps"',
+      /* Les trois appels s'ecrivent avec leurs accolades : `carteObjectif()`
+         se lit aussi dans un commentaire quinze lignes plus haut, et l'ancre
+         nue tombait dessus. Le depot public etant servi sans commentaires, le
+         controle aurait ete vert la-bas et rouge ici. */
+      '${carteEvolution()}',
+      '${carteAccumulation()}',
+      'chartPace',
+      '${carteObjectif()}');
+    vrai(croissant(l),
+      'l’ordre attendu est patrimoine, poches, portefeuille, courbe, '
+      + `accumulation, rythme, objectif : ${l.join(' < ')}`);
+    /* Au quatrieme rang, un mur de zeros serait du bruit : la carte ne parait
+       pas sans une seule ligne de titres. */
+    const garde = vue.indexOf("${!Store.state.positions.length ? '' : `");
+    vrai(garde > 0 && garde < vue.indexOf('class="pf-corps"'),
+      'et sans une seule ligne de titres, elle ne paraît pas du tout');
+  });
+
   test('Allocation : ce que c’est, où c’est posé, puis en combien de temps', () => {
     /* Trois axes sur la meme somme, et l'ordre dit lequel repond a la question
        qu'on se pose en ouvrant la page. « Par disponibilite » vient en dernier
