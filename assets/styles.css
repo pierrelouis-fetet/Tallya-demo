@@ -4572,3 +4572,12 @@ tr.ligne-ouvre.porte > td { background: var(--surface-2); }
   box-shadow: 0 6px 18px rgb(0 0 0 / .28);
 }
 @media (prefers-reduced-motion: reduce) { .rang-glissant.porte { opacity: 1; } }
+
+.tete-droite {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  margin-left: auto;
+}
+.tete-droite > .row { justify-content: flex-end; }
+.tete-variation { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.tete-variation span { font-size: 11px; color: var(--muted); }
+.tete-variation b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }

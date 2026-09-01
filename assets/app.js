@@ -3610,9 +3610,21 @@ function viewHistory() {
           (lignes.length > 1 ? trad('{n} relevés en {a}') : trad('{n} relevé en {a}'))
             .replace('{n}', lignes.length).replace('{a}', esc(String(annee)))}</span>` : ''}
       </div>
-      <div class="row">
-        ${annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
-        <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter un relevé')}</button>
+      <div class="tete-droite">
+        ${lignes.length ? (() => {
+          /* Un seul calcul, lu deux fois : la couleur et le montant venaient de
+             deux `reduce` identiques, et deux ecritures d'un meme nombre
+             finissent par diverger le jour ou l'une est modifiee seule. */
+          const variation = lignes.reduce((s, x) => s + x.dlt, 0);
+          return `<div class="tete-variation">
+          <span>${trad('Variation {a}').replace('{a}', esc(String(annee)))}</span>
+          <b class="${cls(variation)}">${fmtSigned(variation)}</b>
+        </div>`;
+        })() : ''}
+        <div class="row">
+          ${annees.length > 1 ? yearControl('history-year', annees, annee) : ''}
+          <button class="btn sm" data-action="ajouter-releve">${trad('+ Ajouter un relevé')}</button>
+        </div>
       </div>
     </div>
     ${pasAFaire('comptes') ? `

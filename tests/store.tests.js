@@ -4742,6 +4742,120 @@ suite('Allocation : une carte de synthèse, sans porte', () => {
   });
 });
 
+/* ------------------------------------------------------------------
+   Le journal annonce la variation de l'annee qu'on regarde
+   ------------------------------------------------------------------ */
+suite('Variation de l’année : la somme des écarts qu’on a sous les yeux', () => {
+
+  /* Les ecarts du journal, rejoues depuis les donnees : le meme calcul que la
+     vue, dont le harnais ne charge pas le code. */
+  const ecarts = () => {
+    const rows = Store.state.monthly.filter(r => !rowIsEmpty(r))
+      .slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    let avant = null;
+    return rows.map(r => {
+      const net = rowNet(r);
+      const d = { date: r.date, net, dlt: avant == null ? 0 : net - avant };
+      avant = net;
+      return d;
+    });
+  };
+  const variationDe = a => ecarts().filter(x => String(x.date).startsWith(a))
+    .reduce((s, x) => s + x.dlt, 0);
+
+  const poser = (paires) => {
+    Fixture.poser();
+    const id = Store.state.comptes[0].id;
+    Store.state.monthly = paires.map(([d, v]) =>
+      ({ date: d, comment: '', dettes: 0, v: { [id]: v } }));
+  };
+
+  test('elle vaut la somme des écarts affichés', () => {
+    /* La liste montre douze variations sans jamais dire ce qu'elles font
+       ensemble, et personne ne les additionne de tete. Un total egale la somme
+       de ses parts, ici plus qu'ailleurs puisque les parts sont sous les yeux. */
+    poser([['2025-12-31', 10000],
+           ['2026-01-31', 10087], ['2026-02-28', 9669], ['2026-03-31', 12517]]);
+    const e = ecarts().filter(x => x.date.startsWith('2026'));
+    eq(e.map(x => Math.round(x.dlt)).join(' '), '87 -418 2848', 'les trois écarts');
+    pres(variationDe('2026'), 87 - 418 + 2848, 'et leur somme');
+  });
+
+  test('elle se télescope : dernier de l’année moins dernier d’avant', () => {
+    /* C'est la propriete qui rend le chiffre lisible : il ne depend pas du
+       nombre de releves, seulement des deux bouts. */
+    poser([['2025-12-31', 10000],
+           ['2026-01-31', 10087], ['2026-02-28', 9669], ['2026-03-31', 12517]]);
+    pres(variationDe('2026'), 12517 - 10000, 'mars moins décembre');
+  });
+
+  test('la première année du journal part de son premier relevé', () => {
+    /* Le premier releve n'a rien avant lui : son ecart vaut zero, et la
+       variation part donc de lui. C'est la seule chose vraie qu'on puisse en
+       dire — pretendre mesurer depuis un point qui n'existe pas serait
+       inventer une donnee. */
+    poser([['2026-01-31', 10000], ['2026-06-30', 12000]]);
+    eq(Math.round(ecarts()[0].dlt), 0, 'le premier écart est nul');
+    pres(variationDe('2026'), 2000, 'et la variation vaut la montée depuis lui');
+  });
+
+  test('chaque année a la sienne, et elles ne se mélangent pas', () => {
+    poser([['2025-06-30', 5000], ['2025-12-31', 10000],
+           ['2026-06-30', 12000], ['2026-12-31', 15000]]);
+    pres(variationDe('2025'), 5000, 'en 2025, depuis le premier relevé');
+    pres(variationDe('2026'), 5000, 'en 2026, décembre à décembre');
+    /* Et la somme des deux fait le trajet complet. */
+    pres(variationDe('2025') + variationDe('2026'), 15000 - 5000,
+      'les deux années font le trajet entier');
+  });
+
+  test('sans relevé dans l’année, rien ne s’affiche', () => {
+    /* Un « +0 € » sous une liste vide se lirait comme une mesure. */
+    const app = lireSource('assets/app.js');
+    vrai(/\$\{lignes\.length \? \(\(\) => \{/.test(app),
+      'le bloc ne se rend qu’avec des lignes');
+  });
+
+  test('un seul calcul, lu deux fois', () => {
+    /* La couleur et le montant venaient de deux `reduce` identiques : deux
+       ecritures d'un meme nombre finissent par diverger le jour ou l'une est
+       modifiee seule. */
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('<div class="tete-droite">');
+    const bloc = app.slice(i, app.indexOf('</div>\n    </div>', i));
+    eq((bloc.match(/lignes\.reduce\(/g) || []).length, 1, 'un seul reduce');
+    vrai(/const variation = lignes\.reduce\(\(s, x\) => s \+ x\.dlt, 0\);/.test(bloc),
+      'et il se nomme');
+    vrai(/cls\(variation\)/.test(bloc) && /fmtSigned\(variation\)/.test(bloc),
+      'la couleur et le montant le lisent tous deux');
+    /* La somme porte sur `lignes`, celles-la memes que la liste rend : prendre
+       `tous` compterait les autres annees. */
+    vrai(!/tous\.reduce\(/.test(bloc), 'et sur les lignes de l’année affichée');
+  });
+
+  test('elle se pose en haut à droite, au-dessus des commandes', () => {
+    const app = lireSource('assets/app.js');
+    const i = app.indexOf('<div class="tete-droite">');
+    const bloc = app.slice(i, app.indexOf('</div>\n    </div>', i));
+    vrai(bloc.indexOf('tete-variation') < bloc.indexOf('class="row"'),
+      'la variation précède les commandes');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.tete-droite \{[\s\S]{0,400}align-items: flex-end/.test(css),
+      'la colonne aligne ses enfants à droite');
+    vrai(/margin-left: auto;/.test(css.slice(css.indexOf('.tete-droite {'),
+                                             css.indexOf('.tete-variation {'))),
+      'et se pousse au bord droit');
+    vrai(/\.tete-droite > \.row \{ justify-content: flex-end; \}/.test(css),
+      'les commandes s’alignent avec elle : deux alignements dans un bloc se '
+      + 'lisent comme un oubli');
+  });
+
+  test('le mot se traduit', () => {
+    eq(I18N.en['Variation {a}'], '{a} change', 'et garde son année interpolée');
+    vrai(/\{a\}/.test(I18N.en['Variation {a}']), 'le gabarit survit à la traduction');
+  });
+});
+
 suite('Pièges de source', () => {
 
   /* Ces deux-là ne se voient pas à l'exécution : ils cassent le fichier au
