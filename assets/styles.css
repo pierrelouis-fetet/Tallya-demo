@@ -1885,6 +1885,11 @@ table.editable input.bad { border-color: var(--critical); background: color-mix(
 .modal-champs { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 4px; }
 .modal-champs.champs-cote { flex-direction: row; gap: 10px; }
 .modal-champs.champs-cote > .field { flex: 1; min-width: 0; }
+.modal-champs.champs-cote { align-items: flex-end; }
+.modal-champs input.lecture {
+  color: var(--text-secondary); background: var(--surface-2);
+  border-style: dashed; cursor: default;
+}
 .modal-champs.champs-cote input { max-width: 100%; }
 .champ-inline { max-width: 8.5em; text-align: right; margin-left: auto; display: block; }
 /* L'unite d'un champ de saisie, collee a lui. `margin-left: auto` sur le champ

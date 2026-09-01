@@ -840,7 +840,7 @@ function viewOverview() {
   : `
   ${!aDesPositionsMarche() ? '' : `
   <div class="card">
-    <div class="card-head"><h2>${trad('Portefeuille')}</h2>
+    <div class="card-head"><h2>${trad('Investissements de marché')}</h2>
       <a class="hint lien-vue" href="#/positions">${trad('Voir les positions')} →</a></div>
     <div class="pf-corps">
       <button type="button" class="pf-total" data-action="apercu" data-apercu="portefeuille">
@@ -9043,10 +9043,23 @@ function askPosition(index) {
       <div class="modal-champs champs-cote" style="margin:14px 0 4px">
         <div class="field"><label>${trad('Quantité')}</label>
           <input type="number" step="any" data-path="positions.${index}.qty" value="${p.qty ?? ''}"></div>
-        <div class="field"><label>${trad('Prix de revient')} (${esc(dev)})</label>
-          <input type="number" step="any" data-path="positions.${index}.buyPrice" value="${p.buyPrice ?? ''}"></div>
+        ${p.manual ? `
+        <div class="field"><label>${trad('Prix de revient')} (€)</label>
+          <input type="number" step="any" data-path="positions.${index}.invested" value="${p.invested ?? ''}"></div>`
+        : `
+        <div class="field"><label>${trad('Prix de revient unitaire')} (${esc(dev)})</label>
+          <input type="number" step="any" data-path="positions.${index}.buyPrice" value="${p.buyPrice ?? ''}"></div>`}
       </div>
-      <p class="hint" style="margin:0 0 12px">${trad('soit')} ${fmtEUR(posInvested(p))} ${trad('investis')}</p>
+      ${(() => {
+        const phrase = p.manual
+          ? (num(p.invested) ? '' : trad('prix de revient manquant'))
+          : num(p.buyPrice)
+            ? `${trad('soit')} ${num(p.qty).toLocaleString(locale())} × ${fmtCur(p.buyPrice, dev)} = ${
+                fmtEUR(posInvested(p))} ${trad('investis')}`
+            : trad('prix de revient manquant');
+        return phrase ? `
+      <p class="hint" style="margin:0 0 12px">${phrase}</p>` : '';
+      })()}
 
       ${(() => {
         const emetteur = issuerOf(p), pays = isinCountry(p.isin), r = rangePosition(p);
@@ -9148,13 +9161,26 @@ function askPosition(index) {
             ${OPTIONS_ROLE.map(([v, l]) => `<option value="${v}" ${v === roleDe(p) ? 'selected' : ''}>${esc(trad(l))}</option>`).join('')}
           </select></div>
 
+        ${p.manual ? `
+        <div class="field"><label>${trad('Valeur')} (€)</label>
+          <input type="number" step="any" data-path="positions.${index}.value" value="${p.value ?? ''}"></div>`
+        : num(p.quoteTime) ? `
         <div class="field"><label>${trad('Cours')} (${esc(dev)})</label>
-          <input type="number" step="any" data-path="positions.${index}.price" value="${p.price ?? ''}"></div>
+          <input type="number" class="lecture" value="${p.price ?? ''}" readonly tabindex="-1"
+                 aria-readonly="true"></div>`
+        : `
+        <div class="field"><label>${trad('Cours')} (${esc(dev)})</label>
+          <input type="number" step="any" data-path="positions.${index}.price" value="${p.price ?? ''}"></div>`}
         <div class="field"><label>${trad('Valeur')}${aide(trad("Par défaut, la valeur d’une ligne est quantité × cours, et le cours se rafraîchit tout seul. « Saisie à la main » sert aux lignes qu’aucune place ne cote : une part de société, un contrat, un actif que tu valorises toi-même. Le cours cesse alors d’être interrogé."))}</label>
           <select data-path="positions.${index}.manual" data-type="bool">
             <option value="false" ${p.manual ? '' : 'selected'}>${trad('Calculée, quantité × cours')}</option>
             <option value="true" ${p.manual ? 'selected' : ''}>${trad('Saisie à la main')}</option>
           </select></div>
+        <p class="hint" style="margin: -2px 0 0">${p.manual
+          ? trad('Le cours n’est plus interrogé pour cette ligne.')
+          : num(p.quoteTime)
+            ? `${trad('cours')} ${esc(fmtCoursQuand(p.quoteTime))} · ${trad('il se met à jour tout seul')}`
+            : trad('aucun cours reçu pour cette ligne : saisis-le à la main')}</p>
         <div class="field"><label>ISIN
             <button type="button" class="btn xs ghost" id="posIsinVerif"
                     style="margin-left:8px"

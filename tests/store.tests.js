@@ -27031,7 +27031,7 @@ suite('La carte du portefeuille raconte une phrase', () => {
   test('les intitulés nouveaux ont leur clé anglaise, et l’ancienne part', () => {
     const en = lireSource('assets/i18n.js');
     vrai(en, 'assets/i18n.js doit être lisible pour ce contrôle');
-    for (const [fr, ang] of [['Portefeuille', 'Investment portfolio'],
+    for (const [fr, ang] of [['Investissements de marché', 'Market investments'],
                              ['Voir les positions', 'View holdings'],
                              ['Valeur actuelle', 'Current value'],
                              ['Gain depuis l’achat', 'Gain since purchase'],
@@ -27048,6 +27048,112 @@ suite('La carte du portefeuille raconte une phrase', () => {
 
 /* Marches ne se montre qu'a qui a des titres. La condition vit dans le modele,
    les ecrans la lisent : c'est ce couple que cette suite garde. */
+suite('Deux champs de la fiche d’une ligne', () => {
+
+  test('le prix de revient est unitaire, et le total en découle', () => {
+    /* La semantique du champ, posee sur des nombres : `buyPrice` est le prix
+       d'UN titre. Y taper le montant d'un ordre le multiplie par la quantite,
+       et la ligne s'affiche en perte enorme sans que rien n'ait l'air faux. */
+    const p = { qty: 10, price: 60, buyPrice: 50, currency: 'USD', fx: 0.9, manual: false };
+    pres(round2(posInvested(p)), round2(10 * 50 * 0.9),
+      'quantité × prix unitaire × change');
+    pres(round2(posValue(p)), round2(10 * 60 * 0.9), 'et la valeur suit la même forme');
+    vrai(posPerfPct(p) > 0, 'dix titres payés 50 et valant 60 sont en gain');
+    const total = { ...p, buyPrice: 10 * 50 };
+    vrai(posPerfPct(total) < -80,
+      'le montant de l’ordre tapé à la place du prix unitaire donne une perte '
+      + 'énorme et fausse : c’est le défaut que le libellé doit empêcher');
+
+    /* L'autre regime : valeur et prix de revient sont deux TOTAUX, et le prix
+       unitaire n'entre dans aucun des deux. */
+    const main = { qty: 3, buyPrice: 999, price: 999, manual: true,
+                   value: 1200, invested: 1000 };
+    pres(posValue(main), 1200, 'la valeur saisie fait la valeur');
+    pres(posInvested(main), 1000, 'et le total saisi fait le prix de revient');
+    pres(round2(posPerfPct(main)), 20, 'le prix unitaire n’entre dans ni l’un ni l’autre');
+  });
+
+  test('le champ où on le tape porte le mot, et montre sa multiplication', () => {
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const i = src.indexOf('data-path="positions.${index}.qty"');
+    vrai(i > 0, 'la paire de champs doit être trouvable');
+    const bloc = src.slice(i, src.indexOf('</p>', i));
+    vrai(/trad\('Prix de revient unitaire'\)/.test(bloc),
+      'le champ où l’on tape dit « unitaire », comme les quatre autres surfaces');
+    vrai(!/trad\('Prix de revient'\) \(/.test(bloc),
+      'et plus le libellé qui se lisait comme un montant payé');
+    vrai(/× \$\{fmtCur\(p\.buyPrice, dev\)\} = /.test(bloc),
+      'le rappel montre le produit, pas seulement son résultat');
+    vrai(/trad\('prix de revient manquant'\)/.test(bloc),
+      'sans prix saisi, la phrase le dit au lieu d’annoncer 0,00 €');
+    /* Une ligne dont la valeur est saisie a la main tient son prix de revient
+       en TOTAL : `posInvested` y lit `invested` et jamais le produit. Offrir le
+       champ unitaire aux deux affichait « 1 514 × 5,80 € = 0,00 € investis ». */
+    vrai(/data-path="positions\.\$\{index\}\.invested"/.test(bloc),
+      'une ligne à la main pose un total, pas un prix par titre');
+    vrai(/\$\{p\.manual \? `/.test(bloc), 'et les deux régimes se distinguent');
+    /* Les quatre autres surfaces le portaient deja : c'est l'incoherence qui
+       rendait celle-ci invisible. */
+    for (const [quoi, motif] of [
+      ['la colonne du tableau', /Prix de revient unitaire, dans la devise de cotation\./],
+      ['le formulaire d’ajout', /\$\{trad\('Prix de revient unitaire'\)\} \(\$\{cote\.currency\}\)/],
+      ['l’import de fichier', /cle: 'buyPrice', label: trad\('Prix de revient unitaire'\)/],
+    ]) vrai(motif.test(src), `${quoi} le disait déjà`);
+  });
+
+  test('le cours ne se tape que si personne ne le cote', () => {
+    /* Il ecrivait dans le `price` que le rafraichissement reecrit toutes les
+       cinq minutes : la saisie disparaissait toute seule. Trois etats, et un
+       seul laisse taper. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    /* Bornes de CODE : le depot public est servi sans commentaires, et une
+       tranche prise a partir de l'un d'eux y serait vide. */
+    const i = src.indexOf('data-path="positions.${index}.role"');
+    vrai(i > 0, 'le bloc du cours doit être trouvable');
+    const bloc = src.slice(i, src.indexOf('data-path="positions.${index}.manual"', i));
+
+    vrai(/\$\{p\.manual \? `/.test(bloc),
+      'valeur saisie à la main : c’est la valeur qu’on pose, pas le cours');
+    vrai(/data-path="positions\.\$\{index\}\.value"/.test(bloc),
+      'et ce champ-là n’existait que dans le tableau, masqué sur téléphone');
+    vrai(/: num\(p\.quoteTime\) \? `/.test(bloc),
+      'un cours déjà reçu : la passerelle le pose, donc il se lit seulement');
+    vrai(/class="lecture" value="\$\{p\.price \?\? ''\}" readonly/.test(bloc),
+      'en lecture, sans data-path : rien ne peut écrire par-dessus le marché');
+    /* Et l'unique porte qui reste : aucune cotation recue. */
+    eq((bloc.match(/data-path="positions\.\$\{index\}\.price"/g) || []).length, 1,
+      'un seul endroit écrit encore le cours, celui que rien ne cote');
+  });
+
+  test('la fiche dit d’où vient le chiffre, sinon un champ grisé est une panne', () => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('data-path="positions.${index}.manual"');
+    vrai(i > 0, 'la phrase doit être trouvable');
+    const bloc = src.slice(i, src.indexOf('data-path="positions.${index}.isin"', i));
+    vrai(/trad\('il se met à jour tout seul'\)/.test(bloc), 'le cas courant');
+    vrai(/trad\('aucun cours reçu pour cette ligne : saisis-le à la main'\)/.test(bloc),
+      'le cas où l’on tape');
+    vrai(/trad\('Le cours n’est plus interrogé pour cette ligne\.'\)/.test(bloc),
+      'et le cas de la valeur posée à la main');
+
+    const en = lireSource('assets/i18n.js');
+    for (const fr of ['il se met à jour tout seul',
+                      'aucun cours reçu pour cette ligne : saisis-le à la main',
+                      'Le cours n’est plus interrogé pour cette ligne.'])
+      vrai(en.indexOf(`"${fr}": "`) > 0, `« ${fr} » doit se traduire`);
+  });
+
+  test('un champ de lecture garde la géométrie sans l’encre d’une saisie', () => {
+    const css = lireSource('assets/styles.css');
+    vrai(/\.modal-champs\.champs-cote \{ align-items: flex-end; \}/.test(css),
+      'les deux champs restent alignés quand un libellé se replie');
+    vrai(/\.modal-champs input\.lecture \{/.test(css),
+      'et le champ en lecture se distingue d’une invite à taper');
+  });
+});
+
 suite('Marchés n’existe que pour qui a des titres', () => {
 
   /* Un compte n'est jamais un argument : on en pose de toutes sortes, vides,
