@@ -1946,12 +1946,25 @@ function posInvested(p) {
    — donc on la redresse au lieu de se taire, et le signe vient de l'euro.
 
    Rien ne change pour une position longue : `perf / inv` vaut exactement
-   `value / inv - 1` quand `inv` est positif. Seul le short est corrige. */
+   `value / inv - 1` quand `inv` est positif. Seul le short est corrige.
+
+   Une base NULLE, elle, ne se redresse pas : il n'y a rien a redresser. Zero
+   n'est pas une base, c'est une absence. */
 function posPerfPct(p) {
   const inv = posInvested(p);
-  return inv === 0 ? 0 : posPerfEur(p) / Math.abs(inv) * 100;
+  return inv === 0 ? null : posPerfEur(p) / Math.abs(inv) * 100;
 }
-function posPerfEur(p) { return posValue(p) - posInvested(p); }
+/* Et l'euro se tait avec lui.
+
+   `posValue - 0` rend la valeur entiere de la ligne. Un titre a 520 EUR sans
+   prix de revient saisi s'affichait donc en « +520 EUR de plus-value », soit
+   pres de la moitie du resultat annonce pour tout le portefeuille, avec un
+   « +0,0 % » a cote qui venait de la fonction du dessus. Un pourcentage muet et
+   un euro bavard sur le meme fait ne peuvent pas etre justes tous les deux. */
+function posPerfEur(p) {
+  const inv = posInvested(p);
+  return inv === 0 ? null : posValue(p) - inv;
+}
 
 /* Le cours retenu date-t-il d'aujourd'hui ?
 
@@ -4766,11 +4779,28 @@ function salesCumulative(range) {
 
 function latentPnl() {
   const ps = Store.state.positions;
+  /* La valeur est connue de toutes les lignes ; le resultat, non.
+
+     Le total soustrayait un prix de revient partiel d'une valeur complete : une
+     ligne sans base entrait dans `value` et pour zero dans `invested`, donc sa
+     valeur entiere ressortait en plus-value. Une seule ligne pesait la moitie
+     du resultat affiche.
+
+     Le resultat se calcule donc sur les lignes qui ont une base, des deux
+     cotes. `value` ne bouge pas : c'est le portefeuille, il est connu, et c'est
+     lui qu'affichent la carte d'accueil et le panneau de la valeur. Ce qui est
+     ecarte se compte, pour que l'ecran puisse le dire au lieu de laisser une
+     somme qui ne se retrouve pas. */
   const value = ps.reduce((s, p) => s + posValue(p), 0);
-  const invested = ps.reduce((s, p) => s + posInvested(p), 0);
-  return { value, invested, pnl: value - invested,
-           pct: invested > 0 ? (value / invested - 1) * 100 : null,
-           winners: ps.filter(p => posPerfEur(p) > 0).length, count: ps.length };
+  const avecBase = ps.filter(p => posInvested(p) !== 0);
+  const invested = avecBase.reduce((s, p) => s + posInvested(p), 0);
+  const valeurAvecBase = avecBase.reduce((s, p) => s + posValue(p), 0);
+  return { value, invested, pnl: valeurAvecBase - invested,
+           pct: invested > 0 ? (valeurAvecBase / invested - 1) * 100 : null,
+           winners: avecBase.filter(p => posPerfEur(p) > 0).length,
+           count: ps.length, avecBase: avecBase.length,
+           sansBase: ps.length - avecBase.length,
+           valeurSansBase: value - valeurAvecBase };
 }
 
 /* --- l'ecart du non cote, tenu a part -----------------------------------

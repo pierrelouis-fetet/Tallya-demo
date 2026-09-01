@@ -917,40 +917,43 @@ function viewOverview() {
     <div class="pf-corps">
       <button type="button" class="pf-total" data-action="apercu" data-apercu="portefeuille">
         <b>${fmtEUR0(pnl.value)}</b>
-        <span>${Store.state.positions.length} ${Store.state.positions.length > 1
-          ? trad('lignes de titres') : trad('ligne de titres')}</span>
+        <span>${trad('Valeur actuelle')} · ${Store.state.positions.length} ${
+          Store.state.positions.length > 1 ? trad('lignes de titres') : trad('ligne de titres')}</span>
       </button>
       <div class="pf-mesures">
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="investiTitres">
+          <span class="pf-lab">${trad('Investi')}</span>
+          <span class="pf-val"><b>${fmtEUR0(pnl.invested)}</b></span>
+        </button>
+        ${(() => {
+          const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
+          if (pct == null) return `
+        <div class="pf-mesure pf-muet">
+          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
+          <span class="pf-val"><b>${trad('prix de revient manquant')}</b></span>
+        </div>`;
+          return `
+        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="pnlLatent">
+          <span class="pf-lab">${trad('Gain depuis l’achat')}</span>
+          <span class="pf-val"><b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
+            <span class="pf-pct ${cls(pnl.pnl)}">${pct}</span></span>
+        </button>`;
+        })()}
         ${(() => {
           const j = dayPerformance();
           if (!j.lignes.length || j.toutHorsSeance) return `
         <div class="pf-mesure pf-muet">
           <span class="pf-lab">${trad('Aujourd’hui')}</span>
-          <b>${trad('hors séance')}</b>
-          <span class="pf-sous">${j.lignes.length
-            ? trad('aucune ligne n’a coté depuis minuit')
-            : trad('pas de clôture de veille en mémoire')}</span>
+          <span class="pf-val"><b>${trad('hors séance')}</b>
+            <span class="pf-sous">${j.lignes.length
+              ? trad('aucune ligne n’a coté depuis minuit')
+              : trad('pas de clôture de veille en mémoire')}</span></span>
         </div>`;
           return `
         <button type="button" class="pf-mesure" data-action="apercu" data-apercu="jourTitres">
           <span class="pf-lab">${trad('Aujourd’hui')}</span>
-          <b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
-          <span class="pf-sous ${cls(j.eur)}">${fmtSignedPct(j.pct)}</span>
-        </button>`;
-        })()}
-        ${(() => {
-          const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
-          if (pct == null) return `
-        <div class="pf-mesure pf-muet">
-          <span class="pf-lab">${trad('Performance')}</span>
-          <b>${trad('non calculée')}</b>
-          <span class="pf-sous">${trad('aucun prix de revient saisi')}</span>
-        </div>`;
-          return `
-        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="pnlLatent">
-          <span class="pf-lab">${trad('Performance')}</span>
-          <b class="${cls(pnl.pnl)}">${fmtSigned(pnl.pnl)}</b>
-          <span class="pf-sous ${cls(pnl.pnl)}">${pct}</span>
+          <span class="pf-val"><b class="${cls(j.eur)}">${fmtSigned(j.eur)}</b>
+            <span class="pf-pct ${cls(j.eur)}">${fmtSignedPct(j.pct)}</span></span>
         </button>`;
         })()}
       </div>
@@ -2240,8 +2243,8 @@ function viewPositions() {
       <td>${p.manual
             ? `<input type="number" step="any" data-path="positions.${i}.invested" value="${p.invested ?? ''}">`
             : fmtEUR(inv)}</td>
-      <td class="${cls(pe)}">${fmtSigned(pe)}</td>
-      <td class="${cls(pp)}">${arrow(pp)} ${fmtSignedPct(pp)}</td>
+      <td class="${cls(pe)}">${pe == null ? '' : fmtSigned(pe)}</td>
+      <td class="${cls(pp)}">${pp == null ? '' : `${arrow(pp)} ${fmtSignedPct(pp)}`}</td>
       <td class="muted">${fmtPct(poidsPortefeuille(v, stockBase))}</td>
     </tr>`;
   }).join('');
@@ -2403,7 +2406,7 @@ function viewPositions() {
       <dt>${trad('Prix de revient des titres')}</dt>
         <dd><button type="button" class="mois-lien" data-action="apercu" data-apercu="investiTitres"
                     title="${trad('Voir le prix de revient ligne par ligne')}">${fmtEUR(pnl.invested)}</button></dd>
-      <dt><b>${trad('Plus / moins-value latente')}</b></dt>
+      <dt><b>${trad('Gain depuis l’achat')}</b></dt>
         <dd><button type="button" class="mois-lien ${cls(pnl.pnl)}" data-action="apercu" data-apercu="pnlLatent"
                     title="${trad('Voir le détail par ligne')}"><b>${fmtSigned(pnl.pnl)}</b>
               ${pnl.pct == null ? '' : `<span class="muted">·</span> ${fmtSignedPct(pnl.pct)}`}</button></dd>
@@ -2454,7 +2457,9 @@ function viewPositions() {
           action: 'open-position', index: i,
           titre: p.name || 'Sans nom',
           sous: `${ASSET_CLASSES[assetClassDe(p)]} · ${ROLES[roleDe(p)]} · ${ACC[p.account]?.short || ''}`,
-          valeur: fmtEUR(v), second: fmtSignedPct(pp, 1), classeSecond: cls(pp),
+          valeur: fmtEUR(v),
+          second: pp == null ? trad('prix de revient manquant') : fmtSignedPct(pp, 1),
+          classeSecond: pp == null ? 'muted' : cls(pp),
         });
       }).join('') || `<p class="empty">${trad('Aucune ligne.')}</p>`}
     </div>
@@ -5883,8 +5888,10 @@ function sheetPositions() {
       p.name, p.isin || '', p.symbol || '', ACC[p.account]?.short || p.account,
       ASSET_CLASSES[assetClassDe(p)], ROLES[roleDe(p)],
       num(p.qty), num(p.buyPrice), num(p.price), p.currency || 'EUR', num(p.fx || 1),
-      round2(posValue(p)), round2(posInvested(p)), round2(posPerfEur(p)),
-      posPerfPct(p) / 100, poidsPortefeuille(posValue(p), base) / 100,
+      round2(posValue(p)), round2(posInvested(p)),
+      posPerfEur(p) == null ? null : round2(posPerfEur(p)),
+      posPerfPct(p) == null ? null : posPerfPct(p) / 100,
+      poidsPortefeuille(posValue(p), base) / 100,
     ]),
     total: ['Total', '', '', '', '', null, null, null, '', null,
       round2(pnl.value), round2(pnl.invested), round2(pnl.pnl),
@@ -9080,8 +9087,10 @@ function askPosition(index) {
               + ` <span class="muted">${fmtSigned(jour.eur)}</span>`) : ''}
         ${ligne(`${trad('Plus / moins-value')}${jour?.depuisAchat
             ? `<span class="sub">${trad('achetée aujourd’hui : c’est aussi ton résultat du jour')}</span>` : ''}`,
-            `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
-            + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
+            posPerfEur(p) == null
+              ? `<span class="muted">${trad('prix de revient manquant')}</span>`
+              : `<span class="${cls(posPerfEur(p))}">${fmtSignedPct(posPerfPct(p), 2)}</span>`
+                + ` <span class="muted">${fmtSigned(posPerfEur(p))}</span>`)}
         ${jour && num(jour.prev) ? ligne(trad('Clôture de la veille'), fmtCur(jour.prev, dev)) : ''}
         ${num(p.dayLow) && num(p.dayHigh)
           ? ligne(trad('Séance'), `${fmtCur(p.dayLow, dev)} <span class="muted">${trad('à')}</span> ${fmtCur(p.dayHigh, dev)}`) : ''}
@@ -9886,6 +9895,16 @@ function askMonthlySnapshot(index) {
   });
 }
 
+const noteSansBase = r => !r.sansBase ? ''
+  : trad(r.sansBase > 1 ? '{n} lignes sans prix de revient'
+                        : '{n} ligne sans prix de revient').replace('{n}', String(r.sansBase));
+/* Une ligne sans montant se range en fin de liste plutot que de se glisser
+   parmi celles qui sont proches de zero : `null - x` vaut `-x`, donc un tri nu
+   la traite comme un gain nul et la melange a des lignes qui, elles, ont ete
+   mesurees. */
+const parGainDecroissant = (a, b) =>
+  (a.valeur == null) - (b.valeur == null) || b.valeur - a.valeur;
+
 const APERCUS = {
   classe: (classe) => {
     const p = patrimoine();
@@ -10422,14 +10441,16 @@ const APERCUS = {
   perfLatente: () => {
     const lat = latentPnl();
     return {
-      titre: trad('Plus-value latente'), sous: `${lat.winners} ${trad('lignes en gain sur')} ${lat.count}`,
-      total: lat.pnl, totalNote: lat.pct == null
+      titre: trad('Plus-value latente'),
+      sous: `${lat.winners} ${trad('lignes en gain sur')} ${lat.avecBase}`,
+      total: lat.pnl, totalNote: [lat.pct == null
         ? trad('prix de revient non renseigné')
         : `${fmtSignedPct(lat.pct)} ${trad('sur.investis', 'sur')} ${fmtEUR0(lat.invested)} ${trad('investis')}`,
+        noteSansBase(lat)].filter(Boolean).join(', '),
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
-        .sort((a, b) => b.valeur - a.valeur),
+        .sort(parGainDecroissant),
       vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
     };
   },
@@ -10620,9 +10641,12 @@ const APERCUS = {
     total: portfolioPnl().invested,
     totalNote: `${trad('pour')} ${fmtEUR0(portfolioPnl().value)} ${trad('de valeur actuelle')}`,
     lignes: Store.state.positions
-      .map(p => ({ label: p.name, meta: `${num(p.qty)} × ${fmtCur(p.buyPrice, p.currency)} ${trad('à l’achat')}`,
-                   valeur: posInvested(p) }))
-      .sort((a, b) => b.valeur - a.valeur),
+      .map(p => ({ label: p.name,
+                   meta: posInvested(p)
+                     ? `${num(p.qty)} × ${fmtCur(p.buyPrice, p.currency)} ${trad('à l’achat')}`
+                     : trad('prix de revient manquant'),
+                   valeur: posInvested(p) || null }))
+      .sort(parGainDecroissant),
     vue: 'positions', ancre: 'titres', cta: trad('Voir les lignes'),
   }),
 
@@ -10630,14 +10654,16 @@ const APERCUS = {
     const pnl = portfolioPnl();
     const j = dayPerformance();
     return {
-      titre: trad('Plus / moins-value latente'),
+      titre: trad('Gain depuis l’achat'),
       sous: [pnl.pct == null ? trad('prix de revient non renseigné') : fmtSignedPct(pnl.pct),
              j.lignes.length ? `${fmtSigned(j.eur)} ${trad('aujourd’hui')}` : trad('pas de cours du jour')].join(' · '),
-      total: pnl.pnl, totalNote: `${trad('sur.investis', 'sur')} ${fmtEUR0(pnl.invested)} ${trad('investis')}`,
+      total: pnl.pnl,
+      totalNote: [`${trad('sur.investis', 'sur')} ${fmtEUR0(pnl.invested)} ${trad('investis')}`,
+        noteSansBase(pnl)].filter(Boolean).join(', '),
       lignes: Store.state.positions
         .map(p => ({ label: p.name, meta: `${ACC[p.account]?.short || ''} · ${ASSET_CLASSES[assetClassDe(p)]}`,
                      valeur: posPerfEur(p), perf: posPerfPct(p) }))
-        .sort((a, b) => b.valeur - a.valeur),
+        .sort(parGainDecroissant),
       vue: 'positions', ancre: '', cta: trad('Voir tes lignes'),
     };
   },
@@ -10820,7 +10846,9 @@ function openApercu(cle, arg) {
       <td class="${l.perf != null ? cls(l.perf) : 'muted'}">${l.perf != null ? fmtSignedPct(l.perf, 1) : ''}</td>
       <td>${l.champ
         ? `<input type="number" step="any" data-path="${esc(l.champ)}" value="${getPath(l.champ) ?? 0}" class="champ-inline">`
-        : `<b>${fmtEUR(l.valeur)}</b>`}</td>
+        : l.valeur == null
+          ? `<span class="muted petit">${trad('prix de revient manquant')}</span>`
+          : `<b>${fmtEUR(l.valeur)}</b>`}</td>
     </tr>`).join('')}${a.montrer && (a.lignes || []).length > a.montrer ? `
     <tr class="apercu-plus"><td colspan="3">
       <button type="button" class="btn sm ghost" data-action="apercu-voir-tout">${

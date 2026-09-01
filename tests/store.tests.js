@@ -10440,9 +10440,15 @@ suite('Une vente à découvert ne s’affiche pas gagnante', () => {
     }
   });
 
-  test('sans prix de revient, aucun pourcentage inventé', () => {
-    eq(posPerfPct(short(-10, 0, 212)), 0,
+  test('sans prix de revient, ni pourcentage ni euro inventés', () => {
+    /* Le controle disait deja « il n'y a pas de base » et acceptait pourtant un
+       zero, qui est un chiffre. Un zero se lit « pas de mouvement », pas « on ne
+       sait pas », et l'ecran l'imprimait tel quel a cote d'un euro non nul. */
+    const p = short(-10, 0, 212);
+    eq(posPerfPct(p), null,
       'diviser par zéro ne donne pas un pourcentage, il n’y a pas de base');
+    eq(posPerfEur(p), null,
+      'et « valeur − 0 » n’est pas un gain : ce serait la ligne entière');
   });
 });
 
@@ -18919,7 +18925,11 @@ suite('La plus-value ne dit que ce qu’elle peut prouver', () => {
     const lat = latentPnl();
     pres(lat.invested, 0, 'des lignes sans prix de revient');
     eq(lat.pct, null, 'pas de base, pas de pourcentage');
-    vrai(lat.pnl > 0, 'alors que l’écart en euros existe et se dit');
+    /* Cette assertion-ci affirmait le contraire, et elle avait tort : sans
+       base, « valeur − 0 » rendait la valeur entiere du portefeuille et le
+       controle exigeait qu'elle soit positive. Un controle peut graver un
+       defaut a la place de la regle qu'il croit tenir. */
+    pres(lat.pnl, 0, 'et l’euro se tait avec lui : sans base, rien à mesurer');
   });
 
   test('les écrans se taisent avec le calcul', () => {
@@ -26820,13 +26830,12 @@ suite('La démonstration ne porte aucune enveloppe française', () => {
 
 /* La carte du portefeuille sur l'accueil : ce qu'elle montre, ce qu'elle tait,
    et la place qu'elle prend. */
-suite('La carte du portefeuille dit trois choses, pas quatre', () => {
+suite('La carte du portefeuille raconte une phrase', () => {
 
-  test('sans aucun prix de revient, la « plus-value » est le portefeuille entier', () => {
-    /* C'est la raison d'etre de la garde. `invested` vaut zero, donc `pnl`
-       vaut `value` : le chiffre existe, il est arithmetiquement juste, et il
-       ne veut rien dire. Le pourcentage se taisait deja ; l'euro, lui,
-       s'affichait comme un gain. */
+  test('sans aucun prix de revient, il n’y a pas de gain à afficher', () => {
+    /* `invested` vaut zero, donc `value - invested` rendait `value` : le chiffre
+       est arithmetiquement juste et ne veut rien dire. Le pourcentage se taisait
+       deja ; l'euro s'affichait comme un gain, et c'etait le portefeuille. */
     Fixture.poser();
     Store.state.positions = [
       { id: 'ptf-a', symbol: 'AAA', qty: 10, price: 50 },
@@ -26835,8 +26844,39 @@ suite('La carte du portefeuille dit trois choses, pas quatre', () => {
     const p = latentPnl();
     pres(p.value, 600, 'la valeur se calcule sans prix de revient');
     pres(p.invested, 0, 'aucune ligne ne dit ce qu’elle a coûté');
-    pres(p.pnl, p.value, 'la « plus-value » vaut alors la valeur entière');
-    eq(p.pct, null, 'et aucun pourcentage n’existe sur une base nulle');
+    pres(p.pnl, 0, 'et « 600 − 0 » n’est pas un gain de 600 €');
+    eq(p.pct, null, 'aucun pourcentage n’existe sur une base nulle');
+    eq(p.sansBase, 2, 'les deux lignes sont écartées, et comptées');
+  });
+
+  test('une seule ligne sans base ne gonfle pas le résultat de tout le reste', () => {
+    /* Le cas vu a l'ecran, et le plus dangereux : les autres lignes ont une
+       base, donc `invested > 0`, donc la garde du pourcentage ne se declenche
+       pas. Une ligne a 520 EUR sans prix de revient ajoutait 520 EUR de
+       plus-value au portefeuille — pres de la moitie du resultat annonce — avec
+       un « +0,0 % » a cote, qui venait de l'autre branche du calcul. */
+    Fixture.poser();
+    Store.state.positions = [
+      { id: 'ptf-a', symbol: 'AAA', qty: 10, price: 110, buyPrice: 100 },
+      { id: 'ptf-b', symbol: 'BBB', qty: 1, price: 520 },
+    ];
+    const sansBase = Store.state.positions[1];
+    eq(posPerfEur(sansBase), null, 'la ligne sans base n’a pas de gain');
+    eq(posPerfPct(sansBase), null, 'ni de pourcentage, et surtout pas zéro');
+
+    const p = latentPnl();
+    pres(p.value, 1620, 'le portefeuille vaut bien la somme de ses deux lignes');
+    pres(p.invested, 1000, 'une seule a coûté quelque chose');
+    pres(p.pnl, 100, 'et le gain est celui de cette seule ligne');
+    pres(p.pct, 10, 'calculé sur la base qui existe, pas sur le portefeuille');
+    eq(p.sansBase, 1, 'une ligne écartée, et l’écran peut le dire');
+
+    /* La regle de la maison : un total egale la somme de ses parts. C'est elle
+       qui tombait, et personne ne pouvait le voir sur l'ecran — les parts
+       affichees faisaient bien le total, mais une part etait fausse. */
+    const somme = Store.state.positions
+      .map(posPerfEur).filter(v => v != null).reduce((s, v) => s + v, 0);
+    pres(somme, p.pnl, 'la somme des lignes mesurables fait le total affiché');
   });
 
   test('l’écran se tait alors sur l’euro comme sur le pourcentage', () => {
@@ -26858,8 +26898,10 @@ suite('La carte du portefeuille dit trois choses, pas quatre', () => {
     vrai(bloc.indexOf('if (pct == null) return') < bloc.indexOf('fmtSigned(pnl.pnl)'),
       'et il vit dans la branche que la garde n’atteint pas : sans base, '
       + 'l’euro se tait avec le pourcentage');
-    vrai(/trad\('aucun prix de revient saisi'\)/.test(bloc),
+    vrai(/trad\('prix de revient manquant'\)/.test(bloc),
       'la mesure muette dit pourquoi elle se tait');
+    vrai(/trad\('Gain depuis l’achat'\)/.test(bloc),
+      'et le gain porte sa base dans son nom, au lieu de « Performance »');
   });
 
   test('sans séance, la mesure du jour le dit au lieu d’afficher zéro', () => {
@@ -26890,9 +26932,8 @@ suite('La carte du portefeuille dit trois choses, pas quatre', () => {
       'aucun chevron : quatre lignes de liste en portaient quatre');
     eq((corps.match(/href="#\//g) || []).length, 0,
       'la seule destination explicite vit dans l’en-tête');
-    eq((corps.match(/data-action="apercu"/g) || []).length, 3,
-      'trois ouvreurs, et trois seulement : le montant, l’écart du jour, '
-      + 'la performance');
+    eq((corps.match(/data-action="apercu"/g) || []).length, 4,
+      'quatre ouvreurs : le montant, puis l’investi, le gain et l’écart du jour');
     /* Le renvoi de l'en-tete mene aux lignes, pas aux « marches » : c'est son
        portefeuille que le detenteur veut voir. */
     const tete = src.slice(src.lastIndexOf('<div class="card-head">', i), i);
@@ -26901,18 +26942,26 @@ suite('La carte du portefeuille dit trois choses, pas quatre', () => {
       'et le dit avec le mot que l’écran d’arrivée emploie');
   });
 
-  test('retirer la ligne « Investi » ne laisse pas un panneau sans porte', () => {
-    /* La moitie qu'on oublie en retirant un affichage. Le panneau garde un
-       ouvreur ailleurs, donc il reste vivant ; s'il n'en avait plus, c'est le
-       panneau qu'il aurait fallu retirer avec la ligne. */
+  test('les quatre chiffres suivent l’ordre de la phrase', () => {
+    /* « J'ai investi tant, ca vaut tant, j'ai donc gagne tant, et aujourd'hui ca
+       a bouge de tant. » Le montant est le sujet et vit au-dessus ; les trois
+       mesures suivent dans cet ordre, et chacune ouvre le panneau qui la
+       detaille — aucun quatrieme ecran a tenir a jour. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    vrai((src.match(/data-apercu="investiTitres"/g) || []).length >= 1,
-      'le panneau « Investi » s’ouvre encore depuis ailleurs');
     const i = src.indexOf('<div class="pf-corps">');
+    vrai(i > 0, 'le corps de la carte doit être trouvable');
     const corps = src.slice(i, src.indexOf('</div>\n    </div>', i));
-    vrai(!/investiTitres/.test(corps),
-      'mais plus depuis l’accueil : le prix de revient n’y est pas la question');
+    for (const nom of ['portefeuille', 'investiTitres', 'pnlLatent', 'jourTitres'])
+      vrai(corps.indexOf(`data-apercu="${nom}"`) > 0,
+        `${nom} doit s’ouvrir depuis la carte`);
+    vrai(corps.indexOf('investiTitres') < corps.indexOf('pnlLatent'),
+      'l’investi vient avant le gain : c’est ce dont le gain se calcule');
+    vrai(corps.indexOf('pnlLatent') < corps.indexOf('jourTitres'),
+      'et le gain avant l’écart du jour, qui est la nuance la plus fine');
+    /* Le montant reste le sujet, donc il reste seul en grand. */
+    vrai(/class="pf-total"/.test(corps) && /trad\('Valeur actuelle'\)/.test(corps),
+      'le grand montant dit ce qu’il est, sans reprendre le titre de la carte');
   });
 
   test('la carte occupe la largeur au lieu de la laisser vide', () => {
@@ -26935,10 +26984,15 @@ suite('La carte du portefeuille dit trois choses, pas quatre', () => {
       'et les mesures se poussent au bord droit');
     /* Sous 768 px elles passent sous le montant, mais restent cote a cote :
        un chiffre et son etiquette tiennent dans une demi-largeur. */
-    vrai(/\.pf-mesures \{ flex-basis: 100%; max-width: none; margin-left: 0;/.test(css),
+    vrai(/\.pf-mesures \{[^}]*flex-basis: 100%;[^}]*max-width: none;/.test(css),
       'sur un téléphone elles prennent la ligne entière');
-    vrai(/\.pf-mesures \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(css),
-      'les mesures sont une grille de deux colonnes');
+    vrai(/\.pf-mesures \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/.test(css),
+      'les mesures sont une grille de trois colonnes sur un écran large');
+    /* Sur un telephone elles passent en rangees : trois colonnes dans 311 px
+       replient « Gain depuis l'achat » sur trois lignes et desalignent les
+       chiffres. */
+    vrai(/\.pf-mesure \{\s*flex-direction: row; justify-content: space-between;/.test(css),
+      'et en rangées nom-à-gauche / chiffre-à-droite sur un téléphone');
   });
 
   test('les intitulés nouveaux ont leur clé anglaise, et l’ancienne part', () => {
@@ -26946,13 +27000,15 @@ suite('La carte du portefeuille dit trois choses, pas quatre', () => {
     vrai(en, 'assets/i18n.js doit être lisible pour ce contrôle');
     for (const [fr, ang] of [['Portefeuille', 'Investment portfolio'],
                              ['Voir les positions', 'View holdings'],
-                             ['Performance', 'Total return'],
-                             ['non calculée', 'not available'],
-                             ['aucun prix de revient saisi', 'no cost basis entered']])
+                             ['Valeur actuelle', 'Current value'],
+                             ['Gain depuis l’achat', 'Gain since purchase'],
+                             ['prix de revient manquant', 'cost basis missing']])
       vrai(en.indexOf(`"${fr}": "${ang}"`) > 0, `« ${fr} » doit se traduire`);
     /* Une clef sans appelant est du code mort comme un autre. */
     for (const partie of ['"Portefeuille titres"', '"ce que ces lignes t’ont coûté"',
-                          '"tant que tu ne vends pas"'])
+                          '"tant que tu ne vends pas"', '"aucun prix de revient saisi"',
+                          '"Performance"', '"non calculée"',
+                          '"Plus / moins-value latente"'])
       vrai(en.indexOf(partie) < 0, `${partie} n’a plus d’appelant`);
   });
 });
