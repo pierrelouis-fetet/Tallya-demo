@@ -7305,6 +7305,33 @@ const ACTIONS = {
       && COMPTES().filter(x => x.etabId === etab.id && x.id !== c.id).length === 0;
     const credits = dernierDeSonEtab ? (etab.dettes || []) : [];
     const duCredit = credits.reduce((s, d) => s + num(d.montant), 0);
+    /* Les credits que CE bien porte et qui lui survivraient : le contenant
+       reste, donc ils ne partent pas avec lui, et leur `bienId` designerait un
+       compte disparu. Une reference morte ne se voit nulle part et fausse toutes
+       les lectures a venir. Le cas du dernier compte est deja traite au-dessus :
+       tout part ensemble, et il n'y a rien a demander. */
+    const orphelins = dernierDeSonEtab ? [] : creditsDuBien(c);
+    let sort = null;
+    if (orphelins.length) {
+      const restants = (Store.state.comptes || [])
+        .filter(x => x.etabId === c.etabId && x.id !== c.id)
+        .map(x => [x.id, `${trad('Rattacher à')} ${nomCompteV2(x)}`]);
+      const r = await askForm({
+        titre: trad(orphelins.length > 1 ? '{n} crédits financent ce bien'
+                                         : 'Un crédit finance ce bien')
+          .replace('{n}', orphelins.length),
+        sous: `${fmtEUR0(orphelins.reduce((s, d) => s + num(d.montant), 0))} ${
+          trad('de capital restant dû')}`,
+        ok: 'Continuer',
+        champs: [{ cle: 'sort', label: trad('Que devient ce financement ?'), type: 'liste',
+          options: [['supprimer', trad('Le supprimer avec le bien')], ...restants],
+          aide: trad('un crédit ne peut pas rester rattaché à un bien qui n’existe plus') }],
+      });
+      if (!r) return;
+      sort = r.sort;
+    }
+    const delies = B().income.filter(r => r.bienId === c.id).length
+                 + B().fixedCharges.filter(x => x.bienId === c.id).length;
     if (!await askConfirm(`${trad('Clôturer et supprimer')} ${guill(nomCompteV2(c))} ?\n\n`
       + (v ? trad('Sa valeur de {v} sortira du patrimoine.').replace('{v}', fmtEUR(v)) + '\n' : '')
       + (duCredit ? trad('Le crédit qui le finance, {c} de capital restant dû, sera supprimé en '
@@ -7312,9 +7339,27 @@ const ACTIONS = {
       + (mois ? trad(mois > 1 ? 'Ses montants restent lisibles dans {n} relevés passés.'
                               : 'Ses montants restent lisibles dans {n} relevé passé.')
                   .replace('{n}', mois) + '\n' : '')
+      + (orphelins.length ? (sort === 'supprimer'
+            ? trad('Son financement sera supprimé.')
+            : trad('Son financement sera rattaché à un autre bien.')) + '\n' : '')
+      + (delies ? trad(delies > 1 ? '{n} lignes de budget resteront, sans rattachement.'
+                                  : '{n} ligne de budget restera, sans rattachement.')
+                    .replace('{n}', delies) + '\n' : '')
       + (dernierDeSonEtab ? `${guill(etab.nom)} ${trad("disparaîtra avec lui : c'était son dernier compte.")}\n` : '')
       + `\n${trad('Réversible avec Ctrl+Z.')}`, { ok: 'Supprimer', danger: true })) return;
-    if (credits.length) etab.dettes = [];
+    if (credits.length) {
+      /* Le dernier compte emmene tout : les charges qui remboursaient ces
+         credits ne peuvent pas garder un `creditId` vers une dette effacee. */
+      for (const d of credits) delierChargeDuCredit(d.id);
+      etab.dettes = [];
+    }
+    if (orphelins.length) {
+      if (sort === 'supprimer') {
+        for (const d of orphelins) delierChargeDuCredit(d.id);
+        etab.dettes = (etab.dettes || []).filter(d => !orphelins.includes(d));
+      } else for (const d of orphelins) rattacherCredit(d, sort);
+    }
+    delierDuBien(c.id);
     if (!Store.state.accounts.some(a => a.id === c.id)) {
       Store.state.accounts.push({ id: c.id, label: nomCompteV2(c), short: c.court || '',
         broker: nomEtabDe(c), type: c.type, group: typeCompte(c.type).groupe, legacy: true });
@@ -7591,6 +7636,11 @@ const ACTIONS = {
           type: 'case', valeur: true,
           aide: trad('seulement si une mensualité est renseignée : elle entrera dans ton ')
               + 'budget sous ce nom, et suivra le capital restant dû' }]),
+        ...(lien ? [{ cle: 'supprimerCharge',
+          label: trad('… et la charge « {l} » qui le rembourse').replace('{l}',
+            lien.charge.label || trad('Charge fixe')), type: 'case', valeur: true,
+          aide: trad('décoche pour la garder : elle redeviendra une charge fixe '
+                   + 'ordinaire, avec le même montant') }] : []),
         { cle: 'supprimer', label: trad('Supprimer ce crédit'), type: 'case',
           aide: `${trad('Le patrimoine net remontera de')} ${fmtEUR0(num(d.montant))}. ${
             trad('Réversible avec Ctrl+Z.')}` },
@@ -7600,9 +7650,14 @@ const ACTIONS = {
     if (v.supprimer) {
       const nom = d.libelle || trad('Crédit');
       const rendu = num(d.montant);
+      /* Avant le retrait : une charge ne peut pas garder un `creditId` vers une
+         dette qui n'existe plus. Elle part, ou elle redevient ordinaire. */
+      const chargeNom = delierChargeDuCredit(d.id, { retirer: !!v.supprimerCharge });
       e.dettes.splice(i, 1);
       Store.save(); render();
-      toast(`${guill(nom)} ${trad('supprimé')} · ${trad('patrimoine net')} +${fmtEUR0(rendu)}`);
+      toast(`${guill(nom)} ${trad('supprimé')} · ${trad('patrimoine net')} +${fmtEUR0(rendu)}`
+        + (chargeNom ? ` · ${v.supprimerCharge ? trad('charge supprimée')
+                                               : trad('charge conservée')}` : ''));
       return;
     }
     const avant = num(d.montant);
@@ -7615,7 +7670,10 @@ const ACTIONS = {
        « taux inconnu » a chaque enregistrement. */
     d.taux = estDeclare(v.taux) ? num(v.taux) : null;
     d.tauxAssurance = num(v.tauxAssurance) || null;
-    if (v.bienId !== undefined) d.bienId = v.bienId || null;
+    /* `rattacherCredit` et non une affectation nue : la charge qui rembourse ce
+       credit doit suivre, sans quoi sa mensualite resterait comptee dans le
+       cash-flow d'un bien qui ne la paie plus. */
+    if (v.bienId !== undefined) rattacherCredit(d, v.bienId);
     d.preteur = v.preteur || '';
     Store.save(); render();
     const baisse = avant - d.montant;

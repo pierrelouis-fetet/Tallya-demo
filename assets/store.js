@@ -4459,6 +4459,48 @@ function comptesDuPreteur(etabId) {
    l'argent qu'on doit, quel que soit l'etat du lien — mais elle n'est attribuee
    a aucun bien. La signaler vaut mieux que la ranger au hasard : un chiffre
    manquant se voit, un chiffre faux se croit. */
+/* Delier la charge fixe qui remboursait un credit.
+
+   Rien ne doit garder un `creditId` vers une dette disparue : la charge
+   continuerait de vivre dans le budget en pretant sa mensualite a un credit qui
+   n'existe plus, et `mensualiteCredit()` la lirait pour un fantome.
+
+   Deux sorties, et c'est un choix qui appartient au detenteur : la charge part
+   avec le credit — cet argent ne sort plus — ou elle reste et redevient une
+   charge fixe ordinaire. Elle garde alors son montant, qui vivait deja chez
+   elle : c'est le credit qui le lisait, jamais l'inverse. */
+function delierChargeDuCredit(id, { retirer = false } = {}) {
+  const lien = chargeDuCredit(id);
+  if (!lien) return null;
+  const nom = lien.charge.label || 'Charge fixe';
+  if (retirer) B().fixedCharges.splice(lien.index, 1);
+  else delete lien.charge.creditId;
+  return nom;
+}
+
+/* Delier tout ce qui pointait vers un compte qu'on supprime.
+
+   Les loyers et les charges restent : ce sont de vrais flux du budget, et les
+   effacer changerait des totaux que personne n'a demande a changer. Ils
+   redeviennent simplement independants. Ce qui ne peut pas rester, c'est le
+   `bienId` : il designerait un compte disparu, et aucun ecran ne montrerait
+   jamais l'incoherence. */
+function delierDuBien(compteId) {
+  let n = 0;
+  for (const r of B().income) if (r.bienId === compteId) { delete r.bienId; n++; }
+  for (const c of B().fixedCharges) if (c.bienId === compteId) { delete c.bienId; n++; }
+  return n;
+}
+
+function rattacherCredit(d, bienId) {
+  if (!d) return;
+  d.bienId = bienId || null;
+  const lien = chargeDuCredit(d.id);
+  if (!lien || !lien.charge.bienId) return;
+  if (bienId) lien.charge.bienId = bienId;
+  else delete lien.charge.bienId;
+}
+
 function creditsAClarifier() {
   const dehors = [];
   for (const e of ETABS()) {

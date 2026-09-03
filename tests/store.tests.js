@@ -27915,3 +27915,134 @@ suite('Un crédit sait quel bien il finance', () => {
     pres(round2(dettesTotal()), 180000, 'et la dette reste entière');
   });
 });
+
+/* Trois gestes qui effacent, et une seule regle : rien ne doit garder une
+   reference vers ce qui n'existe plus. Une reference morte ne se voit nulle
+   part — c'est le pire genre d'erreur, un chiffre faux que rien ne trahit. */
+suite('Aucune référence ne survit à ce qu’elle désigne', () => {
+
+  /* Un preteur, deux biens, un credit sur le premier, et sa charge. */
+  const poser = () => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [
+      { id: 'd_appt', libelle: 'Prêt appartement', montant: 180000, initial: 210000,
+        taux: 1.45, tauxAssurance: 0.34, bienId: 'c_appt' }] }];
+    s.comptes = [
+      { id: 'c_appt', etabId: 'e_bq', type: 'immo', statut: 'ouvert', libelle: 'Appartement',
+        cash: [], lignes: [{ id: 'l1', classe: 'immobilier', libelle: 'Appt', valeur: 300000 }] },
+      { id: 'c_park', etabId: 'e_bq', type: 'immo', statut: 'ouvert', libelle: 'Parking',
+        cash: [], lignes: [{ id: 'l2', classe: 'immobilier', libelle: 'Parking', valeur: 20000 }] },
+    ];
+    s.positions = []; s.monthly = [];
+    s.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_appt' }];
+    s.budget.fixedCharges = [
+      { label: 'Mensualité', amount: 894.44, period: 'mois', creditId: 'd_appt',
+        bienId: 'c_appt', shares: {} },
+      { label: 'Taxe foncière', amount: 1200, period: 'an', bienId: 'c_appt', shares: {} },
+    ];
+  });
+  const credit = () => Store.state.etabs[0].dettes.find(d => d.id === 'd_appt');
+  const charge = (l) => Store.state.budget.fixedCharges.find(c => c.label === l);
+
+  test('un crédit qui change de bien emmène sa charge', () => {
+    /* Sans cette synchronisation, la mensualite resterait comptee dans le
+       cash-flow d'un bien qui ne la paie plus, et manquerait a celui qui la
+       paie. Deux fiches fausses d'un seul geste. */
+    poser();
+    rattacherCredit(credit(), 'c_park');
+    eq(credit().bienId, 'c_park', 'le crédit suit');
+    eq(charge('Mensualité').bienId, 'c_park', 'et sa charge avec lui');
+    /* Une charge qui ne portait aucun lien ne s'en voit pas poser un dans son
+       dos : elle n'a jamais dit appartenir a ce bien. */
+    delete charge('Mensualité').bienId;
+    rattacherCredit(credit(), 'c_appt');
+    eq(charge('Mensualité').bienId, undefined, 'une charge sans lien n’en reçoit pas');
+    /* Et la taxe fonciere, qui ne rembourse aucun credit, ne bouge pas. */
+    eq(charge('Taxe foncière').bienId, 'c_appt', 'les autres charges restent où elles sont');
+  });
+
+  test('détacher un crédit détache aussi sa charge', () => {
+    poser();
+    rattacherCredit(credit(), null);
+    eq(credit().bienId, null, 'le crédit n’est plus rattaché');
+    eq(charge('Mensualité').bienId, undefined, 'sa charge non plus');
+  });
+
+  test('un crédit supprimé ne laisse pas de creditId mort', () => {
+    /* Une charge qui garde un `creditId` vers une dette effacee continue de
+       vivre dans le budget en pretant sa mensualite a un fantome. */
+    poser();
+    const nom = delierChargeDuCredit('d_appt');
+    eq(nom, 'Mensualité', 'la charge est nommée, pour que le geste puisse le dire');
+    eq(charge('Mensualité').creditId, undefined, 'le lien mort est retiré');
+    pres(charge('Mensualité').amount, 894.44,
+      'et elle garde son montant : il vivait déjà chez elle');
+    eq(chargeDuCredit('d_appt'), null, 'plus rien ne remonte de ce crédit');
+  });
+
+  test('ou part avec lui, si on le demande', () => {
+    poser();
+    const avant = Store.state.budget.fixedCharges.length;
+    delierChargeDuCredit('d_appt', { retirer: true });
+    eq(Store.state.budget.fixedCharges.length, avant - 1, 'la charge est retirée');
+    eq(charge('Mensualité'), undefined, 'nommément');
+    eq(charge('Taxe foncière') != null, true, 'et les autres restent');
+  });
+
+  test('un bien supprimé ne laisse ni loyer ni charge rattachés au vide', () => {
+    /* Les flux restent — ce sont de vrais mouvements du budget — mais ils
+       cessent de designer un compte disparu. */
+    poser();
+    const n = delierDuBien('c_appt');
+    eq(n, 3, 'le loyer et les deux charges sont déliés');
+    eq(Store.state.budget.income[0].bienId, undefined, 'le loyer reste, sans lien');
+    pres(Store.state.budget.income[0].amount, 900, 'et garde son montant');
+    eq(charge('Taxe foncière').bienId, undefined, 'la charge aussi');
+    pres(budgetFrame().fixed, chargeMensuelle(charge('Mensualité'))
+       + chargeMensuelle(charge('Taxe foncière')),
+      'le budget ne bouge pas d’un centime');
+  });
+
+  test('le geste de suppression appelle bien ces trois portes', () => {
+    /* Le modele sait delier ; encore faut-il que l'ecran s'en serve. Les
+       assertions portent sur du CODE, jamais sur un commentaire. */
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf("async 'supprimer-compte'(btn) {"),
+                        src.indexOf("async 'supprimer-compte'(btn) {") + 6000);
+    vrai(/creditsDuBien\(c\)/.test(f),
+      'il regarde les crédits de CE bien, pas ceux de l’établissement');
+    vrai(/delierChargeDuCredit\(d\.id\)/.test(f),
+      'les charges des crédits effacés sont déliées');
+    vrai(/rattacherCredit\(d, sort\)/.test(f),
+      'ou les crédits suivent le bien choisi');
+    vrai(/delierDuBien\(c\.id\)/.test(f),
+      'et rien ne garde un bienId vers le compte supprimé');
+
+    const g = src.slice(src.indexOf("async 'editer-credit'(btn) {"));
+    vrai(/rattacherCredit\(d, v\.bienId\)/.test(g),
+      'déplacer un crédit passe par la porte qui emmène sa charge');
+    vrai(/delierChargeDuCredit\(d\.id, \{ retirer: !!v\.supprimerCharge \}\)/.test(g),
+      'et le supprimer traite sa charge, sans jamais la laisser en l’air');
+  });
+
+  test('après une opération terminée, plus rien à clarifier', () => {
+    /* L'invariant que le detenteur a demande : le controle doit se taire quand
+       tout est propre, sinon il devient un bruit qu'on cesse de lire. */
+    poser();
+    eq(creditsAClarifier().length, 0, 'au départ, tout est rattaché');
+    /* On supprime le bien qui porte le credit, en le rattachant au parking. */
+    rattacherCredit(credit(), 'c_park');
+    delierDuBien('c_appt');
+    Store.state.comptes = Store.state.comptes.filter(c => c.id !== 'c_appt');
+    refreshAccounts();
+    eq(creditsAClarifier().length, 0, 'après le rattachement, le contrôle se tait');
+    pres(round2(dettesTotal()), 180000, 'et la dette globale n’a pas bougé');
+
+    /* Le meme geste sans rattacher laisserait, lui, une reference morte. */
+    poser();
+    Store.state.comptes = Store.state.comptes.filter(c => c.id !== 'c_appt');
+    refreshAccounts();
+    eq(creditsAClarifier().length, 1, 'sans rattachement, le contrôle parle');
+    eq(creditsAClarifier()[0].quoi, 'mort', 'et nomme le défaut');
+    pres(round2(dettesTotal()), 180000, 'la dette reste comptée malgré tout');
+  });
+});
