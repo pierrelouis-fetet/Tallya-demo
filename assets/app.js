@@ -3190,7 +3190,7 @@ function viewAllocation() {
 
   return `
   ${horsFinancierExiste() ? barreCommutateur([
-    ['tout', 'Tout'], ['financier', 'Financier'],
+    ['financier', 'Financier'], ['tout', 'Tout'],
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
@@ -6039,19 +6039,35 @@ function sheetAccounts() {
 }
 
 function sheetHistory() {
+  const poches = SERIES_PATRIMOINE();
+  const mixtes = ACCOUNTS.filter(a => (Store.state.monthly || []).some(r => {
+    const p = r.parts && r.parts[a.id];
+    if (!p) return false;
+    const cash = num(p.cash);
+    const reste = Object.entries(p)
+      .reduce((s, [k, m]) => s + (k === 'cash' ? 0 : num(m)), 0);
+    return Math.abs(cash) > 0.005 && Math.abs(reste) > 0.005;
+  }));
   return {
     name: 'Releves mensuels',
     cols: [
-      { h: 'Date', t: 'date', w: 12 }, { h: 'Cash', t: 'eur', w: 14 },
-      { h: 'Bourse', t: 'eur', w: 14 }, { h: 'Private equity', t: 'eur', w: 15 },
-      { h: 'Total net worth', t: 'eur', w: 16 },
+      { h: 'Date', t: 'date', w: 12 },
+      ...poches.map(s => ({ h: s.label, t: 'eur', w: 14 })),
+      { h: 'Total brut', t: 'eur', w: 16 },
+      { h: 'Crédits', t: 'eur', w: 14 },
+      { h: 'Total net', t: 'eur', w: 16 },
       ...ACCOUNTS.map(a => ({ h: a.label, t: 'eur', w: 15 })),
+      ...mixtes.map(a => ({ h: `${a.label} · cash`, t: 'eur', w: 15 })),
       { h: 'Commentaire', t: 'text', w: 60 },
     ],
     rows: Store.state.monthly.map(r => {
       const g = rowGroups(r);
-      return [r.date, round2(g.cash), round2(g.bourse), round2(g.pe), round2(g.cash + g.bourse + g.pe),
-        ...ACCOUNTS.map(a => r.v[a.id] == null ? null : num(r.v[a.id])), r.comment || ''];
+      return [r.date,
+        ...poches.map(s => round2(num(g[s.key]))),
+        round2(rowTotal(r)), round2(num(r.dettes)), round2(rowNet(r)),
+        ...ACCOUNTS.map(a => r.v[a.id] == null ? null : num(r.v[a.id])),
+        ...mixtes.map(a => cashDuReleve(r, a.id)),
+        r.comment || ''];
     }),
   };
 }
@@ -9705,7 +9721,8 @@ function appliquerReleve(index, saisi) {
   row.v = saisi.v;
   row.comment = saisi.comment;
   row.dettes = round2(num(saisi.dettes));
-  row.poches = pochesDuReleve(saisi.v);
+  row.parts = partsDuReleve(saisi.v);
+  delete row.poches;
   historyYear = String(row.date).slice(0, 4);
   Store.save(); render();
   return true;

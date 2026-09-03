@@ -27321,6 +27321,26 @@ suite('Un relevé note sa propre ventilation', () => {
     ACCOUNTS.map(a => [a.id, round2(nowValue(a.id))]));
   const somme = o => Object.values(o).reduce((s, x) => s + num(x), 0);
 
+  test('l’export dit un total qui est vraiment le total', () => {
+    /* « Total net worth » valait `cash + bourse + pe` : trois poches sur sept.
+       La crypto, l'immobilier, les biens de valeur et le capital garanti en
+       etaient absents, et il n'etait pas net non plus. Un fichier qu'on ouvre
+       justement pour verifier ne peut pas se tromper sur sa colonne de total. */
+    const src = lireSource('assets/app.js');
+    vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
+    const f = src.slice(src.indexOf('function sheetHistory()'),
+                        src.indexOf('function sheetSales()'));
+    vrai(f.length > 400, 'la feuille doit être trouvable');
+    vrai(!/g\.cash \+ g\.bourse \+ g\.pe/.test(f),
+      'plus de total écrit à la main sur trois poches');
+    vrai(/round2\(rowTotal\(r\)\)/.test(f) && /round2\(rowNet\(r\)\)/.test(f),
+      'le brut et le net sont deux colonnes, chacune nommée par ce qu’elle contient');
+    vrai(/poches\.map\(s => \(\{ h: s\.label/.test(f),
+      'et les poches se dérivent de la table, sans en citer trois à la main');
+    vrai(/cashDuReleve\(r, a\.id\)/.test(f),
+      'une colonne « dont cash » pour les comptes qui portent les deux');
+  });
+
   test('la somme des poches fait le total du relevé', () => {
     /* La regle cardinale de la maison, et c'est elle qui attrape une poche
        oubliee : un montant range nulle part disparait d'une bande sans quitter
@@ -27402,10 +27422,64 @@ suite('Un relevé note sa propre ventilation', () => {
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     const f = src.slice(src.indexOf('function appliquerReleve('),
                         src.indexOf('async function viderOuSupprimerMois'));
-    vrai(/row\.poches = pochesDuReleve\(saisi\.v\);/.test(f),
+    vrai(/row\.parts = partsDuReleve\(saisi\.v\);/.test(f),
       'la ventilation se note au moment où le relevé s’écrit');
-    vrai(f.indexOf('row.v = saisi.v') < f.indexOf('row.poches ='),
+    vrai(f.indexOf('row.v = saisi.v') < f.indexOf('row.parts ='),
       'après les montants dont elle se calcule');
+    /* Une seule verite stockee : le total se derive du detail. */
+    vrai(/delete row\.poches;/.test(f),
+      'et le total global part, pour qu’il ne puisse pas contredire le détail');
+  });
+
+  test('la ventilation se garde compte par compte', () => {
+    /* « Combien de cash sur le PEA en mars ? » ne se repond que si la ligne
+       garde le detail. Le total global s'en derive ; l'inverse est perdu. */
+    Fixture.poser();
+    const cpt = Store.state.comptes.find(c => typeCompte(c.type).titres);
+    Store.state.positions = [{ id: 'p_y', name: 'ETF', symbol: 'Y', qty: 6, price: 100,
+      buyPrice: 90, currency: 'EUR', fx: 1, account: cpt.id,
+      assetClass: 'actions', manual: false }];
+    cpt.cash = [{ montant: 400, affectation: 'investir' }];
+    Store.state.comptes = [cpt];
+    refreshAccounts();
+
+    const v = Object.fromEntries(ACCOUNTS.map(a => [a.id, round2(nowValue(a.id))]));
+    const parts = partsDuReleve(v);
+    pres(parts[cpt.id].cash, 400, 'le cash du compte est noté à part');
+    pres(parts[cpt.id].bourse, 600, 'et les titres avec les titres');
+    pres(cashDuReleve({ parts }, cpt.id), 400, 'et se relit compte par compte');
+    eq(cashDuReleve({ parts }, 'inconnu'), null, 'un compte sans détail ne ment pas');
+
+    /* Le global n'est plus qu'une somme du detail. */
+    const g = sommerParts(parts);
+    for (const poche of POCHES_EVOLUTION)
+      pres(g[poche], pochesDuReleve(v)[poche], `« ${poche} » se dérive du détail`);
+  });
+
+  test('un compte de l’ancien modèle ne fait pas tomber le calcul', () => {
+    /* Une entree orpheline n'a pas de compte derriere elle : `cashCompte` y
+       levait une exception des qu'un releve portait un montant dessus. Ce
+       chemin-la existe vraiment — des releves de 2025 en portent. */
+    Fixture.poser();
+    Store.state.accounts = [{ id: 'c_vieux', label: 'TR PEA (2025)', group: 'bourse' }];
+    refreshAccounts();
+    const parts = partsDuReleve({ c_vieux: 1500 });
+    pres(parts.c_vieux.bourse, 1500,
+      'il se range dans la poche de son type, sans exception levée');
+  });
+
+  test('rowGroups lit le détail, puis le global, puis le type de compte', () => {
+    /* Trois generations de releves coexistent, et la cascade doit les rendre
+       toutes les trois lisibles. */
+    Fixture.poser();
+    const detail = rowGroups({ v: {}, parts: { x: { cash: 10, bourse: 90 } } });
+    pres(detail.cash, 10, 'le détail d’abord');
+    pres(detail.bourse, 90, 'poche par poche');
+    const global = rowGroups({ v: {}, poches: { cash: 5, bourse: 15 } });
+    pres(global.cash, 5, 'puis le global, pour les relevés écrits entre les deux');
+    const vieux = rowGroups({ v: {} });
+    pres(Object.values(vieux).reduce((s, x) => s + x, 0), 0,
+      'et un relevé sans rien retombe sur la déduction, sans NaN');
   });
 });
 

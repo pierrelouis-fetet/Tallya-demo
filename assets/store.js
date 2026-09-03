@@ -2262,28 +2262,51 @@ const POCHE_EVOLUTION_DE_CLASSE = {
   bienValeur: 'biens',
 };
 
-function pochesDuReleve(v) {
-  const g = Object.fromEntries(POCHES_EVOLUTION.map(k => [k, 0]));
+function partsDuReleve(v) {
+  const parts = {};
   for (const a of ACCOUNTS) {
     const total = num(v[a.id]);
     if (!total) continue;
     const defaut = a.gAff || a.group;
-    const parts = {};
+    /* Un compte fantome n'a pas de compte derriere lui : c'est une entree de
+       l'ancien modele, qui ne porte ni lignes ni liquidites. Sans cette sortie,
+       `cashCompte(undefined)` levait une exception des qu'un releve portait un
+       montant sur l'un d'eux. */
+    if (!a.compte) { parts[a.id] = { [defaut]: round2(total) }; continue; }
+    const brut = {};
     const ajoute = (poche, montant) => {
-      if (montant) parts[poche] = (parts[poche] || 0) + montant;
+      if (montant) brut[poche] = (brut[poche] || 0) + montant;
     };
     ajoute('cash', cashCompte(a.compte));
     for (const l of lignesDe(a.compte))
       ajoute(POCHE_EVOLUTION_DE_CLASSE[l.classe] || defaut, num(l.valeur));
-    const somme = Object.values(parts).reduce((s, x) => s + x, 0);
-    if (somme > 0.005) for (const k of Object.keys(parts)) g[k] += total * parts[k] / somme;
-    else g[defaut] += total;
+    const somme = Object.values(brut).reduce((s, x) => s + x, 0);
+    const part = {};
+    if (somme > 0.005)
+      for (const k of Object.keys(brut)) part[k] = round2(total * brut[k] / somme);
+    else part[defaut] = round2(total);
+    parts[a.id] = part;
   }
+  return parts;
+}
+
+function sommerParts(parts) {
+  const g = Object.fromEntries(POCHES_EVOLUTION.map(k => [k, 0]));
+  for (const part of Object.values(parts || {}))
+    for (const [k, m] of Object.entries(part)) if (k in g) g[k] += num(m);
   for (const k of Object.keys(g)) g[k] = round2(g[k]);
   return g;
 }
 
+function pochesDuReleve(v) { return sommerParts(partsDuReleve(v)); }
+
+function cashDuReleve(row, id) {
+  const p = row && row.parts && row.parts[id];
+  return p && p.cash != null ? round2(num(p.cash)) : null;
+}
+
 function rowGroups(row) {
+  if (row.parts) return sommerParts(row.parts);
   const g = Object.fromEntries(POCHES_EVOLUTION.map(k => [k, 0]));
   if (row.poches) {
     for (const k of Object.keys(g)) g[k] += num(row.poches[k]);
