@@ -28046,3 +28046,161 @@ suite('Aucune référence ne survit à ce qu’elle désigne', () => {
     pres(round2(dettesTotal()), 180000, 'la dette reste comptée malgré tout');
   });
 });
+
+/* Trois questions vivaient eparpillees dans les vues — l'usage est-il rempli, y
+   a-t-il un loyer, que montrer sinon — et chacune repondait a sa facon.
+   `usageEffectifBien` les rejoint, et dit toujours d'ou vient sa reponse. */
+suite('L’usage d’un bien dit toujours d’où il vient', () => {
+
+  const bien = ({ usages = [], loyer = 0, type = 'immo' } = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type, statut: 'ouvert', libelle: 'Appartement',
+      cash: [], lignes: usages.map((u, i) => ({ id: 'l' + i, classe: 'immobilier',
+        libelle: 'Lot ' + i, valeur: 100000, ...(u ? { usage: u } : {}) })) }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = loyer
+      ? [{ label: 'Loyer', amount: loyer, period: 'mois', bienId: 'c_b' }] : [];
+    s.budget.fixedCharges = [];
+  });
+  const u = () => usageEffectifBien(compteById('c_b'));
+
+  test('un usage déclaré gagne toujours, même contre un loyer', () => {
+    /* Une chambre louee dans sa residence principale est un cas reel : l'ecran
+       n'a pas a requalifier le logement de son detenteur. */
+    for (const [dit, loyer, quoi] of [
+      ['principale', 900, 'principale avec un loyer'],
+      ['secondaire', 900, 'secondaire avec un loyer'],
+      ['locative', 0, 'locative sans loyer'],
+      ['principale', 0, 'principale sans loyer'],
+    ]) {
+      bien({ usages: [dit], loyer });
+      eq(u().usage, dit, quoi);
+      eq(u().source, 'declare', 'et la source est la déclaration');
+      eq(u().aConfirmer, false, 'rien à confirmer');
+    }
+  });
+
+  test('sans usage, un loyer fait pencher — mais ça reste une déduction', () => {
+    bien({ usages: [''], loyer: 900 });
+    eq(u().usage, 'locative', 'le comportement historique est préservé');
+    eq(u().source, 'loyer', 'mais la source dit que c’est déduit');
+    eq(u().aConfirmer, true, 'donc l’écran demandera confirmation');
+    /* Et rien n'est ecrit dans les donnees : le jour ou le detenteur confirme,
+       alors seulement. Sinon on perdrait a jamais l'information que c'etait une
+       deduction. */
+    eq(compteById('c_b').lignes[0].usage, undefined,
+      'aucune migration silencieuse : la donnée reste vide');
+  });
+
+  test('un loyer nul ne déduit rien', () => {
+    /* Une ligne de revenu a zero n'est pas un loyer : c'est un champ qu'on n'a
+       pas rempli. */
+    bien({ usages: [''], loyer: 0 });
+    eq(u().usage, '', 'aucun usage');
+    eq(u().source, 'inconnu', 'et rien n’est inventé');
+    eq(u().usage === 'principale', false,
+      'surtout pas « résidence principale » par défaut : le bien sortirait des '
+      + 'avoirs mobilisables sans que personne l’ait dit');
+  });
+
+  test('des lots aux usages différents ne se tranchent pas', () => {
+    /* Un appartement habite et un studio loue dans le meme compte : choisir l'un
+       des deux en silence serait inventer. */
+    bien({ usages: ['principale', 'locative'] });
+    eq(u().usage, '', 'le compte n’a pas d’usage');
+    eq(u().source, 'mixte', 'et le dit');
+    eq(u().mixte, true, 'nommément');
+    eq(u().aConfirmer, true, 'la fiche demandera de trancher');
+    /* Deux lots du MEME usage s'accordent, eux. */
+    bien({ usages: ['principale', 'principale'] });
+    eq(u().usage, 'principale', 'deux lots d’accord donnent l’usage');
+    eq(u().source, 'declare', 'sans rien demander');
+  });
+
+  test('un bien détenu en direct se reconnaît au modèle, pas à son libellé', () => {
+    /* La classe `immobilier` couvre aussi la SCPI, a qui l'on demandait donc si
+       elle etait une residence principale. Le drapeau `direct` du type tranche. */
+    bien({ type: 'immo' });
+    eq(estBienEnDirect(compteById('c_b')), true, 'un bien immobilier en direct');
+    bien({ type: 'scpi' });
+    eq(estBienEnDirect(compteById('c_b')), false, 'une SCPI, non');
+    bien({ type: 'bienValeur' });
+    eq(estBienEnDirect(compteById('c_b')), false,
+      'un bien de valeur non plus : il est détenu en direct mais ne s’habite pas');
+  });
+
+  test('la création réclame l’usage, et seulement au bien en direct', () => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("cle: 'usageBien'");
+    vrai(i > 0, 'le champ doit être trouvable');
+    const bloc = src.slice(src.lastIndexOf('...(', i), src.indexOf('}] : []),', i));
+    vrai(/estDetenuEnDirect\(t\)/.test(bloc),
+      'la condition passe par le drapeau du type, pas par la classe');
+    vrai(!/classeDuBien === 'immobilier'/.test(bloc),
+      'et plus par la classe, qui couvre la SCPI');
+    vrai(/requis: true/.test(bloc), 'le choix est obligatoire');
+    vrai(!/\['', trad\('à préciser'\)\]/.test(bloc), 'et il n’y a plus d’option vide');
+  });
+
+  test('changer d’usage ne touche à rien d’autre', () => {
+    /* L'invariant demande : l'usage ne fait que qualifier. */
+    bien({ usages: ['locative'], loyer: 900 });
+    Store.state.etabs[0].dettes = [{ id: 'd1', libelle: 'Prêt', montant: 100000,
+                                     mensualite: 500, taux: 1.5, bienId: 'c_b' }];
+    Store.state.budget.fixedCharges = [{ label: 'Taxe', amount: 1200, period: 'an',
+                                         bienId: 'c_b', shares: {} }];
+    refreshAccounts();
+    const avant = { brut: round2(patrimoine().brut), net: round2(patrimoine().net),
+      dettes: round2(dettesTotal()), fixe: round2(budgetFrame().fixed),
+      revenus: round2(budgetFrame().income), cash: round2(cashFlowBien(compteById('c_b')).cashFlow) };
+
+    for (const l of compteById('c_b').lignes) l.usage = 'principale';
+    refreshAccounts();
+
+    eq(u().usage, 'principale', 'l’usage a changé');
+    pres(round2(patrimoine().brut), avant.brut, 'le patrimoine brut ne bouge pas');
+    pres(round2(patrimoine().net), avant.net, 'le net non plus');
+    pres(round2(dettesTotal()), avant.dettes, 'ni les dettes');
+    pres(round2(budgetFrame().fixed), avant.fixe, 'ni les charges fixes');
+    pres(round2(budgetFrame().income), avant.revenus, 'ni les revenus');
+    pres(round2(cashFlowBien(compteById('c_b')).cashFlow), avant.cash,
+      'ni le cash-flow, tant que l’UX n’est pas refaite');
+    eq(Store.state.budget.income.length, 1, 'le loyer est toujours là');
+    eq(Store.state.etabs[0].dettes.length, 1, 'le crédit aussi');
+  });
+
+  test('un loyer sur un logement déclaré habité se signale, sans requalifier', () => {
+    bien({ usages: ['principale'], loyer: 900 });
+    const dits = healthChecks().filter(x => /résidence principale/.test(x.title || ''));
+    eq(dits.length, 1, 'l’incohérence se dit');
+    eq(dits[0].level, 'info', 'en information : ce peut être parfaitement volontaire');
+    eq(u().usage, 'principale', 'et le bien n’est pas requalifié pour autant');
+
+    bien({ usages: ['secondaire'], loyer: 900 });
+    eq(healthChecks().filter(x => /résidence secondaire/.test(x.title || '')).length, 1,
+      'même chose pour une résidence secondaire');
+
+    /* Un bien locatif avec un loyer n'a rien d'incoherent, et un legacy deduit
+       non plus : il n'a rien declare. */
+    bien({ usages: ['locative'], loyer: 900 });
+    eq(healthChecks().filter(x => /Un loyer est rattaché/.test(x.title || '')).length, 0,
+      'un locatif avec loyer ne déclenche rien');
+    bien({ usages: [''], loyer: 900 });
+    eq(healthChecks().filter(x => /Un loyer est rattaché/.test(x.title || '')).length, 0,
+      'un legacy déduit non plus : il n’a rien déclaré');
+  });
+
+  test('les suggestions de charges suivent la même source', () => {
+    /* `chargesProposees` lisait `usageBien`, qui delegue desormais au helper :
+       un legacy locatif recoit donc les suggestions du bailleur. */
+    bien({ usages: ['locative'] });
+    const locatives = chargesProposees(compteById('c_b'));
+    bien({ usages: [''], loyer: 900 });
+    eq(JSON.stringify(chargesProposees(compteById('c_b'))), JSON.stringify(locatives),
+      'un legacy déduit locatif reçoit les suggestions locatives');
+    bien({ usages: [''] });
+    const generiques = chargesProposees(compteById('c_b'));
+    vrai(generiques.length <= locatives.length,
+      'un usage inconnu ne reçoit que le générique');
+  });
+});

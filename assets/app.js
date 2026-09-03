@@ -4355,6 +4355,20 @@ function espaceBien(c, idx, t) {
 
   return `
   <div class="card">
+    ${(() => {
+      const u = usageEffectifBien(c);
+      if (!u.aConfirmer) return '';
+      return `
+    <p class="perimetre" style="margin:0 0 12px">
+      <b>${u.source === 'loyer' ? trad('Usage à confirmer') : trad('Usage à préciser')}</b>
+      <span class="sans-veuve">${u.source === 'loyer'
+        ? trad('Considéré comme mis en location car un loyer est rattaché à ce bien.')
+        : trad('Ses lots ne portent pas le même usage : la fiche ne tranche pas.')}</span>
+      <button type="button" class="btn xs" data-action="choisir-usage"
+              data-id="${esc(c.id)}" style="margin-left:8px">${
+        u.source === 'loyer' ? trad('Confirmer l’usage') : trad('Choisir l’usage')}</button>
+    </p>`;
+    })()}
     <div class="card-head"><h2>${trad('Le bien')}</h2>
       <span class="hint">${biens.length > 1
         ? `${biens.length} ${trad('lots')}` : esc(trad(t.label))}</span></div>
@@ -7078,8 +7092,16 @@ const ACTIONS = {
            saisit ce qu'on vient d'estimer. */
         { cle: 'estimeLe', label: trad('Estimée le'), type: 'date', valeur: todayISO(),
           aide: trad('la cloche te rappellera de la revoir dans un an') },
-        ...(classeDuBien === 'immobilier' ? [{ cle: 'usageBien', label: trad('Usage'),
-          type: 'liste', options: [['', trad('à préciser')], ...USAGES_BIEN],
+        /* Au bien DETENU EN DIRECT, et a lui seul : la classe `immobilier`
+           couvre aussi la SCPI, a qui l'on demandait donc si elle etait une
+           residence principale. Le drapeau `direct` du type tranche.
+
+           Et sans choix vide : pose plus tard dans une fiche, l'usage restait
+           vide chez presque tout le monde, et la fiche d'une residence
+           principale continuait de parler rendement. C'est le seul moment ou on
+           le sait a coup sur. */
+        ...(bien && estDetenuEnDirect(t) ? [{ cle: 'usageBien', label: trad('Usage'),
+          type: 'liste', requis: true, options: USAGES_BIEN,
           aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }] : []),
         ...(t.sansEtab ? [] : [
         { cle: 'credit', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
@@ -7276,6 +7298,25 @@ const ACTIONS = {
     const y = window.scrollY;
     refreshAccounts(); render();
     window.scrollTo(0, y);
+  },
+
+  async 'choisir-usage'(btn) {
+    const c = compteById(btn.dataset.id);
+    if (!c) return;
+    const u = usageEffectifBien(c);
+    const v = await askForm({
+      titre: trad('Usage du bien'),
+      sous: nomCompteV2(c),
+      ok: 'Enregistrer',
+      champs: [{ cle: 'usage', label: trad('Usage'), type: 'liste', requis: true,
+        options: USAGES_BIEN, valeur: u.usage || '',
+        aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }],
+    });
+    if (!v) return;
+    for (const l of (c.lignes || []))
+      if ((l.classe || 'immobilier') === 'immobilier') l.usage = v.usage;
+    Store.save(); render();
+    toast(`${nomCompteV2(c)} · ${trad(USAGE_BIEN_LABEL[v.usage])}`);
   },
 
   async 'supprimer-compte'(btn) {

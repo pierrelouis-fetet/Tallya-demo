@@ -563,12 +563,54 @@ const USAGES_BIEN = [
 const USAGE_BIEN_LABEL = Object.fromEntries(USAGES_BIEN);
 const usageLigne = l => USAGE_BIEN_LABEL[l?.usage] ? l.usage : '';
 
-function usageBien(compte) {
-  const dits = [...new Set((compte?.lignes || [])
+/* Un bien immobilier DETENU EN DIRECT : celui qui s'habite ou se loue.
+
+   La distinction est dans le modele, pas dans un libelle : `bienImmo` dit « ceci
+   pese comme de la pierre », `direct` dit « on le detient soi-meme ». Une SCPI
+   porte le premier drapeau et pas le second — demander a son detenteur s'il y a
+   sa residence principale n'aurait aucun sens. Un REIT, un fonds, un support
+   loge dans une enveloppe : meme raison. */
+function estBienEnDirect(compte) {
+  const t = typeCompte(compte?.type);
+  return !!t.bienImmo && estDetenuEnDirect(t);
+}
+
+/* L'usage d'un bien, et D'OU IL VIENT. La seule porte.
+
+   Trois questions vivaient eparpillees dans les vues — « l'usage est-il
+   rempli ? », « y a-t-il un loyer ? », « que montrer sinon ? » — et chacune
+   repondait a sa facon. Elles se rejoignent ici, et le resultat dit toujours sa
+   provenance : c'est elle qui decide si l'ecran doit demander confirmation.
+
+     source: 'declare'   quelqu'un l'a choisi. Il gagne toujours, meme contre un
+                         loyer qui dirait le contraire : une chambre louee dans
+                         sa residence principale est un cas reel, et l'ecran n'a
+                         pas a requalifier le logement de son detenteur.
+     source: 'loyer'     rien n'est declare, mais un loyer est rattache. On penche
+                         vers le locatif pour ne pas changer ce que les anciens
+                         etats affichaient — c'est une DEDUCTION, et
+                         `aConfirmer` le dit. Rien n'est ecrit dans les donnees :
+                         le jour ou le detenteur confirme, alors seulement.
+     source: 'mixte'     les lots ne s'accordent pas. Un appartement habite et un
+                         studio loue dans le meme compte : choisir l'un des deux
+                         en silence serait inventer. Le compte n'a pas d'usage.
+     source: 'inconnu'   rien de rien. On n'invente pas, et surtout pas
+                         « residence principale » : ce serait sortir le bien des
+                         avoirs mobilisables sans que personne l'ait dit. */
+function usageEffectifBien(compte) {
+  const rien = { usage: '', source: 'inconnu', aConfirmer: false, mixte: false };
+  if (!compte) return rien;
+  const dits = [...new Set((compte.lignes || [])
     .filter(l => (l.classe || 'immobilier') === 'immobilier')
     .map(usageLigne).filter(Boolean))];
-  return dits.length === 1 ? dits[0] : '';
+  if (dits.length > 1) return { usage: '', source: 'mixte', aConfirmer: true, mixte: true };
+  if (dits.length === 1)
+    return { usage: dits[0], source: 'declare', aConfirmer: false, mixte: false };
+  const loue = (B().income || []).some(r => r.bienId === compte.id && num(r.amount));
+  return loue ? { usage: 'locative', source: 'loyer', aConfirmer: true, mixte: false } : rien;
 }
+
+function usageBien(compte) { return usageEffectifBien(compte).usage; }
 
 function lignesDe(compte) {
   const marche = Store.state.positions
@@ -4683,7 +4725,12 @@ const CHARGES_BIEN = {
 };
 
 function chargesProposees(compte) {
-  const propres = CHARGES_BIEN[usageBien(compte)] || [];
+  /* `usage &&` : sans lui, un bien dont l'usage est inconnu lisait
+     `CHARGES_BIEN['']`, qui est justement le socle commun — les trois memes
+     charges etaient donc proposees deux fois dans la meme liste. Un usage
+     inconnu ne recoit que le generique, et une seule fois. */
+  const usage = usageBien(compte);
+  const propres = (usage && CHARGES_BIEN[usage]) || [];
   return [...CHARGES_BIEN[''], ...propres];
 }
 
@@ -5818,6 +5865,20 @@ function healthChecks() {
       trad('{v} de capital restant dû se soustraient encore de ton patrimoine net, '
         + 'alors que plus aucun compte n’est rattaché. Ouvre la fiche pour retirer le crédit.')
         .replace('{v}', fmtEUR0(du)),
+      'accounts');
+  }
+
+  for (const c of comptesBiens()) {
+    const u = usageEffectifBien(c);
+    if (u.source !== 'declare' || u.usage === 'locative') continue;
+    const loyers = (B().income || []).filter(r => r.bienId === c.id && num(r.amount));
+    if (!loyers.length) continue;
+    add('info', u.usage === 'principale'
+        ? trad('Un loyer est rattaché à ta résidence principale.')
+        : trad('Un loyer est rattaché à ta résidence secondaire.'),
+      `${guill(nomCompteV2(c))} · ${trad('Vérifie l’usage du bien ou le rattachement '
+        + 'du revenu. Ce peut être volontaire : une chambre louée, une location '
+        + 'saisonnière.')}`,
       'accounts');
   }
 
