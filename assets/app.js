@@ -4161,7 +4161,15 @@ function creditsDuCompte(c) {
   const idxEtab = ETABS().findIndex(e => e.id === c.etabId);
   const etab = ETABS()[idxEtab];
   if (!etab) return { idxEtab: -1, etab: null, dettes: [], total: 0 };
-  const dettes = (etab.dettes || []).map((d, i) => ({ d, i }));
+  /* Les credits de CE bien, pas ceux de l'etablissement : deux biens chez la
+     meme banque se partageaient chaque credit. Le rang, lui, reste celui du
+     tableau des dettes de l'etablissement — c'est par lui qu'on ecrit, et un
+     rang pris dans la liste filtree modifierait le credit du voisin.
+     Comparaison par identite plutot que par `id` : un credit d'un etat ancien
+     peut ne pas en porter. */
+  const miens = new Set(creditsDuBien(c));
+  const dettes = (etab.dettes || []).map((d, i) => ({ d, i }))
+    .filter(({ d }) => miens.has(d));
   return { idxEtab, etab, dettes, total: dettes.reduce((s, x) => s + num(x.d.montant), 0) };
 }
 
@@ -4197,7 +4205,7 @@ function reglagesExploitation(c, idx) {
     <div class="grid g-3" style="margin-top:12px">
       <div class="field"><label>${trad('Mois loués par an')}${aide(trad("Douze si le locataire ne part jamais. Un mois de vacance entre deux baux coûte 8 % du loyer annuel, et le rendement calculé sur douze mois pleins ne le voit pas."))}</label>
         <input type="number" step="1" min="0" max="12" class="champ-large"
-               data-path="comptes.${idx}.moisLoues" value="${num(c.moisLoues) || ''}"
+               data-path="comptes.${idx}.moisLoues" value="${estDeclare(c.moisLoues) ? num(c.moisLoues) : ''}"
                placeholder="12"></div>
       <div class="field"><label>${trad('Impôt sur ce loyer (%)')}${aide(trad("Ton taux à toi, celui que tu constates sur ta déclaration. L'application ne devine aucun régime fiscal : micro-foncier, réel, meublé, les règles changent et une estimation automatique finirait par mentir. Le taux s'applique au loyer moins les charges."))}</label>
         <input type="number" step="0.1" min="0" max="100" class="champ-large"
@@ -4380,7 +4388,7 @@ function espaceBien(c, idx, t) {
             </select></div>
           <div class="field"><label>${trad('Ta part (%)')}${aide(trad("À remplir seulement si tu détiens ce bien à plusieurs : indivision, SCI, achat en couple sur deux tableaux de bord. Ton patrimoine ne compte alors que ta part. La valeur ci-dessus reste celle du bien entier, c'est elle que tu compares aux annonces. Le crédit, lui, se saisit tel que tu le dois."))}</label>
             <input type="number" step="any" min="0" max="100" class="champ-large"
-                   data-path="comptes.${idx}.lignes.${i}.part" value="${num(l.part) || ''}"
+                   data-path="comptes.${idx}.lignes.${i}.part" value="${estDeclare(l.part) ? num(l.part) : ''}"
                    placeholder="100">
             ${num(l.part) && (num(l.part) < 0 || num(l.part) > 100) ? `<p class="hint" style="margin:4px 0 0">${
               trad('Une part va de 0 à 100. Au-delà, le bien compte en entier.')}</p>` : ''}</div>
@@ -7484,6 +7492,11 @@ const ACTIONS = {
           aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
           suggestions: valeursConnues('preteur') },
+        ...comptesDuPreteur(e.id).length > 1 ? [{ cle: 'bienId',
+          label: trad('Ce crédit finance'), type: 'liste',
+          options: [['', trad('à préciser')], ...comptesDuPreteur(e.id)],
+          aide: trad('sans lui, ce prêteur tenant plusieurs comptes, aucune fiche '
+                   + 'ne peut savoir lequel porte cette dette') }] : [],
         { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
           aide: trad('seulement si tu renseignes une mensualité : elle entrera dans ton ')
               + 'budget sous ce nom, et suivra le capital restant dû' },
@@ -7491,10 +7504,18 @@ const ACTIONS = {
     });
     if (!v) return;
     e.dettes = e.dettes || [];
+    const candidats = comptesDuPreteur(e.id);
+    const seul = candidats.length === 1 ? candidats[0][0] : null;
     e.dettes.push({ id: 'd' + Date.now(),
       libelle: v.libelle, montant: num(v.montant), initial: num(v.initial) || null,
-      mensualite: num(v.mensualite) || null, taux: num(v.taux) || null,
+      mensualite: num(v.mensualite) || null,
+      /* `estDeclare` et non `|| null` : un pret familial a 0 % perdait son taux
+         a l'enregistrement meme, et se retrouvait aussitot dans l'etat « taux
+         inconnu » — celui ou l'application refuse de projeter quoi que ce soit.
+         Le defaut n'etait pas seulement a la lecture. */
+      taux: estDeclare(v.taux) ? num(v.taux) : null,
       tauxAssurance: num(v.tauxAssurance) || null,
+      bienId: v.bienId || seul,
       preteur: v.preteur || '', note: '', verifieLe: todayISO() });
     Store.save(); render();
     const posee = v.charge && creerChargeDuCredit(e.dettes[e.dettes.length - 1]);
@@ -7547,6 +7568,11 @@ const ACTIONS = {
           valeur: num(d.taux) || '', aide: trad('facultatif, noté pour mémoire') },
         { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre',
           valeur: num(d.tauxAssurance) || '', aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
+        ...comptesDuPreteur(e.id).length > 1 ? [{ cle: 'bienId',
+          label: trad('Ce crédit finance'), type: 'liste', valeur: d.bienId || '',
+          options: [['', trad('à préciser')], ...comptesDuPreteur(e.id)],
+          aide: trad('sans lui, ce prêteur tenant plusieurs comptes, aucune fiche '
+                   + 'ne peut savoir lequel porte cette dette') }] : [],
         { cle: 'preteur', label: 'Prêteur', type: 'texte', valeur: d.preteur || '',
           exemple: 'ex. Crédit Agricole', suggestions: valeursConnues('preteur') },
         ...(lien ? [] : [{ cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'),
@@ -7573,8 +7599,11 @@ const ACTIONS = {
     d.verifieLe = todayISO();
     d.initial = num(v.initial) || null;
     if (v.mensualite !== undefined) d.mensualite = num(v.mensualite) || null;
-    d.taux = num(v.taux) || null;
+    /* Un taux declare a zero reste zero : `|| null` le renvoyait dans l'etat
+       « taux inconnu » a chaque enregistrement. */
+    d.taux = estDeclare(v.taux) ? num(v.taux) : null;
     d.tauxAssurance = num(v.tauxAssurance) || null;
+    if (v.bienId !== undefined) d.bienId = v.bienId || null;
     d.preteur = v.preteur || '';
     Store.save(); render();
     const baisse = avant - d.montant;

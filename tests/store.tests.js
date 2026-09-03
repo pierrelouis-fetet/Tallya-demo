@@ -15582,10 +15582,19 @@ suite('Un bien détenu à plusieurs ne compte que pour sa part', () => {
     pres(lignesDe(compteById('c_immo'))[0].valeur, 60000, 'seconde lecture, identique');
   });
 
-  test('une part absente, nulle ou aberrante vaut le bien entier', () => {
+  test('une part absente ou aberrante vaut le bien entier ; zéro vaut zéro', () => {
+    /* Le zero a longtemps valu le tout, au motif qu'il ne voulait rien dire.
+       Mais le champ accepte zero, donc quelqu'un peut le saisir — et lire alors
+       « 100 % » est exactement le contraire de ce qu'il a ecrit. Un bien cede,
+       garde en memoire pour son historique, se declare a zero.
+
+       Hors bornes, en revanche, la lecture ne change pas : une part negative ou
+       superieure a cent n'est pas une declaration, c'est une faute de frappe. */
     Fixture.poser();
     pres(partDetention({}), 1, 'absente');
-    pres(partDetention({ part: 0 }), 1, 'zéro ne veut pas dire « je ne possède rien »');
+    pres(partDetention({ part: '' }), 1, 'vide aussi');
+    pres(partDetention({ part: 0 }), 0, 'zéro veut dire zéro');
+    pres(partDetention({ part: 50 }), 0.5, 'la moitié');
     pres(partDetention({ part: 100 }), 1, 'cent pour cent');
     pres(partDetention({ part: 140 }), 1, 'au-delà de cent, la saisie est fausse : le tout, plutôt qu’un total gonflé');
     pres(partDetention({ part: -20 }), 1, 'négative aussi');
@@ -27612,5 +27621,250 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
     vrai(f.indexOf('Store.addBackup(') < f.indexOf('retirerComptesClos()'),
       'avant le retrait, pas après');
     vrai(/danger: true/.test(f), 'et le dialogue s’annonce comme destructeur');
+  });
+});
+
+/* Un champ vide dit « je ne sais pas », un zero dit « zero ». Quatre endroits
+   les confondaient, parce que `num(x) || defaut` traite zero comme absent. */
+suite('Un zéro saisi n’est pas un champ vide', () => {
+
+  const credit = (extra = {}) => ({ id: 'd_test', libelle: 'Prêt', montant: 100000,
+    initial: 120000, mensualite: 600, ...extra });
+
+  test('les mois loués : vide vaut douze, zéro vaut zéro', () => {
+    /* `num(compte.moisLoues) || 12` rendait douze sur un zero saisi : un bien
+       vide toute l'annee se voyait prêter douze mois de loyer, et son rendement
+       affichait le plein. Le pire sens de l'erreur — il flatte. */
+    for (const [saisi, attendu, quoi] of [
+      [undefined, 12, 'absent'], ['', 12, 'vide'], [null, 12, 'nul'],
+      [0, 0, 'zéro reste zéro'], ['0', 0, 'zéro en texte aussi'],
+      [1, 1, 'un mois'], [6, 6, 'six mois'], [11, 11, 'onze mois'],
+      [12, 12, 'douze mois'],
+      [-1, 0, 'négatif : borné à zéro'], [13, 12, 'au-delà de douze : borné'],
+      [6.4, 6, 'arrondi au mois'],
+    ]) eq(moisLouesDeclares({ moisLoues: saisi }), attendu, quoi);
+  });
+
+  test('un bien vide toute l’année ne rapporte rien', () => {
+    /* Le defaut, sur des nombres : le rendement se lisait comme si le bien
+       etait loue, alors qu'il ne l'a pas ete un seul mois. */
+    Fixture.poser();
+    const c = Store.state.comptes.find(x => typeCompte(x.type).bienImmo);
+    vrai(!!c, 'le fixture doit porter un bien');
+    Store.state.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois',
+                                   bienId: c.id }];
+    c.moisLoues = 0;
+    const cf = cashFlowBien(c);
+    pres(cf.moisLoues, 0, 'zéro mois loué');
+    pres(cf.loyers, 0, 'donc aucun loyer retenu');
+    pres(cf.loyersPleins, 900, 'le loyer plein reste dit, pour la lecture');
+    pres(cf.vacanceEuros, 900, 'et la vacance porte l’écart en entier');
+    pres(cf.rendementBrut, 0, 'le rendement brut est nul, pas plein');
+  });
+
+  test('la part détenue : vide vaut le tout, zéro vaut zéro', () => {
+    for (const [saisi, attendu, quoi] of [
+      [undefined, 1, 'absente'], ['', 1, 'vide'], [null, 1, 'nulle'],
+      [0, 0, 'zéro veut dire zéro'], ['0', 0, 'zéro en texte aussi'],
+      [50, 0.5, 'la moitié'], [100, 1, 'le tout'], [33.5, 0.335, 'décimale'],
+      [-20, 1, 'négative : une faute de frappe, pas une déclaration'],
+      [140, 1, 'au-delà de cent : le bien entier, jamais un total gonflé'],
+    ]) pres(partDetention({ part: saisi }), attendu, quoi);
+  });
+
+  test('le taux : absent, zéro et positif sont trois états', () => {
+    eq(tauxCreditDeclare({}), null, 'absent');
+    eq(tauxCreditDeclare({ taux: '' }), null, 'vide');
+    eq(tauxCreditDeclare({ taux: null }), null, 'nul');
+    eq(tauxCreditDeclare({ taux: 0 }), 0, 'zéro est un taux, pas une absence');
+    eq(tauxCreditDeclare({ taux: '0' }), 0, 'zéro en texte aussi');
+    eq(tauxCreditDeclare({ taux: 1.45 }), 1.45, 'et un taux se lit tel quel');
+  });
+
+  test('un prêt familial à 0 % s’amortit tout droit', () => {
+    /* `num(d.taux) &&` ecartait ce pret de deux lignes de la carte des credits :
+       il perdait son taux et sa part de capital, alors que sa mensualite
+       rembourse du capital — toute sa mensualite, meme. */
+    Fixture.poser();
+    const d = credit({ taux: 0, mensualite: 500, montant: 10000, initial: 12000 });
+    const e = echeancierCredit(d);
+    vrai(e.amortissable, 'il s’amortit');
+    pres(e.interetsDuMois, 0, 'aucun intérêt, et c’est un zéro vrai');
+    pres(e.capitalDuMois, 500, 'toute la mensualité rembourse du capital');
+    eq(e.mois, 20, 'dix mille euros à cinq cents par mois font vingt mois');
+    pres(e.interets, 0, 'et zéro intérêt sur toute la durée');
+  });
+
+  test('sans taux déclaré, ni l’échéancier ni la projection n’inventent', () => {
+    /* Les deux moteurs se contredisaient : l'echeancier se taisait, la
+       projection traitait l'absence comme un zero et faisait donc descendre la
+       dette en ligne droite, plus vite que la realite. */
+    Fixture.poser();
+    const d = credit({ mensualite: 600, verifieLe: '2026-01-01' });
+    const e = echeancierCredit(d);
+    eq(e.interetsDuMois, null, 'aucune part d’intérêts inventée');
+    eq(e.capitalDuMois, null, 'aucune part de capital inventée');
+    eq(e.amortissable, false, 'et aucune date de fin');
+    eq(finCredit(d), null, 'finCredit se tait');
+    eq(resteAPayer(d), null, 'resteAPayer aussi');
+
+    const p = projectionCredit(d);
+    eq(p.projete, null, 'la projection se tait au lieu d’amortir tout droit');
+    vrai(p.moisDepuis > 0, 'mais elle compte les mois : c’est le rappel qui les lit');
+  });
+
+  test('avec un taux déclaré à zéro, la projection projette', () => {
+    /* Le pendant du controle precedent : zero est un taux, et un pret a zero se
+       projette parfaitement — c'est meme le cas le plus simple. */
+    Fixture.poser();
+    const d = credit({ taux: 0, mensualite: 500, montant: 10000,
+                       verifieLe: '2026-01-01' });
+    const p = projectionCredit(d);
+    vrai(p.projete != null, 'elle rend un montant');
+    pres(p.projete, Math.max(0, 10000 - 500 * p.moisDepuis),
+      'et il descend d’une mensualité par mois, sans intérêts');
+  });
+
+  test('les deux moteurs répondent la même chose sur le même crédit', () => {
+    /* La regle qui gouverne tout ce chantier : jamais deux moteurs pour une
+       meme donnee. Sur chacun de ces trois etats du taux, l'echeancier et la
+       projection doivent etre d'accord sur la question « sait-on amortir ? ». */
+    Fixture.poser();
+    for (const [taux, quoi] of [[undefined, 'taux absent'], [0, 'taux à zéro'],
+                                [1.45, 'taux positif']]) {
+      const d = credit({ taux, mensualite: 600, verifieLe: '2026-01-01' });
+      const sait = echeancierCredit(d).capitalDuMois != null;
+      const projette = projectionCredit(d).projete != null;
+      eq(projette, sait, `${quoi} : les deux moteurs s’accordent`);
+    }
+  });
+});
+
+/* Une dette vit sur l'etablissement qui l'a consentie. La fiche d'un bien lisait
+   donc toutes les dettes de sa banque, et deux biens chez la meme banque se
+   partageaient chaque credit. */
+suite('Un crédit sait quel bien il finance', () => {
+
+  const PRET = (extra = {}) => ({ id: 'd_appt', libelle: 'Prêt appartement',
+    montant: 180000, initial: 210000, taux: 1.45, mensualite: 894.44,
+    tauxAssurance: 0.34, ...extra });
+
+  /* Un etablissement, deux biens : l'appartement finance, le parking non. */
+  const deuxBiens = (credits) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: credits }];
+    s.comptes = [
+      { id: 'c_appt', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Appartement', cash: [], lignes: [
+          { id: 'l1', classe: 'immobilier', libelle: 'Appartement', valeur: 300000 }] },
+      { id: 'c_park', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Parking', cash: [], lignes: [
+          { id: 'l2', classe: 'immobilier', libelle: 'Parking', valeur: 20000 }] },
+    ];
+    s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = [];
+  });
+
+  test('le parking n’hérite pas du crédit de l’appartement', () => {
+    /* Le defaut, sur des nombres : sans lien, la fiche du parking annonçait
+       180 000 EUR de dette, 894 EUR de mensualite et un cash-flow a -894 —
+       pour un bien qui n'a jamais rien emprunte. */
+    deuxBiens([PRET({ bienId: 'c_appt' })]);
+    const appt = cashFlowBien(compteById('c_appt'));
+    const park = cashFlowBien(compteById('c_park'));
+    pres(appt.reste, 180000, 'l’appartement porte sa dette');
+    pres(appt.mensualite, 894.44, 'et sa mensualité');
+    pres(park.reste, 0, 'le parking n’en porte aucune');
+    pres(park.mensualite, 0, 'ni mensualité');
+    pres(park.cashFlow, 0, 'et son cash-flow est nul, pas négatif');
+    eq(park.capitalMois, null, 'il ne constitue aucun capital');
+  });
+
+  test('sans lien et avec deux biens, rien ne se rattache au hasard', () => {
+    /* Mieux vaut une fiche qui ne montre pas son credit qu'une fiche qui montre
+       celui du voisin : le premier manque se voit, le second se croit. */
+    deuxBiens([PRET()]);
+    pres(cashFlowBien(compteById('c_appt')).reste, 0, 'l’appartement attend');
+    pres(cashFlowBien(compteById('c_park')).reste, 0, 'le parking aussi');
+    const attente = creditsARattacher();
+    eq(attente.length, 1, 'et le crédit est signalé comme à rattacher');
+    eq(attente[0].id, 'd_appt', 'nommément');
+    eq(attente[0].comptes.length, 2, 'avec les candidats à choisir');
+  });
+
+  test('un lien qui pointe ailleurs ne déborde jamais', () => {
+    deuxBiens([PRET({ bienId: 'c_appt' })]);
+    eq(creditsDuBien(compteById('c_park')).length, 0,
+      'le parking ne récupère pas un crédit explicitement rattaché ailleurs');
+    /* Et un lien devenu obsolete ne retombe pas dans le repli. */
+    deuxBiens([PRET({ bienId: 'c_disparu' })]);
+    eq(creditsDuBien(compteById('c_appt')).length, 0, 'ni un lien périmé');
+    eq(creditsDuBien(compteById('c_park')).length, 0, 'd’aucun côté');
+  });
+
+  test('un seul compte chez le prêteur : ses crédits le financent', () => {
+    /* Le repli des donnees d'avant, et il n'est pas une supposition : c'est la
+       seule lecture possible. Plusieurs credits sur un meme bien sont normaux —
+       un pret principal et un pret travaux. */
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [
+        PRET(), { id: 'd_trav', libelle: 'Prêt travaux', montant: 20000,
+                  initial: 25000, taux: 2, mensualite: 300 }] }];
+      s.comptes = [{ id: 'c_appt', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Appartement', cash: [], lignes: [
+          { id: 'l1', classe: 'immobilier', libelle: 'Appartement', valeur: 300000 }] }];
+      s.positions = []; s.monthly = [];
+      s.budget.income = []; s.budget.fixedCharges = [];
+    });
+    const cf = cashFlowBien(compteById('c_appt'));
+    pres(cf.reste, 200000, 'les deux crédits comptent');
+    pres(cf.mensualite, 1194.44, 'et les deux mensualités');
+    eq(creditsARattacher().length, 0, 'rien n’est en attente : il n’y a pas d’ambiguïté');
+  });
+
+  test('la migration pose le lien quand il ne fait aucun doute, et jamais sinon', () => {
+    /* Elle ne change aucun chiffre dans le cas simple — c'est deja ce que le
+       repli rend — mais elle fige le lien avant qu'un second bien n'arrive et
+       ne rende la lecture ambigue. */
+    deuxBiens([PRET()]);
+    Store.migrate();
+    eq(Store.state.etabs[0].dettes[0].bienId, undefined,
+      'deux biens : le lien reste vide, on ne devine pas');
+
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [PRET()] }];
+      s.comptes = [{ id: 'c_appt', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Appartement', cash: [], lignes: [] }];
+      s.positions = []; s.monthly = [];
+    });
+    Store.migrate();
+    eq(Store.state.etabs[0].dettes[0].bienId, 'c_appt', 'un seul compte : le lien se pose');
+    /* Idempotente : la rejouer ne change rien. */
+    Store.migrate();
+    eq(Store.state.etabs[0].dettes[0].bienId, 'c_appt', 'et un second passage ne bouge pas');
+  });
+
+  test('la fiche ouvre le bon crédit, malgré le filtre', () => {
+    /* Le rang d'un credit sert a l'ecrire. Filtrer la liste sans retrouver le
+       rang dans les dettes de l'ETABLISSEMENT ferait modifier le credit du
+       voisin — le defaut classique d'un index pris dans une liste derivee. */
+    deuxBiens([{ id: 'd_park', libelle: 'Prêt parking', montant: 5000,
+                 mensualite: 80, bienId: 'c_park' }, PRET({ bienId: 'c_appt' })]);
+    const cf = cashFlowBien(compteById('c_appt'));
+    eq(cf.creditsListe.length, 1, 'un seul crédit sur cette fiche');
+    eq(cf.creditsListe[0].id, 'd_appt', 'le bon');
+    eq(cf.creditsListe[0].index, 1,
+      'et son rang est celui des dettes de l’établissement, pas de la liste filtrée');
+  });
+
+  test('le patrimoine net ne bouge pas d’un euro', () => {
+    /* La regle qui gouverne tout : le rattachement change QUI affiche la dette,
+       jamais combien elle vaut. `dettesTotal()` somme les etablissements et ne
+       connait pas les biens. */
+    deuxBiens([PRET()]);
+    const avant = round2(patrimoine().net);
+    Store.state.etabs[0].dettes[0].bienId = 'c_appt';
+    refreshAccounts();
+    pres(round2(patrimoine().net), avant, 'rattacher un crédit ne déplace aucun total');
+    pres(round2(dettesTotal()), 180000, 'et la dette reste entière');
   });
 });

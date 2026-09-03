@@ -216,6 +216,8 @@ const I18N = {
     "Aucun rendement ne lui est appliqué : la projection le porte tel quel": "No return is applied to it: the projection carries it as is",
     "Aujourd’hui": "Today",
     "Base de calcul du rééquilibrage": "Rebalancing basis",
+    "Ce crédit finance": "This loan finances",
+    "sans lui, ce prêteur tenant plusieurs comptes, aucune fiche ne peut savoir lequel porte cette dette": "without it, this lender holding several accounts, no sheet can know which one carries this debt",
     "Capital emprunté au départ (€)": "Amount originally borrowed (€)",
     "Capital restant dû (€)": "Outstanding balance (€)",
     "Ce que la projection porte à plat": "What the projection carries flat",

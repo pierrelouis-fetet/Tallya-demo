@@ -522,10 +522,38 @@ const CLASSE_DE_POCHE = {
 };
 const classeDePoche = poche => CLASSE_DE_POCHE[poche] || null;
 
+/* Un nombre DECLARE, et le zero en est un.
+
+   C'est la convention qui manquait, et quatre endroits la violaient chacun a sa
+   facon : `num(x) || defaut` transforme un zero saisi en valeur par defaut,
+   parce que zero est faux en JavaScript. Un champ vide dit l'ignorance, un zero
+   dit zero. Les confondre fait afficher un bien a
+   100 % quand on a saisi 0 %, et douze mois loues quand on en a saisi zero.
+
+   `v !== ''` d'abord : `Number('')` vaut zero et passerait pour un nombre. */
+const estDeclare = v => v !== undefined && v !== null && v !== ''
+  && Number.isFinite(Number(v));
+
 const partDetention = l => {
-  const p = num(l?.part);
-  return (p > 0 && p <= 100) ? p / 100 : 1;
+  if (!estDeclare(l?.part)) return 1;
+  const p = num(l.part);
+  if (p < 0 || p > 100) return 1;
+  return p / 100;
 };
+
+const moisLouesDeclares = compte => estDeclare(compte?.moisLoues)
+  ? Math.min(12, Math.max(0, Math.round(num(compte.moisLoues)))) : 12;
+
+/* Le taux d'un credit, en pourcentage annuel, ou `null` s'il n'est pas declare.
+
+   Un taux ABSENT n'est pas un taux nul : sans lui on ne sait pas departager le
+   capital des interets. Un taux DECLARE a zero, lui, est un vrai taux — le pret
+   familial, le differe sans interets — et s'amortit tout droit.
+
+   L'echeancier appliquait deja cette distinction ; la projection du capital
+   restant du, non. Les deux moteurs repondaient donc differemment sur le meme
+   credit. Une seule porte desormais. */
+const tauxCreditDeclare = d => estDeclare(d?.taux) ? num(d.taux) : null;
 
 const USAGES_BIEN = [
   ['locative',   'Mis en location'],
@@ -844,7 +872,8 @@ function creerChargeDuCredit(d) {
 function projectionCredit(d) {
   const reste = num(d.montant);
   const mens = mensualiteCredit(d);
-  const taux = num(d.taux) / 100 / 12;
+  const tauxAn = tauxCreditDeclare(d);
+  const taux = (tauxAn || 0) / 100 / 12;
   const depuis = d.verifieLe || null;
   const rien = { moisDepuis: null, projete: null, ecart: null, sens: null };
   if (!reste || !depuis) return rien;
@@ -852,7 +881,7 @@ function projectionCredit(d) {
   let mois = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
   if (b.getDate() < a.getDate()) mois--;               // le mois n'est pas echu
   if (!(mois > 0)) return { ...rien, moisDepuis: Math.max(0, mois) };
-  if (!mens && !taux) return { ...rien, moisDepuis: mois };
+  if (tauxAn === null || (!mens && !taux)) return { ...rien, moisDepuis: mois };
   /* Un seul calcul pour les deux sens.
      `capital + interets - mensualite` : avec une mensualite plus grosse que les
      interets, la dette descend, c'est un pret qui s'amortit. Sans mensualite, il
@@ -914,8 +943,9 @@ function echeancierCredit(d) {
      le differe sans interets. L'ancienne formule fermee rendait `null` des que le
      taux valait zero -- un logarithme n'aime pas ce cas -- et privait de reponse
      le pret le plus simple. La boucle le traverse sans y penser. */
-  const declare = d.taux !== undefined && d.taux !== null && d.taux !== '';
-  const taux = num(d.taux) / 100 / 12;
+  const tauxAn = tauxCreditDeclare(d);
+  const declare = tauxAn !== null;
+  const taux = (tauxAn || 0) / 100 / 12;
   const interetsDuMois = declare ? reste * taux : null;
   const dispo = mens - assurance;
   const mois0 = {
@@ -999,7 +1029,10 @@ function creditsEnCours() {
         etabId: e.id, etabNom: e.nom, id: d.id, index,
         libelle: d.libelle || 'Crédit', preteur: d.preteur || '',
         reste, initial: initial || null,
-        mensualite: mensualiteCredit(d) || null, taux: num(d.taux) || null,
+        /* `tauxCreditDeclare` et non `num(d.taux) || null` : un pret familial a
+           0 % perdait son taux et s'affichait comme un pret dont on ignore le
+           taux — deux etats tres differents a l'ecran. */
+        mensualite: mensualiteCredit(d) || null, taux: tauxCreditDeclare(d),
         charge: (() => {
           const lien = chargeDuCredit(d.id);
           return lien ? { index: lien.index, label: lien.charge.label || 'Charge fixe',
@@ -1007,9 +1040,12 @@ function creditsEnCours() {
         })(),
         rembourse: initial > 0 ? Math.max(0, initial - reste) : null,
         part: initial > 0 ? Math.min(100, Math.max(0, (initial - reste) / initial * 100)) : null,
-        interets: (num(d.taux) && reste) ? echeancierCredit(d)?.interetsDuMois ?? null : null,
-        capital: (num(d.taux) && mensualiteCredit(d))
-          ? echeancierCredit(d)?.capitalDuMois ?? null : null,
+        /* L'echeancier porte deja toute la regle : il rend `null` sans taux
+           declare, et des nombres justes avec — zero pour cent compris. Le
+           filtre `num(d.taux) &&` qui gardait ces deux lignes ecartait donc le
+           pret a 0 %, dont la mensualite rembourse pourtant du capital. */
+        interets: echeancierCredit(d)?.interetsDuMois ?? null,
+        capital: echeancierCredit(d)?.capitalDuMois ?? null,
         verifieLe: d.verifieLe || null,
         ...projectionCredit(d),
         fin: finCredit(d),
@@ -1677,6 +1713,23 @@ const Store = {
     s.etabs = (s.etabs || []).filter(e =>
       (s.comptes || []).some(c => c.etabId === e.id)
       || (e.dettes || []).some(d => num(d.montant)));
+
+    /* Le lien credit -> bien, pour les etats d'avant.
+
+       Un etablissement qui ne tient qu'UN bien ne laisse aucun doute : tous ses
+       credits le financent, et poser le lien ne change aucun chiffre — c'est
+       deja ce que le repli de lecture rend. Des qu'il en tient deux, on ne
+       devine pas : le lien reste vide, `creditsARattacher()` les nomme, et
+       l'ecran demande. Rattacher au hasard mettrait 180 000 EUR de dette sur un
+       parking, et personne ne verrait d'ou vient le chiffre.
+
+       Idempotente : un credit deja lie n'est pas relu, et un second passage sur
+       un etablissement ambigu ne pose toujours rien. */
+    for (const e of (s.etabs || [])) {
+      const miens = (s.comptes || []).filter(c => c.etabId === e.id);
+      if (miens.length !== 1) continue;
+      for (const d of (e.dettes || [])) if (!d.bienId) d.bienId = miens[0].id;
+    }
     refreshAccounts();
   },
 
@@ -4342,6 +4395,68 @@ function encoursAProbleme() {
    fiscale : micro-foncier, reel, meuble, les regimes changent et le droit avec,
    et une application qui les devinerait mentirait un jour sans le savoir. Elle
    applique le taux que son detenteur annonce, sur une base qu'elle nomme. */
+/* Les credits qui financent un bien donne.
+
+   Une dette vit sur l'ETABLISSEMENT qui l'a consentie, et c'est juste : c'est la
+   banque qui prete, pas le mur. Mais la fiche d'un bien lisait TOUTES les dettes
+   de son etablissement, donc deux biens chez la meme banque se partageaient
+   chaque credit : un parking de 20 000 EUR heritait des 180 000 EUR du credit de
+   l'appartement, de sa mensualite et de son capital rembourse. Trois chiffres
+   faux sur une fiche qui n'a jamais rien emprunte, et un cash-flow qui plonge
+   sans raison.
+
+   `d.bienId` porte donc le lien. Le motif existait deja dans cette base — une
+   charge fixe porte `bienId`, un loyer aussi — il manquait au credit.
+
+   Le repli, pour les etats d'avant la migration : un credit sans lien se
+   rattache au bien de l'etablissement quand il n'y en a QU'UN. Ce n'est pas une
+   supposition, c'est la seule lecture possible. Des qu'il y en a deux,
+   l'ambiguite est reelle et rien ne se rattache — mieux vaut une fiche qui ne
+   montre pas son credit qu'une fiche qui montre celui du voisin.
+
+   Un lien qui pointe ailleurs n'entre jamais dans le repli : il est explicite,
+   il a donc deja repondu. */
+function creditsDuBien(compte) {
+  if (!compte) return [];
+  const dettes = etabById(compte.etabId)?.dettes || [];
+  return dettes.filter(d => d.bienId ? d.bienId === compte.id
+                                     : etabSansAmbiguite(compte.etabId, compte.id));
+}
+
+/* L'etablissement ne tient-il qu'un seul compte, et est-ce celui-la ?
+
+   La question ne passe PAS par le type du compte. `typeCompte(id).bienImmo`
+   semblait le bon filtre, mais un identifiant de type inconnu retombe sur un
+   defaut generique qui ne porte pas le drapeau — et il suffit d'un type ecrit
+   autrement pour qu'un bien cesse d'en etre un. Le nombre de comptes, lui, ne
+   depend d'aucune table.
+
+   Un seul compte chez ce preteur : ses credits ne peuvent financer que lui,
+   quel que soit son type. Deux : on ne devine pas. */
+function etabSansAmbiguite(etabId, compteId) {
+  const miens = (Store.state.comptes || []).filter(c => c.etabId === etabId);
+  return miens.length === 1 && miens[0].id === compteId;
+}
+
+function comptesDuPreteur(etabId) {
+  return (Store.state.comptes || [])
+    .filter(c => c.etabId === etabId)
+    .map(c => [c.id, nomCompteV2(c)]);
+}
+
+function creditsARattacher() {
+  const attente = [];
+  for (const e of ETABS()) {
+    const miens = (Store.state.comptes || []).filter(c => c.etabId === e.id);
+    if (miens.length < 2) continue;
+    for (const d of (e.dettes || []))
+      if (!d.bienId) attente.push({ etabId: e.id, etabNom: e.nom, id: d.id,
+                                    libelle: d.libelle || 'Crédit',
+                                    montant: num(d.montant), comptes: miens });
+  }
+  return attente;
+}
+
 function cashFlowBien(compte) {
   if (!compte) return null;
   /* `revenuMensuel` et non le montant brut : la source porte sa periode, et un
@@ -4354,7 +4469,7 @@ function cashFlowBien(compte) {
     .map(({ r, i }) => ({ i, label: r.label || trad('Loyer'), mensuel: revenuMensuel(r),
                           periode: chargePeriode(r), montant: num(r.amount), estime: !!r.estime }));
   const loyersPleins = sourcesLoyer.reduce((s, x) => s + x.mensuel, 0);
-  const credits = (etabById(compte.etabId)?.dettes || []);
+  const credits = creditsDuBien(compte);
   const rembourses = new Set(credits.map(d => d.id));
   const postesCharge = B().fixedCharges
     .map((c, i) => ({ c, i }))
@@ -4363,7 +4478,9 @@ function cashFlowBien(compte) {
                           periode: chargePeriode(c), montant: num(c.amount) }));
   const charges = postesCharge.reduce((s, x) => s + x.mensuel, 0);
   const idxEtab = ETABS().findIndex(e => e.id === compte.etabId);
-  const creditsListe = credits.map((d, index) => {
+  const rangs = etabById(compte.etabId)?.dettes || [];
+  const creditsListe = credits.map((d) => {
+    const index = rangs.indexOf(d);
     const lien = chargeDuCredit(d.id);
     return { etabId: compte.etabId, idxEtab, index, id: d.id,
              libelle: d.libelle || trad('Crédit'), mensualite: mensualiteCredit(d),
@@ -4386,7 +4503,7 @@ function cashFlowBien(compte) {
   const base = achat || valeur;
   const surAchat = achat > 0;
 
-  const moisLoues = Math.min(12, Math.max(0, num(compte.moisLoues) || 12));
+  const moisLoues = moisLouesDeclares(compte);
   const loyers = loyersPleins * moisLoues / 12;
   const vacance = moisLoues < 12;
 
