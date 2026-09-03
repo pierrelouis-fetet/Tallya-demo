@@ -876,6 +876,19 @@ table .field :is(input, select) { max-width: none; }
 .grid > .field :is(input, select, textarea) {
   max-width: none; width: 100%; align-self: stretch;
 }
+/* Et le controle se pose au BAS de sa cellule.
+
+   Deux champs cote a cote, deux libelles de hauteur differente : « Valeur
+   estimee aujourd'hui (€) » passe a la ligne quand « Prix d'acquisition (€) »
+   tient sur une, et les deux saisies se retrouvaient decalees de la hauteur
+   d'une ligne. C'est la meme faute que la paire quantite / prix de revient,
+   corrigee la sur le conteneur ; ici les cellules sont deja etirees a la hauteur
+   de la rangee, donc c'est a l'interieur du champ que l'espace doit se placer.
+
+   `margin-bottom: auto` sur le LIBELLE et non `margin-top: auto` sur la saisie :
+   l'espace se pose ainsi entre les deux, le libelle reste en haut, et ce qui
+   suivrait la saisie garde sa place au lieu d'etre pousse avec elle. */
+.grid > .field > label { margin-bottom: auto; }
 
 .card {
   background:
@@ -1144,8 +1157,8 @@ button.pf-total, button.pf-mesure { cursor: pointer; }
 }
 .pf-total > span { font-size: 12px; color: var(--text-secondary); }
 .pf-mesures {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 24px; margin-left: auto; flex: 1 1 400px; max-width: 560px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 28px; margin-left: auto; flex: 1 1 300px; max-width: 420px;
 }
 .pf-lab {
   font-size: 10.5px; font-weight: 650; letter-spacing: .07em;

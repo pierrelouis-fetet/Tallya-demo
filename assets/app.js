@@ -849,10 +849,6 @@ function viewOverview() {
           Store.state.positions.length > 1 ? trad('lignes de titres') : trad('ligne de titres')}</span>
       </button>
       <div class="pf-mesures">
-        <button type="button" class="pf-mesure" data-action="apercu" data-apercu="investiTitres">
-          <span class="pf-lab">${trad('Investi')}</span>
-          <span class="pf-val"><b>${fmtEUR0(pnl.invested)}</b></span>
-        </button>
         ${(() => {
           const pct = pnl.pct == null ? null : fmtSignedPct(pnl.pct);
           if (pct == null) return `

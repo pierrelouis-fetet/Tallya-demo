@@ -26965,8 +26965,8 @@ suite('La carte du portefeuille raconte une phrase', () => {
       'aucun chevron : quatre lignes de liste en portaient quatre');
     eq((corps.match(/href="#\//g) || []).length, 0,
       'la seule destination explicite vit dans l’en-tête');
-    eq((corps.match(/data-action="apercu"/g) || []).length, 4,
-      'quatre ouvreurs : le montant, puis l’investi, le gain et l’écart du jour');
+    eq((corps.match(/data-action="apercu"/g) || []).length, 3,
+      'trois ouvreurs : le montant, le gain et l’écart du jour');
     /* Le renvoi de l'en-tete mene aux lignes, pas aux « marches » : c'est son
        portefeuille que le detenteur veut voir. */
     const tete = src.slice(src.lastIndexOf('<div class="card-head">', i), i);
@@ -26975,24 +26975,30 @@ suite('La carte du portefeuille raconte une phrase', () => {
       'et le dit avec le mot que l’écran d’arrivée emploie');
   });
 
-  test('les quatre chiffres suivent l’ordre de la phrase', () => {
-    /* « J'ai investi tant, ca vaut tant, j'ai donc gagne tant, et aujourd'hui ca
-       a bouge de tant. » Le montant est le sujet et vit au-dessus ; les trois
-       mesures suivent dans cet ordre, et chacune ouvre le panneau qui la
-       detaille — aucun quatrieme ecran a tenir a jour. */
+  test('les trois chiffres suivent l’ordre de la lecture', () => {
+    /* Ce que ça vaut, ce que ça a rapporte, ce qui a bouge depuis minuit. Le
+       montant est le sujet et vit au-dessus ; les deux mesures suivent, et
+       chacune ouvre le panneau qui la detaille.
+
+       « Investi » a vecu ici deux jours : c'est le seul des quatre termes qu'on
+       ne regarde jamais — il ne bouge pas, et le panneau du resultat le porte
+       deja en note, a un doigt de la. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     const i = src.indexOf('<div class="pf-corps">');
     vrai(i > 0, 'le corps de la carte doit être trouvable');
     const corps = src.slice(i, src.indexOf('</div>\n    </div>', i));
-    for (const nom of ['portefeuille', 'investiTitres', 'pnlLatent', 'jourTitres'])
+    for (const nom of ['portefeuille', 'pnlLatent', 'jourTitres'])
       vrai(corps.indexOf(`data-apercu="${nom}"`) > 0,
         `${nom} doit s’ouvrir depuis la carte`);
-    vrai(corps.indexOf('investiTitres') < corps.indexOf('pnlLatent'),
-      'l’investi vient avant le gain : c’est ce dont le gain se calcule');
+    vrai(!/investiTitres/.test(corps),
+      'et le prix de revient n’est plus une mesure de l’accueil');
+    /* Retirer un affichage sans retirer sa porte : le panneau garde la sienne
+       au pied de Positions, donc rien ne devient mort. */
+    vrai((src.match(/data-apercu="investiTitres"/g) || []).length >= 1,
+      'son panneau s’ouvre encore depuis ailleurs');
     vrai(corps.indexOf('pnlLatent') < corps.indexOf('jourTitres'),
-      'et le gain avant l’écart du jour, qui est la nuance la plus fine');
-    /* Le montant reste le sujet, donc il reste seul en grand. */
+      'le gain vient avant l’écart du jour, qui est la nuance la plus fine');
     vrai(/class="pf-total"/.test(corps) && /trad\('Valeur actuelle'\)/.test(corps),
       'le grand montant dit ce qu’il est, sans reprendre le titre de la carte');
   });
@@ -27019,8 +27025,8 @@ suite('La carte du portefeuille raconte une phrase', () => {
        un chiffre et son etiquette tiennent dans une demi-largeur. */
     vrai(/\.pf-mesures \{[^}]*flex-basis: 100%;[^}]*max-width: none;/.test(css),
       'sur un téléphone elles prennent la ligne entière');
-    vrai(/\.pf-mesures \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/.test(css),
-      'les mesures sont une grille de trois colonnes sur un écran large');
+    vrai(/\.pf-mesures \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(css),
+      'les mesures sont une grille de deux colonnes sur un écran large');
     /* Sur un telephone elles passent en rangees : trois colonnes dans 311 px
        replient « Gain depuis l'achat » sur trois lignes et desalignent les
        chiffres. */
@@ -27149,6 +27155,11 @@ suite('Deux champs de la fiche d’une ligne', () => {
     const css = lireSource('assets/styles.css');
     vrai(/\.modal-champs\.champs-cote \{ align-items: flex-end; \}/.test(css),
       'les deux champs restent alignés quand un libellé se replie');
+    /* La meme faute vit dans les grilles de champs, ou les cellules sont deja
+       etirees : c'est alors a l'interieur du champ que l'espace se place. */
+    vrai(/\.grid > \.field > label \{ margin-bottom: auto; \}/.test(css),
+      'et dans une grille, l’espace se met sous le libellé pour que les saisies '
+      + 's’alignent malgré des libellés de hauteur différente');
     vrai(/\.modal-champs input\.lecture \{/.test(css),
       'et le champ en lecture se distingue d’une invite à taper');
   });
