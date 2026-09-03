@@ -27785,10 +27785,40 @@ suite('Un crédit sait quel bien il finance', () => {
     deuxBiens([PRET()]);
     pres(cashFlowBien(compteById('c_appt')).reste, 0, 'l’appartement attend');
     pres(cashFlowBien(compteById('c_park')).reste, 0, 'le parking aussi');
-    const attente = creditsARattacher();
-    eq(attente.length, 1, 'et le crédit est signalé comme à rattacher');
+    const attente = creditsAClarifier();
+    eq(attente.length, 1, 'et le crédit est signalé comme à clarifier');
     eq(attente[0].id, 'd_appt', 'nommément');
+    eq(attente[0].quoi, 'ambigu', 'pour ambiguïté');
     eq(attente[0].comptes.length, 2, 'avec les candidats à choisir');
+  });
+
+  test('un lien mort ou dépaysé se signale, et la dette reste comptée', () => {
+    /* Trois defauts, aucun ne se devine. Dans les trois cas la dette reste dans
+       le patrimoine net — c'est de l'argent qu'on doit, quel que soit l'etat du
+       lien — mais elle n'est attribuee a aucun bien. */
+    deuxBiens([PRET({ bienId: 'c_efface' })]);
+    const morts = creditsAClarifier();
+    eq(morts.length, 1, 'le lien vers un compte disparu se voit');
+    eq(morts[0].quoi, 'mort', 'et se nomme');
+    pres(round2(dettesTotal()), 180000, 'la dette reste entière malgré le lien cassé');
+
+    /* Un lien vers un compte d'un AUTRE etablissement : deplacer un compte de
+       contenant suffit a le produire. */
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [PRET({ bienId: 'c_autre' })] },
+                 { id: 'e_bq2', nom: 'Autre banque', notes: '', dettes: [] }];
+      s.comptes = [
+        { id: 'c_ici', etabId: 'e_bq', type: 'immo', statut: 'ouvert', libelle: 'Ici',
+          cash: [], lignes: [] },
+        { id: 'c_autre', etabId: 'e_bq2', type: 'immo', statut: 'ouvert', libelle: 'Ailleurs',
+          cash: [], lignes: [] }];
+      s.positions = []; s.monthly = [];
+    });
+    const depayses = creditsAClarifier();
+    eq(depayses.length, 1, 'le lien vers un autre établissement se voit');
+    eq(depayses[0].quoi, 'ailleurs', 'et se nomme');
+    eq(creditsDuBien(compteById('c_autre')).length, 0,
+      'et le compte visé ne le récupère pas pour autant : il n’est pas chez ce prêteur');
   });
 
   test('un lien qui pointe ailleurs ne déborde jamais', () => {
@@ -27818,7 +27848,7 @@ suite('Un crédit sait quel bien il finance', () => {
     const cf = cashFlowBien(compteById('c_appt'));
     pres(cf.reste, 200000, 'les deux crédits comptent');
     pres(cf.mensualite, 1194.44, 'et les deux mensualités');
-    eq(creditsARattacher().length, 0, 'rien n’est en attente : il n’y a pas d’ambiguïté');
+    eq(creditsAClarifier().length, 0, 'rien à clarifier : il n’y a pas d’ambiguïté');
   });
 
   test('la migration pose le lien quand il ne fait aucun doute, et jamais sinon', () => {
@@ -27854,6 +27884,23 @@ suite('Un crédit sait quel bien il finance', () => {
     eq(cf.creditsListe[0].id, 'd_appt', 'le bon');
     eq(cf.creditsListe[0].index, 1,
       'et son rang est celui des dettes de l’établissement, pas de la liste filtrée');
+  });
+
+  test('un crédit mal rattaché déclenche une alerte de cohérence', () => {
+    /* Une fonction qui ne sert nulle part ne protege de rien : le controle doit
+       parler, sinon la dette reste invisible sur toutes les fiches sans que rien
+       ne le signale — le pire genre d'erreur, un chiffre faux que rien ne
+       trahit. */
+    deuxBiens([PRET()]);
+    const dits = healthChecks().filter(c => /non rattaché/.test(c.title || ''));
+    eq(dits.length, 1, 'l’ambiguïté se dit');
+    deuxBiens([PRET({ bienId: 'c_efface' })]);
+    eq(healthChecks().filter(c => /non rattaché/.test(c.title || '')).length, 1,
+      'le lien mort aussi');
+    /* Et un credit correctement rattache ne declenche rien. */
+    deuxBiens([PRET({ bienId: 'c_appt' })]);
+    eq(healthChecks().filter(c => /non rattaché/.test(c.title || '')).length, 0,
+      'un lien sain se tait');
   });
 
   test('le patrimoine net ne bouge pas d’un euro', () => {

@@ -4444,17 +4444,37 @@ function comptesDuPreteur(etabId) {
     .map(c => [c.id, nomCompteV2(c)]);
 }
 
-function creditsARattacher() {
-  const attente = [];
+/* Les credits dont le rattachement ne tient pas, et pourquoi.
+
+   Trois defauts, et aucun ne se devine :
+
+     `ambigu`    aucun lien, et l'etablissement tient plusieurs comptes. Le repli
+                 ne peut pas trancher, donc aucune fiche ne montre ce credit.
+     `mort`      le lien pointe vers un compte qui n'existe plus. Un bien
+                 supprime laissait cette reference derriere lui.
+     `ailleurs`  le lien pointe vers un compte d'un AUTRE etablissement. Deplacer
+                 un compte de contenant suffit a le produire.
+
+   Dans les trois cas la dette reste comptee dans le patrimoine net — c'est de
+   l'argent qu'on doit, quel que soit l'etat du lien — mais elle n'est attribuee
+   a aucun bien. La signaler vaut mieux que la ranger au hasard : un chiffre
+   manquant se voit, un chiffre faux se croit. */
+function creditsAClarifier() {
+  const dehors = [];
   for (const e of ETABS()) {
     const miens = (Store.state.comptes || []).filter(c => c.etabId === e.id);
-    if (miens.length < 2) continue;
-    for (const d of (e.dettes || []))
-      if (!d.bienId) attente.push({ etabId: e.id, etabNom: e.nom, id: d.id,
-                                    libelle: d.libelle || 'Crédit',
-                                    montant: num(d.montant), comptes: miens });
+    for (const d of (e.dettes || [])) {
+      const cible = d.bienId ? compteById(d.bienId) : null;
+      const quoi = !d.bienId ? (miens.length > 1 ? 'ambigu' : null)
+                 : !cible ? 'mort'
+                 : cible.etabId !== e.id ? 'ailleurs' : null;
+      if (!quoi) continue;
+      dehors.push({ etabId: e.id, etabNom: e.nom, id: d.id, quoi,
+                    libelle: d.libelle || 'Crédit',
+                    montant: num(d.montant), comptes: miens });
+    }
   }
-  return attente;
+  return dehors;
 }
 
 function cashFlowBien(compte) {
@@ -4528,7 +4548,7 @@ function cashFlowBien(compte) {
 
 function financementIndicatif(compte) {
   if (!compte) return null;
-  const credits = etabById(compte.etabId)?.dettes || [];
+  const credits = creditsDuBien(compte);
   if (credits.length) return null;
   const prix = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
   const apport = num(compte.apport);
@@ -4556,7 +4576,7 @@ function coherenceAcquisition(compte) {
   if (!compte) return null;
   const prix = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
   const apport = num(compte.apport);
-  const emprunte = (etabById(compte.etabId)?.dettes || [])
+  const emprunte = creditsDuBien(compte)
     .reduce((s, d) => s + num(d.initial), 0);
   if (!(prix > 0) || !(apport > 0) || !(emprunte > 0)) return null;
   const ecart = apport + emprunte - prix;
@@ -5756,6 +5776,20 @@ function healthChecks() {
       trad('{v} de capital restant dû se soustraient encore de ton patrimoine net, '
         + 'alors que plus aucun compte n’est rattaché. Ouvre la fiche pour retirer le crédit.')
         .replace('{v}', fmtEUR0(du)),
+      'accounts');
+  }
+
+  const POURQUOI = {
+    ambigu: 'Ce prêteur tient plusieurs comptes : personne ne peut savoir lequel porte cette dette.',
+    mort: 'Le bien qu’il finançait a été supprimé.',
+    ailleurs: 'Le bien qu’il désigne appartient à un autre contenant.',
+  };
+  for (const d of creditsAClarifier()) {
+    if (!d.montant) continue;
+    add('warn', trad('Crédit non rattaché : {l}').replace('{l}', d.libelle),
+      `${trad(POURQUOI[d.quoi])} ${trad('{v} de capital restant dû comptent dans ton '
+        + 'patrimoine net sans apparaître sur aucune fiche de bien. Ouvre le crédit '
+        + 'pour choisir le bien qu’il finance.').replace('{v}', fmtEUR0(d.montant))}`,
       'accounts');
   }
 

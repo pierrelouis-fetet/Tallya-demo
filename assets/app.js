@@ -4488,7 +4488,10 @@ function espaceBien(c, idx, t) {
         : `<p class="hint" style="margin:8px 0 0">${trad('Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé.')}</p>`}
         ${(() => {
           const f = finCredit(d);
-          if (!f) return num(d.taux) || !restant ? '' : `
+          /* `tauxCreditDeclare` et non la verite JS du taux : sur un pret a 0 %
+             qui ne s'amortit pas encore, la phrase disait « renseigne le taux »
+             alors qu'il l'etait. */
+          if (!f) return tauxCreditDeclare(d) != null || !restant ? '' : `
             <p class="hint" style="margin:12px 0 0">${trad('Renseigne le taux et la mensualité : l’application dira alors quand ce crédit sera soldé et ce qu’il te reste à payer d’intérêts.')}</p>`;
           return `
           <dl class="kv" style="margin-top:12px">
@@ -4543,7 +4546,8 @@ function espaceBien(c, idx, t) {
           })()}
           <div class="field"><label>${trad('Taux annuel (%)')}${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
-                   data-path="etabs.${idxEtab}.dettes.${i}.taux" value="${num(d.taux) || ''}"></div>
+                   data-path="etabs.${idxEtab}.dettes.${i}.taux"
+                   value="${estDeclare(d.taux) ? num(d.taux) : ''}"></div>
           <div class="field"><label>${trad('Banque / prêteur')}</label>
             <input class="champ-large" style="text-align:left"
                    data-path="etabs.${idxEtab}.dettes.${i}.preteur"
@@ -7121,6 +7125,9 @@ const ACTIONS = {
       etabId = id;
     }
 
+    let id = 'c_' + Date.now().toString(36), n = 2;
+    while (compteById(id)) id = 'c_' + Date.now().toString(36) + (n++);
+
     const cash = [], lignes = [];
     if (bien) {
       lignes.push({ id: 'l' + Date.now().toString(36), classe: classeDuBien,
@@ -7134,8 +7141,12 @@ const ACTIONS = {
         et.dettes.push({ id: 'd' + Date.now().toString(36),
           libelle: `${trad('Crédit')} ${nomContenant()}`.trim(),
           montant: num(e3.credit), preteur: e3.preteur || '', note: '',
-          mensualite: num(e3.mensualite) || null, taux: num(e3.taux) || null,
+          mensualite: num(e3.mensualite) || null,
+          /* Un taux declare a zero survit a la creation : `|| null` le rangeait
+             aussitot parmi les taux inconnus. */
+          taux: estDeclare(e3.taux) ? num(e3.taux) : null,
           tauxAssurance: num(e3.tauxAssurance) || null,
+          bienId: id,
           verifieLe: todayISO() });
         /* La charge fixe dans le meme geste : c'est le seul moment ou l'on a la
            mensualite en tete. `creerChargeDuCredit()` ne fait rien sans elle. */
@@ -7166,8 +7177,6 @@ const ACTIONS = {
       }
     }
 
-    let id = 'c_' + Date.now().toString(36), n = 2;
-    while (compteById(id)) id = 'c_' + Date.now().toString(36) + (n++);
     Store.state.comptes.push({
       id, etabId, type: t.id, statut: 'ouvert',
       libelle: String(e3.libelle || e3.nom || '').trim(),
@@ -7565,7 +7574,10 @@ const ACTIONS = {
           aide: trad('facultatif. Mieux : rattache-le à une charge fixe, le montant ')
               + 'ne sera alors saisi qu’une fois' }]),
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre',
-          valeur: num(d.taux) || '', aide: trad('facultatif, noté pour mémoire') },
+          /* `estDeclare` : rouvrir la fenetre d'un pret a 0 % affichait un champ
+             vide, et l'enregistrer sans y toucher effaçait donc le taux. */
+          valeur: estDeclare(d.taux) ? num(d.taux) : '',
+          aide: trad('facultatif, noté pour mémoire') },
         { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre',
           valeur: num(d.tauxAssurance) || '', aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         ...comptesDuPreteur(e.id).length > 1 ? [{ cle: 'bienId',
