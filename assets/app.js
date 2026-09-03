@@ -4357,16 +4357,25 @@ function espaceBien(c, idx, t) {
   <div class="card">
     ${(() => {
       const u = usageEffectifBien(c);
-      if (!u.aConfirmer) return '';
+      if (!u.action) return '';
+      const DEMANDES = {
+        confirmer: { titre: 'Usage à confirmer',
+          quoi: 'Considéré comme mis en location car un loyer est rattaché à ce bien.',
+          bouton: 'Confirmer l’usage' },
+        choisir: { titre: 'Usage à préciser',
+          quoi: 'Personne n’a encore dit si tu l’habites ou si tu le loues.',
+          bouton: 'Choisir l’usage' },
+        lots: { titre: 'Usages différents selon les lots',
+          quoi: 'Certains lots n’ont pas le même usage. Modifie chaque lot séparément.',
+          bouton: null },
+      };
+      const q = DEMANDES[u.action];
       return `
     <p class="perimetre" style="margin:0 0 12px">
-      <b>${u.source === 'loyer' ? trad('Usage à confirmer') : trad('Usage à préciser')}</b>
-      <span class="sans-veuve">${u.source === 'loyer'
-        ? trad('Considéré comme mis en location car un loyer est rattaché à ce bien.')
-        : trad('Ses lots ne portent pas le même usage : la fiche ne tranche pas.')}</span>
-      <button type="button" class="btn xs" data-action="choisir-usage"
-              data-id="${esc(c.id)}" style="margin-left:8px">${
-        u.source === 'loyer' ? trad('Confirmer l’usage') : trad('Choisir l’usage')}</button>
+      <b>${trad(q.titre)}</b>
+      <span class="sans-veuve">${trad(q.quoi)}</span>
+      ${!q.bouton ? '' : `<button type="button" class="btn xs" data-action="choisir-usage"
+              data-id="${esc(c.id)}" style="margin-left:8px">${trad(q.bouton)}</button>`}
     </p>`;
     })()}
     <div class="card-head"><h2>${trad('Le bien')}</h2>
@@ -7100,8 +7109,15 @@ const ACTIONS = {
            vide chez presque tout le monde, et la fiche d'une residence
            principale continuait de parler rendement. C'est le seul moment ou on
            le sait a coup sur. */
+        /* L'option vide N'EST PAS une facilite : sans elle, un select rend son
+           premier choix des l'ouverture, et `USAGES_BIEN` commence par « Mis en
+           location ». Un bien cree sans jamais toucher au champ naissait donc
+           locatif, sans qu'aucune decision ait ete prise — exactement ce que
+           `requis` devait empecher. Avec une valeur vide de depart, `requis`
+           mord enfin : `vide()` rend vrai sur la chaine vide. */
         ...(bien && estDetenuEnDirect(t) ? [{ cle: 'usageBien', label: trad('Usage'),
-          type: 'liste', requis: true, options: USAGES_BIEN,
+          type: 'liste', requis: true, valeur: '',
+          options: [['', trad('Choisir…')], ...USAGES_BIEN],
           aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }] : []),
         ...(t.sansEtab ? [] : [
         { cle: 'credit', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
@@ -7304,12 +7320,17 @@ const ACTIONS = {
     const c = compteById(btn.dataset.id);
     if (!c) return;
     const u = usageEffectifBien(c);
+    if (u.action === 'lots') return;
     const v = await askForm({
       titre: trad('Usage du bien'),
       sous: nomCompteV2(c),
       ok: 'Enregistrer',
+      /* Rien de preselectionne quand rien n'est connu : le choix doit etre un
+         choix. `u.usage` vaut deja '' sur un usage inconnu, et porte la
+         deduction sur un legacy locatif — la, proposer est legitime, c'est ce
+         que l'ecran affiche deja. */
       champs: [{ cle: 'usage', label: trad('Usage'), type: 'liste', requis: true,
-        options: USAGES_BIEN, valeur: u.usage || '',
+        options: [['', trad('Choisir…')], ...USAGES_BIEN], valeur: u.usage || '',
         aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }],
     });
     if (!v) return;

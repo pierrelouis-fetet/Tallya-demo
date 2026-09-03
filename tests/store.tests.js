@@ -28076,7 +28076,7 @@ suite('L’usage d’un bien dit toujours d’où il vient', () => {
       bien({ usages: [dit], loyer });
       eq(u().usage, dit, quoi);
       eq(u().source, 'declare', 'et la source est la déclaration');
-      eq(u().aConfirmer, false, 'rien à confirmer');
+      eq(u().action, null, 'rien à demander');
     }
   });
 
@@ -28084,7 +28084,7 @@ suite('L’usage d’un bien dit toujours d’où il vient', () => {
     bien({ usages: [''], loyer: 900 });
     eq(u().usage, 'locative', 'le comportement historique est préservé');
     eq(u().source, 'loyer', 'mais la source dit que c’est déduit');
-    eq(u().aConfirmer, true, 'donc l’écran demandera confirmation');
+    eq(u().action, 'confirmer', 'donc l’écran demandera confirmation');
     /* Et rien n'est ecrit dans les donnees : le jour ou le detenteur confirme,
        alors seulement. Sinon on perdrait a jamais l'information que c'etait une
        deduction. */
@@ -28110,7 +28110,7 @@ suite('L’usage d’un bien dit toujours d’où il vient', () => {
     eq(u().usage, '', 'le compte n’a pas d’usage');
     eq(u().source, 'mixte', 'et le dit');
     eq(u().mixte, true, 'nommément');
-    eq(u().aConfirmer, true, 'la fiche demandera de trancher');
+    eq(u().action, 'lots', 'et la fiche renverra vers chaque lot, sans bouton global');
     /* Deux lots du MEME usage s'accordent, eux. */
     bien({ usages: ['principale', 'principale'] });
     eq(u().usage, 'principale', 'deux lots d’accord donnent l’usage');
@@ -28202,5 +28202,111 @@ suite('L’usage d’un bien dit toujours d’où il vient', () => {
     const generiques = chargesProposees(compteById('c_b'));
     vrai(generiques.length <= locatives.length,
       'un usage inconnu ne reçoit que le générique');
+  });
+});
+
+/* Trois trous de l'etape B, et le meme fil : une invite qui n'invite a rien, un
+   silence la ou il fallait demander, et un bouton qui ecrase. */
+suite('Le choix de l’usage doit être un vrai choix', () => {
+
+  const bien = ({ usages = [], loyer = 0, type = 'immo' } = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type, statut: 'ouvert', libelle: 'Appartement',
+      cash: [], lignes: usages.map((u, i) => ({ id: 'l' + i, classe: 'immobilier',
+        libelle: 'Lot ' + i, valeur: 100000, ...(u ? { usage: u } : {}) })) }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = loyer
+      ? [{ label: 'Loyer', amount: loyer, period: 'mois', bienId: 'c_b' }] : [];
+    s.budget.fixedCharges = [];
+  });
+  const u = () => usageEffectifBien(compteById('c_b'));
+
+  test('le select de création ne choisit pas à la place du détenteur', () => {
+    /* `requis: true` sans option vide ne protege de rien : un select rend son
+       premier choix des l'ouverture, et USAGES_BIEN commence par « Mis en
+       location ». Un bien cree sans toucher au champ naissait donc locatif. */
+    eq(USAGES_BIEN[0][0], 'locative',
+      'la liste commence par le locatif : c’est ce que le select aurait rendu');
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("cle: 'usageBien'");
+    vrai(i > 0, 'le champ doit être trouvable');
+    const bloc = src.slice(i, src.indexOf('}] : []),', i));
+    vrai(/requis: true/.test(bloc), 'le champ reste obligatoire');
+    vrai(/valeur: ''/.test(bloc), 'et part d’une valeur vide');
+    vrai(/\['', trad\('Choisir…'\)\], \.\.\.USAGES_BIEN/.test(bloc),
+      'avec une option vide en tête, sans quoi « requis » ne mord jamais');
+    /* Et la garde du formulaire refuse bien une chaine vide : c'est elle qui
+       transforme l'option vide en obligation reelle. */
+    vrai(/champs\.find\(c => c\.requis && vide\(c\)\)/.test(src),
+      'le formulaire refuse un champ requis laissé vide');
+  });
+
+  test('choisir l’usage ne présélectionne rien quand rien n’est connu', () => {
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf("async 'choisir-usage'(btn) {"),
+                        src.indexOf("async 'supprimer-compte'(btn) {"));
+    vrai(/\['', trad\('Choisir…'\)\], \.\.\.USAGES_BIEN/.test(f),
+      'la liste porte une option vide');
+    vrai(/valeur: u\.usage \|\| ''/.test(f),
+      'et la valeur de départ est celle qu’on connaît, vide quand on ne sait pas');
+    bien({ usages: [''] });
+    eq(u().usage, '', 'sur un usage inconnu, rien n’est proposé');
+  });
+
+  test('un bien sans usage et sans loyer demande qu’on choisisse', () => {
+    /* Il ne demandait rien : `aConfirmer` valait faux, et le bandeau se taisait.
+       Un bien dont personne n'a jamais dit l'usage doit pourtant inviter. */
+    bien({ usages: [''] });
+    eq(u().source, 'inconnu', 'rien n’est déduit');
+    eq(u().action, 'choisir', 'mais l’écran doit demander');
+    eq(u().usage, '', 'et surtout rien n’est inventé');
+  });
+
+  test('les trois demandes ont chacune leur phrase, et une seule n’a pas de bouton', () => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('const DEMANDES = {');
+    vrai(i > 0, 'la table des demandes doit être trouvable');
+    const bloc = src.slice(i, src.indexOf('};', i));
+    for (const [cle, titre] of [['confirmer', 'Usage à confirmer'],
+                                ['choisir', 'Usage à préciser'],
+                                ['lots', 'Usages différents selon les lots']])
+      vrai(bloc.indexOf(cle) > 0 && bloc.indexOf(titre) > 0, `${cle} a sa phrase`);
+    /* Le cas des lots n'offre PAS de bouton : c'est tout le sujet. */
+    const lots = bloc.slice(bloc.indexOf('lots:'));
+    vrai(/bouton: null/.test(lots), 'et le cas des lots n’offre aucun bouton global');
+  });
+
+  test('un compte aux lots différents ne se fait jamais écraser', () => {
+    /* Un appartement habite et un studio loue peuvent etre parfaitement voulus.
+       Un bouton global les ramenerait au meme usage : le geste le plus
+       destructeur de la fiche, sous le libelle le plus anodin. */
+    bien({ usages: ['principale', 'locative'] });
+    const avant = compteById('c_b').lignes.map(l => l.usage);
+    eq(u().action, 'lots', 'la fiche renvoie vers les lots');
+
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf("async 'choisir-usage'(btn) {"),
+                        src.indexOf("async 'supprimer-compte'(btn) {"));
+    vrai(/if \(u\.action === 'lots'\) return;/.test(f),
+      'et le geste refuse de s’exécuter, même appelé directement');
+    eq(JSON.stringify(compteById('c_b').lignes.map(l => l.usage)), JSON.stringify(avant),
+      'les usages des lots restent intacts');
+  });
+
+  test('une SCPI ne se voit jamais demander si on l’habite', () => {
+    /* Le bandeau se poserait sinon sur toute la pierre papier : `bienImmo` sans
+       `direct`. */
+    bien({ type: 'scpi' });
+    eq(u().action, null, 'aucune demande');
+    bien({ type: 'scpi', loyer: 900 });
+    eq(u().action, null, 'même avec un revenu rattaché');
+  });
+
+  test('un usage explicite reste explicite, loyer ou pas', () => {
+    for (const dit of ['principale', 'secondaire', 'locative']) {
+      bien({ usages: [dit], loyer: 900 });
+      eq(u().usage, dit, `${dit} tient face à un loyer`);
+      eq(u().action, null, 'et rien n’est demandé');
+    }
   });
 });

@@ -598,16 +598,22 @@ function estBienEnDirect(compte) {
                          « residence principale » : ce serait sortir le bien des
                          avoirs mobilisables sans que personne l'ait dit. */
 function usageEffectifBien(compte) {
-  const rien = { usage: '', source: 'inconnu', aConfirmer: false, mixte: false };
-  if (!compte) return rien;
+  const muet = { usage: '', source: 'inconnu', mixte: false, action: null };
+  /* Seul un bien DETENU EN DIRECT a un usage a declarer. Une SCPI porte le
+     drapeau `bienImmo` sans le drapeau `direct` : lui demander si on l'habite
+     n'aurait aucun sens, et le bandeau se poserait sur toute la pierre papier. */
+  if (!compte || !estBienEnDirect(compte)) return muet;
   const dits = [...new Set((compte.lignes || [])
     .filter(l => (l.classe || 'immobilier') === 'immobilier')
     .map(usageLigne).filter(Boolean))];
-  if (dits.length > 1) return { usage: '', source: 'mixte', aConfirmer: true, mixte: true };
+  if (dits.length > 1)
+    return { usage: '', source: 'mixte', mixte: true, action: 'lots' };
   if (dits.length === 1)
-    return { usage: dits[0], source: 'declare', aConfirmer: false, mixte: false };
+    return { usage: dits[0], source: 'declare', mixte: false, action: null };
   const loue = (B().income || []).some(r => r.bienId === compte.id && num(r.amount));
-  return loue ? { usage: 'locative', source: 'loyer', aConfirmer: true, mixte: false } : rien;
+  return loue
+    ? { usage: 'locative', source: 'loyer', mixte: false, action: 'confirmer' }
+    : { ...muet, action: 'choisir' };
 }
 
 function usageBien(compte) { return usageEffectifBien(compte).usage; }
