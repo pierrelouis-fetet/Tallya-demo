@@ -4806,9 +4806,11 @@ function espaceBien(c, idx, t) {
   const { idxEtab, dettes, total: credit } = creditsDuCompte(c);
   const entiere = biens.reduce((s, { l }) => s + num(l.valeur), 0);
   const achatEntier = biens.reduce((s, { l }) => s + (coutAcquisition(l) || 0), 0);
-  const valeur = biens.reduce((s, { l }) => s + num(l.valeur) * partDetention(l), 0);
+  const partsInvalides = biens.filter(({ l }) => partDetention(l) === null);
+  const valeur = biens.reduce((s, { l }) =>
+    s + num(l.valeur) * (partDetention(l) ?? 0), 0);
   const achat = biens.reduce((s, { l }) =>
-    s + (coutAcquisition(l) || 0) * partDetention(l), 0);
+    s + (coutAcquisition(l) || 0) * (partDetention(l) ?? 0), 0);
   const partagee = Math.abs(entiere - valeur) > 0.005;
   const gain = achat ? valeur - achat : null;
 
@@ -4890,7 +4892,8 @@ function espaceBien(c, idx, t) {
     <dl class="kv" style="margin-top:12px">
       <dt>${trad('Valeur actuelle')}</dt><dd><b>${fmtEUR(entiere)}</b></dd>
       ${!partagee ? '' : `<dt>${trad('Ta part')}${aide(trad("Ton patrimoine ne compte que cette fraction. La ligne au-dessus reste la valeur du bien entier."))}
-        <span class="sub">${biens.map(({ l }) => fmtPct(partDetention(l) * 100, 0)).join(', ')}</span></dt>
+        <span class="sub">${biens.map(({ l }) => partDetention(l) == null
+          ? trad('à corriger') : fmtPct(partDetention(l) * 100, 0)).join(', ')}</span></dt>
         <dd><b>${fmtEUR(valeur)}</b></dd>`}
       ${!credit ? '' : `<dt>${trad('Capital restant dû')}</dt>
         <dd class="dette">−${fmtEUR(credit)}</dd>`}
@@ -7426,6 +7429,11 @@ const ACTIONS = {
         ? `, ${trad('la plus-value se calcule sur ces deux montants')}`
         : t.sansCash ? `, ${trad('sa valeur viendra des supports que tu y ajouteras')}` : ''}`,
       ok: 'Créer',
+      valide: v => (v.aCredit === 'oui' && num(v.credit) > 0
+                    && estDeclare(v.initial) && num(v.initial) === 0)
+        ? { cle: 'initial', message: trad('Le capital emprunté au départ doit être '
+            + 'supérieur à 0 lorsqu’un capital restant dû est renseigné.') }
+        : null,
       champs: bien ? [
         ...(t.sansEtab ? [{ cle: 'nom', label: trad('Nom du bien'), type: 'texte', requis: true,
           max: NOM_LIGNE_MAX, exemple: 'ex. Rolex Submariner',
@@ -7577,10 +7585,12 @@ const ACTIONS = {
           libelle: `${trad('Crédit')} ${nomContenant()}`.trim(),
           montant: num(e3.credit), preteur: e3.preteur || '', note: '',
           /* Le capital emprunte au depart survit a la creation quand il est
-             declare, et reste absent sinon : `|| null` le rangeait parmi les
-             inconnus des qu'il valait zero, mais surtout il n'etait pas demande
-             du tout, et la progression du pret ne pouvait jamais exister. */
-          initial: estDeclare(e3.initial) && num(e3.initial) > 0 ? num(e3.initial) : null,
+             declare, et reste absent sinon. Le `&& > 0` qui trainait ici rangeait
+             un ZERO DECLARE parmi les inconnus : c'est la faute que le reste du
+             code a deja corrigee partout ailleurs, et elle survivait sur ce seul
+             chemin. Un zero avec une dette qui reste est refuse plus haut, a la
+             validation — pas efface en silence. */
+          initial: estDeclare(e3.initial) ? num(e3.initial) : null,
           mensualite: estDeclare(e3.mensualite) ? num(e3.mensualite) : null,
           /* Un taux declare a zero survit a la creation : `|| null` le rangeait
              aussitot parmi les taux inconnus. */
@@ -7702,8 +7712,27 @@ const ACTIONS = {
 
   'enregistrer-fiche'() {
     /* Le blur d'abord : sur iOS, un champ encore actif peut n'avoir pas emis son
-       dernier `input`, et l'ecriture se ferait sans lui. */
+       dernier `input`, et l'ecriture se ferait sans lui. Et il fait aussi passer
+       la derniere frappe par `applyField`, donc par la garde ci-dessous. */
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    /* UN CHAMP INVALIDE BLOQUE L'ENREGISTREMENT.
+
+       `applyField` refusait deja d'ecrire une quote-part hors bornes, mais
+       refuser l'ecriture ne suffisait pas : « Enregistrer » sauvegardait le
+       reste, annonçait « Enregistre » et rendait la main. Le detenteur repartait
+       en croyant avoir saisi 150 % alors que l'ancienne valeur etait restee dans
+       les donnees — le refus n'existait que pour le calcul, pas pour lui.
+
+       Le geste se refuse donc la ou il se fait : rien n'est enregistre, la fiche
+       ne bouge pas, et le champ fautif reçoit le curseur. « Annuler » reste
+       ouvert : on n'oblige personne a corriger pour abandonner. */
+    const invalide = $('[data-invalide="1"]');
+    if (invalide) {
+      invalide.focus();
+      invalide.select?.();
+      toast(trad('La quote-part doit être comprise entre 0 et 100 %.'));
+      return;
+    }
     retourHaptique();
     Store.save();
     toast(trad('Enregistré ✓'));
@@ -9215,7 +9244,8 @@ async function demanderTypePerso() {
   return id;
 }
 
-function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore = '' }) {
+function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore = '',
+                   valide = null }) {
   return new Promise(resolve => {
     const m = $('#modal');
     apercuOuvert = null;
@@ -9358,8 +9388,18 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       for (const c of champs) {
         const el = $(`#f_${c.cle}`);
         if (!el || el.closest('.field')?.hidden) continue;
+        /* Un champ nombre VIDE rend la chaine vide, et non zero.
+
+           `num('')` vaut zero : un champ traverse sans rien taper arrivait donc
+           chez l'appelant comme un zero declare, et `estDeclare` y lisait vrai.
+           Toute la convention « vide n'est pas zero » tombait a cet endroit
+           precis, avant meme d'atteindre le code qui la respecte.
+
+           Rien ne change pour les lecteurs : `num('')` vaut toujours zero, et
+           `vide()` compte deja la chaine vide comme vide. Seul `estDeclare` voit
+           enfin la difference. */
         out[c.cle] = c.type === 'case' ? el.checked
-          : c.type === 'nombre' ? num(el.value)
+          : c.type === 'nombre' ? (el.value === '' ? '' : num(el.value))
           : el.value.trim();
       }
       return out;
@@ -9393,6 +9433,17 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       const estRequis = c => typeof c.requis === 'function' ? c.requis(out) : c.requis;
       const manquant = efface ? null : champs.find(c => estRequis(c) && vide(c));
       if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label}${deuxPoints()} ${trad('à remplir')}`); return; }
+      /* Une regle qui porte sur DEUX champs ne peut pas vivre dans l'un des
+         deux : « le capital emprunte doit etre superieur a zero quand un capital
+         restant est renseigne » regarde les deux a la fois. `valide` rend le
+         message a dire, ou rien. La fenetre reste ouverte, comme pour un champ
+         obligatoire vide. */
+      const souci = efface ? null : valide?.(out);
+      if (souci) {
+        if (souci.cle) $(`#f_${souci.cle}`)?.focus();
+        toast(souci.message || souci);
+        return;
+      }
       if (suite) out.__encore = true;
       fermer(out);
     };
@@ -13142,9 +13193,11 @@ function applyField(f) {
   const path = f.dataset.path;
   if (/\.part$/.test(path) && f.value !== '' && !partEstValide(f.value)) {
     f.dataset.invalide = '1';
+    f.setAttribute('aria-invalid', 'true');
     return;
   }
   delete f.dataset.invalide;
+  f.removeAttribute('aria-invalid');
   if (f.type === 'checkbox') { setPath(path, f.checked); return; }
   if (f.type === 'number') { setPath(path, f.value === '' ? '' : Number(f.value)); return; }
   if (f.dataset.type === 'num') { setPath(path, Number(f.value)); return; }

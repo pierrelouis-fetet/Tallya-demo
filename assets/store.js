@@ -539,9 +539,29 @@ const partEstValide = v => !estDeclare(v) || (num(v) >= 0 && num(v) <= 100);
 const partDetention = l => {
   if (!estDeclare(l?.part)) return 1;
   const p = num(l.part);
-  if (p < 0 || p > 100) return 1;
+  /* Hors de [0, 100] : `null`, et surtout pas un pourcentage invente.
+
+     Le garde-fou d'avant rendait 1, au motif que les totaux devaient rester
+     calculables. Mais rendre 1 DIT que le bien est detenu en entier, ce que
+     personne n'a declare : 150 % devenait 100 % en silence, au moment meme ou
+     l'ecran demandait de corriger la valeur. Un total calculable au prix d'une
+     detention inventee n'est pas un service.
+
+     Les appelants ECARTENT la ligne des montants personnels, ils ne substituent
+     pas 1. Le patrimoine est alors incomplet, et le controle de coherence le
+     dit — un total qui manque un bien vaut mieux qu'un total qui en invente la
+     detention. */
+  if (p < 0 || p > 100) return null;
   return p / 100;
 };
+
+function lotsPartInvalide() {
+  const out = [];
+  for (const c of comptesOuverts())
+    for (const l of (c.lignes || []))
+      if (!partEstValide(l.part)) out.push({ compte: c, ligne: l });
+  return out;
+}
 
 const moisLouesDeclares = compte => estDeclare(compte?.moisLoues)
   ? Math.min(12, Math.max(0, Math.round(num(compte.moisLoues)))) : 12;
@@ -670,7 +690,7 @@ function acquisitionCompte(compte) {
   const lots = (compte?.lignes || [])
     .filter(l => (l.classe || 'immobilier') === 'immobilier');
   let entier = 0, detenu = 0, connus = 0, complets = 0, legacy = 0;
-  let sousTotal = 0, partiels = 0;
+  let sousTotal = 0, partiels = 0, partsInvalides = 0;
   for (const l of lots) {
     const a = acquisitionLigne(l);
     if (a.sousTotal != null) { sousTotal += a.sousTotal; }
@@ -680,10 +700,11 @@ function acquisitionCompte(compte) {
     if (a.complet) complets++;
     if (a.source === 'legacy') legacy++;
     entier += a.total;
-    detenu += a.total * partDetention(l);
+    const q = partDetention(l);
+    if (q === null) partsInvalides++; else detenu += a.total * q;
   }
   return { entier: round2(entier), detenu: round2(detenu),
-           connus, lots: lots.length,
+           connus, lots: lots.length, partInvalide: partsInvalides > 0,
            /* `null` quand aucun lot ne dit son cout : zero serait un cout. Et un
               lot dont le detail est partiel SANS legacy n'a pas de cout du tout,
               donc le compte n'en a pas non plus — un total qui n'additionnerait
@@ -707,14 +728,22 @@ function lignesDe(compte) {
      les lignes de marche passent devant. */
   const manuelles = (compte.lignes || []).map((l, i) => {
     const q = partDetention(l);
+    /* Une quote-part invalide ECARTE la ligne des montants personnels : la part
+       detenue n'est pas connue, et l'inventer ferait entrer un montant faux
+       dans les treize ecrans qui lisent cette fonction. La valeur du bien
+       ENTIER reste lisible — c'est elle qu'on vient corriger — et `partInvalide`
+       permet a la fiche de dire pourquoi le montant personnel manque. */
+    const partInvalide = q === null;
     /* `prixDeRevient` rendu ici est desormais le COUT TOTAL d'acquisition, pas
        le seul champ du meme nom : les treize lecteurs de cette fonction — dont
        la base des rendements — parlent tous du meme montant, et un bien dont le
        detail n'est pas rempli continue de rendre exactement sa valeur legacy.
        Aucun ecran ne change de denominateur en silence. */
     const acq = acquisitionLigne(l);
-    return { ...l, ref: i, part: q < 1 ? num(l.part) : null,
-             valeur: num(l.valeur) * q, prixDeRevient: (acq.total || 0) * q,
+    return { ...l, ref: i, partInvalide,
+             part: partInvalide ? num(l.part) : (q < 1 ? num(l.part) : null),
+             valeur: partInvalide ? 0 : num(l.valeur) * q,
+             prixDeRevient: partInvalide ? 0 : (acq.total || 0) * q,
              valeurEntiere: num(l.valeur), prixEntier: acq.total || 0,
              acquisition: acq,
              refMobilite: `comptes.${Store.state.comptes.indexOf(compte)}.lignes.${i}.mobilite` };
@@ -6088,14 +6117,13 @@ function healthChecks() {
       'accounts');
   }
 
-  for (const c of comptesBiens()) {
-    for (const l of (c.lignes || [])) {
-      if (partEstValide(l.part)) continue;
-      add('warn', trad('Quote-part impossible sur un bien.'),
-        `${guill(nomCompteV2(c))} · ${trad('La quote-part doit être comprise entre 0 et 100 %.')} `
-        + trad('En attendant, le bien compte en entier dans ton patrimoine.'),
-        'accounts');
-    }
+  for (const { compte, ligne } of lotsPartInvalide()) {
+    add('warn', trad('Quote-part à corriger'),
+      `${guill(nomCompteV2(compte))} · ${
+        trad('{v} % n’est pas une quote-part valide.').replace('{v}', fmtNombre(num(ligne.part)))} `
+      + trad('Ce bien n’est pas inclus dans les montants personnels qui dépendent de ta part '
+        + 'tant que la valeur n’est pas corrigée.'),
+      'accounts');
   }
 
   for (const c of comptesBiens()) {

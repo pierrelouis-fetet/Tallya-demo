@@ -15634,23 +15634,33 @@ suite('Un bien détenu à plusieurs ne compte que pour sa part', () => {
     pres(lignesDe(compteById('c_immo'))[0].valeur, 60000, 'seconde lecture, identique');
   });
 
-  test('une part absente ou aberrante vaut le bien entier ; zéro vaut zéro', () => {
+  test('une part absente vaut le bien entier ; zéro vaut zéro ; hors bornes ne vaut rien', () => {
     /* Le zero a longtemps valu le tout, au motif qu'il ne voulait rien dire.
        Mais le champ accepte zero, donc quelqu'un peut le saisir — et lire alors
        « 100 % » est exactement le contraire de ce qu'il a ecrit. Un bien cede,
        garde en memoire pour son historique, se declare a zero.
 
-       Hors bornes, en revanche, la lecture ne change pas : une part negative ou
-       superieure a cent n'est pas une declaration, c'est une faute de frappe. */
+       HORS BORNES NE VAUT PLUS LE TOUT. Rendre 1 disait que le bien etait detenu
+       en entier, ce que personne n'avait declare : 150 % devenait 100 % en
+       silence, au moment meme ou l'ecran demandait de corriger. Le raisonnement
+       d'avant — « le tout plutot qu'un total gonfle » — supposait qu'il fallait
+       choisir un chiffre. Il n'y en a pas a choisir : la ligne sort des montants
+       personnels, et le controle de coherence dit que ces totaux sont
+       incomplets. */
     Fixture.poser();
     pres(partDetention({}), 1, 'absente');
     pres(partDetention({ part: '' }), 1, 'vide aussi');
     pres(partDetention({ part: 0 }), 0, 'zéro veut dire zéro');
     pres(partDetention({ part: 50 }), 0.5, 'la moitié');
     pres(partDetention({ part: 100 }), 1, 'cent pour cent');
-    pres(partDetention({ part: 140 }), 1, 'au-delà de cent, la saisie est fausse : le tout, plutôt qu’un total gonflé');
-    pres(partDetention({ part: -20 }), 1, 'négative aussi');
     pres(partDetention({ part: 33.5 }), 0.335, 'une part décimale passe');
+    eq(partDetention({ part: 140 }), null, 'au-delà de cent : aucune valeur');
+    eq(partDetention({ part: -20 }), null, 'négative non plus');
+    /* Et surtout, jamais 1 : c'est la substitution qui mentait. */
+    for (const p of [140, -20, 101, 150]) {
+      vrai(partDetention({ part: p }) !== 1, `${p} % ne vaut pas le bien entier`);
+      vrai(partDetention({ part: p }) !== 0, `${p} % ne vaut pas zéro non plus`);
+    }
   });
 });
 
@@ -27800,14 +27810,17 @@ suite('Un zéro saisi n’est pas un champ vide', () => {
     pres(cf.rendementBrut, 0, 'le rendement brut est nul, pas plein');
   });
 
-  test('la part détenue : vide vaut le tout, zéro vaut zéro', () => {
+  test('la part détenue : vide vaut le tout, zéro vaut zéro, hors bornes ne vaut rien', () => {
     for (const [saisi, attendu, quoi] of [
       [undefined, 1, 'absente'], ['', 1, 'vide'], [null, 1, 'nulle'],
       [0, 0, 'zéro veut dire zéro'], ['0', 0, 'zéro en texte aussi'],
       [50, 0.5, 'la moitié'], [100, 1, 'le tout'], [33.5, 0.335, 'décimale'],
-      [-20, 1, 'négative : une faute de frappe, pas une déclaration'],
-      [140, 1, 'au-delà de cent : le bien entier, jamais un total gonflé'],
     ]) pres(partDetention({ part: saisi }), attendu, quoi);
+    /* Hors bornes : aucune valeur, et surtout pas une substitution. */
+    for (const [saisi, quoi] of [
+      [-20, 'négative : une faute de frappe, pas une déclaration'],
+      [140, 'au-delà de cent : rien, jamais le bien entier'],
+    ]) eq(partDetention({ part: saisi }), null, quoi);
   });
 
   test('le taux : absent, zéro et positif sont trois états', () => {
@@ -29754,8 +29767,8 @@ suite('Un coût d’acquisition se décompose, il ne se devine pas', () => {
                            src.indexOf('function barreValiderFiche'));
     vrai(/const achatEntier = biens\.reduce\(\(s, \{ l \}\) => s \+ \(coutAcquisition\(l\) \|\| 0\), 0\);/
       .test(haut), 'le coût entier passe par coutAcquisition');
-    vrai(/s \+ \(coutAcquisition\(l\) \|\| 0\) \* partDetention\(l\)/.test(haut),
-      'la part détenue aussi');
+    vrai(/s \+ \(coutAcquisition\(l\) \|\| 0\) \* \(partDetention\(l\) \?\? 0\)/.test(haut),
+      'la part détenue aussi, et une part invalide écarte le lot au lieu de valoir le tout');
     vrai(!/num\(l\.prixDeRevient\)/.test(haut),
       'et le champ legacy ne se lit plus en direct dans la fiche');
 
@@ -30163,8 +30176,13 @@ suite('Créer un bien ne force aucune donnée inconnue', () => {
       'l’apport non plus');
     vrai(/apportDit === null \? \{\} : \{ apport: apportDit \}/.test(p),
       'et il n’entre dans le compte que déclaré');
-    vrai(/initial: estDeclare\(e3\.initial\) && num\(e3\.initial\) > 0 \? num\(e3\.initial\) : null/
-      .test(p), 'le capital emprunté non plus');
+    /* Le `&& > 0` qui trainait ici rangeait un ZERO DECLARE parmi les inconnus,
+       sur le seul chemin ou il survivait encore. Un zero avec une dette qui
+       reste se refuse a la validation, il ne s'efface pas en silence. */
+    vrai(/initial: estDeclare\(e3\.initial\) \? num\(e3\.initial\) : null/.test(p),
+      'le capital emprunté garde son zéro déclaré');
+    vrai(!/estDeclare\(e3\.initial\) && num\(e3\.initial\) > 0/.test(p),
+      'et le seuil qui l’effaçait est parti');
   });
 
   test('un crédit créé porte son bienId dès sa naissance', () => {
@@ -30636,8 +30654,10 @@ suite('Une quote-part impossible ne s’enregistre plus', () => {
        la garde n'a donc pas besoin d'etre repetee. */
     vrai(/if \(\/\\\.part\$\/\.test\(path\) && f\.value !== '' && !partEstValide\(f\.value\)\)/
       .test(src), 'l’écriture refuse une quote-part hors bornes');
-    vrai(/f\.dataset\.invalide = '1';\n\s*return;/.test(src),
-      'et rien n’entre dans les données');
+    vrai(/f\.dataset\.invalide = '1';\n\s*f\.setAttribute\('aria-invalid', 'true'\);\n\s*return;/
+      .test(src), 'et rien n’entre dans les données, l’écran le disant aussi');
+    vrai(/f\.removeAttribute\('aria-invalid'\)/.test(src),
+      'l’état invalide part dès qu’une valeur correcte est saisie');
     /* Le wording ne parle plus de ce que le calcul ferait. */
     vrai(/La quote-part doit être comprise entre 0 et 100 %\./.test(src), 'le mot dit la règle');
     vrai(!/Au-delà, le bien compte en entier/.test(src),
@@ -30648,22 +30668,30 @@ suite('Une quote-part impossible ne s’enregistre plus', () => {
     /* Personne ne sait si « 150 » voulait dire 15, 100 ou autre chose : choisir
        a la place du detenteur ecrirait une valeur inventee. */
     bien(150);
-    const dits = healthChecks().filter(x => /Quote-part impossible/.test(x.title || ''));
+    const dits = healthChecks().filter(x => /Quote-part à corriger/.test(x.title || ''));
     eq(dits.length, 1, 'le contrôle la relève');
+    vrai(/n’est pas une quote-part valide/.test(dits[0].detail || ''),
+      'et nomme la valeur fautive');
+    vrai(/pas inclus dans les montants personnels/.test(dits[0].detail || ''),
+      'en disant ce qui est écarté');
+    vrai(!/compte en entier dans ton patrimoine/.test(dits[0].detail || ''),
+      'et non plus qu’il compte en entier');
     eq(num(compteById('c_b').lignes[0].part), 150, 'et la donnée n’est pas migrée');
     /* Le calcul reste possible entre-temps, et le garde-fou ne pretend rien. */
-    pres(partDetention(compteById('c_b').lignes[0]), 1,
-      'le garde-fou compte le bien entier pour que les totaux restent calculables');
-    /* Et il ne fait QUE ca : la donnee reste telle quelle, aucune migration ne
-       la reecrit, et le patrimoine reste calculable en attendant. */
+    eq(partDetention(compteById('c_b').lignes[0]), null,
+      'la quote-part n’a plus de valeur : elle est invalide');
+    /* La donnee reste telle quelle, aucune migration ne la reecrit, et le bien
+       sort des montants personnels au lieu d'y entrer a cent pour cent. */
     eq(num(compteById('c_b').lignes[0].part), 150, 'la donnée n’est pas retouchée');
     vrai(Number.isFinite(patrimoine().brut), 'le patrimoine reste calculable');
-    pres(round2(patrimoine().brut), 400000, 'sur le bien entier, faute de mieux');
+    vrai(round2(patrimoine().brut) !== 400000,
+      'et le bien n’est plus valorisé comme une détention à cent pour cent');
+    eq(lotsPartInvalide().length, 1, 'le lot est nommément écarté');
     const st = lireSource('assets/store.js');
     vrai(!/\.part\s*=\s*(1|100)\b/.test(st), 'et rien n’écrit une part corrigée');
     /* Une valeur valide ne declenche rien. */
     bien(50);
-    eq(healthChecks().filter(x => /Quote-part impossible/.test(x.title || '')).length, 0,
+    eq(healthChecks().filter(x => /Quote-part à corriger/.test(x.title || '')).length, 0,
       'une part valide ne dit rien');
   });
 
@@ -30725,6 +30753,331 @@ suite('D.1 ne change ni le patrimoine, ni les dettes, ni le Budget', () => {
       'C.2 : et ses frais');
     vrai(/Math\.abs\(plan\.ecart\) > 1/.test(st), 'D : la tolérance vaut toujours un euro');
     /* Le capital rembourse n'est toujours pas du cash. */
+    vrai(!/capitalMois \+ [^;]*cashFlow|cashFlow \+ [^;]*capitalMois/.test(src),
+      'et le capital remboursé ne rejoint aucun cash-flow');
+  });
+});
+
+/* 150 % devenait 100 % : le calcul disait une detention que personne n'avait
+   declaree, au moment meme ou l'ecran demandait de corriger la valeur. */
+suite('Une quote-part invalide n’a pas de valeur, et n’en reçoit pas', () => {
+
+  const bien = (part) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ id: 'd1', libelle: 'Prêt',
+      montant: 120000, initial: 150000, taux: 2, mensualite: 700, bienId: 'c_b' }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement Paris', cash: [],
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement Paris', valeur: 400000,
+        prixAchat: 350000, fraisAcquisition: 28000, travauxInitiaux: 0,
+        usage: 'principale', ...(part === undefined ? {} : { part }) }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = [];
+  });
+
+  test('les quatre valeurs valides gardent exactement leur multiplicateur', () => {
+    for (const [p, attendu, quoi] of [
+      [undefined, 1, 'vide vaut le tout'], [0, 0, 'zéro vaut zéro'],
+      [50, 0.5, 'la moitié'], [100, 1, 'le tout'],
+    ]) {
+      bien(p);
+      pres(partDetention(compteById('c_b').lignes[0]), attendu, quoi);
+    }
+  });
+
+  test('hors bornes ne rend ni 1, ni 0, ni un pourcentage inventé', () => {
+    for (const p of [150, -10, 101, -0.5]) {
+      bien(p);
+      const q = partDetention(compteById('c_b').lignes[0]);
+      eq(q, null, `${p} % : aucune valeur`);
+      vrai(q !== 1, `${p} % ne devient pas le bien entier`);
+      vrai(q !== 0, `${p} % ne devient pas zéro`);
+      vrai(q !== p / 100, `${p} % ne se lit pas tel quel non plus`);
+    }
+    /* Et l'etat est explicite, pas devine par l'appelant. */
+    bien(150);
+    eq(partEstValide(150), false, 'la validité se lit à part');
+    eq(lotsPartInvalide().length, 1, 'et le lot fautif se nomme');
+    eq(lotsPartInvalide()[0].compte.id, 'c_b', 'avec son compte');
+  });
+
+  test('un bien à 150 % n’est jamais valorisé comme une détention à 100 %', () => {
+    bien(100);
+    const entier = round2(patrimoine().brut);
+    pres(entier, 400000, 'à cent pour cent, le bien entier entre au patrimoine');
+
+    bien(150);
+    vrai(round2(patrimoine().brut) !== entier,
+      'à cent cinquante, il n’entre plus pour la même chose');
+    pres(round2(patrimoine().brut), 0, 'il sort des montants personnels');
+    /* La ligne le dit, pour que la fiche puisse l'expliquer. */
+    const l = lignesDe(compteById('c_b'))[0];
+    eq(l.partInvalide, true, 'la ligne porte le cas');
+    pres(l.valeurEntiere, 400000, 'et la valeur du bien entier reste lisible');
+    pres(l.valeur, 0, 'seule la part détenue manque');
+    /* Le cout d'acquisition detenu manque aussi, l'entier reste. */
+    const acq = acquisitionCompte(compteById('c_b'));
+    pres(acq.entier, 378000, 'le coût du bien entier reste connu');
+    pres(acq.detenu, 0, 'mais la part détenue ne se calcule pas');
+    eq(acq.partInvalide, true, 'et le compte le dit');
+  });
+
+  test('la donnée n’est pas migrée, et le contrôle dit ce qui est écarté', () => {
+    bien(150);
+    eq(num(compteById('c_b').lignes[0].part), 150, 'la valeur reste telle quelle');
+    refreshAccounts();
+    eq(num(compteById('c_b').lignes[0].part), 150, 'après un recalcul aussi');
+    const st = lireSource('assets/store.js');
+    vrai(!/\.part\s*=\s*(1|100)\b/.test(st), 'rien n’écrit une part corrigée');
+
+    const dits = healthChecks().filter(x => /Quote-part à corriger/.test(x.title || ''));
+    eq(dits.length, 1, 'le contrôle parle');
+    eq(dits[0].level, 'warn', 'en avertissement');
+    vrai(/150/.test(dits[0].detail || ''), 'il nomme la valeur fautive');
+    vrai(/pas inclus dans les montants personnels/.test(dits[0].detail || ''),
+      'et dit ce qui est écarté');
+    vrai(!/compte en entier dans ton patrimoine/.test(dits[0].detail || ''),
+      'l’ancien wording, qui prétendait le contraire, est parti');
+    vrai(!/compte en entier dans ton patrimoine/.test(lireSource('assets/i18n.js')),
+      'et sa clef aussi');
+  });
+
+  test('la dette n’est toujours pas multipliée par la quote-part', () => {
+    bien(50);
+    pres(round2(patrimoine().brut), 200000, 'la moitié de la valeur');
+    pres(round2(dettesTotal()), 120000, 'la dette entière, telle qu’elle est due');
+    pres(round2(patrimoine().net), 80000, 'donc deux cent mille moins cent vingt mille');
+    /* Et à 150 %, la dette ne bouge pas non plus : c'est la part qui manque. */
+    bien(150);
+    pres(round2(dettesTotal()), 120000, 'une part invalide ne touche pas la dette');
+  });
+});
+
+/* Refuser l'ecriture ne suffisait pas : la fiche s'enregistrait quand meme, et
+   le detenteur repartait en croyant avoir saisi 150 %. */
+suite('Une saisie invalide bloque vraiment l’enregistrement de la fiche', () => {
+
+  const src = () => lireSource('assets/app.js');
+
+  test('« Enregistrer » cherche un champ invalide avant toute écriture', () => {
+    const s = src();
+    const i = s.indexOf("'enregistrer-fiche'()");
+    vrai(i > 0, 'l’action doit être trouvable');
+    const fn = s.slice(i, s.indexOf('\n  },', i));
+    /* L'ordre compte : le blur d'abord, parce qu'il fait passer la derniere
+       frappe par `applyField` — donc par la garde. */
+    const blur = fn.indexOf('document.activeElement.blur()');
+    const garde = fn.indexOf("const invalide = $('[data-invalide=\"1\"]');");
+    const save = fn.indexOf('Store.save();');
+    vrai(blur > 0 && garde > blur, 'la garde vient après le blur');
+    vrai(save > garde, 'et avant tout enregistrement');
+    vrai(/if \(invalide\) \{[\s\S]{0,220}return;/.test(fn),
+      'un champ invalide arrête le geste');
+    vrai(/invalide\.focus\(\);/.test(fn), 'le curseur revient sur lui');
+    vrai(/La quote-part doit être comprise entre 0 et 100 %\./.test(fn),
+      'et le message dit la règle');
+  });
+
+  test('la valeur invalide reste visible, et l’état s’efface dès la correction', () => {
+    const s = src();
+    /* `applyField` ne reecrit jamais le champ : il refuse d'ecrire dans l'etat
+       et marque le champ. La saisie reste donc a l'ecran, avec son message. */
+    vrai(/f\.dataset\.invalide = '1';\n\s*f\.setAttribute\('aria-invalid', 'true'\);\n\s*return;/
+      .test(s), 'la valeur n’entre pas dans les données, et l’écran le dit');
+    /* La borne haute est la fonction SUIVANTE, jamais une longueur : une
+       fenetre en caracteres se defait des que les commentaires partent, et
+       l'arbre publie n'en a aucun. */
+    const i = s.indexOf('function applyField');
+    /* `applyField` est la derniere fonction du fichier : la borne haute est le
+       demarrage, qui est du CODE et survit donc au filtre de publication. */
+    const fn = s.slice(i, s.indexOf('(async function init()', i));
+    vrai(fn.length > 200, 'applyField doit être trouvable');
+    vrai(/setPath\(path, f\.value\)/.test(fn), 'et être bien la bonne fonction');
+    /* `(?!=)` : sans lui le motif attrape `f.value === ''`, une comparaison, et
+       croit voir une affectation. */
+    vrai(!/f\.value\s*=(?!=)/.test(fn),
+      'et rien ne réécrit le champ à la place du détenteur');
+    vrai(/delete f\.dataset\.invalide;\n\s*f\.removeAttribute\('aria-invalid'\);/.test(s),
+      'une valeur correcte efface l’état invalide');
+  });
+
+  test('« Annuler » reste possible, et restaure l’état précédent', () => {
+    const s = src();
+    const i = s.indexOf("async 'annuler-fiche'(btn)");
+    vrai(i > 0, 'l’action doit exister');
+    const fn = s.slice(i, s.indexOf('\n  },', i));
+    vrai(/retablirFiche\(\);/.test(fn), 'elle rétablit l’instantané');
+    vrai(!/data-invalide/.test(fn),
+      'et ne regarde aucun champ invalide : on n’oblige personne à corriger pour abandonner');
+  });
+
+  test('aucune autre sortie de la fiche n’écrit derrière la garde', () => {
+    /* Le contrôle qui compte : `Store.save()` dans la fiche passe par
+       « Enregistrer », et par lui seul. */
+    const s = src();
+    const i = s.indexOf("'enregistrer-fiche'()");
+    const fn = s.slice(i, s.indexOf('\n  },', i));
+    eq((fn.match(/Store\.save\(\)/g) || []).length, 1,
+      'un seul enregistrement dans l’action, après la garde');
+    /* Et le champ de la part porte bien ses bornes côté navigateur aussi. */
+    vrai(/min="0" max="100"/.test(s), 'le champ déclare ses bornes');
+  });
+});
+
+/* Le `&& > 0` survivait sur le seul chemin de la creation d'un bien : un zero
+   declare y redevenait « absent ». */
+suite('Un capital emprunté nul reste nul dans l’onboarding', () => {
+
+  const parcours = () => {
+    const s = lireSource('assets/app.js');
+    return s.slice(s.indexOf("async 'ajouter-compte'"), s.indexOf("'fiche-compte'(btn)"));
+  };
+
+  test('vide, zéro et positif sont trois écritures distinctes', () => {
+    const p = parcours();
+    vrai(/initial: estDeclare\(e3\.initial\) \? num\(e3\.initial\) : null/.test(p),
+      'le zéro déclaré s’écrit, l’absence reste nulle');
+    vrai(!/estDeclare\(e3\.initial\) && num\(e3\.initial\) > 0/.test(p),
+      'et le seuil qui effaçait le zéro est parti');
+    /* Et le champ reste FACULTATIF : absent veut dire « je ne le connais pas ». */
+    vrai(!/cle: 'initial'[^}]*requis/.test(p), 'il n’est pas obligatoire');
+  });
+
+  test('un champ nombre vide franchit le formulaire sans devenir un zéro', () => {
+    /* LE DEFAUT ETAIT EN AMONT DE TOUT LE RESTE. `valeurs()` rendait
+       `num(el.value)` pour un champ nombre, et `num('')` vaut zero : un champ
+       traverse sans rien taper arrivait chez l'appelant comme un ZERO DECLARE.
+
+       Consequence exacte : tous les `estDeclare(v.x)` poses sur les champs de
+       credit lisaient vrai sur du vide, et ecrivaient 0 la ou il fallait `null`.
+       La convention « vide n'est pas zero » tombait avant meme d'atteindre le
+       code qui la respecte, et aucun des correctifs precedents ne pouvait
+       fonctionner a travers une fenetre. */
+    const src = lireSource('assets/app.js');
+    vrai(/: c\.type === 'nombre' \? \(el\.value === '' \? '' : num\(el\.value\)\)/.test(src),
+      'un champ nombre vide rend la chaîne vide, pas zéro');
+    vrai(!/: c\.type === 'nombre' \? num\(el\.value\)\n/.test(src),
+      'et l’ancienne lecture, qui les confondait, est partie');
+    /* Les deux lecteurs en aval continuent de fonctionner : `vide()` compte deja
+       la chaine vide comme vide, et `num('')` vaut toujours zero. */
+    eq(estDeclare(''), false, 'une chaîne vide n’est pas déclarée');
+    eq(estDeclare(0), true, 'zéro l’est');
+    pres(num(''), 0, 'et num() la lit toujours comme zéro');
+    vrai(/if \(c\.type === 'nombre'\) return !num\(v\);/.test(src),
+      'la garde des champs obligatoires ne change pas');
+  });
+
+  test('un capital emprunté nul avec une dette est refusé, pas effacé', () => {
+    const p = parcours();
+    vrai(/valide: v => \(v\.aCredit === 'oui' && num\(v\.credit\) > 0/.test(p),
+      'la règle regarde les deux champs à la fois');
+    vrai(/estDeclare\(v\.initial\) && num\(v\.initial\) === 0/.test(p),
+      'et ne vise que le zéro explicite');
+    vrai(/Le capital emprunté au départ doit être /.test(p), 'le message dit pourquoi');
+    /* La phrase entiere vit dans le dictionnaire : c'est elle qui s'affiche, et
+       la source la coupe en deux par concatenation. */
+    vrai(I18N.en['Le capital emprunté au départ doit être supérieur à 0 lorsqu’un capital '
+      + 'restant dû est renseigné.'], 'et elle a sa traduction');
+    vrai(/cle: 'initial'/.test(p.slice(p.indexOf('valide: v =>'), p.indexOf('champs: bien'))),
+      'et le curseur revient sur le bon champ');
+    /* Un capital ABSENT avec une dette reste autorise : c'est « je ne sais pas ». */
+    const s = lireSource('assets/app.js');
+    vrai(/const souci = efface \? null : valide\?\.\(out\);/.test(s),
+      'la fenêtre lit la règle croisée');
+    vrai(/if \(souci\) \{[\s\S]{0,200}return;/.test(s),
+      'et reste ouverte quand elle parle');
+  });
+
+  test('répondre « non » ne lit aucune valeur de crédit', () => {
+    const s = lireSource('assets/app.js');
+    vrai(/if \(!el \|\| el\.closest\('\.field'\)\?\.hidden\) continue;/.test(s),
+      'un champ masqué ne se lit pas');
+    const p = parcours();
+    for (const cle of ['credit', 'initial', 'preteur', 'mensualite', 'taux',
+                       'tauxAssurance', 'charge']) {
+      vrai(new RegExp(`cle: '${cle}'[\\s\\S]{0,220}montreSi: avecCredit`).test(p),
+        `« ${cle} » est masqué quand la réponse est non`);
+    }
+    vrai(/if \(num\(e3\.credit\)\) \{/.test(p), 'et sans capital restant, aucun crédit n’est créé');
+  });
+
+  test('les zéros déclarés des autres champs de crédit tiennent toujours', () => {
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ id: 'd1', libelle: 'Prêt',
+        montant: 200000, initial: 240000, taux: 0, tauxAssurance: 0, mensualite: 0,
+        bienId: 'c_b' }] }];
+      s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Appartement', cash: [],
+        lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+                   usage: 'principale', prixAchat: 300000 }] }];
+      s.positions = []; s.monthly = [];
+      s.budget.income = []; s.budget.fixedCharges = [];
+    });
+    const d = Store.state.etabs[0].dettes[0];
+    eq(tauxCreditDeclare(d), 0, 'un taux à zéro reste zéro');
+    eq(num(d.tauxAssurance), 0, 'un taux d’assurance à zéro aussi');
+    eq(estDeclare(d.tauxAssurance), true, 'et il est bien déclaré');
+    eq(num(d.mensualite), 0, 'une mensualité déclarée nulle reste zéro');
+    d.mensualite = null;
+    eq(estDeclare(d.mensualite), false, 'là où une mensualité absente reste absente');
+  });
+});
+
+/* D.2 ne change rien pour une donnee valide. */
+suite('D.2 ne change rien aux données valides', () => {
+
+  const poser = (part) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ id: 'd1', libelle: 'Prêt',
+      montant: 187000, initial: 240000, taux: 2.8, mensualite: 1180,
+      tauxAssurance: 0.3, bienId: 'c_b' }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [], apport: 80000,
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+        usage: 'principale', prixDeRevient: 334000,
+        ...(part === undefined ? {} : { part }) }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = [];
+    s.budget.fixedCharges = [{ label: 'Mensualité', amount: 1180, period: 'mois',
+                               shares: {}, creditId: 'd1', bienId: 'c_b' },
+                             { label: 'Taxe foncière', amount: 250, period: 'mois',
+                               shares: {}, bienId: 'c_b' }];
+  });
+
+  test('sans quote-part, tous les totaux sont ceux d’avant D.2', () => {
+    poser();
+    pres(round2(patrimoine().brut), 370000, 'le patrimoine brut');
+    pres(round2(dettesTotal()), 187000, 'les dettes');
+    pres(round2(patrimoine().net), 183000, 'le net');
+    pres(round2(budgetFrame().fixed), 1430, 'le budget');
+    pres(round2(coutBien(compteById('c_b')).totalSorties), 1430,
+      'et la mensualité ne se dédouble pas');
+    pres(cashFlowBien(compteById('c_b')).base, 334000, 'la base d’acquisition');
+  });
+
+  test('à cinquante pour cent, les calculs sont ceux d’avant aussi', () => {
+    poser(50);
+    pres(round2(patrimoine().brut), 185000, 'la moitié de la valeur');
+    pres(round2(dettesTotal()), 187000, 'la dette entière');
+    pres(round2(budgetFrame().fixed), 1430, 'le budget ne dépend pas de la part');
+    pres(lignesDe(compteById('c_b'))[0].prixDeRevient, 167000, 'et la moitié du coût');
+    eq(lignesDe(compteById('c_b'))[0].partInvalide, false, 'rien d’invalide ici');
+  });
+
+  test('les fondations d’A, B, C et D tiennent', () => {
+    poser(50);
+    eq(Store.state.etabs[0].dettes[0].bienId, 'c_b', 'A : le crédit désigne son bien');
+    eq(creditsAClarifier().length, 0, 'A : aucune référence à clarifier');
+    eq(usageEffectifBien(compteById('c_b')).source, 'declare', 'B : l’usage est déclaré');
+    const src = lireSource('assets/app.js');
+    const st = lireSource('assets/store.js');
+    vrai(/if \(!estBienEnDirect\(c\)\) return cartePierrePapier\(c, idx, cf\);/.test(src),
+      'C : la pierre papier garde sa fiche');
+    vrai(/if \(!estBienEnDirect\(compte\)\) return FRAIS_PIERRE_PAPIER;/.test(st),
+      'C.2 : et ses frais');
+    vrai(/const pruAvant = num\(p\.buyPrice\) \|\| num\(a\.base\);/.test(src),
+      'le PRU ne se dilue pas par un zéro');
+    vrai(/Math\.abs\(plan\.ecart\) > 1/.test(st), 'D : la tolérance vaut un euro');
+    vrai(/if \(complet\)\n\s*return \{ \.\.\.socle, total: sousTotal, source: 'detail', complet: true \};/
+      .test(st), 'D.1 : le détail ne prend la main que complet');
     vrai(!/capitalMois \+ [^;]*cashFlow|cashFlow \+ [^;]*capitalMois/.test(src),
       'et le capital remboursé ne rejoint aucun cash-flow');
   });
