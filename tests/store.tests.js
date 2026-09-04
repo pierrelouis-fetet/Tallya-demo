@@ -4035,7 +4035,7 @@ suite('Synchronisation : c’est toujours la version en ligne', () => {
 /* ------------------------------------------------------------------
    Les charges fixes se rangent : a la main, ou du plus cher
    ------------------------------------------------------------------ */
-suite('Ordre des charges fixes : le sien, ou celui des montants', () => {
+suite('Les charges fixes se rangent du plus cher au moins cher', () => {
 
   const poser = () => {
     Fixture.poser();
@@ -4047,277 +4047,104 @@ suite('Ordre des charges fixes : le sien, ou celui des montants', () => {
     ];
   };
 
-  test('déplacer décale, ça n’échange pas deux lignes', () => {
-    /* Glisser la derniere ligne en tete doit decaler toutes les autres d'un
-       cran. Un echange troquerait la premiere contre la derniere et melangerait
-       tout le reste : c'est le defaut classique de ce geste. */
-    poser();
-    vrai(deplacerCharge(3, 0), 'le déplacement se fait');
-    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' '),
-      'Streaming Loyer Assurance Mobile', 'la dernière passe en tête, les autres décalent');
-  });
-
-  test('un déplacement hors bornes ne touche à rien', () => {
-    poser();
-    const avant = Store.state.budget.fixedCharges.map(c => c.label).join(' ');
-    for (const [de, vers] of [[-1, 0], [0, 9], [9, 0], [2, 2], [0.5, 1]]) {
-      vrai(!deplacerCharge(de, vers), `« ${de} → ${vers} » se refuse`);
-    }
-    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' '), avant,
-      'et la liste est intacte');
-  });
-
   test('le tri se fait sur l’équivalent mensuel, pas sur le montant saisi', () => {
     /* Une assurance a 600 € l'an pese 50 € par mois. La ranger devant un
        abonnement a 60 € trimestriels — 20 € par mois — est juste ; la ranger
        d'apres les 600 dirait le contraire de la colonne affichee a cote. */
     poser();
-    const cher = chargesOrdonnees('cher').map(x => x.c.label);
-    eq(cher.join(' '), 'Loyer Assurance Streaming Mobile',
+    eq(chargesOrdonnees().map(x => x.c.label).join(' '), 'Loyer Assurance Streaming Mobile',
       'du plus cher au moins cher, au mois');
-    const m = chargesOrdonnees('cher').map(x => chargeMensuelle(x.c));
+    const m = chargesOrdonnees().map(x => chargeMensuelle(x.c));
     vrai(m.every((v, k) => k === 0 || m[k - 1] >= v), 'et la suite est décroissante');
   });
 
-  test('trier est une lecture : le tableau ne bouge pas', () => {
-    /* Trier en reecrivant la liste detruirait l'ordre choisi a la main, et il
-       n'y aurait plus moyen d'y revenir. */
+  test('trier est une lecture : la liste enregistrée ne bouge pas', () => {
+    /* Trier en reecrivant `fixedCharges` reordonnerait les donnees a chaque
+       rendu. La saisie, l'import et l'export lisent cette liste-la, et elle
+       garde l'ordre ou elle est arrivee. */
     poser();
     const avant = Store.state.budget.fixedCharges.map(c => c.label).join(' ');
-    chargesOrdonnees('cher');
-    chargesOrdonnees('mien');
+    chargesOrdonnees();
+    chargesOrdonnees();
     eq(Store.state.budget.fixedCharges.map(c => c.label).join(' '), avant,
-      'l’ordre du détenteur survit au tri');
+      'l’ordre enregistré survit au tri');
   });
 
-  test('chaque ligne garde son rang réel, quel que soit l’ordre', () => {
+  test('chaque ligne garde son rang réel dans le tableau', () => {
     /* La vue s'en sert pour ouvrir, modifier et supprimer. Sans lui, trier par
        montant ferait porter un clic sur la ligne voisine — et le defaut ne se
        verrait qu'en supprimant la mauvaise charge. */
     poser();
-    for (const ordre of ['mien', 'cher']) {
-      const l = chargesOrdonnees(ordre);
-      eq(l.length, 4, `« ${ordre} » rend toutes les lignes`);
-      for (const { c, i } of l) {
-        eq(Store.state.budget.fixedCharges[i], c,
-          `« ${ordre} » : le rang ${i} désigne bien « ${c.label} »`);
-      }
-      eq([...l.map(x => x.i)].sort().join(','), '0,1,2,3', 'et aucun rang ne manque');
+    const l = chargesOrdonnees();
+    eq(l.length, 4, 'toutes les lignes sont rendues');
+    for (const { c, i } of l) {
+      eq(Store.state.budget.fixedCharges[i], c, `le rang ${i} désigne bien « ${c.label} »`);
     }
+    eq([...l.map(x => x.i)].sort().join(','), '0,1,2,3', 'et aucun rang ne manque');
   });
 
-  test('une liste vide ou d’une ligne se range sans rien casser', () => {
+  test('une liste vide ou d’une seule ligne se range sans rien casser', () => {
     Fixture.poser();
     Store.state.budget.fixedCharges = [];
-    eq(chargesOrdonnees('cher').length, 0, 'aucune ligne');
+    eq(chargesOrdonnees().length, 0, 'aucune ligne');
     Store.state.budget.fixedCharges = [{ label: 'Seule', amount: 10, period: 'mois' }];
-    eq(chargesOrdonnees('cher').length, 1, 'une ligne');
-    vrai(!deplacerCharge(0, 0), 'qu’on ne peut pas déplacer sur elle-même');
+    eq(chargesOrdonnees().length, 1, 'une ligne');
   });
 
-  test('la poignée ne paraît qu’en ordre manuel', () => {
-    /* Sous un tri calcule, glisser une ligne ne voudrait rien dire : le tri la
-       remettrait ou il veut au rendu suivant. */
-    const app = lireSource('assets/app.js');
-    vrai(/const poigneeCharge = \(\) => ordreCharges !== 'mien' \? ''/.test(app),
-      'la poignée se tait dès que l’ordre est calculé');
-    /* Et le geste ne s'arme pas non plus. */
-    vrai(/sousOngletActif\.budget === 'cadre' && ordreCharges === 'mien'/.test(app),
-      'le glissement ne se monte qu’en ordre manuel');
+  test('deux charges du même poids ne se mangent pas', () => {
+    /* Un tri qui compare a zero peut echanger deux egales sans rien perdre :
+       ce qui compterait, et qui se verrait a la suppression, serait qu'un rang
+       disparaisse. */
+    Fixture.poser();
+    Store.state.budget.fixedCharges = [
+      { label: 'A', amount: 50, period: 'mois' },
+      { label: 'B', amount: 600, period: 'an' },
+      { label: 'C', amount: 50, period: 'mois' },
+    ];
+    const l = chargesOrdonnees();
+    eq(l.length, 3, 'les trois sont là');
+    eq([...l.map(x => x.i)].sort().join(','), '0,1,2', 'et chacune garde son rang');
   });
 
-  test('le geste sert la souris et le doigt du même code', () => {
-    /* `pointerdown` et non `touchstart` : c'est la seule facon d'avoir un geste
-       identique sur telephone et sur bureau. */
+  test('il n’y a plus qu’un ordre : le commutateur est parti', () => {
+    /* Deux ordres et un commutateur pour passer de l'un a l'autre demandaient
+       de choisir avant de lire. Une liste de charges se lit pour savoir ce qui
+       pese, et cette reponse-la ne depend d'aucun rangement personnel. */
+    const store = lireSource('assets/store.js');
     const app = lireSource('assets/app.js');
-    const i = app.indexOf('function monterGlissement(');
-    const fn = app.slice(i, app.indexOf('\n}', i));
-    for (const e of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
-      vrai(new RegExp(`'${e}'`).test(fn), `« ${e} » est écouté`);
+    const dico = lireSource('assets/i18n.js');
+    vrai(/function chargesOrdonnees\(\) \{/.test(store),
+      'la fonction ne prend plus d’ordre en paramètre');
+    vrai(!/ORDRES_CHARGES/.test(store) && !/ORDRES_CHARGES/.test(app),
+      'la table des deux ordres n’existe plus');
+    vrai(!/let ordreCharges/.test(app), 'ni le réglage de vue');
+    vrai(!/data-action="charges-ordre"/.test(app) && !/'charges-ordre'\(btn\)/.test(app),
+      'ni son bouton, ni l’action qui l’écoutait');
+    for (const clef of ["'Mon ordre'", "'Du plus cher'"]) {
+      vrai(!dico.includes(clef), `la clef ${clef} est morte avec le commutateur`);
     }
-    vrai(!/touchstart|mousedown/.test(fn), 'et aucun second jeu d’écouteurs');
-    /* Le mouvement s'ecoute sur le DOCUMENT, et c'est ce qui fait tenir le geste
-       sur un telephone. La premiere version capturait le pointeur sur la
-       poignee ; or reordonner DEPLACE la ligne qui la contient, deplacer un
-       noeud le retire puis le reinsere, et le navigateur relache alors la
-       capture. Le geste mourait au premier reordonnancement : la ligne se
-       soulevait, puis le depot n'arrivait jamais. Rien ne le montrait sur un
-       navigateur de bureau pilote par des evenements synthetiques. */
-    vrai(!/setPointerCapture/.test(fn),
-      'aucune capture sur un nœud que le geste va déplacer');
-    vrai(/document\.addEventListener\('pointermove', bouger/.test(fn),
-      'le mouvement s’écoute sur le document');
-    vrai(/document\.removeEventListener\('pointermove', bouger\)/.test(fn),
-      'et se retire au relâchement, sinon chaque geste en laisserait un de plus');
-    vrai(/porte\.style\.transform = `translateY\(/.test(fn),
-      'la ligne suit le doigt : sans quoi on ne voit pas ce qu’on tient');
+  });
+
+  test('le glissement part avec lui, il ne reste pas armé', () => {
+    /* Il ne servait que cette liste : personne d'autre ne posait l'attribut de
+       rang. Le laisser en place armerait un geste qui reordonne une liste que
+       plus rien n'affiche dans cet ordre. */
+    const app = lireSource('assets/app.js');
+    const store = lireSource('assets/store.js');
+    for (const mort of [/function monterGlissement/, /function poserOrdreCharges/,
+                        /const poigneeCharge/, /class="rang-glissant"/,
+                        /class="cell-poignee"/, /data-rang="/]) {
+      vrai(!mort.test(app), `${mort.source} n’a plus rien à faire dans app.js`);
+    }
+    vrai(!/function deplacerCharge/.test(store),
+      'ni la fonction qui réécrivait l’ordre dans les données');
     const css = lireSource('assets/styles.css');
-    vrai(/\.poignee \{[^}]*touch-action: none/.test(css),
-      'sans « touch-action: none » le navigateur prendrait le geste pour un défilement');
-    vrai(!/\.rang-glissant \{[^}]*touch-action: none/.test(css),
-      'et la rangée entière ne le porte pas : on doit pouvoir faire défiler la page');
-    /* Un appui maintenu sur un telephone declenche la selection de texte du
-       systeme, dont les poignees prennent le geste a leur compte. */
-    vrai(/\.en-glissement, \.en-glissement \* \{[^}]*user-select: none/.test(css),
-      'la liste cesse d’être sélectionnable pendant le geste');
-    vrai(/-webkit-touch-callout: none/.test(css),
-      'et le menu contextuel du maintien ne s’ouvre pas');
-    vrai(/hote\.classList\.add\('en-glissement'\)/.test(fn)
-      && /hote\.classList\.remove\('en-glissement'\)/.test(fn),
-      'la classe se pose au départ et se retire à la fin : hors geste, le texte '
-      + 'reste sélectionnable comme partout ailleurs');
-  });
-
-  test('l’ordre final se lit dans le DOM, il ne se recalcule pas', () => {
-    /* Pendant le geste la ligne est reellement inseree entre ses voisines :
-       l'ordre affiche EST l'ordre final, donc rien a reconcilier au
-       relachement. Ce qu'on voit est ce qu'on obtient. */
-    const app = lireSource('assets/app.js');
-    vrai(/surFin\(\[\.\.\.hote\.querySelectorAll\('\[data-rang\]'\)\]\.map\(r => \+r\.dataset\.rang\)\)/.test(app),
-      'le relâchement lit les rangs affichés');
-    const i = app.indexOf('function poserOrdreCharges(');
-    const fn = app.slice(i, app.indexOf('\n}', i));
-    vrai(/if \(rangs\.length !== arr\.length\) return;/.test(fn),
-      'un rendu concurrent ne peut pas tronquer la liste');
-    vrai(/if \(neuf\.some\(x => !x\)\) return;/.test(fn),
-      'ni un rang inconnu la trouer');
-  });
-
-  test('un seul réglage pour les deux listes', () => {
-    /* La liste du telephone et le tableau du bureau : deux controles pour un
-       meme reglage finiraient par dire deux choses. */
-    const app = lireSource('assets/app.js');
-    eq((app.match(/data-action="charges-ordre"/g) || []).length, 1,
-      'un seul contrôle, dans un seul balisage');
-    eq((app.match(/chargesOrdonnees\(ordreCharges\)/g) || []).length, 2,
-      'et les deux listes le lisent');
-  });
-
-  test('les voisines rejoignent leur place au lieu d’y sauter', () => {
-    /* Le navigateur ne sait pas animer un changement d'ordre du DOM : pour lui
-       la ligne a disparu d'un endroit et reparu ailleurs. On note donc ou sont
-       les voisines AVANT de deplacer, on les repose visuellement a leur ancienne
-       place, et on les laisse revenir. */
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('const glisserVoisines = avant =>');
-    const fn = app.slice(i, app.indexOf('\n  };', i));
-    vrai(i > 0, 'la fonction d’animation doit être trouvable');
-    vrai(/const d = y0 - x\.getBoundingClientRect\(\)\.top;/.test(fn),
-      'l’écart se mesure entre l’ancienne place et la nouvelle');
-    vrai(/x\.animate\(/.test(fn), 'et la voisine revient de cet écart');
-    /* La mesure se prend avant le deplacement, sinon elle ne mesure rien. */
-    const b = app.indexOf('const bouger = e =>');
-    const bloc = app.slice(b, app.indexOf('\n  };', b));
-    const iMesure = bloc.indexOf('avant.set(x, x.getBoundingClientRect().top)');
-    const iBouge = bloc.indexOf('hote.insertBefore(porte, r)');
-    vrai(iMesure > 0 && iBouge > 0, 'les deux gestes existent');
-    vrai(iMesure < iBouge, 'et la mesure précède le déplacement');
-    /* La ligne portee suit le doigt : ce n'est pas a une animation de la placer. */
-    vrai(/if \(x !== porte\) avant\.set\(/.test(bloc),
-      'la ligne portée est exclue de l’animation');
-  });
-
-  test('deux animations ne se superposent pas sur la même ligne', () => {
-    /* Un glissement rapide fait traverser plusieurs voisines par seconde. Deux
-       animations sur le meme element donnent un tremblement, pas un mouvement. */
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('const glisserVoisines = avant =>');
-    const fn = app.slice(i, app.indexOf('\n  };', i));
-    vrai(/if \(x\.__glisse\) x\.__glisse\.cancel\(\);/.test(fn),
-      'la précédente s’annule avant que la suivante parte');
-    /* Et tout meurt avec le geste : la liste se redessine juste apres, et une
-       voisine encore en mouvement sur un element qui va etre remplace laisse un
-       clignotement. */
-    const f = app.indexOf('const finir = () => {');
-    const fin = app.slice(f, app.indexOf('\n  };', f));
-    vrai(/x\.__glisse\.cancel\(\); x\.__glisse = null;/.test(fin),
-      'et le relâchement les annule toutes');
-  });
-
-  test('le mouvement réduit est respecté, et relu à chaque geste', () => {
-    /* Une valeur figee au chargement continuerait d'animer chez quelqu'un qui
-       vient de demander l'arret. Meme convention que les graphiques. */
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('const glisserVoisines = avant =>');
-    const fn = app.slice(i, app.indexOf('\n  };', i));
-    vrai(/matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches\) return;/.test(fn),
-      'l’animation se tait quand le mouvement est refusé');
-    vrai(fn.indexOf('matchMedia') < fn.indexOf('x.animate('),
-      'et la garde vient avant l’animation, pas après');
-  });
-
-  test('les montants gardent leur colonne, poignée ou pas', () => {
-    /* Sans poignee — le cas des que l'ordre est calcule — la ligne devenait le
-       premier enfant de la rangee et tombait dans la colonne `auto`, qui se
-       dimensionne au contenu. Chaque rangee prenait la largeur de son propre
-       libelle : les montants partaient en escalier et les chevrons avec eux. */
-    const css = lireSource('assets/styles.css');
-    vrai(/\.rang-glissant > \.poignee \{ grid-column: 1; \}/.test(css),
-      'la poignée est placée par sa colonne');
-    vrai(/\.rang-glissant > \.mlist \{ grid-column: 2;/.test(css),
-      'la ligne aussi, et non par son rang parmi les enfants');
-    vrai(/\.rang-glissant \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)/.test(css),
-      '« minmax(0, 1fr) » : un libellé long ne repousse pas la piste');
-  });
-
-  test('le tableau du bureau se glisse aussi', () => {
-    /* La poignee ne vivait que dans la liste du telephone, laquelle est masquee
-       au-dessus de 768 px : sur un ecran large, il n'y avait aucun moyen de
-       reordonner. Le meme mecanisme sert les deux. */
-    const app = lireSource('assets/app.js');
-    vrai(/<tbody id="chargesTable">/.test(app), 'le corps du tableau est nommé');
-    vrai(/data-action="edit-charge" data-i="\$\{i\}" data-rang="\$\{i\}"/.test(app),
-      'chaque rangée porte son rang');
-    vrai(/monterGlissement\(\$\('#chargesListe'\), poserOrdreCharges\);\s*\n\s*monterGlissement\(\$\('#chargesTable'\), poserOrdreCharges\);/.test(app),
-      'les deux listes s’arment du même mécanisme');
-  });
-
-  test('la colonne des poignées paraît et disparaît sur les trois étages', () => {
-    /* Un tableau dont l'en-tete, le corps et le pied ne comptent pas le meme
-       nombre de colonnes se decale, et le total finit sous la mauvaise. */
-    const app = lireSource('assets/app.js');
-    eq((app.match(/ordreCharges === 'mien' \? '<th><\/th>' : ''/g) || []).length, 1,
-      'l’en-tête suit l’ordre');
-    eq((app.match(/ordreCharges === 'mien' \? `<td class="cell-poignee">/g) || []).length, 1,
-      'le corps aussi');
-    vrai(/colspan="\$\{ordreCharges === 'mien' \? 3 : 2\}"/.test(app),
-      'et le pied compte une colonne de plus quand elle existe');
-  });
-
-  test('un clic parti de la poignée n’ouvre pas la ligne', () => {
-    /* Sur le tableau, la rangee entiere porte `data-action` : sans garde, chaque
-       prise de poignee ouvrait la fenetre d'edition au relachement. */
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('function monterGlissement(');
-    const fn = app.slice(i, app.indexOf('\n}', i));
-    vrai(/if \(e\.target\.closest\('\.poignee'\)\) \{ e\.stopPropagation\(\); e\.preventDefault\(\); \}/.test(fn),
-      'le clic de la poignée est avalé');
-    vrai(/\}, true\);/.test(fn),
-      'en phase de capture, donc avant que l’action déléguée ne le voie');
-  });
-
-  test('la poignée ferme la rangée du tableau, elle ne l’ouvre pas', () => {
-    /* La premiere colonne est epinglee au defilement horizontal : une poignee y
-       aurait pris la place du seul nom qui doit rester visible. */
-    const app = lireSource('assets/app.js');
-    const i = app.indexOf('<tbody id="chargesTable">');
-    const rangee = app.slice(i, app.indexOf('</tr>`).join(\'\')}</tbody>', i));
-    const iNom = rangee.indexOf('sticky-col');
-    const iPoignee = rangee.indexOf('cell-poignee');
-    vrai(iNom > 0 && iPoignee > 0, 'les deux cellules existent');
-    vrai(iNom < iPoignee, 'le nom épinglé reste en tête de rangée');
-  });
-
-  test('les mots se traduisent', () => {
-    eq(I18N.en['Mon ordre'], 'My order', 'l’ordre du détenteur');
-    vrai(I18N.en['Du plus cher'], 'le tri par montant');
-    vrai(I18N.en['Glisser pour déplacer'], 'l’infobulle de la poignée');
+    for (const mort of ['.rang-glissant', '.cell-poignee', '.liste-ordre', '.en-glissement']) {
+      vrai(!css.includes(mort), `« ${mort} » est parti des styles`);
+    }
   });
 });
 
-/* ------------------------------------------------------------------
-   Le non cote se nomme avec les mots qui sont a l'ecran
-   ------------------------------------------------------------------ */
 suite('Non coté : une aide qui cite ce qui existe', () => {
 
   const aideType = () => {
@@ -15908,7 +15735,7 @@ suite('Ce qu’un bien rapporte, sans embellir', () => {
     loue();
     const cf = cashFlowBien(compteById('c_immo'));
     eq(cf.rendementNetNet, null, 'aucun chiffre inventé');
-    eq(cf.impot, 0, 'et rien de retiré');
+    eq(cf.impot, null, 'et aucun montant : rien de déclaré ne vaut pas zéro d’impôt');
   });
 
   test('le cash-flow retire tout ce qui sort, impôt compris', () => {
@@ -15983,6 +15810,197 @@ suite('Ce qu’un bien rapporte, sans embellir', () => {
 /* ------------------------------------------------------------------
    La fiche pose la question de l usage, pas une seule pour tous
    ------------------------------------------------------------------ */
+suite('La fiscalité d’un bien se déclare, elle ne se devine pas', () => {
+  /* Un loyer de 600 et une taxe de 100 : la base du mois vaut 500, et les trois
+     etats se lisent sur les memes nombres. */
+  const loue = (modif) => Fixture.poser(s => {
+    s.budget.income.push({ label: 'Loyer studio', amount: 600, period: 'mois', bienId: 'c_immo' });
+    s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 100, period: 'mois',
+                                 shares: {}, bienId: 'c_immo' });
+    if (modif) modif(s);
+  });
+  const bien = () => compteById('c_immo');
+  const cf = () => cashFlowBien(bien());
+  const regle = (modif) => loue(s => modif(s.comptes.find(c => c.id === 'c_immo')));
+
+  test('rien de saisi ne vaut pas zéro d’impôt', () => {
+    /* LE DEFAUT QUE CETTE ETAPE CORRIGE. `impot` valait 0 sans rien de declare,
+       et le cash-flow retranchait ce zero : le chiffre de tete s'annonçait donc
+       comme ce qui reste, apres un impot que personne n'avait estime. Une donnee
+       absente passait pour une mesure — exactement ce que `rendementBrut` refuse
+       de faire depuis longtemps. */
+    loue();
+    const x = cf();
+    eq(x.fiscalite.source, 'inconnue', 'aucune source de fiscalité');
+    eq(x.impot, null, 'et aucun montant, plutôt qu’un zéro qui se prendrait pour un calcul');
+    eq(x.fiscalite.annuel, null, 'ni à l’année');
+    eq(x.cashFlowApresImpot, null, 'il n’y a pas d’après-impôt sans impôt');
+    pres(x.cashFlowAvantImpot, 500, 'celui d’avant existe toujours : 600 − 100');
+    pres(x.cashFlow, 500, 'et c’est lui que le chiffre de tête porte');
+    eq(x.rendementNetNet, null, 'aucun net d’impôt inventé');
+  });
+
+  test('un montant annuel déclaré fait la fiscalité, au douzième', () => {
+    regle(c => { c.fiscaliteEstimeeAnnuelle = 1200; });
+    const x = cf();
+    eq(x.fiscalite.source, 'declaree', 'la déclaration est la meilleure des sources');
+    pres(x.fiscalite.annuel, 1200, 'l’année telle qu’elle est saisie');
+    pres(x.impot, 100, 'le mois en est le douzième');
+    pres(x.cashFlowApresImpot, 400, '600 − 100 − 100');
+    pres(x.cashFlow, x.cashFlowApresImpot, 'et le chiffre de tête est celui d’après');
+    eq(x.fiscalite.taux, null, 'aucun taux n’est déduit du montant');
+  });
+
+  test('un montant annuel déclaré à zéro est un zéro, pas une absence', () => {
+    /* « Vide n'est pas zero » se joue ici, et seulement ici : le montant est le
+       seul des deux champs qui sache dire « rien a payer ». Un deficit foncier
+       reporte donne exactement ce cas. */
+    regle(c => { c.fiscaliteEstimeeAnnuelle = 0; });
+    const x = cf();
+    eq(x.fiscalite.source, 'declaree', 'zéro est une réponse');
+    eq(x.impot, 0, 'et le montant vaut zéro');
+    pres(x.cashFlowApresImpot, 500, 'l’après-impôt existe, et il égale l’avant');
+    vrai(x.rendementNetNet !== null, 'le net d’impôt existe : il est calculable');
+    pres(x.rendementNetNet, x.rendementNet, 'et vaut le net de charges, sans rien inventer');
+  });
+
+  test('un taux hérité survit, et s’annonce comme une estimation', () => {
+    regle(c => { c.tauxImpot = 30; });
+    const x = cf();
+    eq(x.fiscalite.source, 'legacy', 'le taux reste une source, il ne se perd pas');
+    pres(x.impot, 150, 'trente pour cent de 600 − 100, comme avant');
+    pres(x.fiscalite.taux, 30, 'et le taux se relit pour être affiché');
+    pres(x.fiscalite.annuel, 1800, 'l’année s’en déduit, elle ne se saisit pas');
+    pres(x.cashFlow, 350, 'le cash-flow ne change pas de valeur en changeant de nom');
+  });
+
+  test('un montant déclaré l’emporte sur un taux hérité, sans l’effacer', () => {
+    regle(c => { c.tauxImpot = 30; c.fiscaliteEstimeeAnnuelle = 600; });
+    const x = cf();
+    eq(x.fiscalite.source, 'declaree', 'la déclaration passe devant l’estimation');
+    pres(x.impot, 50, 'et c’est elle qui compte');
+    pres(num(bien().tauxImpot), 30, 'le taux reste dans les données : lire n’écrit pas');
+    eq(bien().fiscaliteEstimeeAnnuelle, 600, 'et le montant n’a pas bougé non plus');
+  });
+
+  test('un taux n’est jamais converti en montant tout seul', () => {
+    /* Un taux n'est pas un montant. Le convertir a l'ouverture ecrirait une
+       declaration que personne n'a faite, et plus rien ensuite ne dirait qu'elle
+       vient d'une estimation. La conversion se fait au calcul, a chaque lecture,
+       et le champ declaratif reste vide. */
+    regle(c => { c.tauxImpot = 30; });
+    cf(); cf();
+    eq(bien().fiscaliteEstimeeAnnuelle, undefined,
+      'le champ déclaratif reste vide après lecture');
+  });
+
+  test('un taux à zéro n’est pas une déclaration de zéro', () => {
+    /* Le champ pour cent affiche le vide quand il vaut zero, et ecrit le vide
+       quand on l'efface : il n'a jamais su exprimer « zero pour cent ». Lui
+       preter ce sens aujourd'hui relirait autrement des donnees ecrites hier. */
+    regle(c => { c.tauxImpot = 0; });
+    const x = cf();
+    eq(x.fiscalite.source, 'inconnue', 'un zéro dans ce champ-là ne déclare rien');
+    eq(x.impot, null, 'donc aucun montant');
+  });
+
+  test('un montant négatif ne se lit pas, et ne réveille pas le taux', () => {
+    regle(c => { c.tauxImpot = 30; c.fiscaliteEstimeeAnnuelle = -100; });
+    const x = cf();
+    eq(x.fiscalite.source, 'inconnue',
+      'une valeur qu’on ne sait pas lire ne se remplace pas par une autre');
+    eq(x.impot, null, 'et rien n’est retiré');
+  });
+
+  test('la base imposée reste le loyer moins les charges, jamais négative', () => {
+    loue(s => {
+      s.comptes.find(c => c.id === 'c_immo').tauxImpot = 30;
+      s.budget.fixedCharges.push({ label: 'Travaux', amount: 900, period: 'mois',
+                                   shares: {}, bienId: 'c_immo' });
+    });
+    const x = cf();
+    eq(x.impot, 0, 'un déficit ne se taxe pas : l’application ne connaît pas tes autres revenus');
+    eq(x.fiscalite.source, 'legacy', 'la source, elle, reste celle qu’on a déclarée');
+  });
+
+  test('sans base mensuelle, la fiscalité dit son état sans donner de montant', () => {
+    /* La porte s'ouvre aussi hors du cash-flow : l'ecran des reglages veut
+       savoir QUELLE source est active sans avoir a calculer un loyer. */
+    regle(c => { c.tauxImpot = 30; });
+    const f = fiscaliteBien(bien());
+    eq(f.source, 'legacy', 'la source se connaît sans base');
+    eq(f.mensuel, null, 'mais pas le montant, qui en dépend');
+    eq(f.annuel, null, 'ni l’année');
+    pres(f.taux, 30, 'seul le taux se lit');
+    eq(fiscaliteBien(null).source, 'inconnue', 'et sans bien, rien n’est connu');
+  });
+
+  test('un montant déclaré ouvre le net d’impôt, que le taux n’ouvrait plus seul', () => {
+    /* Le rendement net d'impot se testait sur le TAUX. Un detenteur qui declare
+       son montant annuel, et lui seul, n'y avait donc pas droit — alors que sa
+       donnee est la meilleure des deux. */
+    const src = lireSource('assets/store.js');
+    vrai(!/\(base && tauxImpot\)/.test(src), 'la condition ne porte plus sur le taux');
+    vrai(/rendementNetNet: \(base > 0 && impot !== null\)/.test(src),
+      'mais sur un impôt calculable');
+    regle(c => { c.fiscaliteEstimeeAnnuelle = 1200; });
+    pres(cf().rendementNetNet, (600 - 100 - 100) * 12 / 110000 * 100,
+      'et le chiffre suit le montant déclaré');
+  });
+
+  test('l’écran nomme le total selon ce qu’il sait de la fiscalité', () => {
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function carteLocatif'),
+                           src.indexOf('function lignesDuMois'));
+    vrai(/Cash-flow avant fiscalité/.test(bloc),
+      'sans fiscalité connue, le total dit qu’il est d’avant');
+    vrai(/cf\.fiscalite\.source === 'inconnue'/.test(bloc),
+      'et c’est l’état de la fiscalité qui en décide');
+    vrai(/<dd class="\$\{cls\(cf\.cashFlow\)\}"><b>/.test(bloc),
+      'le montant, lui, ne change pas de place');
+  });
+
+  test('la ligne de fiscalité s’affiche toujours, et dit ce qu’elle ignore', () => {
+    const src = lireSource('assets/app.js');
+    /* Les bornes sont du CODE : une fenetre en caracteres se defait des que les
+       commentaires partent, et l'arbre publie n'en a aucun. */
+    const fn = src.slice(src.indexOf('function ligneFiscalite'),
+                         src.indexOf('function carteUsageInconnu'));
+    vrai(/const f = cf\.fiscalite;/.test(fn), 'ligneFiscalite doit être trouvable, et seule');
+    vrai(!/!cf\.impot \? '' :/.test(src),
+      'la ligne ne disparaît plus quand le montant vaut zéro ou rien');
+    vrai(/non estimée/.test(fn), 'l’état inconnu porte son mot');
+    vrai(/estimation simplifiée à confirmer/.test(fn),
+      'et l’estimation héritée porte le sien');
+    vrai(/ligneFiscalite\(cf\),/.test(src), 'et la cascade du mois l’appelle');
+  });
+
+  test('le champ annuel se propose, le taux ne se propose plus', () => {
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function reglagesExploitation'),
+                         src.indexOf('const periodeDite'));
+    vrai(/comptes\.\$\{idx\}\.moisLoues/.test(fn), 'la bonne fonction est lue');
+    vrai(/comptes\.\$\{idx\}\.fiscaliteEstimeeAnnuelle/.test(fn),
+      'le montant annuel a son champ');
+    vrai(/\$\{!\(num\(c\.tauxImpot\) > 0\) \? '' : /.test(fn),
+      'le taux ne s’affiche que chez ceux qui en ont déjà un');
+    vrai(/comptes\.\$\{idx\}\.tauxImpot/.test(fn),
+      'et il reste effaçable, plutôt que caché avec sa valeur');
+  });
+
+  test('le cash-flow reste la somme de ses lignes, dans les trois états', () => {
+    for (const [modif, attendu] of [[() => {}, 500],
+                                    [c => { c.tauxImpot = 30; }, 350],
+                                    [c => { c.fiscaliteEstimeeAnnuelle = 1200; }, 400]]) {
+      regle(modif);
+      const x = cf();
+      pres(x.cashFlow, x.loyers - x.charges - x.mensualite - num(x.impot),
+        'le total est la somme de ses termes affichés');
+      pres(x.cashFlow, attendu, 'et vaut ce qu’on calcule à la main');
+    }
+  });
+});
+
 suite('La fiche pose la question de l’usage', () => {
 
   test('l’usage décide de ce que la carte montre, et lui seul', () => {
@@ -16069,8 +16087,10 @@ suite('La fiche pose la question de l’usage', () => {
        vraiment du compte. Un terme du total ne peut pas rester invisible, sinon
        le total est plus petit que la somme de ce qu'on montre. */
     const store = lireSource('assets/store.js');
-    vrai(/const cashFlow = loyers - charges - mensualite - impot/.test(store),
-      'le cash-flow retranche l’impôt, parce qu’il sort du compte');
+    vrai(/const cashFlowApresImpot = impot === null \? null : cashFlowAvantImpot - impot;/.test(store),
+      'le cash-flow après fiscalité retranche l’impôt, parce qu’il sort du compte');
+    vrai(/const cashFlowAvantImpot = loyers - charges - mensualite;/.test(store),
+      'et celui d’avant ne le retranche pas, parce qu’il ne le connaît pas');
     const src = lireSource('assets/app.js');
     const bloc = src.slice(src.indexOf('function carteLocatif'),
                            src.indexOf('function lignesDuMois'));
@@ -17036,8 +17056,11 @@ suite('Un montant n’a qu’un porteur', () => {
     /* `<dt` et non `<dt>` : le sous-total du loyer retenu porte une classe, et
        le motif d'avant serait passe a cote sans rien dire. */
     const litteraux = bloc.match(/<dt[ >][^\n]*/g) || [];
-    eq(litteraux.length, 4,
-      'quatre lignes seulement s’écrivent à la main : les autres passent par ligneSource');
+    /* CINQ et non quatre : la fiscalite en ecrit deux, une par etat. Celle qui
+       porte un montant, et celle qui dit « non estimee » quand personne n'en a
+       donne — c'est une ligne de plus dans le fichier, jamais deux a l'ecran. */
+    eq(litteraux.length, 5,
+      'cinq lignes seulement s’écrivent à la main : les autres passent par ligneSource');
     /* La regle qui compte n'est pas le nombre de lignes, c'est qu'aucune ne
        laisse chercher : chacune porte une aide qui dit ou le montant se regle.
        La vacance et l'impot renvoient a un champ de la meme carte, le total des
@@ -17054,7 +17077,7 @@ suite('Un montant n’a qu’un porteur', () => {
     vrai(litteraux.every(l => l.includes('${aide(')),
       'chacune porte une aide qui dit où le montant se règle');
     vrai(/Se règle par « Mois loués par an »/.test(bloc)
-      && /Se règle par « Impôt sur ce loyer »/.test(bloc)
+      && /Se règle par « Fiscalité estimée »/.test(bloc)
       && /se lit séparément dans « Financement »/.test(bloc),
       'et les trois le disent');
   });
@@ -27760,7 +27783,7 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     const f = src.slice(src.indexOf("async 'retirer-comptes-clos'()"),
-                        src.indexOf("async 'start-blank'()"));
+                        src.indexOf("async 'supprimer-comptes-retenus'()"));
     vrai(f.length > 300, 'l’action doit être trouvable');
     vrai(/askConfirm\(/.test(f), 'elle demande avant');
     vrai(/libres\.map\(x => x\.label\)\.join\(', '\)/.test(f),
@@ -27774,6 +27797,129 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
 
 /* Un champ vide dit « je ne sais pas », un zero dit « zero ». Quatre endroits
    les confondaient, parce que `num(x) || defaut` traite zero comme absent. */
+
+/* Et celui qu'un releve retient, qui ne partait pas du tout. */
+suite('Un compte clos que des relevés portent se supprime aussi', () => {
+
+  const poser = ({ dansReleve = {}, forme = 'v' } = {}) => {
+    Fixture.poser();
+    Store.state.comptes = [
+      { id: 'c_ouvert', type: 'courant', label: 'Courant', statut: 'ouvert',
+        cash: [{ montant: 1000, affectation: 'courant' }], lignes: [] },
+    ];
+    Store.state.accounts = [{ id: 'c_fantome', label: 'aaa', group: 'cash' }];
+    Store.state.positions = [];
+    const r = { date: '2026-01-31', v: { c_ouvert: 1000, ...dansReleve },
+                comment: '', dettes: 0 };
+    if (forme === 'poches') r.poches = { cash: 1250 };
+    if (forme === 'parts') r.parts = { c_ouvert: { cash: 1000 }, c_fantome: { cash: 250 } };
+    Store.state.monthly = [r];
+    refreshAccounts();
+  };
+  const mois = () => Store.state.monthly[0];
+
+  test('il part, et le total du mois ne bouge pas d’un centime', () => {
+    poser({ dansReleve: { c_fantome: 250 } });
+    const avant = round2(rowTotal(mois()));
+    const netAvant = round2(rowNet(mois()));
+    eq(comptesClosDetaches().retenus.length, 1, 'le relevé le retient');
+    eq(retirerComptesClos(['c_fantome']), 1, 'et il se retire quand on le nomme');
+    vrai(!(Store.state.accounts || []).some(a => a.id === 'c_fantome'), 'la fiche est partie');
+    pres(round2(rowTotal(mois())), avant, 'le total du mois est le même');
+    pres(round2(rowNet(mois())), netAvant, 'le net aussi');
+    eq(comptesClosDetaches().retenus.length, 0, 'et plus rien ne le retient');
+  });
+
+  test('la ventilation du mois est gravée avant, pas après', () => {
+    /* C'est elle qui fait tenir le total : sans elle `rowGroups` retomberait sur
+       ACCOUNTS, ou le compte n'est plus, et le mois maigrirait en silence. */
+    poser({ dansReleve: { c_fantome: 250 } });
+    vrai(!mois().poches, 'le relevé ancien n’en portait pas');
+    retirerComptesClos(['c_fantome']);
+    const p = mois().poches;
+    vrai(p, 'le relevé porte désormais sa ventilation');
+    pres(Object.values(p).reduce((s, v) => s + v, 0), 1250,
+      'et elle vaut ce que le mois valait, le compte parti compris');
+  });
+
+  test('le montant saisi reste dans le relevé', () => {
+    /* Retirer une fiche n'oblige pas a detruire ce qui a ete saisi ce mois-la.
+       Plus rien ne le lit — les ecrans ne montrent que les comptes qui existent
+       — et il n'est pas efface pour autant. */
+    poser({ dansReleve: { c_fantome: 250 } });
+    retirerComptesClos(['c_fantome']);
+    pres(num(mois().v.c_fantome), 250, 'ce qui a été saisi ce mois-là est toujours là');
+  });
+
+  test('un relevé qui porte déjà sa ventilation n’est pas regravé', () => {
+    poser({ dansReleve: { c_fantome: 250 }, forme: 'poches' });
+    const avant = JSON.stringify(mois().poches);
+    const total = round2(rowTotal(mois()));
+    retirerComptesClos(['c_fantome']);
+    eq(JSON.stringify(mois().poches), avant, 'sa ventilation ne se réécrit pas');
+    pres(round2(rowTotal(mois())), total, 'et son total ne bouge pas');
+  });
+
+  test('un relevé détaillé par compte garde son détail', () => {
+    /* `parts` est la forme complète : le total s'en dérive, et y toucher
+       changerait le mois. La suppression ne l'approche pas. */
+    poser({ dansReleve: { c_fantome: 250 }, forme: 'parts' });
+    const total = round2(rowTotal(mois()));
+    retirerComptesClos(['c_fantome']);
+    vrai(!mois().poches, 'rien n’est gravé par-dessus');
+    vrai(mois().parts.c_fantome, 'le détail du mois est intact');
+    pres(round2(rowTotal(mois())), total, 'et le total avec lui');
+  });
+
+  test('sans argument, seuls les comptes libres partent', () => {
+    /* Le geste d'avant ne change pas de sens : c'est le bouton de la carte, et
+       il ne touche a rien qu'un releve reclame. */
+    poser({ dansReleve: { c_fantome: 250 } });
+    Store.state.comptes.push({ id: 'c_clos', type: 'courant', label: 'Vieux livret',
+      statut: 'archive', cash: [], lignes: [] });
+    refreshAccounts();
+    eq(retirerComptesClos(), 1, 'un seul, celui que rien ne retient');
+    vrai((Store.state.accounts || []).some(a => a.id === 'c_fantome'),
+      'le compte que le relevé porte est toujours là');
+  });
+
+  test('un compte ouvert ne se supprime pas, même nommé', () => {
+    poser({ dansReleve: { c_fantome: 250 } });
+    eq(retirerComptesClos(['c_ouvert', 'c_inconnu']), 0,
+      'la liste ne s’ouvre qu’aux comptes clos');
+    vrai(Store.state.comptes.some(c => c.id === 'c_ouvert'), 'et il survit');
+  });
+
+  test('l’écran propose le geste, et dit ce qu’il protège', () => {
+    const src = lireSource('assets/app.js');
+    const f = src.slice(src.indexOf("async 'supprimer-comptes-retenus'()"),
+                        src.indexOf("async 'start-blank'()"));
+    vrai(/askConfirm\(/.test(f), 'il demande avant');
+    vrai(/Store\.addBackup\(/.test(f), 'il prend une sauvegarde');
+    vrai(/retenus\.map\(x => x\.label\)\.join\(', '\)/.test(f), 'il nomme ce qui part');
+    vrai(/retirerComptesClos\(retenus\.map\(x => x\.id\)\)/.test(f),
+      'et il ne retire que ceux-là');
+    vrai(/data-action="supprimer-comptes-retenus"/.test(src), 'le bouton existe');
+  });
+
+  test('les comptes clos sortent des feuilles Excel', () => {
+    /* Quatorze comptes clos ouvraient quatorze colonnes vides sur toute la
+       hauteur du fichier. Celui qu'un releve porte garde la sienne, sinon le
+       detail cesserait d'expliquer sa propre somme. */
+    const src = lireSource('assets/app.js');
+    const acc = src.slice(src.indexOf('function sheetAccounts'),
+                          src.indexOf('function sheetHistory'));
+    vrai(/ACCOUNTS\.filter\(a => !a\.legacy\)/.test(acc),
+      'la feuille des comptes ne liste que les comptes ouverts');
+    const hist = src.slice(src.indexOf('function sheetHistory'),
+                           src.indexOf('function sheetSales'));
+    vrai(/const colonnes = ACCOUNTS\.filter\(a => !a\.legacy/.test(hist),
+      'la feuille des relevés dérive ses colonnes');
+    vrai(!/\.\.\.ACCOUNTS\.map\(/.test(hist),
+      'et plus une seule ne vient d’ACCOUNTS en entier');
+  });
+});
+
 suite('Un zéro saisi n’est pas un champ vide', () => {
 
   const credit = (extra = {}) => ({ id: 'd_test', libelle: 'Prêt', montant: 100000,

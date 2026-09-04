@@ -1986,134 +1986,16 @@ function sortPositions(entries) {
    La ligne porte `avec-jauge` : c'est cette classe qui deplace la croissance du
    nom du mois vers la piste, et elle seule. `ligneListe` sert a six ecrans, et
    les cinq autres gardent leur mise en page. */
-let ordreCharges = 'mien';
+/* L'ORDRE DE LECTURE DES CHARGES FIXES A DISPARU, avec le geste qui l'entretenait.
 
-/* Glisser une ligne pour la deplacer.
+   Vivaient ici : `ordreCharges`, un reglage de vue a deux valeurs ; le
+   glissement d'une ligne a la poignee, avec son animation FLIP ; et l'ecriture
+   du nouvel ordre dans les donnees. La liste se range desormais du plus cher au
+   moins cher, toujours, et `chargesOrdonnees()` porte la regle a elle seule.
 
-   `pointerdown` et non `touchstart` : le meme code sert la souris et le doigt,
-   et c'est la seule facon d'avoir un geste identique sur telephone et sur
-   bureau. La poignee porte `touch-action: none`, sans quoi le navigateur prend
-   le mouvement pour un defilement et la ligne ne suit jamais.
-
-   Le rang se lit dans le DOM plutot que calcule : pendant le geste, la ligne
-   deplacee est reellement inseree entre ses voisines, donc l'ordre affiche EST
-   l'ordre final. Rien a reconcilier au relachement, et ce qu'on voit est ce
-   qu'on obtient.
-
-   La poignee vit hors du bouton de la ligne : un bouton dans un bouton n'existe
-   pas, et c'est la meme raison qui a donne sa forme aux lignes de compte. */
-function monterGlissement(hote, surFin) {
-  if (!hote || hote.dataset.glissant) return;
-  hote.dataset.glissant = '1';
-  let porte = null, departY = 0;
-
-  const centre = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
-
-  /* Les voisines rejoignent leur nouvelle place au lieu d'y sauter.
-
-     C'est le motif « FLIP » : on note ou elles sont AVANT de deplacer la ligne,
-     puis on les repose visuellement a leur ancienne place et on les laisse
-     revenir. Le navigateur ne sait pas animer un changement d'ordre du DOM —
-     pour lui, la ligne a simplement disparu d'un endroit et reparu ailleurs.
-
-     `element.animate()` plutot qu'une transition CSS : l'animation se nettoie
-     seule, ne laisse aucun style en ligne derriere elle, et se remplace
-     proprement quand la voisine bouge de nouveau avant la fin. Une transition
-     aurait demande de poser puis retirer `transform` a la main, sur des elements
-     que le geste continue de deplacer.
-
-     `cancel()` avant chaque nouvelle : un glissement rapide fait traverser
-     plusieurs voisines par seconde, et deux animations superposees sur le meme
-     element donnent un tremblement au lieu d'un mouvement. */
-  const glisserVoisines = avant => {
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    for (const [x, y0] of avant) {
-      const d = y0 - x.getBoundingClientRect().top;
-      if (Math.abs(d) < 0.5) continue;
-      if (x.__glisse) x.__glisse.cancel();
-      x.__glisse = x.animate(
-        [{ transform: `translateY(${d}px)` }, { transform: 'none' }],
-        { duration: 180, easing: 'cubic-bezier(.22, .61, .36, 1)' });
-    }
-  };
-
-  const bouger = e => {
-    if (!porte) return;
-    e.preventDefault();
-    porte.style.transform = `translateY(${e.clientY - departY}px)`;
-    const p = centre(porte);
-    for (const r of hote.querySelectorAll('[data-rang]')) {
-      if (r === porte) continue;
-      const c = centre(r);
-      const apres = !!(r.compareDocumentPosition(porte) & Node.DOCUMENT_POSITION_FOLLOWING);
-      if (!((p < c && apres) || (p > c && !apres))) continue;
-      const avant = new Map();
-      for (const x of hote.querySelectorAll('[data-rang]')) {
-        if (x !== porte) avant.set(x, x.getBoundingClientRect().top);
-      }
-      if (p < c) hote.insertBefore(porte, r);
-      else hote.insertBefore(porte, r.nextSibling);
-      departY = e.clientY;
-      porte.style.transform = '';
-      glisserVoisines(avant);
-      break;
-    }
-  };
-
-  const finir = () => {
-    if (!porte) return;
-    for (const x of hote.querySelectorAll('[data-rang]')) {
-      if (x.__glisse) { x.__glisse.cancel(); x.__glisse = null; }
-    }
-    document.removeEventListener('pointermove', bouger);
-    document.removeEventListener('pointerup', finir);
-    document.removeEventListener('pointercancel', finir);
-    porte.style.transform = '';
-    porte.classList.remove('porte');
-    hote.classList.remove('en-glissement');
-    porte = null;
-    surFin([...hote.querySelectorAll('[data-rang]')].map(r => +r.dataset.rang));
-  };
-
-  /* Un clic parti de la poignee n'ouvre pas la ligne.
-
-     Sur le tableau du bureau, la rangee entiere porte `data-action` : sans cette
-     garde, chaque prise de poignee ouvrait la fenetre d'edition au relachement.
-     En phase de capture, donc avant que l'action deleguee ne le voie. */
-  hote.addEventListener('click', e => {
-    if (e.target.closest('.poignee')) { e.stopPropagation(); e.preventDefault(); }
-  }, true);
-
-  hote.addEventListener('pointerdown', e => {
-    const poignee = e.target.closest('.poignee');
-    if (!poignee || !hote.contains(poignee)) return;
-    porte = poignee.closest('[data-rang]');
-    if (!porte) return;
-    departY = e.clientY;
-    porte.classList.add('porte');
-    hote.classList.add('en-glissement');
-    document.addEventListener('pointermove', bouger, { passive: false });
-    document.addEventListener('pointerup', finir);
-    document.addEventListener('pointercancel', finir);
-    e.preventDefault();
-  });
-}
-
-function poserOrdreCharges(rangs) {
-  const arr = Store.state.budget.fixedCharges || [];
-  if (rangs.length !== arr.length) return;         // rendu concurrent : on ne touche a rien
-  const neuf = rangs.map(i => arr[i]);
-  if (neuf.some(x => !x)) return;
-  Store.state.budget.fixedCharges = neuf;
-  Store.save();
-  render();
-}
-
-const poigneeCharge = () => ordreCharges !== 'mien' ? ''
-  : `<span class="poignee" role="button" tabindex="-1"
-           aria-label="${trad('Déplacer cette ligne')}"
-           title="${trad('Glisser pour déplacer')}">⠿</span>`;
-
+   Le glissement ne servait que cette liste-la : personne d'autre ne posait
+   l'attribut de rang qu'il lisait. Il part donc en entier, plutot que de rester
+   arme sur un ordre que plus rien n'affiche. */
 function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, jauge }) {
   const part = jauge == null ? null : Math.max(-1, Math.min(1, num(jauge)));
   return `
@@ -4095,6 +3977,10 @@ function viewAccounts() {
   }
 
   return `
+  ${barreCommutateur([
+    ['banque', 'Comptes et avoirs'], ['type', 'Type'],
+  ], compteVue, 'compte-vue', 'vue')}
+
   <dl class="kv cpt-resume">
     <dt>${BASES.avoirs.nom}${aide(trad("La somme des comptes ouverts de cette page. Le même nombre que sur l’accueil : si les deux diffèrent, c’est qu’un compte est archivé ou qu’un montant vient d’être corrigé."))}</dt><dd>${fmtEUR(pat.brut)}</dd>
     ${pat.dettes ? `
@@ -4102,10 +3988,6 @@ function viewAccounts() {
       <dd class="dette">−${fmtEUR(pat.dettes)}</dd>
     <dt><b>${trad('Patrimoine net')}</b></dt><dd><b>${fmtEUR(pat.net)}</b></dd>` : ''}
   </dl>
-
-  ${barreCommutateur([
-    ['banque', 'Comptes et avoirs'], ['type', 'Type'],
-  ], compteVue, 'compte-vue', 'vue')}
 
   <div class="card" style="padding:12px 16px">
     <div class="row" style="gap:10px">
@@ -4209,10 +4091,16 @@ function reglagesExploitation(c, idx) {
         <input type="number" step="1" min="0" max="12" class="champ-large"
                data-path="comptes.${idx}.moisLoues" value="${estDeclare(c.moisLoues) ? num(c.moisLoues) : ''}"
                placeholder="12"></div>
-      <div class="field"><label>${trad('Impôt sur ce loyer (%)')}${aide(trad("Ton taux à toi, celui que tu constates sur ta déclaration. L'application ne devine aucun régime fiscal : micro-foncier, réel, meublé, les règles changent et une estimation automatique finirait par mentir. Le taux s'applique au loyer moins les charges."))}</label>
+      <div class="field"><label>${trad('Fiscalité estimée (€ / an)')}${aide(trad("Ce que ce bien te coûte en impôt sur une année, tel que tu le lis sur ta déclaration. L'application ne modélise aucun régime : micro-foncier, réel, meublé, SCI, les règles changent et une estimation automatique finirait par mentir. Laisse vide tant que tu ne le sais pas : la carte écrira « non estimée » plutôt qu'un zéro qui passerait pour un calcul."))}</label>
+        <input type="number" step="1" min="0" class="champ-large"
+               data-path="comptes.${idx}.fiscaliteEstimeeAnnuelle"
+               value="${estDeclare(c.fiscaliteEstimeeAnnuelle) ? num(c.fiscaliteEstimeeAnnuelle) : ''}"
+               placeholder="${trad('facultatif')}"></div>
+      ${!(num(c.tauxImpot) > 0) ? '' : `
+      <div class="field"><label>${trad('Impôt sur ce loyer (%)')}${aide(trad("Une estimation simplifiée, saisie avant que le montant annuel existe : ton taux appliqué au loyer moins les charges. Le montant annuel, au-dessus, la remplace dès qu'il est renseigné. Vide ce champ pour ne plus la voir."))}</label>
         <input type="number" step="0.1" min="0" max="100" class="champ-large"
                data-path="comptes.${idx}.tauxImpot" value="${num(c.tauxImpot) || ''}"
-               placeholder="${trad('facultatif')}"></div>
+               placeholder="${trad('facultatif')}"></div>`}
     </div>`;
 }
 
@@ -4426,7 +4314,8 @@ function carteLocatif(c, idx, cf) {
       ${boutonsRattachement(c, 'locative')}</div>
     <dl class="kv">
       ${lignesDuMois(cf)}
-      <dt><b>${trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
+      <dt><b>${cf.fiscalite.source === 'inconnue'
+        ? trad('Cash-flow avant fiscalité') : trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
         <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
     </dl>
     ${blocCapitalRembourse(co)}
@@ -4472,12 +4361,24 @@ function lignesDuMois(cf) {
         <dd>${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>`,
     ]),
     ligneCharges(cf, -1),
-    !cf.impot ? '' : `
-      <dt>${trad('Fiscalité estimée')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte."))}
-        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
-        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>`,
+    ligneFiscalite(cf),
     ligneMensualite(cf, -1),
   ].filter(Boolean).join('');
+}
+
+function ligneFiscalite(cf) {
+  const f = cf.fiscalite;
+  const aideTxt = trad("Ce que ce bien te coûte en impôt sur un mois. Elle vient de toi : l'application ne modélise ni micro-foncier, ni réel, ni meublé, et ne devine donc aucun montant. Se règle par « Fiscalité estimée », au bas de cette carte.");
+  if (f.source === 'inconnue') return `
+      <dt>${trad('Fiscalité estimée')}${aide(aideTxt)}</dt>
+        <dd class="muted">${trad('non estimée')}</dd>`;
+  const sous = f.source === 'legacy'
+    ? `${fmtPct(f.taux, 1)} · ${trad('estimation simplifiée à confirmer')}`
+    : `${fmtEUR0(f.annuel)} ${trad('par an')}`;
+  return `
+      <dt>${trad('Fiscalité estimée')}${aide(aideTxt)}
+        <span class="sub">${sous}</span></dt>
+        <dd class="dette">−${fmtEUR(f.mensuel)} ${trad('/ mois')}</dd>`;
 }
 
 function carteUsageInconnu(c) {
@@ -5899,17 +5800,8 @@ function viewBudget(section = 'depenses') {
         const gens = contributors();
         const st = sharedTotals();
         return `
-      ${b.fixedCharges.length > 1 ? `<div class="liste-ordre">
-        <span class="segmented seg-mini">
-          ${ORDRES_CHARGES.map(([cle, lib]) => `<button data-action="charges-ordre"
-            data-ordre="${cle}" class="${ordreCharges === cle ? 'on' : ''}"
-            >${trad(lib)}</button>`).join('')}
-        </span>
-      </div>` : ''}
-
       <div class="liste-mobile" id="chargesListe">
-        ${chargesOrdonnees(ordreCharges).map(({ c, i }) => `<div class="rang-glissant" data-rang="${i}">${
-          poigneeCharge()}${ligneListe({
+        ${chargesOrdonnees().map(({ c, i }) => `${ligneListe({
           action: 'edit-charge', index: i,
           titre: c.label || 'Sans nom',
           sous: [c.provider || '', chargePeriode(c) === 'mois' ? ''
@@ -5926,7 +5818,7 @@ function viewBudget(section = 'depenses') {
             })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
           second: gens.length ? `${fmtEUR(myShareMensuelle(c))} ${trad('à ma charge')}` : '',
-        })}</div>`).join('')}
+        })}`).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
           ${gens.length ? `<dt><b>${trad('À ma charge')}</b></dt><dd><b>${fmtEUR(st.mine)}</b></dd>` : ''}
@@ -5955,10 +5847,9 @@ function viewBudget(section = 'depenses') {
                       title="Retirer ${esc(p.name)}">✕</button></th>`).join('')}
             <th title="${trad('Ce qui sort réellement de ton compte, ramené au mois')}">${trad('À ma charge')}</th>
             <th>Organisme</th><th></th>
-            ${ordreCharges === 'mien' ? '<th></th>' : ''}
           </tr></thead>
-          <tbody id="chargesTable">${chargesOrdonnees(ordreCharges).map(({ c, i }) => `<tr class="ligne-ouvre"
-              data-action="edit-charge" data-i="${i}" data-rang="${i}"
+          <tbody id="chargesTable">${chargesOrdonnees().map(({ c, i }) => `<tr class="ligne-ouvre"
+              data-action="edit-charge" data-i="${i}"
               title="Modifier ${guill(esc(c.label || 'Sans nom'))}">
             <td class="name sticky-col"><span class="mois-lien">${esc(c.label || 'Sans nom')}</span></td>
             <td>${fmtEUR(num(c.amount))}</td>
@@ -5970,13 +5861,12 @@ function viewBudget(section = 'depenses') {
             <td><b>${fmtEUR(myShareMensuelle(c))}</b></td>
             <td class="name">${esc(c.provider || '')}</td>
             <td><button class="btn icon" data-action="del-charge" data-i="${i}" title="${trad('Supprimer')}">✕</button></td>
-            ${ordreCharges === 'mien' ? `<td class="cell-poignee">${poigneeCharge()}</td>` : ''}
           </tr>`).join('')}</tbody>
           <tfoot><tr>
             <td class="sticky-col">Total / mois</td><td colspan="2"></td>
             <td>${fmtEUR(st.total)}</td><td>${fmtPct(100)}</td>
             ${st.parPersonne.map(p => `<td>${fmtEUR(p.total)}</td>`).join('')}
-            <td><b>${fmtEUR(st.mine)}</b></td><td colspan="${ordreCharges === 'mien' ? 3 : 2}"></td>
+            <td><b>${fmtEUR(st.mine)}</b></td><td colspan="2"></td>
           </tr></tfoot>
         </table>
       </div>
@@ -6194,11 +6084,11 @@ function viewData() {
     return `
   <div class="card">
     <div class="card-head"><h2>${trad('Comptes clos')}</h2>
-      <span class="hint">${libres.length} ${trad('à retirer')}</span></div>
+      <span class="hint">${libres.length + retenus.length} ${trad('clos')}</span></div>
     <p class="small muted" style="margin:0 0 12px">${trad('Un compte clos '
       + 'qu’aucun relevé ne mentionne n’apporte plus rien : il allonge la liste du '
-      + 'relevé mensuel, et c’est tout. Ceux qu’un relevé porte restent, sans quoi '
-      + 'leur montant quitterait le total de ce mois-là.')}</p>
+      + 'relevé mensuel, et c’est tout. Ceux qu’un relevé porte se suppriment à '
+      + 'part, parce que leur montant compte dans le total de ce mois-là.')}</p>
     ${!libres.length
       ? `<p class="empty" style="margin:0">${trad('Aucun compte clos à retirer.')}</p>`
       : `<p class="small" style="margin:0 0 12px">${esc(libres.map(x => x.label).join(', '))}</p>
@@ -6207,9 +6097,14 @@ function viewData() {
         trad('Retirer les {n} comptes').replace('{n}', libres.length)}</button>
     </div>`}
     ${!retenus.length ? '' : `
-    <p class="small muted" style="margin:12px 0 0">${trad('Gardés, un relevé les porte :')} ${
+    <p class="small muted" style="margin:12px 0 8px">${trad('Ceux-ci portent encore un relevé :')} ${
       esc(retenus.map(r => r.label + (r.mois.length
-        ? ` (${fmtMonth(r.mois[0].date)})` : ` (${trad('valeur actuelle')})`)).join(', '))}</p>`}
+        ? ` (${fmtMonth(r.mois[0].date)})` : ` (${trad('valeur actuelle')})`)).join(', '))}</p>
+    <div class="row fiche-actes apres-champs">
+      <button class="btn sm ghost danger" data-action="supprimer-comptes-retenus">${
+        trad('Supprimer définitivement les {n} comptes').replace('{n}', retenus.length)}</button>
+    </div>
+    <p class="small muted" style="margin:8px 0 0">${trad('Leur fiche part, tes relevés ne bougent pas : la ventilation de chaque mois concerné est gravée avant, et ton patrimoine passé reste au centime près.')}</p>`}
   </div>`;
   })()}
 
@@ -6389,7 +6284,7 @@ const lignesAvecTresorerie = r => r.cash ? [...r.classes, r.cash] : [...r.classe
 
 function sheetAccounts() {
   const info = Store.state.accountInfo;
-  const rows = ACCOUNTS
+  const rows = ACCOUNTS.filter(a => !a.legacy)
     .map(a => {
       const i = info[a.id] || {};
       const cash = cashOf(a.id);
@@ -6421,7 +6316,9 @@ function sheetAccounts() {
 
 function sheetHistory() {
   const poches = SERIES_PATRIMOINE();
-  const mixtes = ACCOUNTS.filter(a => (Store.state.monthly || []).some(r => {
+  const colonnes = ACCOUNTS.filter(a => !a.legacy
+    || (Store.state.monthly || []).some(r => Math.abs(num(r.v && r.v[a.id])) > 0.005));
+  const mixtes = colonnes.filter(a => (Store.state.monthly || []).some(r => {
     const p = r.parts && r.parts[a.id];
     if (!p) return false;
     const cash = num(p.cash);
@@ -6437,7 +6334,7 @@ function sheetHistory() {
       { h: 'Total brut', t: 'eur', w: 16 },
       { h: 'Crédits', t: 'eur', w: 14 },
       { h: 'Total net', t: 'eur', w: 16 },
-      ...ACCOUNTS.map(a => ({ h: a.label, t: 'eur', w: 15 })),
+      ...colonnes.map(a => ({ h: a.label, t: 'eur', w: 15 })),
       ...mixtes.map(a => ({ h: `${a.label} · cash`, t: 'eur', w: 15 })),
       { h: 'Commentaire', t: 'text', w: 60 },
     ],
@@ -6446,7 +6343,7 @@ function sheetHistory() {
       return [r.date,
         ...poches.map(s => round2(num(g[s.key]))),
         round2(rowTotal(r)), round2(num(r.dettes)), round2(rowNet(r)),
-        ...ACCOUNTS.map(a => r.v[a.id] == null ? null : num(r.v[a.id])),
+        ...colonnes.map(a => r.v[a.id] == null ? null : num(r.v[a.id])),
         ...mixtes.map(a => cashDuReleve(r, a.id)),
         r.comment || ''];
     }),
@@ -6969,11 +6866,6 @@ const ACTIONS = {
             : depSort.dir === 'desc' ? { key, dir: 'asc' } : null;
     render();
   },
-  'charges-ordre'(btn) {
-    ordreCharges = btn.dataset.ordre === 'cher' ? 'cher' : 'mien';
-    render();
-  },
-
   'monter-category'(btn) {
     if (deplacerCategorie(btn.dataset.cat, -1)) { Store.save(); render(); }
   },
@@ -7041,6 +6933,25 @@ const ACTIONS = {
     Store.save();
     render();
     toast(trad('{n} comptes clos retirés').replace('{n}', n));
+  },
+
+  async 'supprimer-comptes-retenus'() {
+    const { retenus } = comptesClosDetaches();
+    if (!retenus.length) return;
+    const mois = new Set();
+    for (const r of retenus) for (const m of r.mois) mois.add(m.date);
+    if (!await askConfirm(
+      trad('Supprimer définitivement {n} comptes clos ?').replace('{n}', retenus.length) + '\n\n'
+      + retenus.map(x => x.label).join(', ') + '\n\n'
+      + trad('Leur fiche part pour de bon. Les {m} relevés qui les mentionnent gardent leur total : la ventilation de chaque mois est gravée avant la suppression.')
+          .replace('{m}', mois.size) + '\n\n'
+      + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
+      { ok: 'Supprimer', danger: true })) return;
+    Store.addBackup('avant suppression des comptes clos');
+    const n = retirerComptesClos(retenus.map(x => x.id));
+    Store.save();
+    render();
+    toast(trad('{n} comptes clos supprimés').replace('{n}', n));
   },
 
   async 'start-blank'() {
@@ -9013,10 +8924,6 @@ const MOUNTS = {
   budget: () => {
     if (sousOngletActif.budget === 'releves') mountHistory();
     else if (sousOngletActif.budget === 'depenses') mountBudget();
-    else if (sousOngletActif.budget === 'cadre' && ordreCharges === 'mien') {
-      monterGlissement($('#chargesListe'), poserOrdreCharges);
-      monterGlissement($('#chargesTable'), poserOrdreCharges);
-    }
   },
   /* `objective` n'est plus une vue mais un onglet de `overview`, dont le montage
      ci-dessus appelle `mountObjective()`. L'entree reste : `#/objective` est

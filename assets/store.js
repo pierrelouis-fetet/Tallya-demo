@@ -1439,13 +1439,47 @@ function comptesClosDetaches() {
   return { libres, retenus };
 }
 
-function retirerComptesClos() {
-  const ids = new Set(comptesClosDetaches().libres.map(x => x.id));
-  if (!ids.size) return 0;
-  Store.state.comptes = (Store.state.comptes || []).filter(c => !ids.has(c.id));
-  Store.state.accounts = (Store.state.accounts || []).filter(a => !ids.has(a.id));
+/* Retire des comptes clos, des deux listes ou ils peuvent vivre, et rend leur
+   nombre. Ne sauvegarde pas : l'appelant prend une sauvegarde avant et ecrit
+   apres, comme la remise a zero.
+
+   Sans argument, ceux que rien ne retient. Avec, ceux qu'on nomme — y compris
+   ceux qu'un releve porte, et c'est tout le sujet de ce qui suit.
+
+   ON FIGE AVANT DE RETIRER. Un releve ancien ne porte que des montants par
+   compte, `v`, et son total se recompose en parcourant ACCOUNTS : retirer un
+   compte que ce releve mentionne retranchait donc son montant du total du mois,
+   sans un mot, et les mois suivants se comparaient a un passe qui avait maigri.
+   C'etait la raison pour laquelle ces comptes-la ne se retiraient pas.
+
+   `rowGroups` lit `parts`, puis `poches`, puis seulement ACCOUNTS. Ecrire
+   `poches` sur le releve AVANT la suppression y grave la ventilation telle
+   qu'elle est aujourd'hui : le total du mois cesse alors de dependre de la
+   liste des comptes, et il ne bouge pas d'un centime quand elle change.
+
+   Seuls les releves concernes sont figes, et seulement ceux qui n'ont ni
+   `parts` ni `poches` : un releve moderne porte deja sa ventilation, il n'y a
+   rien a graver.
+
+   LE MONTANT PAR COMPTE RESTE. Il ne designe plus un compte que l'application
+   connaisse, mais c'est ce qui a ete saisi ce mois-la, et rien n'oblige a le
+   detruire pour retirer une fiche. Les ecrans ne montrent que les comptes qui
+   existent : il ne se lit plus nulle part, il n'est pas efface pour autant. */
+function retirerComptesClos(ids = null) {
+  const clos = comptesClosDetaches();
+  const tous = [...clos.libres, ...clos.retenus];
+  const cibles = new Set((ids ? tous.filter(x => ids.includes(x.id)) : clos.libres)
+    .map(x => x.id));
+  if (!cibles.size) return 0;
+  for (const r of (Store.state.monthly || [])) {
+    if (r.parts || r.poches) continue;
+    if (![...cibles].some(id => r.v && r.v[id] != null)) continue;
+    r.poches = rowGroups(r);
+  }
+  Store.state.comptes = (Store.state.comptes || []).filter(c => !cibles.has(c.id));
+  Store.state.accounts = (Store.state.accounts || []).filter(a => !cibles.has(a.id));
   refreshAccounts();
-  return ids.size;
+  return cibles.size;
 }
 
 function accountTypes() { return Store.state.accountTypes; }
@@ -4151,31 +4185,27 @@ function expenseCategories() {
 /*    Deplace une categorie d'un cran. L'ordre de `budget.categories` EST l'ordre
    des colonnes du detail mensuel, de la fenetre de saisie, des graphiques et
    des exports : une seule liste, donc un seul geste pour tous ces ecrans.*/
-/* Les charges fixes, dans l'ordre ou on veut les lire.
+/* Les charges fixes, de la plus lourde a la plus legere.
 
-   Deux ordres, et un seul est modifiable : celui du detenteur, qui est l'ordre
-   du tableau lui-meme. « Du plus cher » est une LECTURE, calculee a l'affichage
-   et jamais ecrite — trier en reecrivant la liste detruirait l'ordre choisi a la
-   main, et il n'y aurait plus moyen d'y revenir.
+   IL Y AVAIT DEUX ORDRES, et un commutateur pour passer de l'un a l'autre : le
+   rang du tableau, deplacable a la poignee, et un tri par montant calcule a
+   l'affichage. Le tri reste, seul. Une liste de charges se lit pour savoir ce
+   qui pese ; cette reponse-la ne depend d'aucun rangement personnel, et le
+   commutateur demandait pourtant de choisir avant de lire.
+
+   Le tri se fait sur l'equivalent MENSUEL, pas sur le montant saisi : une
+   assurance a 600 EUR l'an pese 50 EUR par mois, et la ranger derriere un
+   abonnement a 60 EUR mensuels dirait le contraire de ce que la colonne
+   affiche juste a cote.
 
    Chaque entree garde `i`, son rang reel dans le tableau. La vue s'en sert pour
    ouvrir, modifier et supprimer : sans lui, trier par montant ferait porter un
    clic sur la ligne voisine, et le defaut ne se verrait qu'en supprimant la
    mauvaise charge. */
-const ORDRES_CHARGES = [['mien', 'Mon ordre'], ['cher', 'Du plus cher']];
-
-function chargesOrdonnees(ordre = 'mien') {
-  const l = (Store.state.budget.fixedCharges || []).map((c, i) => ({ c, i }));
-  if (ordre === 'cher') l.sort((a, b) => chargeMensuelle(b.c) - chargeMensuelle(a.c));
-  return l;
-}
-
-function deplacerCharge(de, vers) {
-  const arr = Store.state.budget.fixedCharges || [];
-  if (!Number.isInteger(de) || !Number.isInteger(vers)) return false;
-  if (de < 0 || de >= arr.length || vers < 0 || vers >= arr.length || de === vers) return false;
-  arr.splice(vers, 0, arr.splice(de, 1)[0]);
-  return true;
+function chargesOrdonnees() {
+  return (Store.state.budget.fixedCharges || [])
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => chargeMensuelle(b.c) - chargeMensuelle(a.c));
 }
 
 function deplacerCategorie(cat, delta) {
@@ -4712,6 +4742,52 @@ function creditsAClarifier() {
   return dehors;
 }
 
+/* --- la fiscalite du bien, et ce qu'on en sait --------------------------
+
+   TROIS ETATS, jamais deux, et le troisieme n'est pas zero.
+
+     DECLAREE   un montant annuel saisi. Le seul qui dise la verite : il sort
+                d'une declaration, pas d'un modele. Zero compris, qui est la
+                reponse juste d'un deficit foncier reporte.
+     LEGACY     un taux saisi du temps ou le montant n'existait pas. Il
+                s'applique comme avant -- au loyer moins les charges -- et
+                l'ecran le nomme estimation simplifiee a confirmer. La donnee ne
+                se migre JAMAIS : un taux n'est pas un montant, et le convertir
+                tout seul ecrirait une declaration que personne n'a faite.
+     INCONNUE   rien de saisi. Le mensuel vaut `null`, pas zero. « Zero euro
+                d'impot » est une affirmation, et personne ne l'a faite ; ecrire
+                zero ferait passer une donnee absente pour un calcul.
+
+   Le taux legacy exige d'etre STRICTEMENT POSITIF. Le champ d'ou il vient
+   affiche le vide pour un zero et ecrit le vide quand on l'efface : il n'a
+   jamais su exprimer « zero pour cent », et lui preter ce sens aujourd'hui
+   relirait autrement des donnees ecrites hier. Le montant annuel, lui, sait le
+   dire — c'est la que « vide n'est pas zero » se joue.
+
+   Un montant negatif ne se lit pas : ce serait un credit d'impot, que rien ici
+   ne modelise. Il rend « inconnue » et non le taux d'a cote — une valeur qu'on
+   ne sait pas lire ne se remplace pas par une autre.
+
+   Cette fonction ne modelise aucun regime : ni micro-foncier, ni reel, ni LMNP,
+   ni amortissement, ni prelevements sociaux. Elle porte ce qui est dit, et elle
+   nomme ce qu'elle ignore. */
+function fiscaliteBien(compte, baseMensuelle = null) {
+  const rien = { source: 'inconnue', annuel: null, mensuel: null, taux: null };
+  if (!compte) return rien;
+  if (estDeclare(compte.fiscaliteEstimeeAnnuelle)) {
+    const annuel = num(compte.fiscaliteEstimeeAnnuelle);
+    return annuel < 0 ? rien
+      : { source: 'declaree', annuel: round2(annuel),
+          mensuel: round2(annuel / 12), taux: null };
+  }
+  const taux = estDeclare(compte.tauxImpot) ? Math.min(100, num(compte.tauxImpot)) : 0;
+  if (taux <= 0) return rien;
+  const base = baseMensuelle === null ? null : Math.max(0, num(baseMensuelle));
+  const mensuel = base === null ? null : round2(base * taux / 100);
+  return { source: 'legacy', taux, mensuel,
+           annuel: mensuel === null ? null : round2(mensuel * 12) };
+}
+
 function cashFlowBien(compte) {
   if (!compte) return null;
   /* `revenuMensuel` et non le montant brut : la source porte sa periode, et un
@@ -4781,13 +4857,26 @@ function cashFlowBien(compte) {
   const loyers = loyersPleins * moisLoues / 12;
   const vacance = moisLoues < 12;
 
-  const tauxImpot = Math.min(100, Math.max(0, num(compte.tauxImpot)));
-  const impot = tauxImpot ? Math.max(0, loyers - charges) * tauxImpot / 100 : 0;
+  const fiscalite = fiscaliteBien(compte, Math.max(0, loyers - charges));
+  const impot = fiscalite.mensuel;
+  const tauxImpot = fiscalite.taux;
 
-  const cashFlow = loyers - charges - mensualite - impot;
+  /* DEUX cash-flows, parce qu'il y a deux questions. Celui d'avant la fiscalite
+     existe toujours : il ne tient qu'a des montants saisis. Celui d'apres
+     n'existe que si la fiscalite est connue — retirer zero d'un impot que
+     personne n'a estime afficherait un « apres impot » jamais calcule.
+
+     `cashFlow` reste le chiffre de tete, et c'est l'ecran qui dit lequel des
+     deux il montre : apres fiscalite quand elle est connue, avant elle sinon.
+     Le nombre ne change pas ; ce qui change est qu'il ne se fait plus passer
+     pour un net d'impot. */
+  const cashFlowAvantImpot = loyers - charges - mensualite;
+  const cashFlowApresImpot = impot === null ? null : cashFlowAvantImpot - impot;
+  const cashFlow = impot === null ? cashFlowAvantImpot : cashFlowApresImpot;
   const apport = apportDeclare(compte);
   return {
     loyers, loyersPleins, moisLoues, vacance, charges, mensualite, impot, tauxImpot,
+    fiscalite, cashFlowAvantImpot, cashFlowApresImpot,
     reste, valeur, achat, base, surAchat, capitalMois,
     interetsMois, assuranceMois, ventilation,
     nbCredits: credits.length, nbVentiles: amortis.length,
@@ -4801,7 +4890,8 @@ function cashFlowBien(compte) {
        Un vrai zero reste possible : base connue, loyer nul. */
     rendementBrut: base > 0 ? loyers * 12 / base * 100 : null,
     rendementNet: base > 0 ? (loyers - charges) * 12 / base * 100 : null,
-    rendementNetNet: (base && tauxImpot) ? (loyers - charges - impot) * 12 / base * 100 : null,
+    rendementNetNet: (base > 0 && impot !== null)
+      ? (loyers - charges - impot) * 12 / base * 100 : null,
     apport,
     sansApport: apport === 0,
     cashOnCash: apport > 0 ? cashFlow * 12 / apport * 100 : null,
