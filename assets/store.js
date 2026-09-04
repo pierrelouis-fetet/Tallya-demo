@@ -618,6 +618,69 @@ function usageEffectifBien(compte) {
 
 function usageBien(compte) { return usageEffectifBien(compte).usage; }
 
+/* Ce qu'un lot a COUTE, et d'ou vient la reponse.
+
+   Trois montants, et le total ne se saisit pas : le prix, les frais, les travaux
+   du depart. « Prix d'acquisition » nommait jusqu'ici tantot l'un, tantot leur
+   somme, selon qui remplissait le champ — et l'ecart entre les deux vaut les
+   frais de notaire, sept a huit pour cent du prix. Un intitule qui peut vouloir
+   dire deux choses finit par vouloir dire la mauvaise.
+
+   VIDE N'EST PAS ZERO. `estDeclare` tranche : un champ jamais rempli est
+   inconnu, un zero tape est une declaration. Des travaux a zero disent « il n'y
+   en a pas eu » ; des travaux absents ne disent rien. Le total additionne donc
+   ce qui est declare et signale, par `complet`, s'il manque une piece — un
+   « cout total » ampute des frais serait plus trompeur qu'une absence.
+
+   LE LEGACY N'EST PAS DEVINE. `prixDeRevient` porte, chez les anciens biens, une
+   somme dont personne ne sait ce qu'elle contient. Elle vaut donc le cout total
+   et rien de plus : aucune decomposition ne s'en deduit, et l'ecran dit « detail
+   non renseigne » plutot que d'inventer un prix d'achat.
+
+   Une seule source a la lecture : des qu'un composant est declare, le detail
+   gagne et le champ legacy cesse d'etre lu. Il n'est jamais efface — personne ne
+   peut savoir ce qu'il contenait. */
+function acquisitionLigne(l) {
+  const dit = cle => estDeclare(l?.[cle]) ? num(l[cle]) : null;
+  const prixAchat = dit('prixAchat');
+  const frais = dit('fraisAcquisition');
+  const travaux = dit('travauxInitiaux');
+  const muet = { prixAchat, frais, travaux, total: null, source: 'inconnu', complet: false };
+  if (prixAchat !== null || frais !== null || travaux !== null) {
+    const total = (prixAchat || 0) + (frais || 0) + (travaux || 0);
+    return { prixAchat, frais, travaux, total: round2(total), source: 'detail',
+             complet: prixAchat !== null && frais !== null && travaux !== null };
+  }
+  /* Le legacy ne distingue pas un zero d'une absence : il n'a jamais eu de quoi.
+     Zero y vaut donc « non renseigne », et un vrai cout nul se declare
+     desormais par `prixAchat: 0`. */
+  const legacy = num(l?.prixDeRevient);
+  return legacy ? { ...muet, total: round2(legacy), source: 'legacy' } : muet;
+}
+
+const coutAcquisition = l => acquisitionLigne(l).total;
+
+function acquisitionCompte(compte) {
+  const lots = (compte?.lignes || [])
+    .filter(l => (l.classe || 'immobilier') === 'immobilier');
+  let entier = 0, detenu = 0, connus = 0, complets = 0, legacy = 0;
+  for (const l of lots) {
+    const a = acquisitionLigne(l);
+    if (a.total == null) continue;
+    connus++;
+    if (a.complet) complets++;
+    if (a.source === 'legacy') legacy++;
+    entier += a.total;
+    detenu += a.total * partDetention(l);
+  }
+  return { entier: round2(entier), detenu: round2(detenu),
+           connus, lots: lots.length,
+           /* `null` quand aucun lot ne dit son cout : zero serait un cout. */
+           total: connus ? round2(entier) : null,
+           complet: connus > 0 && complets === lots.length,
+           legacy: legacy > 0 && complets === 0 };
+}
+
 function lignesDe(compte) {
   const marche = Store.state.positions
     .filter(p => p.account === compte.id)
@@ -630,9 +693,16 @@ function lignesDe(compte) {
      les lignes de marche passent devant. */
   const manuelles = (compte.lignes || []).map((l, i) => {
     const q = partDetention(l);
+    /* `prixDeRevient` rendu ici est desormais le COUT TOTAL d'acquisition, pas
+       le seul champ du meme nom : les treize lecteurs de cette fonction — dont
+       la base des rendements — parlent tous du meme montant, et un bien dont le
+       detail n'est pas rempli continue de rendre exactement sa valeur legacy.
+       Aucun ecran ne change de denominateur en silence. */
+    const acq = acquisitionLigne(l);
     return { ...l, ref: i, part: q < 1 ? num(l.part) : null,
-             valeur: num(l.valeur) * q, prixDeRevient: num(l.prixDeRevient) * q,
-             valeurEntiere: num(l.valeur), prixEntier: num(l.prixDeRevient),
+             valeur: num(l.valeur) * q, prixDeRevient: (acq.total || 0) * q,
+             valeurEntiere: num(l.valeur), prixEntier: acq.total || 0,
+             acquisition: acq,
              refMobilite: `comptes.${Store.state.comptes.indexOf(compte)}.lignes.${i}.mobilite` };
   });
   return [...marche, ...manuelles];
@@ -902,6 +972,25 @@ function creerChargeDuCredit(d) {
   return true;
 }
 
+function progressionCredit(d) {
+  const initial = estDeclare(d?.initial) ? num(d.initial) : null;
+  const reste = num(d?.montant);
+  const muet = { initial: null, reste, rembourse: null, pct: null, incoherent: false };
+  if (initial === null || initial <= 0) return muet;
+  const rembourse = initial - reste;
+  if (rembourse < -0.005) return { ...muet, initial, incoherent: true };
+  return { initial, reste, rembourse: round2(rembourse),
+           pct: round2(rembourse / initial * 100), incoherent: false };
+}
+
+/* L'apport declare, et rien d'autre.
+
+   `num(compte.apport) || null` confondait deux reponses opposees : un apport
+   NUL, qui est un financement a cent pour cent et une vraie information, et un
+   apport NON DIT, qui n'en est pas une. Le premier merite d'etre affiche, le
+   second de se taire. */
+const apportDeclare = compte => estDeclare(compte?.apport) ? num(compte.apport) : null;
+
 /* --- un capital restant dû se calcule, il ne se retient pas -------------
    Le seul champ d'un crédit qui vieillit tout seul. Personne n'ouvre son
    application pour corriger de 348 EUR une ligne qui n'a pas bouge a l'ecran, et
@@ -947,9 +1036,16 @@ function projectionCredit(d) {
            sens: capital > reste ? 'monte' : capital < reste ? 'baisse' : 'stable' };
 }
 
+function baseAssuranceCredit(d) {
+  const initial = estDeclare(d?.initial) ? num(d.initial) : null;
+  return initial > 0
+    ? { base: initial, sur: 'initial' }
+    : { base: num(d?.montant), sur: 'restant' };
+}
+
 function assuranceMensuelleCredit(d) {
-  return num(d.tauxAssurance)
-    ? (num(d.initial) || num(d.montant)) * num(d.tauxAssurance) / 100 / 12 : 0;
+  const taux = num(d?.tauxAssurance);
+  return taux ? baseAssuranceCredit(d).base * taux / 100 / 12 : 0;
 }
 
 /* L'echeancier d'un credit : LA source, et la seule.
@@ -4640,7 +4736,7 @@ function cashFlowBien(compte) {
   const impot = tauxImpot ? Math.max(0, loyers - charges) * tauxImpot / 100 : 0;
 
   const cashFlow = loyers - charges - mensualite - impot;
-  const apport = num(compte.apport) || null;
+  const apport = apportDeclare(compte);
   return {
     loyers, loyersPleins, moisLoues, vacance, charges, mensualite, impot, tauxImpot,
     reste, valeur, achat, base, surAchat, capitalMois,
@@ -4658,7 +4754,8 @@ function cashFlowBien(compte) {
     rendementNet: base > 0 ? (loyers - charges) * 12 / base * 100 : null,
     rendementNetNet: (base && tauxImpot) ? (loyers - charges - impot) * 12 / base * 100 : null,
     apport,
-    cashOnCash: apport ? cashFlow * 12 / apport * 100 : null,
+    sansApport: apport === 0,
+    cashOnCash: apport > 0 ? cashFlow * 12 / apport * 100 : null,
   };
 }
 
@@ -4699,40 +4796,58 @@ function financementIndicatif(compte) {
   if (!compte) return null;
   const credits = creditsDuBien(compte);
   if (credits.length) return null;
-  const prix = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
-  const apport = num(compte.apport);
-  if (!(prix > 0) || !(apport > 0)) return null;
-  return Math.max(0, prix - apport);
+  const cout = acquisitionCompte(compte).total;
+  /* `estDeclare` et non `> 0` : un apport declare a zero est un financement a
+     cent pour cent, et « reste a financer : tout le cout » est alors la bonne
+     reponse — pas un silence. */
+  const apport = apportDeclare(compte);
+  if (!(cout > 0) || apport === null) return null;
+  return Math.max(0, round2(cout - apport));
 }
 
-/* Les trois montants d'une acquisition simple : prix, apport, capital emprunte
-   au depart. Quand les trois sont connus, ils doivent a peu pres s'accorder.
+/* Ce qui a paye l'acquisition, poste par poste — et non un verdict.
 
-   `null` des qu'il en manque un, et c'est important : un controle qui traite une
-   donnee absente comme un zero inventerait un ecart de la taille du prix, et
-   crierait sur tous les biens dont le capital initial n'a jamais ete saisi.
+   La version d'avant rendait un booleen `coherent`, vrai tant que l'ecart tenait
+   sous QUINZE POUR CENT DU PRIX. Un seuil de cette taille ne dit plus rien : sur
+   un bien a trois cent mille euros il laisse passer quarante-cinq mille euros
+   d'ecart sans un mot, c'est-a-dire tout ce qu'on voudrait justement voir. Et
+   quand il criait, il ne disait pas sur quoi.
 
-   La tolerance est large, et dans les deux sens, parce qu'une acquisition simple
-   ne l'est jamais tout a fait : les frais de notaire pesent sept a huit pour
-   cent, des travaux peuvent etre finances avec le pret, un apport peut avoir
-   servi a autre chose. Quinze pour cent du prix laissent passer tout cela ; le
-   plancher evite de crier sur un arrondi quand le prix est petit.
+   Le detail remplace le verdict : le cout d'un cote, l'apport et le capital
+   emprunte de l'autre, et l'ecart nomme. La tolerance qui reste n'absorbe que
+   l'arrondi, un euro, parce qu'un centime d'ecart n'est pas une information.
 
-   Ce que la fonction ne fait pas : corriger. Elle rend l'ecart, la vue le dit,
-   et le detenteur tranche — c'est la meme regle que partout ici, un etat se
-   declare. */
-function coherenceAcquisition(compte) {
+   UN ECART N'EST PAS UNE ERREUR. Des frais payes autrement, un pret travaux, une
+   aide familiale, des frais finances : toutes ces acquisitions sont normales et
+   toutes laissent un ecart. La vue le dit doucement, et n'empeche rien.
+
+   `null` tant qu'il manque une piece : un plan de financement dont on ignore
+   l'apport n'a pas d'ecart, il a une inconnue. */
+function planFinancement(compte) {
   if (!compte) return null;
-  const prix = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
-  const apport = num(compte.apport);
-  const emprunte = creditsDuBien(compte)
-    .reduce((s, d) => s + num(d.initial), 0);
-  if (!(prix > 0) || !(apport > 0) || !(emprunte > 0)) return null;
-  const ecart = apport + emprunte - prix;
-  const tolerance = Math.max(5000, prix * 0.15);
-  return { prix, apport, emprunte, ecart, tolerance,
-           coherent: Math.abs(ecart) <= tolerance };
+  const acq = acquisitionCompte(compte);
+  if (acq.total == null) return null;
+  const apport = apportDeclare(compte);
+  const credits = creditsDuBien(compte);
+  /* `> 0` et non le seul `estDeclare` : zero est une declaration valide partout
+     ailleurs, mais un capital EMPRUNTE nul n'est pas un montant de pret — c'est
+     un champ qu'on a traverse. Le compter ferait apparaitre un ecart de la
+     taille du cout, sur un credit dont on ignore simplement le montant initial.
+     `progressionCredit` pose la meme borne, pour la meme raison. */
+  const dits = credits.filter(d => estDeclare(d.initial) && num(d.initial) > 0);
+  const emprunte = dits.reduce((s, d) => s + num(d.initial), 0);
+  if (apport === null || !credits.length || dits.length !== credits.length) {
+    return { cout: acq.total, apport, emprunte: dits.length ? round2(emprunte) : null,
+             finance: null, ecart: null, complet: false,
+             manque: apport === null ? 'apport' : 'capital' };
+  }
+  const finance = apport + emprunte;
+  return { cout: acq.total, apport, emprunte: round2(emprunte),
+           finance: round2(finance), ecart: round2(finance - acq.total),
+           complet: true, manque: null };
 }
+
+const ecartAExpliquer = plan => plan?.complet && Math.abs(plan.ecart) > 1;
 
 const PREMIERS_PAS = [
   { cle: 'comptes',

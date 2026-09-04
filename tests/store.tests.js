@@ -2954,18 +2954,33 @@ suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
     });
     eq(financementIndicatif(bien()), null, 'un crédit existe : plus d’indication');
 
-    /* Et sans prix ou sans apport, rien non plus : un montant calcule sur une
-       donnee absente serait invente. */
+    /* Sans prix ou sans apport DECLARE, rien non plus : un montant calcule sur
+       une donnee absente serait invente. */
     Fixture.poser(s => {
       s.etabs.find(x => x.id === 'e_bien').dettes = [];
-      s.comptes.find(x => x.id === 'c_immo').apport = 0;
+      delete s.comptes.find(x => x.id === 'c_immo').apport;
     });
-    eq(financementIndicatif(bien()), null, 'sans apport, aucune indication');
+    eq(financementIndicatif(bien()), null, 'sans apport renseigné, aucune indication');
+
+    /* Un apport declare a ZERO, lui, est une reponse : le financement a couvrir
+       est le cout entier. `num(apport) || null` confondait les deux, et taisait
+       le cas le plus net — un achat finance a cent pour cent. */
+    Fixture.poser(s => {
+      s.etabs.find(x => x.id === 'e_bien').dettes = [];
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.lignes[0].prixDeRevient = 300000;
+      c.apport = 0;
+    });
+    pres(financementIndicatif(bien()), 300000,
+      'un apport nul déclaré laisse tout le coût à financer');
   });
 
-  test('trois montants qui ne s’accordent pas se signalent, sans se corriger', () => {
-    /* Le cas signale : un prix, un apport et un emprunt qui ne peuvent pas
-       decrire la meme acquisition. */
+  test('le financement se détaille au lieu de rendre un verdict', () => {
+    /* La version d'avant rendait un booleen `coherent`, vrai tant que l'ecart
+       tenait sous QUINZE POUR CENT DU PRIX. Sur un bien a 255 000 EUR, cela
+       laissait passer 38 000 EUR d'ecart sans un mot — c'est-a-dire tout ce
+       qu'on voudrait justement voir. Et quand il criait, il ne disait pas sur
+       quoi. Le detail remplace le verdict. */
     const poser = (prix, apport, initial) => Fixture.poser(s => {
       const c = s.comptes.find(x => x.id === 'c_immo');
       c.lignes[0].prixDeRevient = prix;
@@ -2974,39 +2989,60 @@ suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
     });
 
     poser(255000, 200000, 210000);
-    const faux = coherenceAcquisition(bien());
-    vrai(faux && !faux.coherent, 'l’écart doit être signalé');
-    pres(faux.ecart, 155000, 'et chiffré');
+    const p = planFinancement(bien());
+    pres(p.cout, 255000, 'le coût d’acquisition');
+    pres(p.apport, 200000, 'l’apport');
+    pres(p.emprunte, 210000, 'le capital emprunté');
+    pres(p.finance, 410000, 'leur somme, nommée');
+    pres(p.ecart, 155000, 'et l’écart, chiffré');
+    vrai(p.complet, 'les trois pièces sont là');
+    vrai(ecartAExpliquer(p), 'un écart de cette taille se dit');
     /* Rien n'est corrige : les trois montants restent tels qu'ils ont ete
        saisis. C'est au detenteur de dire lequel est faux. */
     pres(num(bien().apport), 200000, 'l’apport n’a pas été retouché');
-    pres(lignesDe(bien())[0].prixDeRevient, 255000, 'ni le prix');
+    pres(lignesDe(bien())[0].prixDeRevient, 255000, 'ni le coût');
     pres(num(etabById('e_bien').dettes[0].initial), 210000, 'ni le capital initial');
 
-    /* Une acquisition ordinaire passe : les frais de notaire pesent sept a huit
-       pour cent, et un pret qui les couvre ne doit pas declencher l'alerte. */
+    /* Ce que l'ancien seuil laissait passer se dit desormais : 20 000 EUR
+       d'ecart sur 255 000, c'est un pret travaux ou des frais finances — une
+       information, pas un silence. */
     poser(255000, 30000, 245000);
-    vrai(coherenceAcquisition(bien()).coherent,
-      'des frais financés restent dans la tolérance');
-    poser(255000, 255000, 1000);
-    vrai(coherenceAcquisition(bien()).coherent, 'un achat comptant aussi');
+    pres(planFinancement(bien()).ecart, 20000, 'vingt mille euros d’écart');
+    vrai(ecartAExpliquer(planFinancement(bien())),
+      'et ils se disent, là où quinze pour cent les taisaient');
+
+    /* La tolerance qui reste n'absorbe que l'arrondi. */
+    poser(255000, 255000.4, 0.2);
+    vrai(!ecartAExpliquer(planFinancement(bien())), 'un arrondi ne se signale pas');
+    const st = lireSource('assets/store.js');
+    vrai(!/prix \* 0\.15|0\.15 \* prix/.test(st), 'et aucun seuil caché à quinze pour cent');
+    vrai(/Math\.abs\(plan\.ecart\) > 1/.test(st), 'la tolérance vaut un euro, et se lit');
   });
 
-  test('une donnée absente ne fabrique ni écart ni rendement', () => {
-    /* Traiter une donnee absente comme un zero inventerait un ecart de la
-       taille du prix, et crierait sur tous les biens dont le capital initial n'a
-       jamais ete saisi. */
+  test('une donnée absente laisse le plan incomplet, sans rien inventer', () => {
+    /* Traiter une donnee absente comme un zero inventerait un ecart de la taille
+       du cout, et crierait sur tous les biens dont le capital initial n'a jamais
+       ete saisi. Le plan dit ce qui lui manque au lieu de se taire tout a fait :
+       la vue peut alors demander la bonne piece. */
     Fixture.poser(s => {
-      s.comptes.find(x => x.id === 'c_immo').apport = 0;
+      delete s.comptes.find(x => x.id === 'c_immo').apport;
       s.etabs.find(x => x.id === 'e_bien').dettes[0].initial = 0;
     });
-    eq(coherenceAcquisition(bien()), null, 'sans apport ni capital initial : rien à dire');
+    const sansRien = planFinancement(bien());
+    eq(sansRien.complet, false, 'le plan n’est pas complet');
+    eq(sansRien.manque, 'apport', 'et nomme ce qui manque en premier');
+    eq(sansRien.ecart, null, 'aucun écart inventé');
 
     Fixture.poser(s => {
       s.comptes.find(x => x.id === 'c_immo').apport = 50000;
       s.etabs.find(x => x.id === 'e_bien').dettes[0].initial = 0;
     });
-    eq(coherenceAcquisition(bien()), null, 'sans capital initial non plus');
+    const sansCapital = planFinancement(bien());
+    eq(sansCapital.complet, false, 'sans capital initial non plus');
+    eq(sansCapital.manque, 'capital', 'et il est nommé');
+    /* Un capital emprunte declare a ZERO n'est pas un montant de pret : le
+       compter ferait apparaitre un ecart de la taille du cout. */
+    eq(sansCapital.emprunte, null, 'un capital emprunté nul ne compte pas comme déclaré');
 
     /* Et le rendement sur apport n'existe pas sans apport : `null`, jamais un
        zero ni un infini. */
@@ -3020,15 +3056,21 @@ suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
     /* Le mot qui manquait : l'aide expliquait a quoi il sert, jamais ce qu'il
        ne change pas. C'est pourtant la seule chose qu'on peut croire a tort. */
     const app = lireSource('assets/app.js');
-    const bloc = app.slice(app.indexOf("trad('Apport à l\\'achat (€)')"),
+    const bloc = app.slice(app.indexOf("trad('Apport initial (€)')"),
                            app.indexOf("data-path=\"comptes.${idx}.apport\""));
     vrai(bloc.length > 100, 'le champ doit être trouvable');
-    vrai(/il ne change pas la valeur nette actuelle du bien/.test(bloc),
-      'l’aide dit qu’il ne change pas la valeur nette');
+    /* Trois choses qu'il ne fait pas, et c'est tout le sujet : un apport est un
+       fait historique, pas un mouvement d'aujourd'hui. */
+    vrai(/il ne s’ajoute pas à ton patrimoine aujourd’hui/.test(bloc),
+      'l’aide dit qu’il ne s’ajoute pas au patrimoine');
+    vrai(/il ne se retire pas de ton cash/.test(bloc), 'ni ne sort du cash');
+    vrai(/il ne change pas la valeur nette du bien/.test(bloc),
+      'ni ne change la valeur nette');
     vrai(/rendement sur apport/.test(bloc), 'et à quoi il sert');
-    const cle = "Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris."
-      + " Il sert au rendement sur apport ; il ne change pas la valeur nette actuelle du bien,"
-      + " qui vaut sa valeur moins ce que tu dois encore.";
+    const cle = "Ce que tu as sorti de ta poche le jour de l’achat. C’est un fait historique :"
+      + " il ne s’ajoute pas à ton patrimoine aujourd’hui, il ne se retire pas de ton cash, et"
+      + " il ne change pas la valeur nette du bien. Il sert à lire le financement, et le"
+      + " rendement sur apport d’un locatif.";
     vrai(I18N.en[cle], 'et elle a sa traduction');
   });
 
@@ -13446,7 +13488,11 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
     const debut = src.indexOf("async 'ajouter-compte'");
     vrai(debut > 0, 'le parcours de création doit exister');
-    const parcours = src.slice(debut, debut + 17000);
+    /* La borne haute est l'action SUIVANTE, pas une longueur : une fenetre en
+       caracteres se defait au premier champ ajoute, et c'est arrive — le nom de
+       la ligne est sorti des dix-sept mille caracteres le jour ou l'acquisition
+       s'est decomposee en trois champs. */
+    const parcours = src.slice(debut, src.indexOf("'fiche-compte'(btn)", debut));
 
     /* L'etape du contenant saute sur le drapeau du modele, pas sur l'identifiant
        du type : un second type sans contenant en heriterait sans rien ecrire. */
@@ -13479,8 +13525,12 @@ suite('Un bien de valeur se tient tout seul, et se nomme une fois', () => {
 
     /* Une dette se pose sur un etablissement : sans contenant, le champ n'aurait
        nulle part ou atterrir, et `etabById(null)` aurait leve. */
-    vrai(/\.\.\.\(t\.sansEtab \? \[\] : \[\n?\s*\{ cle: 'credit'/.test(parcours),
+    /* L'intitule de l'etape s'intercale desormais : la garde est la meme, elle
+       porte seulement sur davantage de lignes. */
+    vrai(/\.\.\.\(t\.sansEtab \? \[\] : \[[\s\S]{0,140}\{ cle: 'credit'/.test(parcours),
       'le crédit ne s’offre que là où une dette peut se poser');
+    vrai(/\{ cle: 'section_fin', label: 'Financement', type: 'section' \}/.test(parcours),
+      'et l’étape du financement se nomme, plutôt que d’enchaîner huit champs de plus');
   });
 
   test('la valeur d’un bien se dit estimée, et porte sa date', () => {
@@ -16083,11 +16133,13 @@ suite('La fiche pose la question de l’usage', () => {
     /* L'apport a quitte ces reglages : il ne decrit aucun mois. */
     vrai(/function reglagesExploitation\(c, idx\) \{/.test(src),
       'la fonction n’a plus d’option pour lui');
-    const iE = src.indexOf('function espaceBien');
-    const espace = src.slice(iE, src.indexOf('function barreValiderFiche', iE));
-    vrai(espace.length > 2000, 'espaceBien doit être trouvable');
-    vrai(/data-path="comptes\.\$\{idx\}\.apport"/.test(espace),
-      'il se saisit là où le bien s’acquiert, avec le prix payé et le prêt');
+    /* Il a sa carte desormais, avec le prix d'achat, les frais et les travaux :
+       tout ce qui decrit l'achat au meme endroit. */
+    const acq = src.slice(src.indexOf('function carteAcquisition'),
+                          src.indexOf('function blocFinancementInitial'));
+    vrai(acq.length > 500, 'la carte Acquisition doit être trouvable');
+    vrai(/data-path="comptes\.\$\{idx\}\.apport"/.test(acq),
+      'il se saisit là où le bien s’acquiert, avec le prix payé et les frais');
   });
 });
 
@@ -16783,9 +16835,10 @@ suite('Un montant n’a qu’un porteur', () => {
        de la fiche n'avait aucun effet, sans que rien ne le dise. La regle
        existait deja pour la fenetre du credit. */
     const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function espaceBien'),
-                           src.indexOf('function boutonEnregistrerFiche'));
-    vrai(bloc.length > 500, 'la fiche du bien doit être trouvable');
+    /* Les champs du credit ont leur propre carte, une par pret. */
+    const bloc = src.slice(src.indexOf('function carteCredit'),
+                           src.indexOf('function espaceBien'));
+    vrai(bloc.length > 500, 'la carte du crédit doit être trouvable');
     const i = bloc.indexOf('dettes.${i}.mensualite');
     vrai(i > 0, 'le champ existe encore, pour le crédit qui porte lui-même sa mensualité');
     vrai(/\$\{chargeDuCredit\(d\.id\) \?/.test(bloc.slice(Math.max(0, i - 900), i)),
@@ -16942,8 +16995,8 @@ suite('Un montant n’a qu’un porteur', () => {
 
   test('un crédit se renomme et se supprime depuis la fiche du bien', () => {
     const src = lireSource('assets/app.js');
-    const fiche = src.slice(src.indexOf('function espaceBien'),
-                            src.indexOf('function boutonEnregistrerFiche'));
+    const fiche = src.slice(src.indexOf('function carteCredit'),
+                            src.indexOf('function espaceBien'));
     vrai(/data-action="editer-credit" data-etab=/.test(fiche),
       'son nom ouvre sa fenêtre : renommer ne se faisait que depuis l’établissement');
     const fn = src.slice(src.indexOf("async 'editer-credit'"), src.indexOf("async 'retirer-credit'"));
@@ -17024,8 +17077,11 @@ suite('Un montant n’a qu’un porteur', () => {
     const src = lireSource('assets/app.js');
     vrai(/Une part va de 0 à 100\. Au-delà, le bien compte en entier\./.test(src),
       'le champ garde la saisie, et un mot dit ce que le calcul en fait');
-    vrai(/num\(l\.part\) && \(num\(l\.part\) < 0 \|\| num\(l\.part\) > 100\)/.test(src),
-      'et ce mot n’apparaît que pour une valeur vraiment hors bornes, jamais sur 100');
+    /* `estDeclare` et non `num` : la garde porte sur le fait qu'une part ait ete
+       SAISIE, pas sur sa verite JS. Zero est une part declaree — et dans les
+       bornes, donc sans phrase — la ou `num(0)` la faisait passer pour absente. */
+    vrai(/estDeclare\(l\.part\) && \(num\(l\.part\) < 0 \|\| num\(l\.part\) > 100\)/.test(src),
+      'et ce mot n’apparaît que pour une valeur vraiment hors bornes, jamais sur 0 ni 100');
   });
 });
 
@@ -29517,5 +29573,668 @@ suite('Un prix de revient ne s’invente pas, et ne reste pas vide', () => {
     eq(posPerfPct(sansBase), null, 'aucun pourcentage');
     eq(posPerfEur(sansBase), null, 'et aucun euro de plus-value');
     pres(posValue(sansBase), 800, 'la valeur, elle, reste connue');
+  });
+});
+
+/* « Prix d'acquisition » nommait tantot le prix, tantot le prix frais compris,
+   selon qui remplissait le champ — et l'ecart entre les deux vaut les frais de
+   notaire, sept a huit pour cent. Un intitule qui peut vouloir dire deux choses
+   finit par vouloir dire la mauvaise. */
+suite('Un coût d’acquisition se décompose, il ne se devine pas', () => {
+
+  const lot = (o = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: o.credits || [] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [], ...(estDeclare(o.apport) ? { apport: o.apport } : {}),
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement',
+        valeur: o.valeur == null ? 370000 : o.valeur,
+        ...(estDeclare(o.part) ? { part: o.part } : {}),
+        ...(estDeclare(o.prixAchat) ? { prixAchat: o.prixAchat } : {}),
+        ...(estDeclare(o.frais) ? { fraisAcquisition: o.frais } : {}),
+        ...(estDeclare(o.travaux) ? { travauxInitiaux: o.travaux } : {}),
+        ...(estDeclare(o.legacy) ? { prixDeRevient: o.legacy } : {}),
+        usage: o.usage || 'principale' }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = o.loyer
+      ? [{ label: 'Loyer', amount: o.loyer, period: 'mois', bienId: 'c_b' }] : [];
+    s.budget.fixedCharges = [];
+  });
+  const a = () => acquisitionLigne(compteById('c_b').lignes[0]);
+
+  test('les trois montants s’additionnent, et le total ne se saisit pas', () => {
+    lot({ prixAchat: 300000 });
+    pres(a().total, 300000, 'le prix seul');
+    lot({ prixAchat: 300000, frais: 24000 });
+    pres(a().total, 324000, 'le prix et les frais');
+    lot({ prixAchat: 300000, frais: 24000, travaux: 10000 });
+    pres(a().total, 334000, 'les trois');
+    eq(a().complet, true, 'et le détail est entier');
+    eq(a().source, 'detail', 'il vient des composants, pas d’un total saisi');
+    /* Rien ne stocke le total : il se recalcule, donc il ne peut pas diverger
+       de ses parts. */
+    eq(compteById('c_b').lignes[0].coutTotal, undefined, 'aucun total en double dans les données');
+  });
+
+  test('vide n’est pas zéro, et zéro n’est pas vide', () => {
+    /* Des travaux a zero disent « il n'y en a pas eu » ; des travaux absents ne
+       disent rien. Le total est le meme, la completude non — et c'est elle qui
+       decide si l'ecran ose l'appeler « cout total ». */
+    lot({ prixAchat: 300000, frais: 24000, travaux: 0 });
+    pres(a().total, 324000, 'des travaux nuls n’ajoutent rien');
+    eq(a().travaux, 0, 'mais ils sont déclarés');
+    eq(a().complet, true, 'donc le détail est entier');
+
+    lot({ prixAchat: 300000, frais: 24000 });
+    pres(a().total, 324000, 'le même total sans les travaux');
+    eq(a().travaux, null, 'mais ils sont inconnus');
+    eq(a().complet, false, 'et le détail est partiel');
+
+    lot({ prixAchat: 300000, frais: 0 });
+    eq(a().frais, 0, 'des frais nuls se déclarent aussi');
+    lot({ prixAchat: 300000 });
+    eq(a().frais, null, 'des frais absents restent absents');
+    /* La convention vient d'`estDeclare`, la meme que partout. */
+    const st = lireSource('assets/store.js');
+    vrai(/const dit = cle => estDeclare\(l\?\.\[cle\]\) \? num\(l\[cle\]\) : null;/.test(st),
+      'la convention passe par estDeclare, pas par la vérité JS');
+  });
+
+  test('un ancien bien garde son total, et rien ne s’en déduit', () => {
+    lot({ legacy: 334000 });
+    pres(a().total, 334000, 'la valeur legacy vaut le coût total');
+    eq(a().source, 'legacy', 'et l’écran sait d’où elle vient');
+    eq(a().prixAchat, null, 'aucun prix d’achat inventé');
+    eq(a().frais, null, 'aucuns frais inventés');
+    eq(a().travaux, null, 'aucuns travaux inventés');
+    eq(a().complet, false, 'le détail n’est pas renseigné');
+    /* Et l'ecran le dit, plutot que d'afficher un detail vide. */
+    const src = lireSource('assets/app.js');
+    vrai(/a\.source !== 'legacy' \? '' :/.test(src), 'la carte reconnaît ce cas');
+    vrai(/Détail non renseigné/.test(src), 'et le nomme');
+    vrai(/rien n’est deviné à partir du total/.test(src), 'en disant pourquoi');
+
+    /* Des qu'un composant est declare, le detail gagne — et le legacy n'est
+       jamais efface, personne ne sachant ce qu'il contenait. */
+    lot({ legacy: 334000, prixAchat: 275000, frais: 20000, travaux: 5000 });
+    pres(a().total, 300000, 'le détail prend le relais');
+    eq(a().source, 'detail', 'nommément');
+    eq(num(compteById('c_b').lignes[0].prixDeRevient), 334000,
+      'et l’ancienne valeur reste dans les données, jamais détruite');
+  });
+
+  test('la valeur et le coût se comparent à la même échelle', () => {
+    /* Comparer la moitie d'une valeur au cout TOTAL ferait apparaitre une perte
+       a qui n'a rien perdu. La quote-part s'applique aux deux, une seule fois,
+       dans `lignesDe`. */
+    lot({ prixAchat: 300000, frais: 24000, travaux: 10000, valeur: 370000 });
+    const acq = acquisitionCompte(compteById('c_b'));
+    pres(acq.entier, 334000, 'le coût du bien entier');
+    pres(acq.detenu, 334000, 'et la part détenue, sans quote-part');
+    pres(lignesDe(compteById('c_b'))[0].prixDeRevient, 334000,
+      'la ligne rend le coût total, pas le seul prix d’achat');
+    pres(lignesDe(compteById('c_b'))[0].valeur - lignesDe(compteById('c_b'))[0].prixDeRevient,
+      36000, 'trente-six mille euros d’écart');
+
+    lot({ prixAchat: 300000, frais: 24000, travaux: 10000, valeur: 370000, part: 50 });
+    const moitie = acquisitionCompte(compteById('c_b'));
+    pres(moitie.entier, 334000, 'le coût du bien entier ne bouge pas');
+    pres(moitie.detenu, 167000, 'la moitié est détenue');
+    const l = lignesDe(compteById('c_b'))[0];
+    pres(l.valeur, 185000, 'la moitié de la valeur');
+    pres(l.prixDeRevient, 167000, 'et la moitié du coût');
+    pres(l.valeur - l.prixDeRevient, 18000, 'l’écart reste la moitié, pas une perte inventée');
+  });
+
+  test('la base des rendements est le coût total, et se dit', () => {
+    lot({ prixAchat: 300000, frais: 24000, travaux: 10000, valeur: 370000,
+          usage: 'locative', loyer: 1200 });
+    const cf = cashFlowBien(compteById('c_b'));
+    pres(cf.base, 334000, 'la base est le coût total, frais et travaux compris');
+    eq(cf.surAchat, true, 'et l’écran le dit');
+    pres(cf.rendementBrut, 1200 * 12 / 334000 * 100, 'le rendement suit');
+
+    /* Sans acquisition, la base retombe sur la valeur du jour, et l'ecran
+       l'annonce — c'est la regle posee en C. */
+    lot({ valeur: 370000, usage: 'locative', loyer: 1200 });
+    const sans = cashFlowBien(compteById('c_b'));
+    pres(sans.base, 370000, 'la valeur du jour prend le relais');
+    eq(sans.surAchat, false, 'et le changement de base se dit');
+
+    /* Sans base du tout, aucun rendement : la regle de C.1 tient. */
+    lot({ valeur: 0, usage: 'locative', loyer: 1200 });
+    eq(cashFlowBien(compteById('c_b')).rendementBrut, null, 'aucune base, aucun rendement');
+  });
+
+  test('le haut de fiche lit le coût total, jamais le champ legacy en direct', () => {
+    /* Le defaut exact : un bien dont le detail est renseigne — prix, frais,
+       travaux — mais qui n'a jamais porte de `prixDeRevient` affichait un cout
+       de zero, donc AUCUN ecart. La ligne la plus regardee de la fiche
+       disparaissait au moment ou l'on venait justement de la renseigner. C'est
+       la divergence que la porte unique existe pour empecher. */
+    const src = lireSource('assets/app.js');
+    const haut = src.slice(src.indexOf('function espaceBien'),
+                           src.indexOf('function barreValiderFiche'));
+    vrai(/const achatEntier = biens\.reduce\(\(s, \{ l \}\) => s \+ \(coutAcquisition\(l\) \|\| 0\), 0\);/
+      .test(haut), 'le coût entier passe par coutAcquisition');
+    vrai(/s \+ \(coutAcquisition\(l\) \|\| 0\) \* partDetention\(l\)/.test(haut),
+      'la part détenue aussi');
+    vrai(!/num\(l\.prixDeRevient\)/.test(haut),
+      'et le champ legacy ne se lit plus en direct dans la fiche');
+
+    /* Et la preuve par les nombres : detail seul, sans legacy. */
+    lot({ prixAchat: 300000, frais: 24000, travaux: 10000, valeur: 370000 });
+    eq(compteById('c_b').lignes[0].prixDeRevient, undefined, 'aucun champ legacy');
+    pres(coutAcquisition(compteById('c_b').lignes[0]), 334000, 'le coût se calcule quand même');
+    pres(lignesDe(compteById('c_b'))[0].prixDeRevient, 334000, 'et la ligne le porte');
+  });
+
+  test('« plus-value » a laissé la place à un écart comptable', () => {
+    /* Tallya ne calcule ni frais de revente, ni abattement pour duree de
+       detention, ni fiscalite de cession. Appeler ce chiffre une plus-value
+       laisserait croire qu'il dit ce qu'on encaisserait. */
+    const src = lireSource('assets/app.js');
+    const haut = src.slice(src.indexOf('function espaceBien'),
+                           src.indexOf('function barreValiderFiche'));
+    vrai(/Écart vs coût d’acquisition/.test(haut), 'la fiche parle d’un écart');
+    vrai(!/Plus-value latente/.test(haut.replace(/\/\*[\s\S]*?\*\//g, '')),
+      'et plus d’une plus-value');
+    vrai(/ni les frais de revente ni la fiscalité de cession/.test(haut),
+      'l’aide dit ce que Tallya ne sait pas');
+  });
+});
+
+/* Un apport est un fait d'hier. Il ne s'ajoute a rien aujourd'hui, il ne se
+   retire de rien, et c'est justement pour ca qu'on l'oublie. */
+suite('Un apport est un fait d’hier, pas un mouvement d’aujourd’hui', () => {
+
+  const bien = (apport, o = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: o.credits || [] }];
+    s.comptes = [
+      { id: 'c_cash', etabId: 'e_bq', type: 'courant', statut: 'ouvert', libelle: 'Compte',
+        cash: [{ id: 'x', usage: 'depenser', montant: 12000 }], lignes: [] },
+      { id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert', libelle: 'Appartement',
+        cash: [], ...(apport === undefined ? {} : { apport }),
+        lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+                   prixAchat: 300000, fraisAcquisition: 24000, travauxInitiaux: 10000,
+                   usage: o.usage || 'locative' }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = o.loyer
+      ? [{ label: 'Loyer', amount: o.loyer, period: 'mois', bienId: 'c_b' }] : [];
+    s.budget.fixedCharges = [];
+  });
+
+  test('absent, il reste inconnu ; nul, il est une réponse', () => {
+    bien(undefined);
+    eq(apportDeclare(compteById('c_b')), null, 'un apport jamais saisi est inconnu');
+    bien(0);
+    eq(apportDeclare(compteById('c_b')), 0, 'un apport nul déclaré vaut zéro');
+    bien(80000);
+    eq(apportDeclare(compteById('c_b')), 80000, 'et un apport positif vaut ce qu’il vaut');
+    /* `num(x) || null` confondait les deux premiers, et taisait le cas le plus
+       net : un achat finance a cent pour cent. */
+    const st = lireSource('assets/store.js');
+    vrai(/const apportDeclare = compte => estDeclare\(compte\?\.apport\) \? num\(compte\.apport\) : null;/
+      .test(st), 'la convention passe par estDeclare');
+  });
+
+  test('il ne touche ni le patrimoine, ni le cash, ni le budget', () => {
+    bien(undefined);
+    const avant = { brut: round2(patrimoine().brut), net: round2(patrimoine().net),
+                    dettes: round2(dettesTotal()), fixe: round2(budgetFrame().fixed),
+                    revenus: round2(budgetFrame().income) };
+    for (const v of [0, 80000, 250000]) {
+      bien(v);
+      pres(round2(patrimoine().brut), avant.brut, `apport ${v} : le patrimoine brut`);
+      pres(round2(patrimoine().net), avant.net, `apport ${v} : le net`);
+      pres(round2(dettesTotal()), avant.dettes, `apport ${v} : les dettes`);
+      pres(round2(budgetFrame().fixed), avant.fixe, `apport ${v} : les charges fixes`);
+      pres(round2(budgetFrame().income), avant.revenus, `apport ${v} : les revenus`);
+      pres(round2(valeurCompte(compteById('c_cash'))), 12000, `apport ${v} : le cash`);
+    }
+    /* Et rien ne l'ecrit dans un credit ni dans une poche. */
+    const st = lireSource('assets/store.js');
+    vrai(!/cash[^;]*=[^;]*apport|\.montant\s*=[^;]*apport/.test(st),
+      'rien n’écrit un solde depuis l’apport');
+  });
+
+  test('le rendement sur apport n’existe pas sans apport, et ne divise pas par zéro', () => {
+    bien(undefined, { loyer: 1500 });
+    const inconnu = cashFlowBien(compteById('c_b'));
+    eq(inconnu.apport, null, 'aucun apport');
+    eq(inconnu.cashOnCash, null, 'donc aucun rendement sur apport');
+    eq(inconnu.sansApport, false, 'et ce n’est pas un financement sans apport : on ne sait pas');
+
+    bien(0, { loyer: 1500 });
+    const zero = cashFlowBien(compteById('c_b'));
+    eq(zero.apport, 0, 'un apport nul déclaré');
+    eq(zero.sansApport, true, 'c’est un financement à cent pour cent, et ça se nomme');
+    eq(zero.cashOnCash, null, 'aucun pourcentage : diviser par zéro rendrait l’infini');
+    vrai(Number.isFinite(zero.cashFlow), 'et le cash-flow reste un nombre');
+
+    bien(60000, { loyer: 1500 });
+    const avec = cashFlowBien(compteById('c_b'));
+    pres(avec.cashOnCash, avec.cashFlow * 12 / 60000 * 100, 'avec un apport, le ratio existe');
+  });
+
+  test('il ne se divise jamais par la quote-part', () => {
+    /* Il represente l'argent reellement sorti de la poche du detenteur, pas une
+       fraction d'un apport commun. Le diviser ferait un rendement sur apport
+       deux fois trop grand sur un bien detenu a moitie. */
+    bien(80000, { loyer: 1500 });
+    compteById('c_b').lignes[0].part = 50;
+    refreshAccounts();
+    eq(apportDeclare(compteById('c_b')), 80000, 'l’apport reste entier');
+    /* L'assertion porte sur le CODE : le champ de la fiche lit l'apport tel
+       qu'il est declare, sans le passer par `partDetention`. Un controle pose
+       sur le commentaire voisin serait vert ici et muet sur l'arbre publie, ou
+       les commentaires sont retires. */
+    const src = lireSource('assets/app.js');
+    const champ = src.slice(src.indexOf("trad('Apport initial (€)')"),
+                            src.indexOf('${blocFinancementInitial(c)}'));
+    vrai(champ.length > 100, 'le champ doit être trouvable');
+    vrai(/estDeclare\(c\.apport\) \? num\(c\.apport\) : ''/.test(champ),
+      'le champ rend l’apport tel qu’il est déclaré');
+    vrai(!/partDetention/.test(champ), 'et aucune quote-part ne s’y applique');
+    /* Ni ailleurs : rien dans le modele ne multiplie l'apport par une part. */
+    const st = lireSource('assets/store.js');
+    vrai(!/apport[^;\n]*partDetention|partDetention[^;\n]*apport/.test(st),
+      'ni dans le modèle');
+  });
+});
+
+/* Le capital restant du et le capital EMPRUNTE sont deux montants differents.
+   Prendre le premier pour le second ferait afficher « 0 % rembourse » a qui a
+   paye la moitie de son pret. */
+suite('Le capital emprunté et le capital restant dû sont deux montants', () => {
+
+  const pret = (o = {}) => ({ id: 'd1', libelle: 'Prêt', montant: o.montant,
+    ...(estDeclare(o.initial) ? { initial: o.initial } : {}),
+    ...(estDeclare(o.taux) ? { taux: o.taux } : {}),
+    ...(estDeclare(o.mensualite) ? { mensualite: o.mensualite } : {}),
+    ...(estDeclare(o.tauxAssurance) ? { tauxAssurance: o.tauxAssurance } : {}),
+    bienId: 'c_b' });
+
+  const bien = (credits) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: credits }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [],
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+                 prixAchat: 300000, usage: 'principale' }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = [];
+  });
+  const p = () => progressionCredit(Store.state.etabs[0].dettes[0]);
+
+  test('capital remboursé = emprunté − restant dû, et son pourcentage', () => {
+    bien([pret({ montant: 187000, initial: 240000 })]);
+    pres(p().initial, 240000, 'le capital emprunté');
+    pres(p().reste, 187000, 'le capital restant dû');
+    pres(p().rembourse, 53000, 'et la différence');
+    pres(p().pct, 53000 / 240000 * 100, 'soit vingt-deux pour cent');
+    eq(p().incoherent, false, 'rien à signaler');
+
+    /* Un pret solde : tout est rembourse, et le pourcentage vaut cent. */
+    bien([pret({ montant: 0, initial: 240000 })]);
+    pres(p().rembourse, 240000, 'un prêt soldé a tout remboursé');
+    pres(p().pct, 100, 'soit cent pour cent');
+  });
+
+  test('sans capital emprunté, la progression n’existe pas — elle ne vaut pas zéro', () => {
+    bien([pret({ montant: 187000 })]);
+    eq(p().initial, null, 'aucun capital emprunté déclaré');
+    eq(p().rembourse, null, 'donc aucun capital remboursé');
+    eq(p().pct, null, 'et aucun pourcentage');
+    pres(p().reste, 187000, 'le restant dû, lui, reste connu');
+    /* Un capital emprunte declare a ZERO n'est pas un montant de pret. */
+    bien([pret({ montant: 187000, initial: 0 })]);
+    eq(p().initial, null, 'un capital emprunté nul n’est pas un montant de prêt');
+    /* Et l'ecran demande la piece manquante au lieu d'afficher une barre vide. */
+    const src = lireSource('assets/app.js');
+    vrai(/prog\.initial == null \? '' : `\n?\s*<div class="goal-bar"/.test(src),
+      'la barre de progression ne s’affiche pas sans capital emprunté');
+    vrai(/Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé/.test(src),
+      'et l’écran dit quoi remplir');
+  });
+
+  test('un restant dû plus grand que l’emprunté se signale, sans se corriger', () => {
+    /* Frais finances, regroupement, pret rechargeable : ca arrive, et ce n'est
+       pas toujours une faute. Un capital rembourse negatif serait faux dans les
+       deux sens. */
+    bien([pret({ montant: 250000, initial: 240000 })]);
+    eq(p().incoherent, true, 'l’incohérence se dit');
+    eq(p().rembourse, null, 'et aucun capital remboursé négatif n’est rendu');
+    pres(num(Store.state.etabs[0].dettes[0].montant), 250000, 'le restant dû n’a pas été retouché');
+    pres(num(Store.state.etabs[0].dettes[0].initial), 240000, 'ni le capital emprunté');
+    const src = lireSource('assets/app.js');
+    vrai(/Le capital restant dû dépasse le capital emprunté au départ/.test(src),
+      'la carte le nomme');
+    vrai(/Tallya ne tranche pas/.test(src), 'et ne corrige rien');
+  });
+
+  test('aucun crédit, un crédit, plusieurs crédits', () => {
+    bien([]);
+    eq(creditsDuBien(compteById('c_b')).length, 0, 'aucun crédit');
+    eq(coutBien(compteById('c_b')).mensualite, 0, 'aucune mensualité');
+    eq(coutBien(compteById('c_b')).capitalMois, null, 'et aucun capital remboursé');
+
+    bien([pret({ montant: 200000, initial: 240000, taux: 2, mensualite: 1000 })]);
+    eq(creditsDuBien(compteById('c_b')).length, 1, 'un crédit');
+    pres(coutBien(compteById('c_b')).mensualite, 1000, 'sa mensualité');
+
+    bien([pret({ montant: 200000, initial: 240000, taux: 2, mensualite: 1000 }),
+          { id: 'd2', libelle: 'Prêt travaux', montant: 50000, initial: 60000,
+            taux: 3, mensualite: 400, bienId: 'c_b' }]);
+    eq(creditsDuBien(compteById('c_b')).length, 2, 'deux crédits');
+    pres(coutBien(compteById('c_b')).mensualite, 1400, 'les mensualités se somment');
+    const dettes = Store.state.etabs[0].dettes;
+    pres(progressionCredit(dettes[0]).rembourse, 40000, 'chacun garde sa progression');
+    pres(progressionCredit(dettes[1]).rembourse, 10000, 'la sienne');
+    pres(round2(dettesTotal()), 250000, 'et la dette totale les additionne');
+  });
+
+  test('le capital restant déclaré ne se remplace jamais par une projection', () => {
+    bien([pret({ montant: 200000, initial: 240000, taux: 2, mensualite: 1000 })]);
+    const d = Store.state.etabs[0].dettes[0];
+    d.verifieLe = '2026-01-15';
+    const pr = projectionCredit(d);
+    vrai(pr.moisDepuis > 0, 'des mois ont passé depuis la vérification');
+    vrai(pr.projete != null && pr.projete < 200000, 'la projection descend');
+    pres(num(d.montant), 200000, 'mais le montant déclaré n’a pas bougé');
+    const st = lireSource('assets/store.js');
+    vrai(!/d\.montant\s*=\s*[^;]*projete|montant:\s*projete/.test(st),
+      'rien n’écrit le capital depuis la projection');
+    const src = lireSource('assets/app.js');
+    vrai(/Tallya ne l’écrit jamais à ta place/.test(src), 'et la carte le dit');
+  });
+});
+
+/* Zero est un taux, l'absence n'en est pas un. La regle est verrouillee depuis
+   la refonte immobiliere ; D ne la desserre nulle part. */
+suite('Un taux déclaré à zéro reste zéro, un taux absent reste absent', () => {
+
+  const pret = (taux) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ id: 'd1', libelle: 'Prêt',
+      montant: 200000, initial: 240000, mensualite: 1000, bienId: 'c_b',
+      ...(taux === undefined ? {} : { taux }) }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [],
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+                 prixAchat: 300000, usage: 'principale' }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = [];
+  });
+  const d = () => Store.state.etabs[0].dettes[0];
+
+  test('un taux positif ventile et donne une fin', () => {
+    pret(2);
+    const e = echeancierCredit(d());
+    pres(e.interetsDuMois, 200000 * 0.02 / 12, 'les intérêts du mois');
+    vrai(e.capitalDuMois > 0, 'du capital se rembourse');
+    vrai(finCredit(d()), 'et la date de fin existe');
+  });
+
+  test('un taux déclaré à zéro s’amortit tout droit', () => {
+    pret(0);
+    eq(tauxCreditDeclare(d()), 0, 'zéro est un taux déclaré');
+    const e = echeancierCredit(d());
+    pres(e.interetsDuMois, 0, 'aucun intérêt');
+    pres(e.capitalDuMois, 1000, 'toute la mensualité rembourse du capital');
+    eq(e.amortissable, true, 'et la dette s’éteint');
+    pres(finCredit(d()).mois, 200, 'deux cents échéances');
+    /* Il survit a une relecture et a une reecriture : c'est la ou `|| null` le
+       rangeait parmi les inconnus. */
+    d().taux = num(d().taux);
+    eq(tauxCreditDeclare(d()), 0, 'après relecture, toujours zéro');
+    const src = lireSource('assets/app.js');
+    vrai(/estDeclare\(d\.taux\) \? num\(d\.taux\) : ''/.test(src),
+      'le champ de la fiche le rend tel quel');
+    vrai(/taux: estDeclare\(e3\.taux\) \? num\(e3\.taux\) : null/.test(src),
+      'et la création l’écrit tel quel');
+  });
+
+  test('un taux absent n’invente ni ventilation ni date de fin', () => {
+    pret(undefined);
+    eq(tauxCreditDeclare(d()), null, 'aucun taux');
+    const e = echeancierCredit(d());
+    eq(e.capitalDuMois, null, 'aucune part de capital');
+    eq(e.interetsDuMois, null, 'aucun intérêt');
+    eq(finCredit(d()), null, 'et aucune date de fin');
+    eq(coutBien(compteById('c_b')).ventilation, 'aucune', 'la ventilation se tait');
+    const src = lireSource('assets/app.js');
+    vrai(/Renseigne le taux pour estimer la répartition capital\/intérêts et la date de fin/
+      .test(src), 'et la carte dit quoi remplir');
+  });
+});
+
+/* Une mensualite contient son assurance : c'est le prelevement qu'on lit sur son
+   releve, et c'est lui que le budget compte. */
+suite('Une mensualité contient son assurance, et le dit', () => {
+
+  const pret = (o) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ id: 'd1', libelle: 'Prêt',
+      montant: 200000, mensualite: 1000, taux: 2, bienId: 'c_b', ...o }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [],
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+                 prixAchat: 300000, usage: 'principale' }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = [];
+  });
+  const d = () => Store.state.etabs[0].dettes[0];
+
+  test('capital + intérêts + assurance font la mensualité', () => {
+    pret({ initial: 240000, tauxAssurance: 0.3 });
+    const e = echeancierCredit(d());
+    const assur = assuranceMensuelleCredit(d());
+    pres(assur, 240000 * 0.003 / 12, 'la prime, sur le capital emprunté');
+    pres(e.capitalDuMois + e.interetsDuMois + assur, 1000,
+      'les trois parts refont la mensualité, au centime');
+    const co = coutBien(compteById('c_b'));
+    pres(co.capitalMois + co.horsCapital, co.totalSorties, 'et le coût se referme aussi');
+  });
+
+  test('l’assurance dit sur quelle base elle est calculée', () => {
+    /* La plupart des contrats la calculent sur le capital EMPRUNTE. Sans lui, on
+       retombe sur le restant du — la prime est alors sous-estimee, ce qui est le
+       bon sens de l'erreur — mais ce repli ne doit pas etre silencieux. */
+    pret({ initial: 240000, tauxAssurance: 0.3 });
+    eq(baseAssuranceCredit(d()).sur, 'initial', 'avec le capital emprunté, c’est lui');
+    pres(baseAssuranceCredit(d()).base, 240000, 'et la base le vaut');
+
+    pret({ tauxAssurance: 0.3 });
+    eq(baseAssuranceCredit(d()).sur, 'restant', 'sans lui, le restant dû sert de base');
+    pres(baseAssuranceCredit(d()).base, 200000, 'nommément');
+    pres(assuranceMensuelleCredit(d()), 200000 * 0.003 / 12, 'et la prime est sous-estimée');
+    const src = lireSource('assets/app.js');
+    vrai(/base\.sur === 'initial' \? '' :/.test(src), 'la carte ne le dit que dans ce cas');
+    vrai(/Estimée sur le capital restant dû, faute de capital emprunté renseigné/.test(src),
+      'et elle le dit');
+  });
+
+  test('l’assurance ne crée aucune seconde sortie de trésorerie', () => {
+    /* Elle est deja dans la mensualite : une charge d'assurance de plus
+       sortirait deux fois du compte. */
+    pret({ initial: 240000, tauxAssurance: 0.3 });
+    Store.state.budget.fixedCharges = [{ label: 'Mensualité', amount: 1000, period: 'mois',
+                                         shares: {}, creditId: 'd1', bienId: 'c_b' }];
+    d().mensualite = null;
+    refreshAccounts();
+    pres(round2(budgetFrame().fixed), 1000, 'le budget compte la mensualité, une fois');
+    pres(coutBien(compteById('c_b')).totalSorties, 1000, 'et le coût du bien aussi');
+    pres(coutBien(compteById('c_b')).autresCharges, 0,
+      'la charge qui rembourse le crédit n’est pas comptée en plus');
+    const src = lireSource('assets/app.js');
+    vrai(/il ne crée aucune sortie de plus, l’assurance étant déjà comprise dedans/.test(src),
+      'et le champ du taux le dit');
+  });
+
+  test('un prêt qui ne s’amortit pas n’invente aucune échéance', () => {
+    pret({ montant: 200000, taux: 12, mensualite: 500, initial: 200000 });
+    const e = echeancierCredit(d());
+    eq(e.amortissable, false, 'la dette ne s’éteint jamais');
+    eq(finCredit(d()), null, 'aucune date de fin');
+    eq(coutBien(compteById('c_b')).capitalMois, 0,
+      'le capital remboursé vaut zéro — connu, pas inconnu');
+    const src = lireSource('assets/app.js');
+    vrai(/La mensualité actuelle ne réduit pas le capital/.test(src), 'et l’écran le dit');
+  });
+});
+
+/* Creer un bien ne doit forcer aucune donnee inconnue : le minimum est un nom,
+   un usage et une valeur. Tout le reste s'enrichit ensuite. */
+suite('Créer un bien ne force aucune donnée inconnue', () => {
+
+  const parcours = () => {
+    const src = lireSource('assets/app.js');
+    return src.slice(src.indexOf("async 'ajouter-compte'"),
+                     src.indexOf("'fiche-compte'(btn)"));
+  };
+
+  test('le parcours se lit par étapes, et chacune se nomme', () => {
+    const p = parcours();
+    vrai(/\{ cle: 'section_acq', label: 'Acquisition', type: 'section' \}/.test(p),
+      'l’acquisition est une étape');
+    vrai(/\{ cle: 'section_fin', label: 'Financement', type: 'section' \}/.test(p),
+      'le financement aussi');
+    /* Une section ne porte aucune valeur : les deux lectures l'ignorent. */
+    const src = lireSource('assets/app.js');
+    vrai(/if \(c\.type === 'section'\)/.test(src), 'askForm sait la rendre');
+    vrai(/const el = \$\(`#f_\$\{c\.cle\}`\);\n\s*if \(!el\) continue;/.test(src),
+      'et la lecture des valeurs passe son chemin');
+  });
+
+  test('seuls le nom, l’usage et la valeur sont exigés', () => {
+    const p = parcours();
+    /* L'usage est le seul champ obligatoire de l'immobilier : c'est lui qui
+       decide de tout ce que la fiche montre ensuite. */
+    vrai(/cle: 'usageBien'[\s\S]{0,120}requis: true/.test(p), 'l’usage est obligatoire');
+    for (const cle of ['prixAchat', 'fraisAcquisition', 'travauxInitiaux',
+                       'initial', 'apport', 'mensualite', 'taux', 'tauxAssurance']) {
+      vrai(!new RegExp(`cle: '${cle}'[^}]*requis`).test(p),
+        `« ${cle} » reste facultatif : personne n’invente un chiffre pour finir`);
+    }
+  });
+
+  test('un champ traversé sans rien taper ne devient pas un zéro', () => {
+    const p = parcours();
+    for (const cle of ['prixAchat', 'fraisAcquisition', 'travauxInitiaux']) {
+      vrai(new RegExp(`estDeclare\\(e3\\.${cle}\\)`).test(p),
+        `« ${cle} » ne s’écrit que s’il est déclaré`);
+    }
+    vrai(/const apportDit = estDeclare\(e3\.apport\) \? num\(e3\.apport\) : null;/.test(p),
+      'l’apport non plus');
+    vrai(/apportDit === null \? \{\} : \{ apport: apportDit \}/.test(p),
+      'et il n’entre dans le compte que déclaré');
+    vrai(/initial: estDeclare\(e3\.initial\) && num\(e3\.initial\) > 0 \? num\(e3\.initial\) : null/
+      .test(p), 'le capital emprunté non plus');
+  });
+
+  test('un crédit créé porte son bienId dès sa naissance', () => {
+    /* Le repli « un seul compte chez ce preteur » reste une lecture
+       conservatrice pour les anciennes donnees ; aucun enregistrement nouveau
+       n'en depend. */
+    const p = parcours();
+    vrai(/bienId: id,/.test(p), 'le lien est posé à la création');
+    const i = p.indexOf('let id = ');
+    const j = p.indexOf('bienId: id');
+    vrai(i > 0 && j > i, 'et l’identifiant du compte est tiré avant le crédit');
+    /* Et le repli reste une lecture, jamais une ecriture : rien ne cree un
+       credit en comptant sur « un seul compte chez ce preteur ». */
+    vrai(!/bienId: null|bienId: undefined/.test(p),
+      'aucun crédit ne naît sans son bien');
+    vrai(/etabSansAmbiguite/.test(lireSource('assets/store.js')),
+      'le repli existe encore, pour les anciennes données');
+  });
+
+  test('la pierre papier ne reçoit pas l’onboarding du bien physique', () => {
+    const p = parcours();
+    /* Les trois champs d'acquisition et l'apport sont gardes par le meme
+       drapeau que l'usage : `bien && estDetenuEnDirect(t)`. Une SCPI garde son
+       « montant investi », qui est son prix de souscription. */
+    vrai(/\.\.\.\(bien && estDetenuEnDirect\(t\) \? \[\n?\s*\{ cle: 'section_acq'/.test(p),
+      'l’acquisition détaillée est réservée au bien détenu en direct');
+    vrai(/\.\.\.\(!\(bien && estDetenuEnDirect\(t\)\) \? \[\] : \[\n?\s*\{ cle: 'apport'/.test(p),
+      'l’apport aussi');
+    vrai(/cle: 'revient', label: trad\('Montant investi \(€\)'\)/.test(p),
+      'et la pierre papier garde son montant investi');
+  });
+});
+
+/* D ne change ni ce que vaut un patrimoine, ni ce que coute un mois. Elle change
+   ce qu'on sait en dire. */
+suite('D ne change ni le patrimoine, ni les dettes, ni le Budget', () => {
+
+  /* Le meme bien, decrit de deux facons economiquement identiques : un total
+     legacy d'un cote, son detail de l'autre. */
+  const poser = (detail) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [{ id: 'd1', libelle: 'Prêt',
+      montant: 187000, initial: 240000, taux: 2.8, mensualite: 1180,
+      tauxAssurance: 0.3, bienId: 'c_b' }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [], apport: 80000,
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 370000,
+        usage: 'principale',
+        ...(detail ? { prixAchat: 300000, fraisAcquisition: 24000, travauxInitiaux: 10000 }
+                   : { prixDeRevient: 334000 }) }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = [];
+    s.budget.fixedCharges = [{ label: 'Mensualité', amount: 1180, period: 'mois',
+                               shares: {}, creditId: 'd1', bienId: 'c_b' },
+                             { label: 'Taxe foncière', amount: 250, period: 'mois',
+                               shares: {}, bienId: 'c_b' }];
+  });
+
+  const photo = () => ({
+    brut: round2(patrimoine().brut), net: round2(patrimoine().net),
+    dettes: round2(dettesTotal()),
+    fixe: round2(budgetFrame().fixed), revenus: round2(budgetFrame().income),
+    cout: round2(coutBien(compteById('c_b')).totalSorties),
+    base: round2(cashFlowBien(compteById('c_b')).base),
+  });
+
+  test('le détail et le total legacy décrivent le même patrimoine', () => {
+    poser(false);
+    const legacy = photo();
+    poser(true);
+    const detail = photo();
+    for (const clef of Object.keys(legacy))
+      eq(detail[clef], legacy[clef], `${clef} ne bouge pas`);
+    pres(legacy.base, 334000, 'et la base vaut le coût total dans les deux cas');
+  });
+
+  test('la mensualité ne se compte qu’une fois, et le capital ne rejoint pas le cash', () => {
+    poser(true);
+    pres(round2(budgetFrame().fixed), 1430, 'la mensualité et la taxe, une fois chacune');
+    const co = coutBien(compteById('c_b'));
+    pres(co.mensualite, 1180, 'la mensualité vient de la charge qui rembourse');
+    pres(co.autresCharges, 250, 'et cette charge n’est pas comptée en plus');
+    pres(co.totalSorties, 1430, 'le total sort une seule fois');
+    vrai(co.capitalMois > 0, 'du capital se rembourse');
+    pres(co.totalSorties, co.mensualite + co.autresCharges,
+      'et le total ne s’allège pas de la part de capital : cet argent sort bien');
+    const src = lireSource('assets/app.js');
+    vrai(!/capitalMois \+ [^;]*cashFlow|cashFlow \+ [^;]*capitalMois/.test(src),
+      'et il ne s’ajoute à aucun cash-flow');
+  });
+
+  test('les fondations d’A, B et C tiennent', () => {
+    poser(true);
+    /* A : le credit appartient explicitement a son bien, et rien n'est mort. */
+    eq(Store.state.etabs[0].dettes[0].bienId, 'c_b', 'le crédit désigne son bien');
+    eq(creditsAClarifier().length, 0, 'aucune référence à clarifier');
+    /* B : l'usage declare est la source de verite. */
+    eq(usageEffectifBien(compteById('c_b')).source, 'declare', 'l’usage vient d’une déclaration');
+    /* C : une residence principale ne parle pas rendement. */
+    const src = lireSource('assets/app.js');
+    const residence = src.slice(src.indexOf('function carteResidence'),
+                                src.indexOf('function carteLocatif'))
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    vrai(!/Rendement/.test(residence), 'et la carte du logement n’en montre aucun');
+    /* C.1 : la pierre papier garde sa fiche. */
+    vrai(/if \(!estBienEnDirect\(c\)\) return cartePierrePapier\(c, idx, cf\);/.test(src),
+      'la pierre papier garde la sienne');
+    /* C.2 : et ses frais, pas des charges de proprietaire. */
+    vrai(/if \(!estBienEnDirect\(compte\)\) return FRAIS_PIERRE_PAPIER;/
+      .test(lireSource('assets/store.js')), 'avec sa propre liste de frais');
   });
 });
