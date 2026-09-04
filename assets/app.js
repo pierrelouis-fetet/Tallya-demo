@@ -4214,15 +4214,17 @@ function reglagesExploitation(c, idx) {
     </div>`;
 }
 
-function boutonsRattachement(c) {
+const periodeDite = p => p !== 'mois' ? trad(CHARGE_PERIODE_LABEL[p]) : '';
+
+function boutonsRattachement(c, usage) {
   return `
-      <button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
-              title="${trad('Créer un loyer déjà rattaché à ce bien')}">+ ${trad('Loyer')}</button>
+      ${usage !== 'locative' ? '' : `<button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
+              title="${trad('Créer un loyer déjà rattaché à ce bien')}">+ ${trad('Loyer')}</button>`}
       <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
               title="${esc(chargesProposees(c).map(([l]) => trad(l)).join(', '))}">${trad('+ Charge')}</button>`;
 }
 
-/* Une ligne de la carte d'exploitation, avec la porte vers sa source.
+/* Une ligne de montant, avec la porte vers sa source.
 
    Le nom porte l'action plutot qu'un crayon a cote : c'est le nom qu'on lit et
    qu'on veut corriger, et un second element a viser sur un telephone est un
@@ -4232,113 +4234,254 @@ function boutonsRattachement(c) {
    Un montant qui s'affiche sans porte pour le corriger oblige a chercher sa
    source ailleurs, et rien a l'ecran ne dit ou : le loyer vit dans les revenus
    du budget, la taxe fonciere dans les charges fixes, la mensualite chez le
-   preteur. La fenetre ouverte est celle du budget, la meme : deux portes sur un
-   meme champ sont saines, deux champs pour un meme montant ne le sont pas. */
-function lignesDuMois(cf) {
-  const periodeDite = p => p !== 'mois' ? trad(CHARGE_PERIODE_LABEL[p]) : '';
-  return [
-    ...cf.sourcesLoyer.map(s => ligneSource({
-      nom: s.label, montant: s.mensuel, signe: 1,
-      action: 'edit-income', donnees: { i: s.i },
-      sub: [s.periode !== 'mois' ? `${fmtEUR0(s.montant)} ${periodeDite(s.periode)}` : '',
-            s.estime ? trad('estimé') : ''].filter(Boolean).join(' · '),
-    })),
-    cf.vacanceEuros > 0.005 ? `
-      <dt>${trad('Vacance locative')}${aide(trad("Les mois où le bien n'est pas loué, lissés sur l'année. Se règle par « Mois loués par an », au bas de cette carte."))}
-        <span class="sub">${fmtNombre(cf.moisLoues)} ${trad('mois loués sur 12')}</span></dt>
-        <dd class="dette">−${fmtEUR(cf.vacanceEuros)} ${trad('/ mois')}</dd>` : '',
-    ...(cf.postesCharge.length === 1 ? cf.postesCharge.map(p => ligneSource({
-      nom: p.label, montant: p.mensuel, signe: -1,
-      action: 'edit-charge', donnees: { i: p.i },
-      sub: p.periode !== 'mois' ? `${fmtEUR0(p.montant)} ${periodeDite(p.periode)}` : '',
-    })) : []),
-    ...(cf.postesCharge.length > 1 ? [`
-      <dt>${trad('Charges du bien')}${aide(trad('Le total des charges rattachées à ce bien. Chacune se corrige dans le budget, où elle porte son nom.'))}
-        <span class="sub">${trad('{n} charges').replace('{n}', cf.postesCharge.length)}</span></dt>
-        <dd class="dette">−${fmtEUR(cf.postesCharge.reduce((s, p) => s + p.mensuel, 0))} ${trad('/ mois')}</dd>`] : []),
-    cf.impot ? `
-      <dt>${trad('Impôt déclaré')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte."))}
-        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
-        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>` : '',
-    ...(() => {
-      const avec = cf.creditsListe.filter(x => x.mensualite > 0.005);
-      if (!avec.length) return [];
-      const total = avec.reduce((s, x) => s + x.mensualite, 0);
-      const nom = avec.length > 1 ? trad('Mensualités de crédit')
-                                  : trad('Mensualité de crédit');
-      if (avec.length > 1) return [`
-      <dt>${nom}${aide(trad('Le total des mensualités des crédits rattachés à ce bien. Chaque prêt se lit séparément dans « Financement », plus bas.'))}
-        <span class="sub">${trad('{n} crédits, détaillés dans Financement')
-          .replace('{n}', avec.length)}</span></dt>
-        <dd class="dette">−${fmtEUR(total)} ${trad('/ mois')}</dd>`];
-      const x = avec[0];
-      return [ligneSource({
-        nom, montant: total, signe: -1,
-        action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
-        donnees: x.chargeIndex != null ? { i: x.chargeIndex } : { etab: x.etabId, i: x.index },
-      })];
-    })(),
-  ].filter(Boolean).join('');
-}
+   preteur.
 
+   `signe: 0` pour une sortie qu'il n'y a pas a juger. La mensualite d'une
+   residence principale n'est pas une perte, c'est le prix du logement : la
+   peindre en rouge moraliserait une depense choisie. La couleur reste pour ce
+   qui a un sens — un cash-flow, un gain, une alerte. */
 function ligneSource({ nom, montant, signe, action, donnees, sub = '', aideTxt = '' }) {
   const attrs = Object.entries(donnees).map(([k, v]) => `data-${k}="${esc(String(v))}"`).join(' ');
+  const teinte = signe > 0 ? 'up' : signe < 0 ? 'dette' : '';
+  const devant = signe > 0 ? '+' : signe < 0 ? '−' : '';
   return `
       <dt><button type="button" class="lien-nu" data-action="${esc(action)}" ${attrs}
                   title="${trad('Modifier ou supprimer')}">${esc(nom)}</button>${aideTxt ? aide(aideTxt) : ''}
         ${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</dt>
-        <dd class="${signe > 0 ? 'up' : 'dette'}">${signe > 0 ? '+' : '−'}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
+        <dd class="${teinte}">${devant}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
 }
 
-function carteExploitation(c, idx) {
-  const cf = cashFlowBien(c);
-  if (!cf) return '';
-  const usage = usageBien(c);
-  const loue = cf.loyersPleins > 0.005;
-  const rien = !cf.loyers && !cf.charges && !cf.mensualite;
+function ligneTotal({ nom, montant, signe, aideTxt, sub = '' }) {
+  const teinte = signe > 0 ? 'up' : signe < 0 ? 'dette' : '';
+  const devant = signe > 0 ? '+' : signe < 0 ? '−' : '';
+  return `
+      <dt>${trad(nom)}${aide(trad(aideTxt))}${sub ? `
+        <span class="sub">${sub}</span>` : ''}</dt>
+        <dd class="${teinte}">${devant}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
+}
 
-  if (rien) return `
+function ligneCharges(cf, signe) {
+  if (!cf.postesCharge.length) return '';
+  if (cf.postesCharge.length === 1) {
+    const p = cf.postesCharge[0];
+    return ligneSource({ nom: p.label, montant: p.mensuel, signe,
+      action: 'edit-charge', donnees: { i: p.i },
+      sub: p.periode !== 'mois' ? `${fmtEUR0(p.montant)} ${periodeDite(p.periode)}` : '' });
+  }
+  return ligneTotal({ nom: 'Charges propriétaire', montant: cf.charges, signe,
+    aideTxt: 'Le total des charges rattachées à ce bien. Chacune se corrige dans le budget, où elle porte son nom.',
+    sub: trad('{n} charges').replace('{n}', cf.postesCharge.length) });
+}
+
+function ligneMensualite(cf, signe) {
+  const avec = cf.creditsListe.filter(x => x.mensualite > 0.005);
+  if (!avec.length) return '';
+  const total = avec.reduce((s, x) => s + x.mensualite, 0);
+  if (avec.length > 1)
+    return ligneTotal({ nom: 'Mensualité totale', montant: total, signe,
+      aideTxt: 'Le total des mensualités des crédits rattachés à ce bien. Chaque prêt se lit séparément dans « Financement », plus bas.',
+      sub: trad('{n} crédits, détaillés dans Financement').replace('{n}', avec.length) });
+  const x = avec[0];
+  return ligneSource({ nom: trad('Mensualité totale'), montant: total, signe,
+    action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
+    donnees: x.chargeIndex != null ? { i: x.chargeIndex } : { etab: x.etabId, i: x.index } });
+}
+
+function blocCapitalRembourse(co) {
+  if (!co.capitalMois) return '';
+  return `
+    <dl class="kv" style="margin-top:12px">
+      <dt><b>${trad('Capital remboursé ce mois')}</b></dt>
+        <dd class="up"><b>+${fmtEUR(co.capitalMois)}</b></dd>
+      ${co.horsCapital == null ? '' : `<dt>${trad('Coût hors remboursement de capital')}${
+        aide(trad('Ce que ce mois te coûte vraiment : tout ce qui sort du compte, moins la part qui rembourse du capital. C’est le total payé diminué de la ligne au-dessus.'))}${
+        (() => {
+          const i = co.interetsMois, a = co.assuranceMois;
+          if (!i && !a) return '';
+          const txt = a > 0.005
+            ? trad('dont {i} d’intérêts et {a} d’assurance')
+                .replace('{i}', fmtEUR0(i)).replace('{a}', fmtEUR0(a))
+            : trad('dont {i} d’intérêts').replace('{i}', fmtEUR0(i));
+          return `
+        <span class="sub">${txt}</span>`;
+        })()}</dt>
+        <dd>${fmtEUR(co.horsCapital)}</dd>`}
+    </dl>
+    <p class="hint" style="margin:8px 0 0">${trad('Cette somme réduit ta dette et augmente '
+      + 'ton patrimoine net. Elle ne rentre sur aucun compte : elle ne fait pas partie de ce '
+      + 'que tu peux dépenser.')}</p>`;
+}
+
+function noteVentilation(co) {
+  if (!co.nbCredits || co.ventilation === 'complete') return '';
+  return `<p class="hint" style="margin:8px 0 0">${co.ventilation === 'aucune'
+    ? trad('Renseigne le taux du crédit pour distinguer capital et intérêts.')
+    : trad('{n} crédit sur {t} n’a pas de taux renseigné : la part de capital ci-dessus ne compte que les autres.')
+        .replace('{n}', co.nbCredits - co.nbVentiles).replace('{t}', co.nbCredits)}</p>`;
+}
+
+function carteResidence(c, idx, cf, usage) {
+  const co = coutBien(c);
+  const revenus = cf.loyersPleins;
+  const titre = usage === 'principale' ? 'Coût mensuel du logement' : 'Coût mensuel du bien';
+  const tete = `
+    <div class="card-head"><h2>${trad(titre)}</h2>
+      <span class="hint">${esc(trad(USAGE_BIEN_LABEL[usage]).toLowerCase())}</span>
+      ${boutonsRattachement(c, usage)}</div>`;
+  if (co.totalSorties < 0.005 && revenus < 0.005) return `
   <div class="card">
-    <div class="card-head"><h2>${trad('Impact mensuel')}</h2>
-      <span class="hint">${trad('loyer, charges, cash-flow')}</span>
-      ${boutonsRattachement(c)}</div>
-    <p class="empty" style="margin:0">${trad('Aucun loyer ni charge rattaché à ce bien. '
-      + '« + Loyer » et « + Charge » les créent déjà rattachés ; un loyer déjà saisi dans le '
-      + 'budget se rattache par sa liste « Bien ». Le cash-flow et le rendement se calculent '
-      + 'alors tout seuls. Une provision pour travaux se déclare de la même façon, en charge '
-      + 'annuelle : c\'est la dépense que tout le monde oublie et qui décide du vrai rendement.')}</p>
+    ${tete}
+    <p class="empty" style="margin:0">${trad('Aucune charge ni crédit rattaché à ce bien. '
+      + '« + Charge » en crée une déjà rattachée : taxe foncière, assurance, copropriété. '
+      + 'Le crédit se déclare dans « Financement », juste en dessous. Le coût mensuel se '
+      + 'calcule alors tout seul.')}</p>
   </div>`;
-
-  const baseDite = cf.surAchat ? trad('le prix payé') : trad('la valeur actuelle');
   return `
   <div class="card">
-    <div class="card-head"><h2>${trad('Impact mensuel')}</h2>
-      <span class="hint">${loue
-        ? `${fmtEUR0(cf.loyersPleins)} ${trad('de loyer par mois')}`
-        : (usage ? esc(trad(USAGE_BIEN_LABEL[usage]).toLowerCase()) : '')}</span>
-      ${boutonsRattachement(c)}</div>
+    ${tete}
+    <dl class="kv">
+      <dt><b>${trad('Total payé')}</b>${aide(trad('Ce que ce bien fait sortir de ton compte chaque mois : la mensualité des crédits rattachés, plus les charges que tu paies en tant que propriétaire.'))}</dt>
+        <dd><b>${fmtEUR(co.totalSorties)} ${trad('/ mois')}</b></dd>
+      ${ligneMensualite(cf, 0)}
+      ${ligneCharges(cf, 0)}
+    </dl>
+    ${blocCapitalRembourse(co)}
+    ${noteVentilation(co)}
+    ${revenus < 0.005 ? '' : `
+    <dl class="kv" style="margin-top:12px">
+      ${cf.sourcesLoyer.length === 1 ? ligneSource({
+        nom: trad('Revenus liés au bien'), montant: revenus, signe: 1,
+        action: 'edit-income', donnees: { i: cf.sourcesLoyer[0].i },
+      }) : ligneTotal({ nom: 'Revenus liés au bien', montant: revenus, signe: 1,
+        aideTxt: 'Des revenus sont rattachés à ce bien, que tu as déclaré habité. Ce peut être parfaitement volontaire : une chambre louée, une location saisonnière. La fiche ne le requalifie pas pour autant.' })}
+    </dl>`}
+  </div>`;
+}
+
+function carteLocatif(c, idx, cf) {
+  const co = coutBien(c);
+  const loue = cf.loyersPleins > 0.005;
+  const baseDite = cf.surAchat ? trad('le prix payé') : trad('la valeur actuelle');
+  if (!loue) return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Performance locative')}</h2>
+      ${boutonsRattachement(c, 'locative')}</div>
+    <div class="empty">
+      <p style="margin:0 0 12px">${trad('Aucun loyer renseigné.')} ${co.totalSorties < 0.005
+        ? trad('Ce bien est déclaré mis en location : ajoute le loyer pour voir son cash-flow et son rendement.')
+        : trad('Ce bien est déclaré mis en location et coûte déjà {v} par mois. Ajoute le loyer pour voir son cash-flow et son rendement.')
+            .replace('{v}', fmtEUR0(co.totalSorties))}</p>
+      <button class="btn sm" data-action="ajouter-loyer" data-id="${esc(c.id)}">${
+        trad('+ Ajouter un loyer')}</button>
+    </div>
+    ${blocCapitalRembourse(co)}
+  </div>`;
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Performance locative')}</h2>
+      <span class="hint">${fmtEUR0(cf.loyersPleins)} ${trad('de loyer par mois')}</span>
+      ${boutonsRattachement(c, 'locative')}</div>
     <dl class="kv">
       ${lignesDuMois(cf)}
       <dt><b>${trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
         <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
-      ${cf.capitalMois ? `<dt>${trad('Patrimoine constitué ce mois')}${aide(trad("La part de capital de ta mensualité : elle réduit ta dette et augmente ton patrimoine net d’autant. Elle quitte ta trésorerie et rejoint tes murs, donc les deux lignes ne s'additionnent pas : elles répondent à deux questions différentes."))}</dt>
-        <dd class="up"><b>+${fmtEUR(cf.capitalMois)} ${trad('/ mois')}</b></dd>` : ''}
     </dl>
-    ${!loue ? '' : `
+    ${blocCapitalRembourse(co)}
+    ${noteVentilation(co)}
     <dl class="kv" style="margin-top:12px">
       <dt>${trad('Rendement brut')}${aide(trad('Loyer annuel rapporté à la base indiquée. C’est la convention du marché : un rendement calculé sur une estimation du jour n’est pas le même chiffre, et il baisse quand le bien prend de la valeur.'))}
         <span class="sub">${trad('sur')} ${baseDite}, ${fmtEUR0(cf.base)}</span></dt>
         <dd>${fmtPct(cf.rendementBrut, 2)}</dd>
-      ${cf.charges ? `<dt>${trad('Rendement net de charges')}</dt>
-        <dd>${fmtPct(cf.rendementNet, 2)}</dd>` : ''}
-      ${cf.rendementNetNet != null ? `<dt>${trad('Net d\'impôt')}${aide(trad("Le seul des trois qui dise ce qui te reste. Il n'apparaît que si tu as déclaré ton taux."))}</dt>
-        <dd><b>${fmtPct(cf.rendementNetNet, 2)}</b></dd>` : ''}
-      ${cf.cashOnCash != null ? `<dt>${trad('Sur ton apport')}${aide(trad("Le cash-flow annuel rapporté à ce que tu as sorti de ta poche. C'est le chiffre qui répond à « ce montage vaut-il mieux qu'un livret », parce qu'il tient compte du levier du crédit. Il se calcule sur ton apport, qui ne bouge pas : le rapporter au capital déjà remboursé le ferait baisser tout seul à mesure que tu rembourses, alors que rien ne se dégrade."))}
+      ${!cf.charges ? '' : `<dt>${trad('Rendement net de charges')}</dt>
+        <dd>${fmtPct(cf.rendementNet, 2)}</dd>`}
+      ${cf.rendementNetNet == null ? '' : `<dt>${trad('Rendement après estimation fiscale')}${
+        aide(trad('Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d’un régime fiscal que l’application aurait deviné : tant que Tallya ne modélise pas ta déclaration, ce chiffre reste une estimation, pas un net d’impôt.'))}</dt>
+        <dd>${fmtPct(cf.rendementNetNet, 2)}</dd>`}
+      ${cf.cashOnCash == null ? '' : `<dt>${trad('Rendement sur apport')}${
+        aide(trad('Le cash-flow annuel rapporté à ton apport initial. Il se calcule sur l’apport, qui ne bouge pas : le rapporter au capital déjà remboursé le ferait baisser tout seul à mesure que tu rembourses, alors que rien ne se dégrade.'))}
         <span class="sub">${fmtEUR0(cf.apport)} ${trad('engagés')}</span></dt>
-        <dd class="${cls(cf.cashOnCash)}">${fmtSignedPct(cf.cashOnCash, 1)}</dd>` : ''}
+        <dd class="${cls(cf.cashOnCash)}">${fmtSignedPct(cf.cashOnCash, 1)}</dd>`}
     </dl>
-    ${reglagesExploitation(c, idx)}`}
+    ${reglagesExploitation(c, idx)}
   </div>`;
+}
+
+function lignesDuMois(cf) {
+  const vacance = cf.vacanceEuros > 0.005;
+  const unSeul = cf.sourcesLoyer.length === 1;
+  return [
+    ...(!vacance ? cf.sourcesLoyer.map(s => ligneSource({
+      nom: s.label, montant: s.mensuel, signe: 1,
+      action: 'edit-income', donnees: { i: s.i },
+      sub: [s.periode !== 'mois' ? `${fmtEUR0(s.montant)} ${periodeDite(s.periode)}` : '',
+            s.estime ? trad('estimé') : ''].filter(Boolean).join(' · '),
+    })) : [
+      unSeul ? ligneSource({ nom: trad('Loyer potentiel'), montant: cf.loyersPleins, signe: 1,
+        action: 'edit-income', donnees: { i: cf.sourcesLoyer[0].i } })
+        : ligneTotal({ nom: 'Loyer potentiel', montant: cf.loyersPleins, signe: 1,
+            aideTxt: 'Ce que le bien rapporterait loué douze mois sur douze. Chaque loyer se corrige dans le budget, où il porte son nom.' }),
+      `
+      <dt>${trad('Vacance moyenne')}${aide(trad("Les mois où le bien n'est pas loué, lissés sur l'année. Se règle par « Mois loués par an », au bas de cette carte."))}
+        <span class="sub">${fmtNombre(cf.moisLoues)} ${trad('mois loués sur 12')}</span></dt>
+        <dd class="dette">−${fmtEUR(cf.vacanceEuros)} ${trad('/ mois')}</dd>`,
+      `
+      <dt class="kv-sous">${trad('Loyer retenu')}${aide(trad('Le loyer potentiel moins la vacance. C’est lui qui entre dans le cash-flow et dans les rendements : la vacance est déjà déduite ici, elle ne se retranche pas une seconde fois plus bas.'))}</dt>
+        <dd>${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>`,
+    ]),
+    ligneCharges(cf, -1),
+    !cf.impot ? '' : `
+      <dt>${trad('Fiscalité estimée')}${aide(trad("Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d'une règle fiscale que l'application aurait devinée. Se règle par « Impôt sur ce loyer », au bas de cette carte."))}
+        <span class="sub">${fmtPct(cf.tauxImpot, 1)}</span></dt>
+        <dd class="dette">−${fmtEUR(cf.impot)} ${trad('/ mois')}</dd>`,
+    ligneMensualite(cf, -1),
+  ].filter(Boolean).join('');
+}
+
+function carteUsageInconnu(c) {
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Usage du bien')}</h2></div>
+    <div class="empty">
+      <p style="margin:0 0 12px">${trad('Précise si tu l’habites, s’il s’agit d’une résidence '
+        + 'secondaire ou s’il est mis en location : la fiche affiche alors les bons indicateurs. '
+        + 'Un logement habité a un coût mensuel, un bien loué a un rendement.')}</p>
+      <button class="btn sm" data-action="choisir-usage" data-id="${esc(c.id)}">${
+        trad('Choisir l’usage')}</button>
+    </div>
+  </div>`;
+}
+
+function carteUsageLots(c) {
+  const lots = (c.lignes || []).filter(l => (l.classe || 'immobilier') === 'immobilier');
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Usage du bien')}</h2>
+      <span class="hint">${lots.length} ${trad('lots')}</span></div>
+    <dl class="kv">
+      ${lots.map(l => `<dt>${esc(l.libelle || trad('Lot'))}</dt>
+        <dd class="phrase">${usageLigne(l)
+          ? esc(trad(USAGE_BIEN_LABEL[usageLigne(l)])) : trad('à préciser')}</dd>`).join('')}
+    </dl>
+    <p class="hint" style="margin:12px 0 0">${trad('Les lots de ce bien n’ont pas le même usage : '
+      + 'ni rendement ni coût global ne seraient justes ici. Ton patrimoine, lui, reste complet. '
+      + 'L’usage de chaque lot se corrige plus haut, dans sa propre ligne.')}</p>
+  </div>`;
+}
+
+const CARTES_USAGE = {
+  principale: (c, idx, cf) => carteResidence(c, idx, cf, 'principale'),
+  secondaire: (c, idx, cf) => carteResidence(c, idx, cf, 'secondaire'),
+  locative: (c, idx, cf) => carteLocatif(c, idx, cf),
+};
+
+function carteUsageBien(c, idx) {
+  const cf = cashFlowBien(c);
+  if (!cf) return '';
+  if (!estBienEnDirect(c)) return carteLocatif(c, idx, cf);
+  const u = usageEffectifBien(c);
+  if (u.action === 'lots') return carteUsageLots(c);
+  const rendre = CARTES_USAGE[u.usage];
+  return rendre ? rendre(c, idx, cf) : carteUsageInconnu(c);
 }
 
 function espaceBien(c, idx, t) {
@@ -4432,16 +4575,21 @@ function espaceBien(c, idx, t) {
       </dl>`;
     })()}
     <dl class="kv" style="margin-top:12px">
-      <dt>${trad('Valeur du bien')}</dt><dd><b>${fmtEUR(entiere)}</b></dd>
-      ${partagee ? `<dt>${trad('Ta part')}${aide(trad("Ton patrimoine ne compte que cette fraction. La ligne au-dessus reste la valeur du bien entier."))}
+      <dt>${trad('Valeur actuelle')}</dt><dd><b>${fmtEUR(entiere)}</b></dd>
+      ${!partagee ? '' : `<dt>${trad('Ta part')}${aide(trad("Ton patrimoine ne compte que cette fraction. La ligne au-dessus reste la valeur du bien entier."))}
         <span class="sub">${biens.map(({ l }) => fmtPct(partDetention(l) * 100, 0)).join(', ')}</span></dt>
-        <dd><b>${fmtEUR(valeur)}</b></dd>` : ''}
-      ${gain != null ? `<dt>${trad('Plus-value latente')}${partagee ? aide(trad("Sur ta part, comme le reste de ton patrimoine.")) : ''}</dt>
+        <dd><b>${fmtEUR(valeur)}</b></dd>`}
+      ${!credit ? '' : `<dt>${trad('Capital restant dû')}</dt><dd class="dette">−${fmtEUR(credit)}</dd>
+        <dt><b>${trad('Valeur nette')}</b>${aide(trad("La valeur du bien moins ce qu'il reste à rembourser. C'est ce montant qui compte dans ton patrimoine net."))}</dt>
+        <dd><b>${fmtEUR(valeur - credit)}</b></dd>`}
+      ${(() => {
+        const u = usageEffectifBien(c);
+        return !u.usage ? '' : `<dt>${trad('Usage')}</dt>
+        <dd class="phrase">${esc(trad(USAGE_BIEN_LABEL[u.usage]))}</dd>`;
+      })()}
+      ${gain == null ? '' : `<dt>${trad('Plus-value latente')}${partagee ? aide(trad("Sur ta part, comme le reste de ton patrimoine.")) : ''}</dt>
         <dd class="${cls(gain)}">${fmtSigned(gain)}
-          <span class="muted">${fmtSignedPct((valeur / achat - 1) * 100, 1)}</span></dd>` : ''}
-      ${credit ? `<dt>${trad('Capital restant dû')}</dt><dd class="dette">−${fmtEUR(credit)}</dd>
-        <dt><b>${trad('Ce que tu possèdes')}</b>${aide(trad("La valeur du bien moins ce qu'il reste à rembourser. C'est ce montant qui compte dans ton patrimoine net."))}</dt>
-        <dd><b>${fmtEUR(valeur - credit)}</b></dd>` : ''}
+          <span class="muted">${fmtSignedPct((valeur / achat - 1) * 100, 1)}</span></dd>`}
     </dl>
     <div class="field" style="margin-top:12px">
       <label>${trad('Apport à l\'achat (€)')}${aide(trad("Ce que tu as sorti de ta poche le jour de l'achat, frais de notaire compris. Il sert au rendement sur apport ; il ne change pas la valeur nette actuelle du bien, qui vaut sa valeur moins ce que tu dois encore."))}</label>
@@ -4464,7 +4612,7 @@ function espaceBien(c, idx, t) {
     })()}
   </div>
 
-  ${carteExploitation(c, idx)}
+  ${carteUsageBien(c, idx)}
 
   <div class="card">
     <div class="card-head"><h2>Financement</h2>
@@ -4505,7 +4653,7 @@ function espaceBien(c, idx, t) {
           <div class="goal-bar"><div class="goal-fill"
                style="width:${pct.toFixed(1)}%; background:var(--good)"></div></div>
           <div class="goal-foot">
-            <span>${trad('Remboursé')} <b class="up">${fmtEUR0(paye)}</b> · ${fmtPct(pct, 0)}</span>
+            <span>${trad('Capital remboursé')} <b class="up">${fmtEUR0(paye)}</b> · ${fmtPct(pct, 0)}</span>
             <span>${trad('Reste')} <b>${fmtEUR0(restant)}</b> ${trad('sur')} ${fmtEUR0(initial)}</span>
           </div>`
         : `<p class="hint" style="margin:8px 0 0">${trad('Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé.')}</p>`}

@@ -4608,6 +4608,25 @@ function cashFlowBien(compte) {
   const capitalMois = amortis.length ? amortis.reduce((s, d) =>
     s + (echeancierCredit(d)?.capitalDuMois || 0), 0) : null;
 
+  /* La ventilation du mois -- capital, interets, assurance -- et SON ETENDUE.
+
+     Elle n'a de sens que si TOUS les credits du bien la donnent. Un credit sans
+     taux declare ne dit ni son capital ni ses interets : sommer les autres et
+     presenter le total comme la ventilation du mois annoncerait un cout hors
+     capital plus petit que la verite, sans que rien ne le signale. La vue lit
+     `ventilation` et se tait plutot que d'arrondir un silence a zero.
+
+     `capitalMois` reste la somme de ce qui est CONNU, meme partielle : c'est un
+     minorant vrai, et le taire ferait disparaitre du capital reellement
+     rembourse. C'est son etendue qui se dit, pas sa valeur qui se corrige. */
+  const interetsMois = amortis.length ? amortis.reduce((s, d) =>
+    s + (echeancierCredit(d)?.interetsDuMois || 0), 0) : null;
+  const assuranceMois = amortis.length
+    ? amortis.reduce((s, d) => s + assuranceMensuelleCredit(d), 0) : null;
+  const ventilation = !credits.length ? 'aucune'
+    : amortis.length === credits.length ? 'complete'
+    : amortis.length ? 'partielle' : 'aucune';
+
   const valeur = valeurCompte(compte);
   const achat = lignesDe(compte).reduce((s, l) => s + num(l.prixDeRevient), 0);
   const base = achat || valeur;
@@ -4625,6 +4644,8 @@ function cashFlowBien(compte) {
   return {
     loyers, loyersPleins, moisLoues, vacance, charges, mensualite, impot, tauxImpot,
     reste, valeur, achat, base, surAchat, capitalMois,
+    interetsMois, assuranceMois, ventilation,
+    nbCredits: credits.length, nbVentiles: amortis.length,
     sourcesLoyer, postesCharge, creditsListe,
     vacanceEuros: loyersPleins - loyers,
     cashFlow,
@@ -4633,6 +4654,39 @@ function cashFlowBien(compte) {
     rendementNetNet: (base && tauxImpot) ? (loyers - charges - impot) * 12 / base * 100 : null,
     apport,
     cashOnCash: apport ? cashFlow * 12 / apport * 100 : null,
+  };
+}
+
+/* Ce qu'un bien fait sortir du compte chaque mois, et ce qui, dans cette sortie,
+   ne se consomme pas.
+
+   UNE SEULE PORTE POUR LES TROIS FICHES. Une residence principale, une residence
+   secondaire et un bien loue posent la meme question de cout ; la calculer trois
+   fois donnerait trois reponses le jour ou l'une des trois oublierait la regle du
+   double comptage. Cette regle vit dans `cashFlowBien`, qui ecarte deja des
+   charges celles qui remboursent un credit du bien : leur montant EST la
+   mensualite, et la compter des deux cotes la ferait sortir deux fois du compte.
+
+   `horsCapital` se calcule par SOUSTRACTION, et non en resommant interets,
+   assurance et charges. Les deux donnent le meme nombre quand le pret s'amortit
+   -- une mensualite est exactement capital + interets + assurance -- mais la
+   soustraction garantit que les deux lignes affichees refont le total au centime,
+   et elle reste vraie sur le pret dont la mensualite ne couvre meme pas ses
+   interets, ou la somme des trois depasserait la mensualite.
+
+   Et rien ici n'est un revenu : le capital rembourse reduit une dette, il ne
+   rentre sur aucun compte. Il est rendu a part, jamais retranche du total. */
+function coutBien(compte) {
+  const cf = cashFlowBien(compte);
+  if (!cf) return null;
+  const totalSorties = cf.mensualite + cf.charges;
+  const ventile = cf.ventilation === 'complete' && cf.capitalMois != null;
+  return {
+    mensualite: cf.mensualite, autresCharges: cf.charges, totalSorties,
+    capitalMois: cf.capitalMois, interetsMois: cf.interetsMois,
+    assuranceMois: cf.assuranceMois, ventilation: cf.ventilation,
+    nbCredits: cf.nbCredits, nbVentiles: cf.nbVentiles,
+    horsCapital: ventile ? totalSorties - cf.capitalMois : null,
   };
 }
 

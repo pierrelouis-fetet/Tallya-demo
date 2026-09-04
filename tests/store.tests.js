@@ -3038,7 +3038,7 @@ suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
     const app = lireSource('assets/app.js');
     const i = app.indexOf('data-path="comptes.${idx}.apport"');
     vrai(i > 0, 'le champ doit exister');
-    const finZone = app.indexOf('${carteExploitation(c, idx)}');
+    const finZone = app.indexOf('${carteUsageBien(c, idx)}');
     vrai(finZone > i, 'le champ vit avant la carte d’exploitation');
     const financement = app.indexOf("<h2>Financement</h2>");
     vrai(financement > i, 'et avant la carte du financement courant');
@@ -15761,7 +15761,7 @@ suite('Ce qu’un bien rapporte, sans embellir', () => {
     pres(incomeTotal(), 3000 + revenuMensuel(source),
       'le budget le compte une fois, rattaché à un bien ou pas');
     const src = lireSource('assets/app.js');
-    const tete = src.slice(src.indexOf("trad('Impact mensuel')"),
+    const tete = src.slice(src.lastIndexOf("trad('Performance locative')"),
                            src.indexOf("trad('de loyer par mois')"));
     vrai(/fmtEUR0\(cf\.loyersPleins\)/.test(tete),
       'l’en-tête aussi : deux chiffres pour le loyer sur un même écran, c’est un de trop');
@@ -15923,54 +15923,60 @@ suite('Ce qu’un bien rapporte, sans embellir', () => {
    ------------------------------------------------------------------ */
 suite('La fiche pose la question de l’usage', () => {
 
-  test('une résidence principale ne s’entend plus dire « rendement 0,00 % »', () => {
-    /* Le garde-fou a change deux fois. Il testait l'absence de loyer ET de
-       charge : rattacher sa taxe fonciere a sa propre maison suffisait a
-       basculer la carte en mode rendement. Puis il a teste l'USAGE declare --
-       mieux, mais facultatif, donc un bien dont personne ne l'avait rempli
-       retombait sur le versant locatif. C'etait le cas de la demonstration
-       elle-meme : « Rendement brut 0,00 % » sur un appartement habite.
+  test('l’usage décide de ce que la carte montre, et lui seul', () => {
+    /* Trois regles se sont succede, et chacune corrigeait la precedente.
 
-       C'est le LOYER qui decide desormais. Un bien qui n'en porte aucun n'a pas
-       de rendement a montrer, et cette phrase est vraie sans rien demander a
-       personne. */
+       Le premier garde-fou testait l'absence de loyer ET de charge : rattacher
+       sa taxe fonciere a sa propre maison suffisait a basculer la carte en mode
+       rendement. Puis l'USAGE declare a decide -- mieux, mais il etait
+       facultatif, donc un bien dont personne ne l'avait rempli retombait sur le
+       versant locatif, et c'etait le cas de la demonstration elle-meme. Le LOYER
+       a donc decide a son tour : vrai sans rien demander a personne.
+
+       Mais deduire du loyer requalifie une chambre louee chez soi en operation
+       locative, et c'est faux dans l'autre sens. L'usage se demande desormais a
+       la creation et un bandeau le reclame sur les anciens biens : il est
+       rempli, donc il peut decider. C'est la seule donnee qui distingue une
+       residence principale d'un investissement — aucun calcul ne le devine. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    const bloc = src.slice(src.indexOf('function carteExploitation'),
-                           src.indexOf('function espaceBien'));
-    vrai(bloc.length > 500, 'la carte doit être trouvable');
-    vrai(/const loue = cf\.loyersPleins > 0\.005/.test(bloc),
-      'le loyer décide de ce que la carte montre');
-    vrai(!/const habite/.test(bloc),
-      'et non l’usage déclaré, qu’un bien peut très bien ne pas porter');
-    /* Tout ce qui est locatif vit derriere cette condition : les rendements et
-       les hypotheses. Le controle prend la tranche qui les contient et verifie
-       qu'elle commence par la garde. */
-    const i = bloc.indexOf("trad('Rendement brut')");
-    vrai(i > 0, 'le rendement brut existe pour les biens qui en ont un');
-    const avant = bloc.slice(0, i);
-    vrai(/\$\{!loue \? '' : `/.test(avant),
-      'et il est gardé par l’absence de loyer');
-    vrai(avant.lastIndexOf("${!loue ? '' : `") > avant.lastIndexOf('</dl>') - 400,
-      'la garde couvre le bloc entier des métriques locatives');
-    /* Les reglages purement locatifs sont dans la meme tranche. */
-    const apres = bloc.slice(i);
-    vrai(/reglagesExploitation\(c, idx\)/.test(apres),
-      'les mois loués et l’impôt sur le loyer suivent le même sort');
+    const aiguillage = src.slice(src.indexOf('function carteUsageBien(c, idx)'),
+                                 src.indexOf('function espaceBien'));
+    vrai(aiguillage.length > 200, 'l’aiguillage doit être trouvable');
+    vrai(/const u = usageEffectifBien\(c\);/.test(aiguillage),
+      'la carte se choisit sur l’usage effectif');
+    vrai(/const rendre = CARTES_USAGE\[u\.usage\];/.test(aiguillage),
+      'par une table, et non par une cascade de conditions');
+    vrai(!/cf\.loyersPleins > 0\.005/.test(aiguillage),
+      'et plus sur la présence d’un loyer, qui requalifiait une chambre louée chez soi');
+    /* Un usage, une carte, et aucune n'est atteignable autrement. */
+    for (const [usage, carte] of [['principale', 'carteResidence'],
+                                  ['secondaire', 'carteResidence'],
+                                  ['locative', 'carteLocatif']]) {
+      const t = src.slice(src.indexOf('const CARTES_USAGE = {'),
+                          src.indexOf('function carteUsageBien'));
+      vrai(new RegExp(`${usage}: \\(c, idx, cf\\) => ${carte}\\(`).test(t),
+        `${usage} mène à ${carte}`);
+    }
   });
 
   test('les deux chiffres du mois ne s’additionnent jamais', () => {
     /* Tresorerie et patrimoine repondent a deux questions ; leur somme
        melangerait de l'argent disponible et des murs. */
     const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function carteExploitation'),
-                           src.indexOf('function espaceBien'));
-    /* « En patrimoine, le meme mois » demandait de completer la phrase soi-meme.
-       Le libelle dit maintenant ce que la ligne est. */
-    vrai(/Patrimoine constitué ce mois/.test(bloc), 'le second chiffre est dit');
-    vrai(!/En patrimoine, le même mois/.test(bloc), 'et l’ancien libellé est parti');
-    vrai(!/cashFlow \+ .*capitalMois|capitalMois \+ .*cashFlow/.test(bloc),
-      'et jamais agrégé au premier');
+    const bloc = src.slice(src.indexOf('function blocCapitalRembourse'),
+                           src.indexOf('function noteVentilation'));
+    vrai(/Capital remboursé ce mois/.test(bloc), 'le second chiffre est dit');
+    vrai(!/Patrimoine constitué ce mois/.test(bloc), 'et l’ancien libellé est parti');
+    vrai(!/cashFlow \+ .*capitalMois|capitalMois \+ .*cashFlow/.test(src),
+      'et jamais agrégé au premier, nulle part');
+    /* Ni revenu, ni epargne disponible, ni cash-flow positif : une reduction de
+       dette. La phrase le dit A L'ECRAN, et non dans une infobulle qu'il faut
+       ouvrir — c'est exactement le chiffre qu'on additionne par erreur. */
+    vrai(/Elle ne rentre sur aucun compte/.test(bloc),
+      'la phrase qui empêche de le lire de travers est visible');
+    vrai(!/revenu|épargne/i.test(bloc.replace(/\/\*[\s\S]*?\*\//g, '')),
+      'et il ne s’appelle jamais un revenu ni une épargne');
   });
 
   test('la liste des usages se dérive de sa table', () => {
@@ -15981,6 +15987,11 @@ suite('La fiche pose la question de l’usage', () => {
       'et le dictionnaire des libellés en vient aussi');
     eq(usageLigne({ usage: 'colocation' }), '',
       'un usage inconnu ne se propage pas : il vaut « à préciser »');
+    /* Et l'aiguillage aussi : un usage ajoute a la table sans carte tombe sur la
+       carte neutre, jamais sur celle d'un autre usage. */
+    for (const [cle] of USAGES_BIEN)
+      vrai(new RegExp(`${cle}: \\(c, idx, cf\\)`).test(lireSource('assets/app.js')),
+        `${cle} a sa carte`);
   });
 
   test('l’usage se demande dès la création, là où on le sait', () => {
@@ -15991,26 +16002,25 @@ suite('La fiche pose la question de l’usage', () => {
       'et ce qui est répondu s’écrit sur la ligne');
   });
 
-  test('sur un logement habité, le total égale encore la somme de ses lignes', () => {
+  test('sur un bien loué, le total égale encore la somme de ses lignes', () => {
     /* Le total de la carte est le cash-flow, et l'impot en est un terme : il sort
        vraiment du compte. Un terme du total ne peut pas rester invisible, sinon
-       le total est plus petit que la somme de ce qu'on montre.
-
-       La carte n'a plus deux versants a tenir d'accord : une seule liste de
-       pieces, et le meme total dessous. */
+       le total est plus petit que la somme de ce qu'on montre. */
     const store = lireSource('assets/store.js');
     vrai(/const cashFlow = loyers - charges - mensualite - impot/.test(store),
       'le cash-flow retranche l’impôt, parce qu’il sort du compte');
     const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function carteExploitation'),
-                           src.indexOf('function espaceBien'));
+    const bloc = src.slice(src.indexOf('function carteLocatif'),
+                           src.indexOf('function lignesDuMois'));
     vrai(/\$\{lignesDuMois\(cf\)\}/.test(bloc), 'la carte liste ses pièces');
-    const pieces = src.slice(src.indexOf('function lignesDuMois'), src.indexOf('function ligneSource'));
-    vrai(/Impôt déclaré/.test(pieces), 'et l’impôt y figure');
+    const pieces = src.slice(src.indexOf('function lignesDuMois'),
+                             src.indexOf('function carteUsageInconnu'));
+    vrai(/Fiscalité estimée/.test(pieces), 'et la fiscalité y figure');
     /* Et la preuve par les nombres : les lignes affichees font le total. */
     Fixture.poser(s => {
       const c = s.comptes.find(x => x.id === 'c_immo');
       c.tauxImpot = 20; c.moisLoues = 12;
+      for (const l of c.lignes) l.usage = 'locative';
       s.budget.income.push({ label: 'Loyer', amount: 1000, period: 'mois', bienId: 'c_immo' });
       s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 100, period: 'mois',
                                    bienId: 'c_immo' });
@@ -16022,46 +16032,57 @@ suite('La fiche pose la question de l’usage', () => {
   });
 
   test('un logement qui rapporte ne s’entend pas dire qu’il coûte zéro', () => {
-    /* Une chambre bien louee peut couvrir plus que la mensualite. Le montant
-       etait borne a zero, donc l'intitule mentait sur un chiffre positif. */
-    const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function carteExploitation'),
-                           src.indexOf('function espaceBien'));
     /* Le montant etait borne a zero sur l'ancien versant habite, donc l'intitule
-       mentait sur un chiffre positif. La carte unifiee ne borne rien : le
+       mentait sur un chiffre positif. La carte locative ne borne rien : le
        cash-flow porte son signe, et la couleur le suit. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function carteLocatif'),
+                           src.indexOf('function lignesDuMois'));
     vrai(!/Math\.max\(0, /.test(bloc), 'aucun plancher à zéro sur le montant du mois');
     vrai(/fmtSigned\(cf\.cashFlow\)/.test(bloc) && /cls\(cf\.cashFlow\)/.test(bloc),
       'le signe et la couleur suivent le sens réel du mois');
-    /* Une chambre bien louee peut couvrir plus que la mensualite : le cash-flow
-       est alors positif, et rien ne l'en empeche. */
     Fixture.poser(s => {
+      for (const l of s.comptes.find(x => x.id === 'c_immo').lignes) l.usage = 'locative';
       s.budget.income.push({ label: 'Chambre', amount: 1500, period: 'mois', bienId: 'c_immo' });
     });
     vrai(cashFlowBien(compteById('c_immo')).cashFlow > 0,
       'un logement qui rapporte plus qu’il ne coûte l’affiche');
   });
 
-  test('les réglages qui agissent restent modifiables, quel que soit l’usage', () => {
-    /* Declares sur un locatif puis bascules en residence principale, la vacance
-       et l'impot continuaient d'agir sans qu'aucun champ ne les montre. */
+  test('les réglages locatifs ne s’affichent que sur un bien loué', () => {
+    /* Ils repondaient a une question que la residence principale ne pose pas :
+       « Mois loues par an : 12 » et « Impot sur ce loyer » sur le logement qu'on
+       habite. Ils n'agissent d'ailleurs sur rien la-bas -- sans loyer, la vacance
+       ne retire rien et l'impot porte sur une base nulle -- donc les cacher ne
+       cache aucun effet. C'etait la crainte qui les avait fait rester. */
     const src = lireSource('assets/app.js');
-    const bloc = src.slice(src.indexOf('function carteExploitation'),
-                           src.indexOf('function espaceBien'));
-    /* Les mois loues et l'impot sur le loyer n'agissent que s'il y a un loyer :
-       les offrir sans lui serait du bruit, et les cacher alors qu'ils agissent
-       serait pire -- declares sur un locatif puis bascule en residence
-       principale, ils continuaient d'agir sans qu'aucun champ ne les montre. La
-       meme condition regle les deux cas. */
-    vrai(/\$\{!loue \? '' : `/.test(bloc), 'la garde existe');
-    vrai(/reglagesExploitation\(c, idx\)/.test(bloc),
-      'et les réglages locatifs vivent derrière elle');
-    /* L'apport a quitte cette carte : il ne decrit aucun mois. */
+    const locatif = src.slice(src.indexOf('function carteLocatif'),
+                              src.indexOf('function lignesDuMois'));
+    const residence = src.slice(src.indexOf('function carteResidence'),
+                                src.indexOf('function carteLocatif'));
+    vrai(/reglagesExploitation\(c, idx\)/.test(locatif),
+      'les mois loués et l’impôt vivent sur la carte locative');
+    vrai(!/reglagesExploitation/.test(residence),
+      'et nulle part sur celle d’un logement habité');
+    /* La preuve qu'ils n'agissent sur rien : declares puis bascules en
+       principale, ni la vacance ni l'impot ne changent le total. */
+    Fixture.poser(s => {
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      c.moisLoues = 6; c.tauxImpot = 30;
+      for (const l of c.lignes) l.usage = 'principale';
+      s.budget.income = [];
+      s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 100, period: 'mois',
+                                   shares: {}, bienId: 'c_immo' });
+    });
+    const co = coutBien(compteById('c_immo'));
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.impot, 0, 'aucun impôt sans loyer, quel que soit le taux déclaré');
+    pres(cf.vacanceEuros, 0, 'aucune vacance sans loyer non plus');
+    pres(co.totalSorties, co.mensualite + co.autresCharges,
+      'le coût du logement ne dépend d’aucun des deux');
+    /* L'apport a quitte ces reglages : il ne decrit aucun mois. */
     vrai(/function reglagesExploitation\(c, idx\) \{/.test(src),
       'la fonction n’a plus d’option pour lui');
-    vrai(!/Apport à l/.test(bloc), 'et il ne s’affiche plus dans l’impact mensuel');
-    /* La borne haute est la fonction SUIVANTE, pas une longueur : une fenetre en
-       caracteres se defait au premier commentaire ajoute, et c'est arrive. */
     const iE = src.indexOf('function espaceBien');
     const espace = src.slice(iE, src.indexOf('function barreValiderFiche', iE));
     vrai(espace.length > 2000, 'espaceBien doit être trouvable');
@@ -16937,13 +16958,19 @@ suite('Un montant n’a qu’un porteur', () => {
        ou bien porte une aide qui dit ou le regler. Les deux exceptions sont
        nommees ici, et ce sont des champs de la meme carte. */
     const src = lireSource('assets/app.js');
-    /* La borne haute est `ligneSource` et non `carteExploitation` : c'est elle
-       qui pose le <dt> porteur du bouton, et l'inclure ferait compter la porte
-       elle-meme comme une ligne sans porte. */
+    /* `ligneSource` reste HORS du balayage : c'est elle qui pose le <dt> porteur
+       du bouton, et l'inclure ferait compter la porte elle-meme comme une ligne
+       sans porte. Les trois autres poseurs de lignes y sont, eux — la liste du
+       mois, le total nomme, et le total des mensualites. */
     const bloc = src.slice(src.indexOf('function lignesDuMois'),
-                           src.indexOf('function ligneSource'));
-    vrai(bloc.length > 400, 'la fonction doit être trouvable');
-    const litteraux = bloc.match(/<dt>[^\n]*/g) || [];
+                           src.indexOf('function carteUsageInconnu'))
+      + src.slice(src.indexOf('function ligneTotal'), src.indexOf('function ligneCharges'))
+      + src.slice(src.indexOf('function ligneMensualite'),
+                  src.indexOf('function blocCapitalRembourse'));
+    vrai(bloc.length > 400, 'les fonctions doivent être trouvables');
+    /* `<dt` et non `<dt>` : le sous-total du loyer retenu porte une classe, et
+       le motif d'avant serait passe a cote sans rien dire. */
+    const litteraux = bloc.match(/<dt[ >][^\n]*/g) || [];
     eq(litteraux.length, 4,
       'quatre lignes seulement s’écrivent à la main : les autres passent par ligneSource');
     /* La regle qui compte n'est pas le nombre de lignes, c'est qu'aucune ne
@@ -16955,9 +16982,10 @@ suite('Un montant n’a qu’un porteur', () => {
        d'une variable, parce qu'il se met au pluriel. Ce sont les aides qui
        identifient les lignes, et c'est elles qui portent la regle.
 
-       La quatrieme est le total des charges du bien, agrege des qu'il y en a
-       plusieurs : son aide renvoie au budget, ou chacune se corrige sous son
-       nom. Une seule charge garde sa ligne nommee, avec sa porte. */
+       La quatrieme vient de `ligneTotal`, qui sert des qu'aucune porte unique
+       n'existe : plusieurs charges, plusieurs credits, plusieurs loyers. Son
+       aide dit ou le detail se corrige — le budget, ou « Financement ». A une
+       seule source, la ligne garde son nom et sa porte. */
     vrai(litteraux.every(l => l.includes('${aide(')),
       'chacune porte une aide qui dit où le montant se règle');
     vrai(/Se règle par « Mois loués par an »/.test(bloc)
@@ -22708,192 +22736,223 @@ suite('Aucun français ne s’affiche hors du dictionnaire', () => {
   });
 });
 
-suite('La carte du mois suit le contexte du bien', () => {
+suite('La fiche d’un logement habité parle de coût, pas de rendement', () => {
 
   /* Elle couvrait tous les cas a la fois : mensualite, cash-flow, patrimoine,
      rendement, apport, mois loues, fiscalite. Sur une residence principale, la
-     moitie n'a aucun sens -- « Rendement brut 0,00 % » laisse croire qu'un
-     calcul locatif s'applique, « Mois loues par an : 12 » repond a une question
-     que ce bien ne pose pas.
+     moitie n'a aucun sens -- « Rendement brut 0,00 % » laisse croire qu'un calcul
+     locatif s'applique, « Mois loues par an : 12 » repond a une question que ce
+     bien ne pose pas.
 
-     Le LOYER decide desormais, et non l'usage declare : ce dernier est
-     facultatif, donc un bien dont personne ne l'a rempli -- le cas le plus
-     courant, et celui de la demonstration -- retombait sur le versant locatif. */
+     Un logement qu'on habite pose UNE question : combien il fait sortir chaque
+     mois. Et elle a deux reponses qu'il ne faut jamais additionner -- ce qui sort
+     du compte, et ce qui s'en va vraiment. */
 
-  const carte = () => {
-    const src = lireSource('assets/app.js');
-    return src.slice(src.indexOf('function carteExploitation'),
-                     src.indexOf('function espaceBien'));
-  };
+  const PRET = { id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000,
+                 taux: 2, mensualite: 1000, tauxAssurance: 0.3 };
+  const PETIT = { id: 'd2', libelle: 'Prêt travaux', montant: 100000, initial: 100000,
+                  taux: 2, mensualite: 500 };
+  const TAXE = { label: 'Taxe foncière', amount: 250, period: 'mois', shares: {}, bienId: 'c_b' };
 
   const bien = (opts = {}) => Fixture.poser(e => {
     e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: opts.credits || [] }];
-    e.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immobilier', statut: 'ouvert',
+    e.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
       libelle: 'Appartement', court: 'Appt', numero: '', notes: '', alloc: '',
-      ouvertLe: '2019-01-01', cash: [], moisLoues: 12, tauxImpot: 0,
-      apport: opts.apport || null,
-      lignes: [{ id: 'l_b', classe: 'immobilier', libelle: 'Appartement',
-                 valeur: 288000, prixDeRevient: 255000, quantite: 1,
-                 dateAcquisition: '2019-01-01', ...(opts.usage ? { usage: opts.usage } : {}) }] }];
+      ouvertLe: '2019-01-01', cash: [],
+      moisLoues: opts.moisLoues == null ? 12 : opts.moisLoues,
+      tauxImpot: opts.tauxImpot || 0, apport: opts.apport || null,
+      lignes: (opts.lots || [{ usage: opts.usage }]).map((l, i) => ({
+        id: 'l' + i, classe: 'immobilier', libelle: l.libelle || 'Appartement',
+        valeur: l.valeur == null ? 300000 : l.valeur,
+        prixDeRevient: l.prixDeRevient == null ? 255000 : l.prixDeRevient,
+        quantite: 1, dateAcquisition: '2019-01-01',
+        ...(l.usage ? { usage: l.usage } : {}) })) }];
     e.positions = []; e.monthly = [];
     e.budget.income = opts.loyer
       ? [{ label: 'Loyer', amount: opts.loyer, period: 'mois', bienId: 'c_b' }] : [];
     e.budget.fixedCharges = opts.charges || [];
   });
 
-  const PRET = { id: 'd1', libelle: 'Prêt immobilier', montant: 157362, taux: 1.45,
-                 mensualite: 894.44, tauxAssurance: 0.34, initial: 210000 };
+  const co = () => coutBien(compteById('c_b'));
+  /* La carte d'un logement habite, dans la source : le harnais ne charge pas
+     app.js, donc les faits de vue se lisent sur le CODE -- jamais sur un
+     commentaire, que le filtre de publication retire. */
+  const carte = (nom) => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[src.indexOf('\nfunction ', i + 1),
+                                  src.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([src.length]));
+    return src.slice(i, suivante);
+  };
 
-  test('le loyer décide de ce que la carte montre, pas l’usage déclaré', () => {
-    /* L'usage est facultatif : la demonstration elle-meme ne l'avait pas rempli,
-       et son appartement s'entendait donc dire « Rendement brut 0,00 % ». */
-    const c = carte();
-    vrai(/const loue = cf\.loyersPleins > 0\.005/.test(c),
-      'le loyer décide');
-    vrai(!/const habite/.test(c), 'l’usage ne décide plus');
-    /* Et il n'y a plus qu'un seul visage : les deux titres precedents ont
-       disparu au profit d'un seul, qui vaut pour les deux cas. */
-    vrai(/trad\('Impact mensuel'\)/.test(c), 'un seul titre, court, qui pose la question');
-    vrai(!/Ce que ce bien rapporte, et ce qu’il coûte/.test(c.replace(/<!--[\s\S]*?-->/g, '')),
-      'l’ancien titre locatif est parti');
-    vrai(!/Ce que ce logement te coûte/.test(c), 'et l’ancien titre habité aussi');
+  test('une résidence principale avec crédit : le total est ce qui sort', () => {
+    bien({ usage: 'principale', credits: [{ ...PRET }] });
+    pres(co().mensualite, 1000, 'la mensualité, telle que le crédit la porte');
+    pres(co().autresCharges, 0, 'aucune charge');
+    pres(co().totalSorties, 1000, 'le total est la mensualité seule');
   });
 
-  test('sans loyer, aucune métrique locative ne s’affiche', () => {
-    const c = carte();
-    const i = c.indexOf("trad('Rendement brut')");
-    vrai(i > 0, 'le rendement existe pour les biens qui en ont un');
-    /* Tout ce qui est locatif vit derriere la meme garde : les trois rendements,
-       le rendement sur apport, et les reglages de vacance et d'impot. */
-    const garde = c.lastIndexOf("${!loue ? '' : `", i);
-    vrai(garde > 0 && garde < i, 'le rendement est gardé par l’absence de loyer');
-    const bloc = c.slice(garde);
-    for (const locatif of ['Rendement brut', 'Rendement net de charges',
-                           'Sur ton apport', 'reglagesExploitation(c, idx)']) {
-      vrai(bloc.includes(locatif), `« ${locatif} » est derrière la garde`);
+  test('sans crédit, le coût est celui des charges — et rien ne s’affiche à zéro', () => {
+    bien({ usage: 'principale', charges: [{ ...TAXE }] });
+    pres(co().mensualite, 0, 'aucune mensualité');
+    pres(co().totalSorties, 250, 'le total est la charge seule');
+    eq(co().capitalMois, null, 'et aucun capital ne se rembourse');
+    eq(co().ventilation, 'aucune', 'il n’y a pas de crédit à ventiler');
+    /* La section entiere se tait plutot que d'annoncer « Capital rembourse : 0 ». */
+    vrai(/if \(!co\.capitalMois\) return '';/.test(carte('blocCapitalRembourse')),
+      'la section du capital ne s’écrit pas quand il n’y a rien à rembourser');
+    /* Et sans credit NI charge, la carte invite au lieu d'aligner des zeros. */
+    bien({ usage: 'principale' });
+    pres(co().totalSorties, 0, 'rien ne sort');
+    vrai(/co\.totalSorties < 0\.005 && revenus < 0\.005/.test(carte('carteResidence')),
+      'la carte reconnaît ce cas et dit comment en sortir');
+  });
+
+  test('charges et mensualité s’additionnent une fois chacune', () => {
+    bien({ usage: 'principale', credits: [{ ...PRET }], charges: [{ ...TAXE }] });
+    pres(co().totalSorties, 1250, 'mille de crédit et deux cent cinquante de charges');
+    /* La charge qui REMBOURSE le credit ne compte pas deux fois : son montant EST
+       la mensualite, et la compter des deux cotes la ferait sortir deux fois. */
+    bien({ usage: 'principale',
+           credits: [{ ...PRET, mensualite: null }],
+           charges: [{ label: 'Mensualité', amount: 1000, period: 'mois', shares: {},
+                       creditId: 'd1', bienId: 'c_b' }, { ...TAXE }] });
+    pres(co().mensualite, 1000, 'la mensualité vient de la charge qui rembourse');
+    pres(co().autresCharges, 250, 'et cette charge ne compte plus parmi les autres');
+    pres(co().totalSorties, 1250, 'le total ne double pas');
+  });
+
+  test('avec un taux connu, capital et coût consommé refont le total', () => {
+    bien({ usage: 'principale', credits: [{ ...PRET }], charges: [{ ...TAXE }] });
+    const x = co();
+    eq(x.ventilation, 'complete', 'la ventilation est entière');
+    pres(x.interetsMois, 200000 * 0.02 / 12, 'les intérêts du mois');
+    pres(x.assuranceMois, 240000 * 0.003 / 12, 'la prime, sur le capital emprunté');
+    pres(x.capitalMois, 1000 - x.assuranceMois - x.interetsMois,
+      'et le capital est ce qui reste de la mensualité');
+    /* L'invariant qui compte : les deux lignes affichees refont le total payé. */
+    pres(x.capitalMois + x.horsCapital, x.totalSorties,
+      'capital remboursé et coût hors capital font exactement le total');
+    pres(x.horsCapital, x.interetsMois + x.assuranceMois + x.autresCharges,
+      'et le coût hors capital est bien intérêts, assurance et charges');
+  });
+
+  test('sans taux, la ventilation ne s’invente pas : elle se demande', () => {
+    bien({ usage: 'principale', credits: [{ ...PRET, taux: null }] });
+    const x = co();
+    eq(x.capitalMois, null, 'aucun capital annoncé');
+    eq(x.horsCapital, null, 'aucun coût consommé non plus');
+    eq(x.ventilation, 'aucune', 'et la vue sait pourquoi');
+    pres(x.totalSorties, 1000, 'ce qui sort du compte, lui, reste connu');
+    vrai(/Renseigne le taux du crédit pour distinguer capital et intérêts/
+      .test(carte('noteVentilation')), 'la carte dit quoi remplir');
+    /* Un taux DECLARE a zero n'est pas un taux absent : le pret familial
+       s'amortit tout droit. */
+    bien({ usage: 'principale', credits: [{ ...PRET, taux: 0, tauxAssurance: 0 }] });
+    eq(co().ventilation, 'complete', 'un prêt à 0 % se ventile parfaitement');
+    pres(co().capitalMois, 1000, 'et rembourse du capital pour toute sa mensualité');
+  });
+
+  test('deux crédits se somment, et un seul sans taux fait taire la ventilation globale', () => {
+    bien({ usage: 'principale', credits: [{ ...PRET }, { ...PETIT }] });
+    const deux = co();
+    pres(deux.mensualite, 1500, 'les deux mensualités');
+    eq(deux.ventilation, 'complete', 'les deux portent un taux');
+    pres(deux.capitalMois, (1000 - 240000 * 0.003 / 12 - 200000 * 0.02 / 12)
+                         + (500 - 100000 * 0.02 / 12), 'les deux parts de capital');
+    pres(deux.capitalMois + deux.horsCapital, deux.totalSorties, 'et le total tient');
+
+    bien({ usage: 'principale', credits: [{ ...PRET }, { ...PETIT, taux: null }] });
+    const boiteux = co();
+    eq(boiteux.ventilation, 'partielle', 'un crédit sur deux ne dit pas son taux');
+    eq(boiteux.nbCredits, 2, 'sur deux crédits');
+    eq(boiteux.nbVentiles, 1, 'un seul se ventile');
+    eq(boiteux.horsCapital, null,
+      'le coût consommé se tait : il compterait les intérêts d’un seul prêt');
+    vrai(boiteux.capitalMois > 0,
+      'mais le capital connu reste dit : c’est un minorant vrai, pas une invention');
+    vrai(/ne compte que les autres/.test(carte('noteVentilation')),
+      'et la carte dit ce que ce chiffre ne couvre pas');
+  });
+
+  test('aucun rendement, aucune vacance, aucun bouton « + Loyer »', () => {
+    const residence = carte('carteResidence');
+    for (const locatif of ['Rendement', 'Vacance', 'Cash-flow', 'rendementBrut',
+                           'cashOnCash', 'moisLoues', 'reglagesExploitation']) {
+      vrai(!new RegExp(locatif).test(residence.replace(/\/\*[\s\S]*?\*\//g, '')),
+        `« ${locatif} » n’a rien à faire sur le logement qu’on habite`);
     }
-    /* Et les reglages purement locatifs ne vivent nulle part ailleurs. */
-    const avant = c.slice(0, garde);
-    vrai(!/reglagesExploitation/.test(avant),
-      'les mois loués et l’impôt ne s’affichent pas sans loyer');
+    /* Le bouton se tient a la garde de l'usage, et non a une liste ecrite deux
+       fois : c'est la meme fonction qui sert aux trois cartes. */
+    const boutons = carte('boutonsRattachement');
+    vrai(/usage !== 'locative' \? '' :/.test(boutons),
+      '« + Loyer » n’apparaît que sur un bien mis en location');
+    vrai(/data-action="ajouter-charge-bien"/.test(boutons),
+      '« + Charge » vaut pour tous : une résidence principale a une taxe foncière');
+    vrai(/boutonsRattachement\(c, usage\)/.test(residence),
+      'et la carte du logement lui passe son usage');
   });
 
-  test('les trois lignes d’une résidence principale, au centime', () => {
-    bien({ credits: [{ ...PRET }], usage: 'principale' });
-    const cf = cashFlowBien(compteById('c_b'));
-    pres(cf.loyers, 0, 'aucun loyer');
-    pres(cf.charges, 0, 'aucune charge');
-    pres(cf.mensualite, 894.44, 'la mensualité, telle que le crédit la porte');
-    pres(cf.cashFlow, -894.44, 'le cash-flow, qui n’est que cette mensualité');
-    pres(cf.capitalMois, echeancierCredit(Store.state.etabs[0].dettes[0]).capitalDuMois,
-      'et le patrimoine constitué, qui vient du moteur d’amortissement');
-    eq(Math.round(cf.capitalMois * 100) / 100, 644.79, 'soit 644,79 € ce mois-ci');
-    /* Le rendement brut existe dans le modele mais vaut zero : c'est justement
-       pour ça que la carte ne l'affiche pas. */
-    pres(cf.rendementBrut, 0, 'et un rendement à zéro, qu’il ne faut pas montrer');
-  });
-
-  test('le libellé du second chiffre dit ce qu’il est', () => {
-    /* « En patrimoine, le meme mois » demandait de completer la phrase soi-meme. */
-    const c = carte();
-    vrai(/trad\('Patrimoine constitué ce mois'\)/.test(c), 'le libellé est explicite');
-    vrai(!/En patrimoine, le même mois/.test(c), 'l’ancien est parti');
-    /* Son aide dit la mecanique : la part de capital reduit la dette et monte le
-       patrimoine net d'autant. */
-    const i = c.indexOf("trad('Patrimoine constitué ce mois')");
-    const aide = c.slice(i, i + 500);
-    vrai(/réduit ta dette et augmente ton patrimoine net/.test(aide),
-      'et l’aide dit pourquoi');
-    /* Elle ne s'affiche que s'il y a du capital a rembourser. */
-    vrai(/\$\{cf\.capitalMois \? `<dt>\$\{trad\('Patrimoine constitué ce mois'\)/.test(c),
-      'et rien ne s’affiche quand aucun capital ne se rembourse');
-  });
-
-  test('sans crédit, aucune ligne de mensualité', () => {
-    bien({ loyer: 1200 });
-    const cf = cashFlowBien(compteById('c_b'));
-    pres(cf.mensualite, 0, 'aucune mensualité');
-    eq(cf.capitalMois, null, 'et rien ne se constitue');
-    pres(cf.cashFlow, 1200, 'le cash-flow est le loyer seul');
-    /* La ligne est filtree a la source : une mensualite nulle ne s'ecrit pas. */
+  test('le capital remboursé ne grossit jamais ce qui reste à dépenser', () => {
+    bien({ usage: 'principale', credits: [{ ...PRET }], charges: [{ ...TAXE }] });
+    const x = co();
+    vrai(x.capitalMois > 0, 'du capital se rembourse bien ce mois-ci');
+    pres(x.totalSorties, x.mensualite + x.autresCharges,
+      'le total payé ne le retranche pas : cet argent sort bel et bien du compte');
+    /* Et nulle part il ne s'ajoute a un solde. */
     const src = lireSource('assets/app.js');
-    const pieces = src.slice(src.indexOf('function lignesDuMois'),
-                             src.indexOf('function ligneSource'));
-    vrai(/filter\(x => x\.mensualite > 0\.005\)/.test(pieces),
-      'la ligne de mensualité ne s’écrit pas à zéro');
+    vrai(!/capitalMois \+ [^;]*cashFlow|cashFlow \+ [^;]*capitalMois/.test(src),
+      'et il ne s’additionne à aucun cash-flow');
+    vrai(!/totalSorties - co\.capitalMois/.test(carte('carteResidence')),
+      'le total payé n’est pas allégé de sa part de capital');
   });
 
-  test('plusieurs charges se totalisent, une seule garde son nom', () => {
-    /* Le meme partage que la mensualite de credit : a une seule, le nom dit
-       quelque chose et la ligne ouvre sa source ; a plusieurs, les nommer toutes
-       allonge la carte sans repondre a sa question. */
-    const src = lireSource('assets/app.js');
-    const pieces = src.slice(src.indexOf('function lignesDuMois'),
-                             src.indexOf('function ligneSource'));
-    vrai(/cf\.postesCharge\.length === 1 \? cf\.postesCharge\.map/.test(pieces),
-      'une charge seule porte son nom, avec sa porte');
-    vrai(/cf\.postesCharge\.length > 1/.test(pieces), 'à plusieurs, une ligne les totalise');
-    vrai(/trad\('Charges du bien'\)/.test(pieces), 'et elle se nomme');
-    vrai(/reduce\(\(s, p\) => s \+ p\.mensuel, 0\)/.test(pieces), 'sur leur somme');
-    /* La somme est celle du modele, pas un second calcul. */
-    bien({ loyer: 1200, charges: [
-      { label: 'Taxe foncière', amount: 150, period: 'mois', bienId: 'c_b' },
-      { label: 'Copropriété', amount: 80, period: 'mois', bienId: 'c_b' },
-      { label: 'PNO', amount: 20, period: 'mois', bienId: 'c_b' } ] });
-    const cf = cashFlowBien(compteById('c_b'));
-    eq(cf.postesCharge.length, 3, 'trois charges rattachées');
-    pres(cf.postesCharge.reduce((s, x) => s + x.mensuel, 0), cf.charges,
-      'leur total est celui que le cash-flow retranche');
-    pres(cf.charges, 250, 'soit deux cent cinquante euros');
-  });
-
-  test('sans loyer, sans charge et sans crédit, la carte ne montre pas des zéros', () => {
-    bien({});
-    const cf = cashFlowBien(compteById('c_b'));
-    vrai(!cf.loyers && !cf.charges && !cf.mensualite, 'le bien ne porte rien');
-    const c = carte();
-    vrai(/const rien = !cf\.loyers && !cf\.charges && !cf\.mensualite/.test(c),
-      'la carte reconnaît ce cas');
-    vrai(/Aucun loyer ni charge rattaché/.test(c),
-      'et dit comment en sortir, plutôt que d’aligner des zéros');
-  });
-
-  test('la carte ne duplique aucune donnée', () => {
-    /* Tout vient des sources existantes : le loyer du budget, les charges du
-       budget, la mensualite de la charge liee au credit, le capital du moteur
-       d'amortissement. La carte lit, elle ne stocke pas. */
-    bien({ credits: [{ ...PRET }], loyer: 1200,
-           charges: [{ label: 'Taxe foncière', amount: 150, period: 'mois', bienId: 'c_b' }] });
-    const c = compteById('c_b');
-    const cf = cashFlowBien(c);
-    pres(cf.loyers, revenuMensuel(Store.state.budget.income[0]), 'le loyer vient du budget');
-    pres(cf.charges, chargeMensuelle(Store.state.budget.fixedCharges[0]),
-      'la charge vient du budget');
-    const d = Store.state.etabs[0].dettes[0];
-    pres(cf.mensualite, mensualiteCredit(d), 'la mensualité vient du crédit');
-    pres(cf.capitalMois, echeancierCredit(d).capitalDuMois,
-      'et le capital du moteur d’amortissement');
-    for (const mort of ['loyer', 'mensualite', 'charges', 'cashFlow', 'capitalMois']) {
-      eq(c[mort], undefined, `le compte ne stocke pas « ${mort} »`);
+  test('le budget ne bouge pas d’un centime, quel que soit l’usage', () => {
+    for (const usage of ['principale', 'secondaire', 'locative']) {
+      bien({ usage, credits: [{ ...PRET }], charges: [{ ...TAXE }], loyer: 900 });
+      pres(round2(budgetFrame().fixed), 250, `${usage} : les charges fixes du budget`);
+      pres(round2(budgetFrame().income), 900, `${usage} : les revenus du budget`);
+      eq(Store.state.budget.income.length, 1, `${usage} : le loyer est toujours là`);
+      eq(Store.state.budget.fixedCharges.length, 1, `${usage} : la charge aussi`);
     }
   });
 
-  test('l’apport a quitté l’impact mensuel pour l’acquisition', () => {
-    /* Il ne decrit aucun mois : c'est une somme sortie une fois, le jour de
-       l'achat. Il sert toujours au rendement sur apport, qui se lit dans cette
-       carte -- une donnee se saisit ou elle se comprend, elle se lit partout ou
-       elle sert. */
+  test('une résidence secondaire coûte, elle ne rapporte pas — même avec un revenu', () => {
+    /* Un revenu rattache ne requalifie rien : l'usage declare gagne. C'est le cas
+       reel de la location saisonniere, et transformer la fiche en investissement
+       locatif repondrait a une question que son detenteur n'a pas posee. */
+    bien({ usage: 'secondaire', credits: [{ ...PRET }], charges: [{ ...TAXE }], loyer: 400 });
+    const u = usageEffectifBien(compteById('c_b'));
+    eq(u.usage, 'secondaire', 'l’usage tient face au revenu');
+    eq(u.source, 'declare', 'et il vient d’une déclaration');
+    eq(u.action, null, 'rien n’est demandé');
+    pres(co().totalSorties, 1250, 'le coût reste le coût : le revenu ne s’en retranche pas');
+    eq(Store.state.budget.income.length, 1, 'et le revenu n’est pas supprimé');
+    /* Il reste VISIBLE et modifiable, dans sa propre section. */
+    const residence = carte('carteResidence');
+    vrai(/Revenus liés au bien/.test(residence), 'les revenus liés au bien s’affichent');
+    vrai(/action: 'edit-income'/.test(residence), 'et gardent leur porte vers le budget');
+    /* Le controle de coherence le signale, sans trancher. */
+    const dits = healthChecks().filter(x => /résidence secondaire/.test(x.title || ''));
+    eq(dits.length, 1, 'l’incohérence se dit');
+    eq(dits[0].level, 'info', 'en information : ce peut être parfaitement volontaire');
+  });
+
+  test('les deux logements posent la même question, à deux mots près', () => {
+    const residence = carte('carteResidence');
+    vrai(/usage === 'principale' \? 'Coût mensuel du logement' : 'Coût mensuel du bien'/
+      .test(residence), 'le titre suit l’usage, et lui seul');
+    vrai(/trad\('Total payé'\)/.test(residence), 'les deux affichent le total payé');
+    /* Et une seule fonction les sert : deux jumelles de quatre-vingts lignes
+       auraient diverge au premier correctif applique a une seule. */
     const src = lireSource('assets/app.js');
-    vrai(!/Apport à l/.test(carte()), 'plus d’apport parmi les hypothèses du mois');
-    vrai(/function reglagesExploitation\(c, idx\) \{/.test(src),
-      'la fonction n’a plus d’option pour lui');
-    const espace = src.slice(src.indexOf('function espaceBien'));
-    vrai(/data-path="comptes\.\$\{idx\}\.apport"/.test(espace),
-      'il se saisit là où le bien s’acquiert');
-    /* Et le rendement sur apport continue de le lire. */
-    bien({ credits: [{ ...PRET }], loyer: 1200, apport: 50000 });
-    vrai(cashFlowBien(compteById('c_b')).cashOnCash != null,
-      'le rendement sur apport se calcule encore');
+    vrai(!/function carteResidencePrincipale|function carteResidenceSecondaire/.test(src),
+      'une seule fonction, parce que la question est la même');
+    /* Les deux traductions existent. */
+    vrai(I18N.en['Coût mensuel du logement'] && I18N.en['Coût mensuel du bien'],
+      'et les deux titres ont leur anglais');
   });
 });
 
@@ -28308,5 +28367,379 @@ suite('Le choix de l’usage doit être un vrai choix', () => {
       eq(u().usage, dit, `${dit} tient face à un loyer`);
       eq(u().action, null, 'et rien n’est demandé');
     }
+  });
+});
+
+/* Une cascade se lit ; un cash-flow isole se subit. « −15 EUR » tout seul ne se
+   verifie contre rien, et personne ne sait s'il faut s'en inquieter. */
+suite('Un bien loué montre ses flux en cascade', () => {
+
+  const PRET = { id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000,
+                 taux: 2, mensualite: 1000, tauxAssurance: 0.3 };
+  const TAXE = { label: 'Taxe foncière', amount: 250, period: 'mois', shares: {}, bienId: 'c_b' };
+
+  const bien = (opts = {}) => Fixture.poser(e => {
+    e.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: opts.credits || [] }];
+    e.comptes = [{ id: 'c_b', etabId: 'e_bq', type: opts.type || 'immo', statut: 'ouvert',
+      libelle: 'Studio', court: 'Studio', numero: '', notes: '', alloc: '',
+      ouvertLe: '2019-01-01', cash: [],
+      moisLoues: opts.moisLoues == null ? 12 : opts.moisLoues,
+      tauxImpot: opts.tauxImpot || 0, apport: opts.apport || null,
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Studio',
+        valeur: 300000, prixDeRevient: opts.achat == null ? 240000 : opts.achat,
+        quantite: 1, dateAcquisition: '2019-01-01',
+        ...(opts.usage === undefined ? { usage: 'locative' }
+                                     : (opts.usage ? { usage: opts.usage } : {})) }] }];
+    e.positions = []; e.monthly = [];
+    e.budget.income = opts.loyer
+      ? [{ label: 'Loyer', amount: opts.loyer, period: 'mois', bienId: 'c_b' }] : [];
+    e.budget.fixedCharges = opts.charges || [];
+  });
+
+  const cf = () => cashFlowBien(compteById('c_b'));
+  const bloc = (nom) => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[src.indexOf('\nfunction ', i + 1),
+                                  src.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([src.length]));
+    return src.slice(i, suivante);
+  };
+
+  test('avec loyer, crédit et charges, le cash-flow est la somme de ses lignes', () => {
+    bien({ loyer: 1200, credits: [{ ...PRET }], charges: [{ ...TAXE }] });
+    const x = cf();
+    pres(x.loyersPleins, 1200, 'le loyer plein');
+    pres(x.charges, 250, 'les charges');
+    pres(x.mensualite, 1000, 'la mensualité');
+    pres(x.cashFlow, 1200 - 250 - 1000, 'et le solde du mois, à l’euro');
+  });
+
+  test('sans crédit, aucune ligne de mensualité — et le cash-flow est le loyer net', () => {
+    bien({ loyer: 1200, charges: [{ ...TAXE }] });
+    pres(cf().mensualite, 0, 'aucune mensualité');
+    eq(cf().capitalMois, null, 'et rien ne se constitue');
+    pres(cf().cashFlow, 950, 'le loyer moins les charges');
+    vrai(/filter\(x => x\.mensualite > 0\.005\)/.test(bloc('ligneMensualite')),
+      'la ligne de mensualité ne s’écrit pas à zéro');
+  });
+
+  test('douze mois loués : aucune cascade, le loyer garde son nom', () => {
+    bien({ loyer: 1200, moisLoues: 12 });
+    pres(cf().vacanceEuros, 0, 'aucune vacance');
+    pres(cf().loyers, cf().loyersPleins, 'le loyer retenu est le loyer plein');
+    /* Trois lignes pour un seul fait seraient trois lignes de trop : la cascade
+       n'existe que pour EXPLIQUER une vacance. */
+    vrai(/const vacance = cf\.vacanceEuros > 0\.005;/.test(bloc('lignesDuMois')),
+      'la cascade est gardée par l’existence d’une vacance');
+    vrai(/!vacance \? cf\.sourcesLoyer\.map/.test(bloc('lignesDuMois')),
+      'sans vacance, chaque loyer garde son nom et sa porte');
+  });
+
+  test('onze, six, zéro mois : la vacance retire ce qu’elle retire', () => {
+    for (const [mois, retenu] of [[11, 1100], [6, 600], [0, 0]]) {
+      bien({ loyer: 1200, moisLoues: mois });
+      const x = cf();
+      pres(x.loyersPleins, 1200, `${mois} mois : le loyer plein reste dit`);
+      pres(x.loyers, retenu, `${mois} mois : le loyer retenu`);
+      pres(x.vacanceEuros, 1200 - retenu, `${mois} mois : et la vacance est le reste`);
+      pres(x.loyersPleins - x.vacanceEuros, x.loyers,
+        `${mois} mois : les trois lignes affichées se referment`);
+    }
+  });
+
+  test('la vacance ne se déduit qu’une fois, et l’écran le montre', () => {
+    /* Le piege : le modele rend deja un loyer NET de vacance. L'afficher en
+       cascade et repartir du loyer plein la compterait deux fois. La preuve tient
+       en une egalite -- le cash-flow part du loyer RETENU. */
+    bien({ loyer: 1200, moisLoues: 6, charges: [{ ...TAXE }], credits: [{ ...PRET }] });
+    const x = cf();
+    pres(x.cashFlow, x.loyers - x.charges - x.mensualite - x.impot,
+      'le cash-flow part du loyer retenu');
+    pres(x.cashFlow, x.loyersPleins - x.vacanceEuros - x.charges - x.mensualite - x.impot,
+      'ce qui revient à retirer la vacance une seule fois');
+    vrai(x.cashFlow !== x.loyers - x.vacanceEuros - x.charges - x.mensualite - x.impot,
+      'et surtout pas deux : ce calcul-là donnerait un autre chiffre');
+    /* A l'ecran : la vacance s'ecrit une fois, et le loyer retenu est un
+       SOUS-TOTAL — il ferme les lignes du dessus au lieu de s'y ajouter. */
+    const lignes = bloc('lignesDuMois');
+    eq((lignes.match(/cf\.vacanceEuros/g) || []).length, 2,
+      'la vacance n’apparaît qu’à sa garde et à sa ligne');
+    vrai(/<dt class="kv-sous">\$\{trad\('Loyer retenu'\)\}/.test(lignes),
+      'le loyer retenu porte la marque du sous-total');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.kv \.kv-sous, \.kv \.kv-sous \+ dd \{[^}]*border-top/.test(css),
+      'et la feuille lui donne le filet qui dit qu’il ferme, plutôt qu’il n’ajoute');
+  });
+
+  test('le capital remboursé vit hors du cash-flow, et le dit', () => {
+    bien({ loyer: 1200, credits: [{ ...PRET }] });
+    const x = cf(), co = coutBien(compteById('c_b'));
+    vrai(co.capitalMois > 0, 'du capital se rembourse');
+    pres(x.cashFlow, 1200 - 1000, 'le cash-flow l’ignore : cet argent est bien sorti');
+    /* A l'ecran, il est dans son propre bloc, hors de la liste qui totalise. */
+    const carte = bloc('carteLocatif');
+    const iTotal = carte.indexOf("trad('Cash-flow')");
+    vrai(iTotal > 0, 'le cash-flow doit être trouvable');
+    /* La mesure part du cash-flow et non du debut de la fonction : la branche
+       sans loyer porte elle aussi le bloc du capital, et plus haut. Chercher sa
+       PREMIERE occurrence lisait donc l'autre branche. */
+    vrai(/<\/dl>[\s\S]{0,80}\$\{blocCapitalRembourse\(co\)\}/.test(carte.slice(iTotal)),
+      'le capital vient après le cash-flow, dans une liste à part et refermée');
+  });
+
+  test('les trois rendements se rangent toujours dans le même ordre', () => {
+    bien({ loyer: 1200, charges: [{ ...TAXE }], tauxImpot: 30, apport: 60000,
+           credits: [{ ...PRET }] });
+    const x = cf();
+    pres(x.rendementBrut, 1200 * 12 / 240000 * 100, 'le brut, sur le prix payé');
+    pres(x.rendementNet, (1200 - 250) * 12 / 240000 * 100, 'le net de charges');
+    vrai(x.rendementNetNet < x.rendementNet && x.rendementNet < x.rendementBrut,
+      'et l’estimation fiscale ferme la marche');
+    pres(x.cashOnCash, x.cashFlow * 12 / 60000 * 100, 'le rendement sur apport');
+    /* Sans apport, aucun chiffre sur une base inventee. */
+    bien({ loyer: 1200 });
+    eq(cf().cashOnCash, null, 'sans apport déclaré, il n’existe pas');
+  });
+
+  test('la hiérarchie est celle des questions : le cash-flow d’abord', () => {
+    const carte = bloc('carteLocatif');
+    const iCash = carte.indexOf("trad('Cash-flow')");
+    const iBrut = carte.indexOf("trad('Rendement brut')");
+    vrai(iCash > 0 && iBrut > iCash, 'le cash-flow précède les rendements');
+    vrai(/<dd class="\$\{cls\(cf\.cashFlow\)\}"><b>/.test(carte),
+      'lui seul est en gras et coloré');
+    /* « Net d'impot » annonçait une verite forte que la fiscalite actuelle ne
+       porte pas : elle est declarative, pas modelisee. Le libelle le dit. */
+    vrai(!/Net d'impôt/.test(carte), 'l’ancien libellé, trop affirmatif, est parti');
+    vrai(/Rendement après estimation fiscale/.test(carte), 'le nouveau reste honnête');
+    vrai(!/<dd><b>\$\{fmtPct\(cf\.rendementNetNet/.test(carte),
+      'et il n’est plus mis en gras comme une conclusion');
+    /* La comparaison avec un livret a disparu : elle reduisait un montage a
+       credit, avec son levier et son risque, a un placement sans risque. */
+    vrai(!/livret/i.test(carte), 'plus de comparaison simpliste avec un livret');
+    vrai(/Le cash-flow annuel rapporté à ton apport initial/.test(carte),
+      'l’aide reste neutre et dit seulement ce que le chiffre est');
+  });
+
+  test('la base du rendement se dit, et ne change jamais en silence', () => {
+    bien({ loyer: 1200 });
+    eq(cf().surAchat, true, 'le prix payé est connu');
+    pres(cf().base, 240000, 'donc la base, c’est lui');
+    bien({ loyer: 1200, achat: 0 });
+    eq(cf().surAchat, false, 'sans prix payé, la base change');
+    pres(cf().base, 300000, 'et c’est la valeur du jour');
+    const carte = bloc('carteLocatif');
+    vrai(/cf\.surAchat \? trad\('le prix payé'\) : trad\('la valeur actuelle'\)/.test(carte),
+      'et la carte annonce laquelle des deux');
+    vrai(/\$\{trad\('sur'\)\} \$\{baseDite\}, \$\{fmtEUR0\(cf\.base\)\}/.test(carte),
+      'avec son montant, pour qu’aucun doute ne subsiste');
+  });
+
+  test('un bien loué sans loyer réclame le loyer, il n’en invente pas un à zéro', () => {
+    bien({ credits: [{ ...PRET }], charges: [{ ...TAXE }] });
+    eq(usageBien(compteById('c_b')), 'locative', 'le bien reste déclaré mis en location');
+    const carte = bloc('carteLocatif');
+    vrai(/const loue = cf\.loyersPleins > 0\.005;/.test(carte), 'la carte voit qu’il n’y a pas de loyer');
+    vrai(/Aucun loyer renseigné/.test(carte), 'et le dit');
+    vrai(/data-action="ajouter-loyer"/.test(carte), 'avec le bouton qui le crée déjà rattaché');
+    /* Ni cash-flow ni rendement : les deux supposeraient un loyer declare a zero,
+       alors que la donnee manque simplement. */
+    const iVide = carte.indexOf('Aucun loyer renseigné');
+    const iCash = carte.indexOf("trad('Cash-flow')");
+    vrai(iCash > iVide, 'le cash-flow vit sur l’autre branche');
+    vrai(/if \(!loue\) return `/.test(carte), 'et cette branche rend tout de suite');
+    /* Le cout, lui, reste vrai et reste dit. */
+    pres(coutBien(compteById('c_b')).totalSorties, 1250, 'ce que le bien coûte est connu');
+    vrai(/coûte déjà \{v\} par mois/.test(carte), 'et la carte le rappelle');
+  });
+
+  test('la pierre papier prend la fiche locative sans qu’on lui demande son usage', () => {
+    /* On n'habite pas une SCPI : son economie EST celle d'un placement locatif.
+       Lui poser la question de l'usage n'aurait aucun sens, et la faire tomber
+       sur la carte neutre l'aurait privee de son rendement. */
+    bien({ type: 'scpi', usage: null, loyer: 900 });
+    eq(estBienEnDirect(compteById('c_b')), false, 'une SCPI n’est pas détenue en direct');
+    eq(usageEffectifBien(compteById('c_b')).action, null, 'et rien ne lui est demandé');
+    const aiguillage = bloc('carteUsageBien');
+    vrai(/if \(!estBienEnDirect\(c\)\) return carteLocatif\(c, idx, cf\);/.test(aiguillage),
+      'elle prend la fiche locative directement');
+    const i = aiguillage.indexOf('estBienEnDirect');
+    const j = aiguillage.indexOf('usageEffectifBien');
+    vrai(i > 0 && j > i, 'avant même que la question de l’usage se pose');
+  });
+});
+
+/* Trois etats ou l'application ne SAIT pas, et ou elle a le choix entre se taire
+   et inventer. Elle se tait, et elle dit ce qui lui manque. */
+suite('Les usages qu’on ne peut pas trancher ne se tranchent pas', () => {
+
+  const bien = ({ usages = [''], loyer = 0, type = 'immo' } = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [
+      { id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000, taux: 2,
+        mensualite: 1000, bienId: 'c_b' }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type, statut: 'ouvert', libelle: 'Immeuble',
+      cash: [], lignes: usages.map((u, i) => ({ id: 'l' + i, classe: 'immobilier',
+        libelle: ['Appartement', 'Studio'][i] || ('Lot ' + i), valeur: 200000,
+        ...(u ? { usage: u } : {}) })) }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = loyer
+      ? [{ label: 'Loyer', amount: loyer, period: 'mois', bienId: 'c_b' }] : [];
+    s.budget.fixedCharges = [{ label: 'Taxe foncière', amount: 250, period: 'mois',
+                               shares: {}, bienId: 'c_b' }];
+  });
+  const bloc = (nom) => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[src.indexOf('\nfunction ', i + 1),
+                                  src.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([src.length]));
+    return src.slice(i, suivante);
+  };
+
+  test('usage inconnu : la carte pose la question, et rien d’autre', () => {
+    bien();
+    const u = usageEffectifBien(compteById('c_b'));
+    eq(u.source, 'inconnu', 'rien n’est déduit');
+    eq(u.usage, '', 'et rien n’est inventé');
+    /* L'aiguillage tombe sur la carte neutre : ni rendement, ni cout, ni
+       vacance. Chacun de ces chiffres suppose une reponse qui n'a pas ete
+       donnee, et les trois se contrediraient. */
+    vrai(/return rendre \? rendre\(c, idx, cf\) : carteUsageInconnu\(c\);/
+      .test(bloc('carteUsageBien')), 'un usage sans carte tombe sur la carte neutre');
+    const neutre = bloc('carteUsageInconnu');
+    vrai(/trad\('Usage du bien'\)/.test(neutre), 'elle se nomme');
+    vrai(/data-action="choisir-usage"/.test(neutre), 'et porte le seul geste utile');
+    for (const mot of ['Rendement', 'Cash-flow', 'Total payé', 'Vacance', 'moisLoues'])
+      vrai(!new RegExp(mot).test(neutre.replace(/\/\*[\s\S]*?\*\//g, '')),
+        `« ${mot} » suppose une réponse qui n’a pas été donnée`);
+    /* Rien ne disparait pour autant : la mensualite et les charges restent
+       lisibles dans « Financement » et dans le budget. */
+    pres(coutBien(compteById('c_b')).totalSorties, 1250, 'le coût reste calculable');
+    pres(round2(budgetFrame().fixed), 250, 'et le budget est intact');
+  });
+
+  test('lots aux usages différents : la liste, et aucun calcul global', () => {
+    bien({ usages: ['principale', 'locative'] });
+    const u = usageEffectifBien(compteById('c_b'));
+    eq(u.source, 'mixte', 'le compte n’a pas d’usage');
+    eq(u.action, 'lots', 'et la fiche renvoie vers chaque lot');
+    vrai(/if \(u\.action === 'lots'\) return carteUsageLots\(c\);/.test(bloc('carteUsageBien')),
+      'l’aiguillage s’arrête là, avant toute carte financière');
+    const lots = bloc('carteUsageLots');
+    vrai(/c\.lignes \|\| \[\]\)\.filter/.test(lots), 'la carte liste les lots');
+    vrai(/USAGE_BIEN_LABEL\[usageLigne\(l\)\]/.test(lots), 'avec l’usage de chacun');
+    for (const mot of ['Rendement', 'Cash-flow', 'Total payé', 'cashFlowBien', 'coutBien'])
+      vrai(!new RegExp(mot).test(lots.replace(/\/\*[\s\S]*?\*\//g, '')),
+        `« ${mot} » mélangerait un logement habité et un studio loué`);
+    /* Le patrimoine, lui, reste exact : il ne depend d'aucun usage. */
+    pres(round2(patrimoine().brut), 400000, 'les deux lots comptent en entier');
+    pres(round2(dettesTotal()), 200000, 'et la dette aussi');
+  });
+
+  test('un ancien bien déduit locatif garde son écran, et demande confirmation', () => {
+    /* Le comportement historique est preserve — ces fiches affichaient un
+       rendement, elles continuent — mais l'ecran dit que c'est une DEDUCTION, et
+       rien n'est ecrit dans les donnees tant que personne n'a tranche. */
+    bien({ usages: [''], loyer: 900 });
+    const u = usageEffectifBien(compteById('c_b'));
+    eq(u.usage, 'locative', 'l’écran locatif est conservé');
+    eq(u.source, 'loyer', 'mais la source dit que c’est déduit');
+    eq(u.action, 'confirmer', 'donc le bandeau demande confirmation');
+    eq(compteById('c_b').lignes[0].usage, undefined,
+      'et aucune migration silencieuse : la donnée reste vide');
+    /* La carte est bien la locative, par la table des usages. */
+    const table = lireSource('assets/app.js');
+    vrai(/locative: \(c, idx, cf\) => carteLocatif\(c, idx, cf\)/.test(table),
+      'un usage locatif, déduit ou déclaré, mène à la même carte');
+    /* Et le bandeau de la fiche porte les trois demandes. */
+    const espace = table.slice(table.indexOf('function espaceBien'));
+    vrai(/const DEMANDES = \{/.test(espace), 'la table des demandes est sur la fiche');
+    vrai(/if \(!u\.action\) return '';/.test(espace), 'et se tait quand rien n’est demandé');
+  });
+
+  test('un usage déclaré ne se laisse jamais requalifier par un loyer', () => {
+    for (const [dit, carte] of [['principale', 'carteResidence'],
+                                ['secondaire', 'carteResidence'],
+                                ['locative', 'carteLocatif']]) {
+      bien({ usages: [dit], loyer: 900 });
+      const u = usageEffectifBien(compteById('c_b'));
+      eq(u.usage, dit, `${dit} tient face à un loyer`);
+      eq(u.source, 'declare', 'et reste une déclaration');
+      const table = lireSource('assets/app.js');
+      vrai(new RegExp(`${dit}: \\(c, idx, cf\\) => ${carte}\\(`).test(table),
+        `${dit} mène à ${carte}, loyer ou pas`);
+    }
+  });
+});
+
+/* L'invariant que la refonte devait tenir : elle change ce que l'ecran montre,
+   jamais ce que les donnees valent. */
+suite('Changer la fiche d’un bien ne change pas le patrimoine', () => {
+
+  const poser = (usage) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [
+      { id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000, taux: 2,
+        mensualite: null, tauxAssurance: 0.3, bienId: 'c_b' }] }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Appartement', cash: [], moisLoues: 11, tauxImpot: 30, apport: 60000,
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Appartement', valeur: 300000,
+                 prixDeRevient: 240000, ...(usage ? { usage } : {}) }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = [{ label: 'Loyer', amount: 1200, period: 'mois', bienId: 'c_b' }];
+    s.budget.fixedCharges = [
+      { label: 'Mensualité', amount: 1000, period: 'mois', shares: {},
+        creditId: 'd1', bienId: 'c_b' },
+      { label: 'Taxe foncière', amount: 250, period: 'mois', shares: {}, bienId: 'c_b' }];
+  });
+
+  const photo = () => ({
+    brut: round2(patrimoine().brut), net: round2(patrimoine().net),
+    dettes: round2(dettesTotal()),
+    fixe: round2(budgetFrame().fixed), revenus: round2(budgetFrame().income),
+    nRevenus: Store.state.budget.income.length,
+    nCharges: Store.state.budget.fixedCharges.length,
+    nCredits: Store.state.etabs[0].dettes.length,
+  });
+
+  test('les cinq usages donnent le même patrimoine, la même dette, le même budget', () => {
+    const ref = (poser('locative'), photo());
+    for (const usage of ['principale', 'secondaire', 'locative', '', null]) {
+      poser(usage);
+      const p = photo();
+      for (const clef of Object.keys(ref))
+        eq(p[clef], ref[clef], `${usage || 'sans usage'} : ${clef} ne bouge pas`);
+    }
+  });
+
+  test('aucun revenu, aucune charge, aucun crédit n’est modifié par la refonte', () => {
+    poser('principale');
+    const revenus = JSON.stringify(Store.state.budget.income);
+    const charges = JSON.stringify(Store.state.budget.fixedCharges);
+    const credits = JSON.stringify(Store.state.etabs[0].dettes);
+    /* Les trois lectures de la fiche, l'une apres l'autre. Aucune n'ecrit. */
+    coutBien(compteById('c_b'));
+    cashFlowBien(compteById('c_b'));
+    usageEffectifBien(compteById('c_b'));
+    chargesProposees(compteById('c_b'));
+    eq(JSON.stringify(Store.state.budget.income), revenus, 'les revenus sont intacts');
+    eq(JSON.stringify(Store.state.budget.fixedCharges), charges, 'les charges aussi');
+    eq(JSON.stringify(Store.state.etabs[0].dettes), credits, 'et les crédits');
+  });
+
+  test('le coût du logement et le cash-flow lisent la même mensualité', () => {
+    /* Deux portes sur un meme montant sont saines, deux montants ne le sont pas.
+       La mensualite vit dans la charge qui rembourse le credit ; les deux cartes
+       la lisent la, et la charge ne compte pas une seconde fois. */
+    poser('principale');
+    const co = coutBien(compteById('c_b')), cf = cashFlowBien(compteById('c_b'));
+    pres(co.mensualite, cf.mensualite, 'une seule mensualité pour les deux cartes');
+    pres(co.mensualite, 1000, 'celle de la charge qui rembourse');
+    pres(co.autresCharges, 250, 'et la charge de remboursement n’est pas comptée deux fois');
+    pres(co.totalSorties, 1250, 'donc le total sort une seule fois');
+    /* Le budget, lui, compte bien les deux charges : ce sont deux sorties reelles. */
+    pres(round2(budgetFrame().fixed), 1250, 'et le budget dit exactement la même chose');
   });
 });

@@ -1226,7 +1226,8 @@ button.pf-total:focus-visible, button.pf-mesure:focus-visible {
    « Ça ne colle pas au graphique plus bas » : les deux ne partageaient
    littéralement aucune couleur. */
 .goal-fill { height: 100%; border-radius: var(--radius-pill); background: var(--accent); }
-.goal-foot { display: flex; justify-content: flex-start; gap: 12px; font-size: 12px; color: var(--text-secondary); }
+.goal-foot { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px;
+             font-size: 12px; color: var(--text-secondary); }
 .goal-vide {
   flex-direction: row; align-items: center; justify-content: space-between;
   gap: 12px; font-size: 13.5px; color: var(--text-secondary);
@@ -3070,6 +3071,8 @@ td .empty, th .empty { background: none; border: none; }
 
    Le bloc mobile plus bas redeclare `.kv dt` : les regles qui doivent le
    battre y sont reprises, meme specificite, c'est l'ordre qui tranche. */
+.kv .kv-sous, .kv .kv-sous + dd { border-top: 1px solid var(--border); padding-top: 7px; }
+
 .kv-texte { grid-template-columns: auto minmax(0, 1fr); }
 .kv-texte dd { white-space: normal; overflow-wrap: anywhere; }
 .kv-texte dt { overflow-wrap: normal; min-width: max-content; }
