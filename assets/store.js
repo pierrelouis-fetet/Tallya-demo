@@ -4649,8 +4649,13 @@ function cashFlowBien(compte) {
     sourcesLoyer, postesCharge, creditsListe,
     vacanceEuros: loyersPleins - loyers,
     cashFlow,
-    rendementBrut: base ? loyers * 12 / base * 100 : 0,
-    rendementNet: base ? (loyers - charges) * 12 / base * 100 : 0,
+    /* `null` et non zero quand la base manque. « 0,00 % » dit « le rendement
+       est nul » ; sans valeur estimee ni prix paye, la verite est « on ne sait
+       pas sur quoi le calculer ». Ecrire zero fait passer une donnee absente
+       pour une mesure — un chiffre s'affiche, donc personne ne cherche.
+       Un vrai zero reste possible : base connue, loyer nul. */
+    rendementBrut: base > 0 ? loyers * 12 / base * 100 : null,
+    rendementNet: base > 0 ? (loyers - charges) * 12 / base * 100 : null,
     rendementNetNet: (base && tauxImpot) ? (loyers - charges - impot) * 12 / base * 100 : null,
     apport,
     cashOnCash: apport ? cashFlow * 12 / apport * 100 : null,

@@ -22800,9 +22800,11 @@ suite('La fiche d’un logement habité parle de coût, pas de rendement', () =>
     pres(co().totalSorties, 250, 'le total est la charge seule');
     eq(co().capitalMois, null, 'et aucun capital ne se rembourse');
     eq(co().ventilation, 'aucune', 'il n’y a pas de crédit à ventiler');
-    /* La section entiere se tait plutot que d'annoncer « Capital rembourse : 0 ». */
-    vrai(/if \(!co\.capitalMois\) return '';/.test(carte('blocCapitalRembourse')),
-      'la section du capital ne s’écrit pas quand il n’y a rien à rembourser');
+    /* La section se tait quand le capital est INCONNU, et non quand il est nul :
+       un credit qui ne rembourse rien vaut zero, et zero est une reponse. Sans
+       credit du tout, il n'y a rien a savoir. */
+    vrai(/if \(co\.capitalMois == null\) return '';/.test(carte('blocCapitalRembourse')),
+      'la section du capital ne s’écrit pas quand rien n’est connu');
     /* Et sans credit NI charge, la carte invite au lieu d'aligner des zeros. */
     bien({ usage: 'principale' });
     pres(co().totalSorties, 0, 'rien ne sort');
@@ -22887,8 +22889,10 @@ suite('La fiche d’un logement habité parle de coût, pas de rendement', () =>
     /* Le bouton se tient a la garde de l'usage, et non a une liste ecrite deux
        fois : c'est la meme fonction qui sert aux trois cartes. */
     const boutons = carte('boutonsRattachement');
-    vrai(/usage !== 'locative' \? '' :/.test(boutons),
-      '« + Loyer » n’apparaît que sur un bien mis en location');
+    vrai(/const libelle = revenu \|\| \(usage === 'locative' \? trad\('Loyer'\) : ''\);/
+      .test(boutons), '« + Loyer » n’apparaît que sur un bien mis en location');
+    vrai(/\$\{!libelle \? '' :/.test(boutons),
+      'et sans libellé, aucun bouton de revenu : l’absence de mot vaut interdiction');
     vrai(/data-action="ajouter-charge-bien"/.test(boutons),
       '« + Charge » vaut pour tous : une résidence principale a une taxe foncière');
     vrai(/boutonsRattachement\(c, usage\)/.test(residence),
@@ -28506,7 +28510,9 @@ suite('Un bien loué montre ses flux en cascade', () => {
   test('la hiérarchie est celle des questions : le cash-flow d’abord', () => {
     const carte = bloc('carteLocatif');
     const iCash = carte.indexOf("trad('Cash-flow')");
-    const iBrut = carte.indexOf("trad('Rendement brut')");
+    /* Le libelle du rendement passe desormais par `ligneRendement`, qui traduit
+       elle-meme : il s'ecrit en clair et non plus enveloppe de `trad`. */
+    const iBrut = carte.indexOf("nom: 'Rendement brut'");
     vrai(iCash > 0 && iBrut > iCash, 'le cash-flow précède les rendements');
     vrai(/<dd class="\$\{cls\(cf\.cashFlow\)\}"><b>/.test(carte),
       'lui seul est en gras et coloré');
@@ -28555,16 +28561,17 @@ suite('Un bien loué montre ses flux en cascade', () => {
     vrai(/coûte déjà \{v\} par mois/.test(carte), 'et la carte le rappelle');
   });
 
-  test('la pierre papier prend la fiche locative sans qu’on lui demande son usage', () => {
-    /* On n'habite pas une SCPI : son economie EST celle d'un placement locatif.
-       Lui poser la question de l'usage n'aurait aucun sens, et la faire tomber
-       sur la carte neutre l'aurait privee de son rendement. */
+  test('la pierre papier a sa propre fiche, et n’emprunte plus celle du locatif', () => {
+    /* Elle prenait la carte du bien loue en direct : « Loyer potentiel »,
+       « Vacance moyenne », « Mois loues par an » sur une SCPI. Or sa societe de
+       gestion porte deja tout cela et distribue NET de sa propre vacance —
+       saisir la sienne l'aurait retranchee une seconde fois. */
     bien({ type: 'scpi', usage: null, loyer: 900 });
     eq(estBienEnDirect(compteById('c_b')), false, 'une SCPI n’est pas détenue en direct');
     eq(usageEffectifBien(compteById('c_b')).action, null, 'et rien ne lui est demandé');
     const aiguillage = bloc('carteUsageBien');
-    vrai(/if \(!estBienEnDirect\(c\)\) return carteLocatif\(c, idx, cf\);/.test(aiguillage),
-      'elle prend la fiche locative directement');
+    vrai(/if \(!estBienEnDirect\(c\)\) return cartePierrePapier\(c, idx, cf\);/
+      .test(aiguillage), 'elle prend sa propre fiche');
     const i = aiguillage.indexOf('estBienEnDirect');
     const j = aiguillage.indexOf('usageEffectifBien');
     vrai(i > 0 && j > i, 'avant même que la question de l’usage se pose');
@@ -28611,7 +28618,10 @@ suite('Les usages qu’on ne peut pas trancher ne se tranchent pas', () => {
       .test(bloc('carteUsageBien')), 'un usage sans carte tombe sur la carte neutre');
     const neutre = bloc('carteUsageInconnu');
     vrai(/trad\('Usage du bien'\)/.test(neutre), 'elle se nomme');
-    vrai(/data-action="choisir-usage"/.test(neutre), 'et porte le seul geste utile');
+    /* Et n'offre AUCUN bouton : le bandeau du haut porte deja « Choisir
+       l'usage », et deux boutons identiques sur un meme ecran font douter qu'ils
+       fassent la meme chose. */
+    vrai(!/data-action="choisir-usage"/.test(neutre), 'sans reposer la question du bandeau');
     for (const mot of ['Rendement', 'Cash-flow', 'Total payé', 'Vacance', 'moisLoues'])
       vrai(!new RegExp(mot).test(neutre.replace(/\/\*[\s\S]*?\*\//g, '')),
         `« ${mot} » suppose une réponse qui n’a pas été donnée`);
@@ -28741,5 +28751,389 @@ suite('Changer la fiche d’un bien ne change pas le patrimoine', () => {
     pres(co.totalSorties, 1250, 'donc le total sort une seule fois');
     /* Le budget, lui, compte bien les deux charges : ce sont deux sorties reelles. */
     pres(round2(budgetFrame().fixed), 1250, 'et le budget dit exactement la même chose');
+  });
+});
+
+/* La pierre papier portait la fiche du locatif : « Loyer potentiel », « Vacance
+   moyenne », « Mois loues par an » sur une SCPI. Or sa societe de gestion porte
+   deja tout cela, et distribue NET de sa propre vacance : saisir la sienne
+   l'aurait retranchee une seconde fois. */
+suite('Un placement immobilier n’est pas un appartement', () => {
+
+  const bloc = (nom) => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[src.indexOf('\nfunction ', i + 1),
+                                  src.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([src.length]));
+    return src.slice(i, suivante).replace(/\/\*[\s\S]*?\*\//g, '');
+  };
+
+  const placement = ({ type = 'scpi', revenu = 900, charges = [], credits = [] } = {}) =>
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: credits }];
+      s.comptes = [{ id: 'c_p', etabId: 'e_bq', type, statut: 'ouvert', libelle: 'SCPI',
+        cash: [], lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Parts',
+          valeur: 100000, prixDeRevient: 90000 }] }];
+      s.positions = []; s.monthly = [];
+      s.budget.income = revenu
+        ? [{ label: 'Distribution', amount: revenu, period: 'mois', bienId: 'c_p' }] : [];
+      s.budget.fixedCharges = charges;
+    });
+
+  test('elle ne passe plus par la fiche du locatif', () => {
+    placement();
+    eq(estBienEnDirect(compteById('c_p')), false, 'une SCPI n’est pas détenue en direct');
+    const aiguillage = bloc('carteUsageBien');
+    vrai(/if \(!estBienEnDirect\(c\)\) return cartePierrePapier\(c, idx, cf\);/.test(aiguillage),
+      'elle prend sa propre fiche');
+    vrai(!/carteLocatif/.test(aiguillage.slice(0, aiguillage.indexOf('usageEffectifBien'))),
+      'et plus celle du bien loué en direct');
+    /* La distinction vient du MODELE : `bienImmo` sans `direct`. Aucune liste de
+       noms, aucun libelle — un support ajoute demain entre tout seul. */
+    const src = lireSource('assets/store.js');
+    vrai(/return !!t\.bienImmo && estDetenuEnDirect\(t\);/.test(src),
+      'la frontière est celle des drapeaux du type');
+  });
+
+  test('elle ne montre ni loyer potentiel, ni vacance, ni mois loués', () => {
+    const fiche = bloc('cartePierrePapier');
+    for (const mot of ['Loyer potentiel', 'Vacance', 'vacanceEuros', 'moisLoues',
+                       'mois loués', 'reglagesExploitation', 'Charges propriétaire',
+                       'Résidence', 'usageEffectifBien']) {
+      vrai(!new RegExp(mot).test(fiche),
+        `« ${mot} » n’a pas de sens sur un placement : la gérance le porte déjà`);
+    }
+    /* Elle lit les distributions DECLAREES, et non le montant lisse par une
+       vacance qui appartient au bien detenu en direct. */
+    vrai(/const revenus = cf\.loyersPleins;/.test(fiche),
+      'le revenu est celui qui est déclaré, sans lissage');
+  });
+
+  test('son bouton dit « Distribution », jamais « Loyer »', () => {
+    const fiche = bloc('cartePierrePapier');
+    vrai(/boutonsRattachement\(c, '', trad\('Distribution'\)\)/.test(fiche),
+      'le bouton porte le mot du placement');
+    /* Le libelle decide de ce qu'on croit devoir saisir : son absence vaut
+       interdiction, et « locative » reste le seul usage qui l'obtienne seul. */
+    const boutons = bloc('boutonsRattachement');
+    vrai(/const libelle = revenu \|\| \(usage === 'locative' \? trad\('Loyer'\) : ''\);/
+      .test(boutons), '« Loyer » reste réservé au bien loué en direct');
+    vrai(/\$\{!libelle \? '' :/.test(boutons), 'et sans mot, aucun bouton');
+    /* La fenetre elle-meme suit le modele : on ne demande pas a une SCPI son
+       « loyer hors charges recuperables ». */
+    const src = lireSource('assets/app.js');
+    const action = src.slice(src.indexOf("async 'ajouter-loyer'(btn) {"),
+                             src.indexOf("async 'ajouter-charge-bien'(btn) {"));
+    vrai(/const direct = estBienEnDirect\(c\);/.test(action), 'la fenêtre lit le modèle');
+    vrai(/Revenu de \{v\}/.test(action), 'et propose le mot juste');
+  });
+
+  test('on ne lui demande jamais si on l’habite', () => {
+    placement();
+    eq(usageEffectifBien(compteById('c_p')).action, null, 'aucune demande d’usage');
+    placement({ revenu: 900 });
+    eq(usageEffectifBien(compteById('c_p')).action, null, 'même avec un revenu rattaché');
+    /* Et le select d'usage disparait de ses lignes : il y etait pose sur chacune
+       d'elles, proposant « Residence principale » a des parts de SCPI. */
+    const src = lireSource('assets/app.js');
+    const espace = src.slice(src.indexOf('function espaceBien'),
+                             src.indexOf('function barreValiderFiche'));
+    const i = espace.indexOf("trad('Usage')");
+    vrai(i > 0, 'le champ d’usage doit être trouvable');
+    vrai(/\$\{!estBienEnDirect\(c\) \? '' : `<div class="field"><label>\$\{trad\('Usage'\)\}/
+      .test(espace), 'il ne s’écrit que pour un bien détenu en direct');
+  });
+
+  test('ses métriques de placement restent, et son crédit aussi', () => {
+    /* La SCPI a credit est un montage courant : taire sa mensualite ferait
+       disparaitre de l'argent qui sort vraiment. */
+    placement({ revenu: 900, charges: [{ label: 'Frais de gestion', amount: 100,
+      period: 'mois', shares: {}, bienId: 'c_p' }],
+      credits: [{ id: 'd1', libelle: 'Prêt SCPI', montant: 80000, initial: 90000,
+                  taux: 2, mensualite: 500, bienId: 'c_p' }] });
+    const cf = cashFlowBien(compteById('c_p')), co = coutBien(compteById('c_p'));
+    pres(cf.loyersPleins, 900, 'les distributions');
+    pres(cf.charges, 100, 'les frais');
+    pres(co.mensualite, 500, 'et la mensualité du crédit');
+    vrai(co.capitalMois > 0, 'le capital remboursé se calcule comme ailleurs');
+    const fiche = bloc('cartePierrePapier');
+    vrai(/ligneMensualite\(cf, -1\)/.test(fiche), 'la mensualité s’affiche');
+    vrai(/blocCapitalRembourse\(co\)/.test(fiche), 'et le capital remboursé aussi');
+    vrai(/ligneCharges\(cf, -1, 'Frais'\)/.test(fiche), 'les charges s’appellent des frais');
+    vrai(/Rendement brut/.test(fiche) && /Rendement net de frais/.test(fiche),
+      'les rendements restent : c’est ce qu’on regarde sur un placement');
+    /* Le net du mois est la somme de ses lignes, comme partout. */
+    vrai(/const net = revenus - cf\.charges - cf\.mensualite;/.test(fiche),
+      'et le net mensuel est exactement la somme des lignes affichées');
+  });
+
+  test('aucune SCPI n’est requalifiée, et le patrimoine ne bouge pas', () => {
+    placement({ revenu: 900, credits: [{ id: 'd1', libelle: 'Prêt', montant: 80000,
+      initial: 90000, taux: 2, mensualite: 500, bienId: 'c_p' }] });
+    pres(round2(patrimoine().brut), 100000, 'la valeur des parts');
+    pres(round2(dettesTotal()), 80000, 'la dette');
+    pres(round2(patrimoine().net), 20000, 'et le net');
+    pres(round2(budgetFrame().income), 900, 'le budget garde son revenu');
+    eq(compteById('c_p').lignes[0].usage, undefined,
+      'et rien n’a été écrit sur ses lignes : aucun usage inventé');
+  });
+});
+
+/* Zero et l'inconnu s'ecrivaient pareil : « 0,00 % » sur un bien sans base, et
+   rien du tout sur un capital rembourse reellement nul. Les deux erreurs sont
+   symetriques — l'une invente une mesure, l'autre efface une reponse. */
+suite('Zéro est une réponse, l’inconnu n’en est pas une', () => {
+
+  const bloc = (nom) => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[src.indexOf('\nfunction ', i + 1),
+                                  src.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([src.length]));
+    return src.slice(i, suivante);
+  };
+
+  const bien = ({ valeur = 300000, achat = 240000, loyer = 1200, moisLoues = 12,
+                  credits = [], charges = [] } = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: credits }];
+    s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+      libelle: 'Studio', cash: [], moisLoues, tauxImpot: 0,
+      lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Studio', valeur,
+                 prixDeRevient: achat, usage: 'locative' }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = loyer
+      ? [{ label: 'Loyer', amount: loyer, period: 'mois', bienId: 'c_b' }] : [];
+    s.budget.fixedCharges = charges;
+  });
+  const cf = () => cashFlowBien(compteById('c_b'));
+
+  test('sans base, le rendement n’existe pas — il ne vaut pas zéro', () => {
+    /* « 0,00 % » dit « le rendement est nul ». Sans valeur estimee ni prix paye,
+       la verite est « on ne sait pas sur quoi le calculer », et ecrire zero fait
+       passer une donnee absente pour une mesure : un chiffre s'affiche, donc
+       personne ne cherche. */
+    bien({ valeur: 0, achat: 0, charges: [{ label: 'Taxe', amount: 250,
+      period: 'mois', shares: {}, bienId: 'c_b' }] });
+    pres(cf().base, 0, 'aucune base');
+    eq(cf().rendementBrut, null, 'donc aucun rendement brut');
+    eq(cf().rendementNet, null, 'aucun rendement net non plus');
+    eq(cf().rendementNetNet, null, 'ni après estimation fiscale');
+    const src = lireSource('assets/store.js');
+    vrai(/rendementBrut: base > 0 \? loyers \* 12 \/ base \* 100 : null,/.test(src),
+      'la convention est écrite dans le modèle');
+    vrai(/rendementNet: base > 0 \? \(loyers - charges\) \* 12 \/ base \* 100 : null,/.test(src),
+      'pour les deux');
+  });
+
+  test('un vrai zéro reste possible, et reste montré', () => {
+    /* Base connue, loyer nul : le rendement EST nul, et c'est une information.
+       La convention ne doit pas faire disparaitre les vrais zeros. */
+    bien({ moisLoues: 0 });
+    pres(cf().base, 240000, 'la base est connue');
+    pres(cf().loyers, 0, 'aucun loyer retenu : le bien n’a pas été loué');
+    pres(cf().rendementBrut, 0, 'le rendement est nul, et il se dit');
+    eq(cf().rendementBrut === null, false, 'ce n’est pas un inconnu');
+  });
+
+  test('l’écran n’écrit jamais 0,00 % à la place d’une base manquante', () => {
+    const ligne = bloc('ligneRendement');
+    vrai(/const inconnu = valeur == null;/.test(ligne),
+      'la ligne distingue l’absence de la nullité');
+    vrai(/Base à renseigner/.test(ligne), 'et dit ce qui manque');
+    /* Le pourcentage ne s'ecrit que du cote connu. */
+    vrai(/inconnu \? `<span class="muted">\$\{trad\('Base à renseigner'\)\}<\/span>`/.test(ligne),
+      'aucun pourcentage du côté inconnu');
+    vrai(/: fmtPct\(valeur, 2\)/.test(ligne), 'et le pourcentage du côté connu');
+    /* Et les trois rendements de la fiche locative passent par elle. */
+    const locatif = bloc('carteLocatif');
+    for (const nom of ['Rendement brut', 'Rendement net de charges',
+                       'Rendement après estimation fiscale']) {
+      vrai(new RegExp(`ligneRendement\\(\\{[\\s\\S]{0,120}${nom}`).test(locatif),
+        `« ${nom} » passe par la ligne qui sait se taire`);
+    }
+    vrai(!/fmtPct\(cf\.rendement/.test(locatif),
+      'et aucun rendement ne s’écrit plus directement');
+  });
+
+  test('un capital remboursé inconnu ne s’invente pas', () => {
+    bien({ credits: [{ id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000,
+                       taux: null, mensualite: 1000 }] });
+    const co = coutBien(compteById('c_b'));
+    eq(co.capitalMois, null, 'sans taux, on ne sait pas départager');
+    eq(co.horsCapital, null, 'et le coût consommé se tait aussi');
+    eq(co.ventilation, 'aucune', 'la ventilation est absente');
+    vrai(/if \(co\.capitalMois == null\) return '';/.test(bloc('blocCapitalRembourse')),
+      'le bloc ne s’écrit pas : rien n’est connu');
+  });
+
+  test('un capital remboursé réellement nul s’affiche, et s’explique', () => {
+    /* Une mensualite qui ne couvre pas ses interets ne rembourse rien : c'est
+       CONNU, et ca vaut zero. Faire disparaitre le bloc laissait croire que la
+       question ne se posait pas. */
+    bien({ credits: [{ id: 'd1', libelle: 'Prêt', montant: 200000, initial: 200000,
+                       taux: 12, mensualite: 500 }] });
+    const co = coutBien(compteById('c_b'));
+    const e = echeancierCredit(Store.state.etabs[0].dettes[0]);
+    pres(e.interetsDuMois, 200000 * 0.12 / 12, 'les intérêts du mois dépassent la mensualité');
+    eq(e.amortissable, false, 'la dette ne s’éteint jamais');
+    eq(co.capitalMois, 0, 'et le capital remboursé vaut zéro — connu, pas inconnu');
+    eq(co.capitalMois === null, false, 'surtout pas null : la réponse existe');
+    const b = bloc('blocCapitalRembourse');
+    vrai(/const nul = co\.capitalMois < 0\.005;/.test(b), 'l’écran reconnaît ce cas');
+    vrai(/nul \? fmtEUR\(0\)/.test(b), 'et affiche zéro euro');
+    vrai(/La mensualité actuelle ne réduit pas le capital/.test(b), 'avec ce qu’il faut en dire');
+    /* Le cout hors capital vaudrait alors le total paye, deja affiche : une
+       ligne de plus qui ne dit rien de plus. */
+    vrai(/nul \|\| co\.horsCapital == null \? '' :/.test(b),
+      'et la ligne du coût consommé se tait, puisqu’elle répéterait le total');
+    pres(co.horsCapital, co.totalSorties, 'car tout ce qui sort est consommé');
+  });
+
+  test('un capital remboursé positif garde son comportement', () => {
+    bien({ credits: [{ id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000,
+                       taux: 2, mensualite: 1000, tauxAssurance: 0.3 }] });
+    const co = coutBien(compteById('c_b'));
+    vrai(co.capitalMois > 0, 'du capital se rembourse');
+    pres(co.capitalMois + co.horsCapital, co.totalSorties, 'et les deux lignes font le total');
+    const b = bloc('blocCapitalRembourse');
+    vrai(/Cette somme réduit ta dette et augmente ton patrimoine net/.test(b),
+      'la phrase qui empêche de le lire de travers est toujours là');
+  });
+
+  test('la ventilation partielle garde le capital connu et le dit', () => {
+    /* Le comportement de C, verifie encore : un minorant vrai vaut mieux qu'un
+       silence, et mieux qu'un total qui melangerait connu et inconnu. */
+    bien({ credits: [
+      { id: 'd1', libelle: 'Prêt', montant: 200000, initial: 240000, taux: 2,
+        mensualite: 1000, tauxAssurance: 0.3 },
+      { id: 'd2', libelle: 'Travaux', montant: 50000, initial: 50000, mensualite: 400 }] });
+    const co = coutBien(compteById('c_b'));
+    eq(co.ventilation, 'partielle', 'un crédit sur deux ne dit pas son taux');
+    eq(co.nbCredits, 2, 'sur deux');
+    eq(co.nbVentiles, 1, 'un seul se ventile');
+    vrai(co.capitalMois > 0, 'le capital connu reste dit');
+    eq(co.horsCapital, null, 'mais le coût consommé se tait');
+    vrai(/ne compte que les autres/.test(bloc('noteVentilation')),
+      'et l’écran dit ce que ce chiffre ne couvre pas');
+  });
+});
+
+/* Deux boutons identiques sur un meme ecran font douter qu'ils fassent la meme
+   chose, et on cherche la difference. Une seule porte par question. */
+suite('La valeur nette et le choix de l’usage ne se disent qu’une fois', () => {
+
+  const espace = () => {
+    const src = lireSource('assets/app.js');
+    return src.slice(src.indexOf('function espaceBien'),
+                     src.indexOf('function barreValiderFiche'));
+  };
+
+  const bien = ({ usage = 'principale', credit = 0, part = null } = {}) =>
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: credit
+        ? [{ id: 'd1', libelle: 'Prêt', montant: credit, initial: credit, taux: 2,
+             mensualite: 1000, bienId: 'c_b' }] : [] }];
+      s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Maison', cash: [], lignes: [{ id: 'l0', classe: 'immobilier',
+          libelle: 'Maison', valeur: 350000, prixDeRevient: 300000,
+          ...(part ? { part } : {}), ...(usage ? { usage } : {}) }] }];
+      s.positions = []; s.monthly = [];
+      s.budget.income = []; s.budget.fixedCharges = [];
+    });
+
+  test('un bien sans dette a une valeur nette, et elle vaut sa valeur', () => {
+    /* Elle ne s'affichait qu'avec un credit : la ligne la plus importante de la
+       fiche disparaissait chez qui a fini de rembourser. La valeur nette d'un
+       bien sans dette n'est pas « sans objet », elle vaut sa valeur. */
+    bien({ credit: 0 });
+    pres(round2(patrimoine().brut), 350000, 'le bien vaut trois cent cinquante mille');
+    pres(round2(dettesTotal()), 0, 'et ne doit rien');
+    const e = espace();
+    vrai(/\$\{!credit && !estBienEnDirect\(c\) \? '' : `<dt><b>\$\{trad\('Valeur nette'\)\}/
+      .test(e), 'la valeur nette s’affiche même sans crédit');
+    vrai(/<dd><b>\$\{fmtEUR\(valeur - credit\)\}<\/b><\/dd>/.test(e),
+      'et vaut la valeur détenue moins le capital restant, donc la valeur seule');
+    /* La ligne du capital restant, elle, ne s'ecrit pas a zero : elle
+       n'apprendrait rien que la suivante ne dise. */
+    vrai(/\$\{!credit \? '' : `<dt>\$\{trad\('Capital restant dû'\)\}/.test(e),
+      'aucune ligne « Capital restant dû : 0 € »');
+  });
+
+  test('la quote-part rétrécit la valeur nette, comme le reste du patrimoine', () => {
+    bien({ credit: 0, part: 50 });
+    pres(round2(patrimoine().brut), 175000, 'la moitié entre au patrimoine');
+    /* Et la fiche lit `valeur`, la part detenue, non `entiere`. */
+    vrai(/fmtEUR\(valeur - credit\)/.test(espace()), 'la valeur nette part de la part détenue');
+  });
+
+  test('un usage inconnu n’offre qu’un seul bouton dans toute la fiche', () => {
+    const e = espace();
+    /* Le bandeau du haut porte la demande et son bouton. */
+    vrai(/const DEMANDES = \{/.test(e), 'le bandeau porte les trois demandes');
+    vrai(/data-action="choisir-usage"/.test(e), 'et son bouton');
+    /* La carte du bas ne le repete plus. */
+    const src = lireSource('assets/app.js');
+    const carte = src.slice(src.indexOf('function carteUsageInconnu'),
+                            src.indexOf('function carteUsageLots'));
+    vrai(!/data-action="choisir-usage"/.test(carte),
+      'la carte du bas ne repose pas la même question');
+    vrai(!/<button/.test(carte), 'elle ne porte aucun bouton du tout');
+    vrai(/Les indicateurs mensuels apparaîtront une fois l’usage précisé/.test(carte),
+      'elle dit seulement ce qui attend');
+    vrai(/Le choix se fait en haut de cette fiche/.test(carte), 'et où le faire');
+    /* Un seul « choisir-usage » sur toute la fiche d'un bien : le bandeau. */
+    const fiche = src.slice(src.indexOf('function espaceBien'),
+                            src.indexOf('function barreValiderFiche'))
+      + src.slice(src.indexOf('function carteUsageInconnu'),
+                  src.indexOf('function carteUsageLots'));
+    eq((fiche.match(/data-action="choisir-usage"/g) || []).length, 1,
+      'une seule porte, pas deux');
+  });
+
+  test('un usage à confirmer ne multiplie pas les CTA non plus', () => {
+    /* Le legacy deduit locatif affiche la fiche locative, qui ne porte aucun
+       bouton d'usage : le bandeau reste seul a demander. */
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [] }];
+      s.comptes = [{ id: 'c_b', etabId: 'e_bq', type: 'immo', statut: 'ouvert',
+        libelle: 'Studio', cash: [], lignes: [{ id: 'l0', classe: 'immobilier',
+          libelle: 'Studio', valeur: 200000, prixDeRevient: 180000 }] }];
+      s.positions = []; s.monthly = [];
+      s.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_b' }];
+      s.budget.fixedCharges = [];
+    });
+    eq(usageEffectifBien(compteById('c_b')).action, 'confirmer', 'le bandeau demande');
+    const src = lireSource('assets/app.js');
+    const locatif = src.slice(src.indexOf('function carteLocatif'),
+                              src.indexOf('function lignesDuMois'));
+    vrai(!/choisir-usage/.test(locatif), 'et la carte locative ne redemande rien');
+    /* Le cas des lots non plus : il n'a jamais eu de bouton, et n'en gagne pas. */
+    const lots = src.slice(src.indexOf('function carteUsageLots'),
+                           src.indexOf('const CARTES_USAGE'));
+    vrai(!/<button/.test(lots), 'la carte des lots reste sans bouton');
+  });
+
+  test('rien de tout cela ne touche aux données', () => {
+    bien({ usage: 'principale', credit: 150000 });
+    const avant = { brut: round2(patrimoine().brut), net: round2(patrimoine().net),
+      dettes: round2(dettesTotal()), fixe: round2(budgetFrame().fixed),
+      revenus: round2(budgetFrame().income),
+      credits: JSON.stringify(Store.state.etabs[0].dettes),
+      lignes: JSON.stringify(compteById('c_b').lignes) };
+    /* Les lectures de la fiche, l'une apres l'autre. */
+    coutBien(compteById('c_b'));
+    cashFlowBien(compteById('c_b'));
+    usageEffectifBien(compteById('c_b'));
+    chargesProposees(compteById('c_b'));
+    pres(round2(patrimoine().brut), avant.brut, 'le patrimoine brut');
+    pres(round2(patrimoine().net), avant.net, 'le net');
+    pres(round2(dettesTotal()), avant.dettes, 'les dettes');
+    pres(round2(budgetFrame().fixed), avant.fixe, 'les charges fixes');
+    pres(round2(budgetFrame().income), avant.revenus, 'les revenus');
+    eq(JSON.stringify(Store.state.etabs[0].dettes), avant.credits, 'aucun crédit modifié');
+    eq(JSON.stringify(compteById('c_b').lignes), avant.lignes, 'aucune ligne modifiée');
   });
 });
