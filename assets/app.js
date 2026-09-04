@@ -4616,17 +4616,29 @@ function carteAcquisition(c, idx) {
         ${champ(i, 'travauxInitiaux', 'Travaux initiaux (€)',
           'Ce que tu as engagé pour le mettre en état avant d’y vivre ou de le louer. Les travaux d’entretien qui suivent sont des charges, pas de l’acquisition.', l)}
       </div>
-      ${a.source !== 'legacy' ? '' : `
+      ${(() => {
+        if (a.complet) return '';
+        if (a.source === 'legacy') return `
       <p class="hint" style="margin:0 0 12px">${trad('Coût total d’acquisition')} <b>${
-        fmtEUR0(a.total)}</b> · ${trad('Détail non renseigné')}. ${
-        trad('Renseigne le prix d’achat ci-dessus pour le décomposer : rien n’est deviné à partir du total.')}</p>`}`;
+        fmtEUR0(a.total)}</b> · ${a.sousTotal == null
+          ? `${trad('Détail non renseigné')}. ${trad('Renseigne le prix d’achat ci-dessus pour le décomposer : rien n’est deviné à partir du total.')}`
+          : `${trad('Sous-total renseigné')} ${fmtEUR0(a.sousTotal)}. ${
+              trad('Renseigne les trois montants pour que le détail remplace le total : tant qu’il en manque un, c’est le total connu qui fait foi.')}`}</p>`;
+        if (a.source === 'partiel') return `
+      <p class="hint" style="margin:0 0 12px">${trad('Sous-total renseigné')} <b>${
+        fmtEUR0(a.sousTotal)}</b> · ${trad('Coût total')} ${trad('À compléter')}. ${
+        trad('Renseigne les trois montants (prix, frais, travaux) pour obtenir un coût total. Un poste manquant n’est pas un poste à zéro.')}</p>`;
+        return '';
+      })()}`;
     }).join('')}
     <dl class="kv" style="margin-top:12px">
-      ${acq.total == null ? '' : `<dt><b>${trad('Coût total d’acquisition')}</b>${
-        aide(trad('Le prix d’achat, les frais et les travaux initiaux additionnés. C’est lui qui sert de base aux rendements, et de repère à l’écart avec la valeur d’aujourd’hui.'))}${
-        acq.complet || acq.legacy ? '' : `
-        <span class="sub">${trad('détail partiel')}</span>`}</dt>
-        <dd><b>${fmtEUR(acq.total)}</b></dd>`}
+      ${acq.total != null ? `<dt><b>${trad('Coût total d’acquisition')}</b>${
+        aide(trad('Le prix d’achat, les frais et les travaux initiaux additionnés. C’est lui qui sert de base aux rendements, et de repère à l’écart avec la valeur d’aujourd’hui.'))}</dt>
+        <dd><b>${fmtEUR(acq.total)}</b></dd>`
+      : acq.sousTotal == null ? '' : `<dt>${trad('Sous-total renseigné')}</dt>
+        <dd>${fmtEUR(acq.sousTotal)}</dd>
+      <dt><b>${trad('Coût total d’acquisition')}</b></dt>
+        <dd class="muted">${trad('À compléter')}</dd>`}
     </dl>
     <div class="field" style="margin-top:12px">
       <label>${trad('Apport initial (€)')}${aide(trad('Ce que tu as sorti de ta poche le jour de l’achat. C’est un fait historique : il ne s’ajoute pas à ton patrimoine aujourd’hui, il ne se retire pas de ton cash, et il ne change pas la valeur nette du bien. Il sert à lire le financement, et le rendement sur apport d’un locatif.'))}</label>
@@ -4715,7 +4727,10 @@ function carteCredit(c, d, i, idxEtab) {
         ${!prog.incoherent ? '' : `<div class="note" style="margin-top:12px">⚠ <span>${
           trad('Le capital restant dû dépasse le capital emprunté au départ.')} ${
           trad('Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Tallya ne tranche pas.')}</span></div>`}
-        ${prog.initial != null ? '' : `<p class="hint" style="margin:12px 0 0">${
+        ${!prog.invalide ? '' : `<div class="note" style="margin-top:12px">⚠ <span>${
+          trad('Le capital emprunté au départ est déclaré à zéro alors qu’il reste une dette.')} ${
+          trad('Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Tallya ne tranche pas.')}</span></div>`}
+        ${prog.initial != null || prog.invalide ? '' : `<p class="hint" style="margin:12px 0 0">${
           trad('Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé.')}</p>`}
         ${taux != null || !num(d.montant) ? '' : `<p class="hint" style="margin:12px 0 0">${
           trad('Renseigne le taux pour estimer la répartition capital/intérêts et la date de fin.')}</p>`}
@@ -4764,7 +4779,8 @@ function carteCredit(c, d, i, idxEtab) {
           <div class="field"><label>${trad('Mensualité totale (€)')}${
             aide(trad('Assurance emprunteur incluse : c’est le prélèvement que tu vois sur ton relevé.'))}</label>
             <input type="number" step="any" class="champ-large"
-                   data-path="etabs.${idxEtab}.dettes.${i}.mensualite" value="${num(d.mensualite) || ''}"></div>`}
+                   data-path="etabs.${idxEtab}.dettes.${i}.mensualite"
+                   value="${estDeclare(d.mensualite) ? num(d.mensualite) : ''}"></div>`}
           <div class="field"><label>${trad('Taux annuel (%)')}${aide(trad("Il donne la date de fin du crédit, ce qu'il te reste à payer d'intérêts, et la part de capital de chaque mensualité. Ton capital restant dû, lui, reste celui que tu saisis : jamais un montant projeté."))}</label>
             <input type="number" step="0.01" class="champ-large"
                    data-path="etabs.${idxEtab}.dettes.${i}.taux"
@@ -4853,8 +4869,8 @@ function espaceBien(c, idx, t) {
             <input type="number" step="any" min="0" max="100" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.part" value="${estDeclare(l.part) ? num(l.part) : ''}"
                    placeholder="100">
-            ${estDeclare(l.part) && (num(l.part) < 0 || num(l.part) > 100) ? `<p class="hint" style="margin:4px 0 0">${
-              trad('Une part va de 0 à 100. Au-delà, le bien compte en entier.')}</p>` : ''}</div>
+            ${partEstValide(l.part) ? '' : `<p class="hint" style="margin:4px 0 0">${
+              trad('La quote-part doit être comprise entre 0 et 100 %.')}</p>`}</div>
         </div>
         ${!estBienEnDirect(c) ? '' : `<div class="field"><label>Adresse</label>
           <textarea rows="3" data-path="comptes.${idx}.lignes.${i}.adresse"
@@ -6618,7 +6634,7 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
       aide: trad('à quelle fréquence le fonds publie sa valeur') }] : []),
     ...(echeancier ? [
       { cle: 'taux', label: trad('Taux annoncé (%)'), type: 'nombre',
-        valeur: l ? (num(l.taux) || '') : '', exemple: '0',
+        valeur: l && estDeclare(l.taux) ? num(l.taux) : '', exemple: '0',
         aide: trad('facultatif, celui du contrat') },
       { cle: 'echeance', label: 'Échéance', type: 'date',
         valeur: l ? (l.echeance || '') : '',
@@ -6647,7 +6663,8 @@ function litPlacement(v, base) {
     ...(v.parts !== undefined ? { parts: num(v.parts) || null } : {}),
     ...(v.vlPeriode !== undefined ? { vlPeriode: v.vlPeriode || 'trimestre' } : {}),
     ...(v.estimeLe !== undefined ? { estimeLe: v.estimeLe || '' } : {}),
-    ...(v.taux !== undefined ? { taux: num(v.taux) || null } : {}),
+    ...(v.taux !== undefined
+      ? { taux: estDeclare(v.taux) ? num(v.taux) : null } : {}),
     ...(v.echeance !== undefined ? { echeance: v.echeance || '' } : {}),
     ...(v.statut !== undefined ? { statut: v.statut || 'encours' } : {}),
     ...(v.projet !== undefined ? { projet: !!v.projet } : {}),
@@ -7413,7 +7430,12 @@ const ACTIONS = {
         ...(t.sansEtab ? [{ cle: 'nom', label: trad('Nom du bien'), type: 'texte', requis: true,
           max: NOM_LIGNE_MAX, exemple: 'ex. Rolex Submariner',
           aide: trad('une montre, une voiture, un tableau : ce nom s’affichera partout') }] : []),
-        { cle: 'valeur',
+        /* La valeur est OBLIGATOIRE, et `vide()` compte un zero comme vide sur un
+           champ nombre : un appartement a zero euro n'existe pas, et il entrait
+           pourtant au patrimoine sans un mot, faussant le brut, le net et toutes
+           les repartitions. Il n'y a rien a inventer pour la remplir — c'est la
+           seule chose qu'on sache a coup sur en creant un bien. */
+        { cle: 'valeur', requis: true,
           label: `${estDetenuEnDirect(t) ? 'Valeur estimée' : 'Valeur actuelle'} (€)`,
           type: 'nombre', exemple: '0',
           aide: estDetenuEnDirect(t) ? 'ce que tu en tirerais en le vendant aujourd’hui'
@@ -7460,29 +7482,46 @@ const ACTIONS = {
           type: 'liste', requis: true, valeur: '',
           options: [['', trad('Choisir…')], ...USAGES_BIEN],
           aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }] : []),
-        ...(t.sansEtab ? [] : [
+        ...(t.sansEtab ? [] : (() => {
+        /* La question d'abord, les champs ensuite — et seulement si la reponse
+           est oui. Un bien paye comptant traversait six champs de pret vides
+           avant d'arriver au bout, et rien ne disait qu'on pouvait les sauter.
+           `montreSi` les fait disparaitre, et `valeurs()` ne lit pas un champ
+           masque : repondre « oui », saisir, puis revenir a « non » ne cree
+           donc aucun credit. */
+        const avecCredit = v => v.aCredit === 'oui';
+        return [
         { cle: 'section_fin', label: 'Financement', type: 'section' },
+        { cle: 'aCredit', label: trad('As-tu encore un crédit sur ce bien ?'), type: 'liste',
+          valeur: 'non', options: [['non', trad('Non')], ['oui', trad('Oui')]] },
         { cle: 'credit', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
-          aide: trad('laisse 0 si c’est payé, sinon la dette se déduit du patrimoine net') },
+          montreSi: avecCredit,
+          aide: trad('ce que tu dois encore aujourd’hui : la dette se déduit du patrimoine net') },
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre',
-          exemple: '0', aide: trad('facultatif, il donne la part déjà remboursée') },
+          exemple: '0', montreSi: avecCredit,
+          aide: trad('facultatif, il donne la part déjà remboursée') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
-          suggestions: valeursConnues('preteur'),
+          suggestions: valeursConnues('preteur'), montreSi: avecCredit,
           aide: trad('la banque qui prête, si ce n’est pas toi') },
-        { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0',
-          aide: trad('facultatif, mais c’est elle qui entre dans ton budget') },
+        { cle: 'mensualite', label: trad('Mensualité totale (€)'), type: 'nombre', exemple: '0',
+          montreSi: avecCredit,
+          aide: trad('facultatif, assurance incluse : c’est elle qui entre dans ton budget') },
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
+          montreSi: avecCredit,
           aide: trad('facultatif, il sert à suivre le capital qui reste') },
         { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre', exemple: '0',
+          montreSi: avecCredit,
           aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
+          montreSi: avecCredit,
           aide: trad('seulement si tu renseignes une mensualité : elle entrera dans ton ')
               + 'budget sous ce nom' },
         ...(!(bien && estDetenuEnDirect(t)) ? [] : [
         { cle: 'apport', label: trad('Apport initial (€)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, ce que tu as sorti de ta poche le jour de l’achat') },
         ]),
-        ]),
+        ];
+        })()),
       ] : [
         { cle: 'libelle', label: trad(t.sansCash ? 'Nom du contrat' : 'Nom du compte'), type: 'texte',
           valeur: `${t.label} ${nomContenant()}`.trim(),
@@ -7542,11 +7581,11 @@ const ACTIONS = {
              inconnus des qu'il valait zero, mais surtout il n'etait pas demande
              du tout, et la progression du pret ne pouvait jamais exister. */
           initial: estDeclare(e3.initial) && num(e3.initial) > 0 ? num(e3.initial) : null,
-          mensualite: num(e3.mensualite) || null,
+          mensualite: estDeclare(e3.mensualite) ? num(e3.mensualite) : null,
           /* Un taux declare a zero survit a la creation : `|| null` le rangeait
              aussitot parmi les taux inconnus. */
           taux: estDeclare(e3.taux) ? num(e3.taux) : null,
-          tauxAssurance: num(e3.tauxAssurance) || null,
+          tauxAssurance: estDeclare(e3.tauxAssurance) ? num(e3.tauxAssurance) : null,
           bienId: id,
           verifieLe: todayISO() });
         /* La charge fixe dans le meme geste : c'est le seul moment ou l'on a la
@@ -8006,14 +8045,15 @@ const ACTIONS = {
     const candidats = comptesDuPreteur(e.id);
     const seul = candidats.length === 1 ? candidats[0][0] : null;
     e.dettes.push({ id: 'd' + Date.now(),
-      libelle: v.libelle, montant: num(v.montant), initial: num(v.initial) || null,
-      mensualite: num(v.mensualite) || null,
+      libelle: v.libelle, montant: num(v.montant),
+      initial: estDeclare(v.initial) ? num(v.initial) : null,
+      mensualite: estDeclare(v.mensualite) ? num(v.mensualite) : null,
       /* `estDeclare` et non `|| null` : un pret familial a 0 % perdait son taux
          a l'enregistrement meme, et se retrouvait aussitot dans l'etat « taux
          inconnu » — celui ou l'application refuse de projeter quoi que ce soit.
          Le defaut n'etait pas seulement a la lecture. */
       taux: estDeclare(v.taux) ? num(v.taux) : null,
-      tauxAssurance: num(v.tauxAssurance) || null,
+      tauxAssurance: estDeclare(v.tauxAssurance) ? num(v.tauxAssurance) : null,
       bienId: v.bienId || seul,
       preteur: v.preteur || '', note: '', verifieLe: todayISO() });
     Store.save(); render();
@@ -8058,9 +8098,10 @@ const ACTIONS = {
           })() },
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, valeur: d.libelle || '' },
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre',
-          valeur: num(d.initial) || '', aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
+          valeur: estDeclare(d.initial) ? num(d.initial) : '',
+          aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
         ...(lien ? [] : [{ cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre',
-          valeur: num(d.mensualite) || '',
+          valeur: estDeclare(d.mensualite) ? num(d.mensualite) : '',
           aide: trad('facultatif. Mieux : rattache-le à une charge fixe, le montant ')
               + 'ne sera alors saisi qu’une fois' }]),
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre',
@@ -8069,7 +8110,8 @@ const ACTIONS = {
           valeur: estDeclare(d.taux) ? num(d.taux) : '',
           aide: trad('facultatif, noté pour mémoire') },
         { cle: 'tauxAssurance', label: trad('Taux d’assurance (%)'), type: 'nombre',
-          valeur: num(d.tauxAssurance) || '', aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
+          valeur: estDeclare(d.tauxAssurance) ? num(d.tauxAssurance) : '',
+          aide: trad('facultatif, environ 0,3 % du capital emprunte : elle sort de la mensualite sans rembourser') },
         ...comptesDuPreteur(e.id).length > 1 ? [{ cle: 'bienId',
           label: trad('Ce crédit finance'), type: 'liste', valeur: d.bienId || '',
           options: [['', trad('à préciser')], ...comptesDuPreteur(e.id)],
@@ -8109,12 +8151,13 @@ const ACTIONS = {
     d.libelle = v.libelle || d.libelle;
     d.montant = num(v.montant);
     d.verifieLe = todayISO();
-    d.initial = num(v.initial) || null;
-    if (v.mensualite !== undefined) d.mensualite = num(v.mensualite) || null;
+    d.initial = estDeclare(v.initial) ? num(v.initial) : null;
+    if (v.mensualite !== undefined)
+      d.mensualite = estDeclare(v.mensualite) ? num(v.mensualite) : null;
     /* Un taux declare a zero reste zero : `|| null` le renvoyait dans l'etat
        « taux inconnu » a chaque enregistrement. */
     d.taux = estDeclare(v.taux) ? num(v.taux) : null;
-    d.tauxAssurance = num(v.tauxAssurance) || null;
+    d.tauxAssurance = estDeclare(v.tauxAssurance) ? num(v.tauxAssurance) : null;
     /* `rattacherCredit` et non une affectation nue : la charge qui rembourse ce
        credit doit suivre, sans quoi sa mensualite resterait comptee dans le
        cash-flow d'un bien qui ne la paie plus. */
@@ -9191,7 +9234,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
          n'existe pas, la garde des champs requis ne regarde que ce que
          `valeurs()` a rendu. */
       if (c.type === 'section')
-        return `<p class="sous-titre-carte">${esc(trad(c.label))}</p>`;
+        return `<p class="sous-titre-carte" id="s_${c.cle}">${esc(trad(c.label))}</p>`;
       const id = `f_${c.cle}`;
       /* Un fait qui se deduit s'affiche, il ne s'edite pas.
          Le type d'un etablissement en est un : il vient des comptes rattaches.
@@ -9245,6 +9288,25 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
     };
 
     $('#modalBody').innerHTML = `<div class="modal-champs">${champs.map(rendu).join('')}</div>`;
+    /* Un champ qui ne s'applique pas DISPARAIT, il ne se grise pas.
+
+       « As-tu encore un credit sur ce bien ? » ne sert a rien si les six champs
+       du pret restent la dessous : la question se pose, la reponse ne change
+       rien a ce qu'il y a a lire. `montreSi` lit les valeurs courantes et se
+       rejoue a chaque frappe.
+
+       Une section se masque comme un champ : son intitule n'a pas de raison de
+       rester quand la matiere qu'il annonce est partie. */
+    const conditionnels = champs.filter(c => typeof c.montreSi === 'function');
+    const majVisibles = () => {
+      if (!conditionnels.length) return;
+      const out = valeurs();
+      for (const c of conditionnels) {
+        const el = $(`#f_${c.cle}`) || $(`#s_${c.cle}`);
+        const hote = el && (el.closest('.field') || el);
+        if (hote) hote.hidden = !c.montreSi(out);
+      }
+    };
     /* Le bouton d'enchainement prend sa propre ligne, en pied. Trois boutons
        cote a cote, dont un qui porte six mots, ne tiennent pas dans 375 px :
        `.modal-foot` les fait deja se replier, mais le repli tombait ou il
@@ -9295,7 +9357,7 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       const out = {};
       for (const c of champs) {
         const el = $(`#f_${c.cle}`);
-        if (!el) continue;
+        if (!el || el.closest('.field')?.hidden) continue;
         out[c.cle] = c.type === 'case' ? el.checked
           : c.type === 'nombre' ? num(el.value)
           : el.value.trim();
@@ -9334,6 +9396,16 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       if (suite) out.__encore = true;
       fermer(out);
     };
+
+    /* La visibilite se calcule APRES `valeurs()`, jamais avant : `majVisibles`
+       la lit, et une constante n'existe pas avant sa ligne. Appelee plus haut,
+       elle levait une erreur de zone morte et la fenetre ne s'ouvrait pas.
+       Et avant `depart` : un champ masque ne se lit pas, donc l'etat initial
+       doit deja tenir compte de ce qui est cache, sans quoi la fenetre se
+       croirait sale des son ouverture. */
+    majVisibles();
+    $('#modalBody').addEventListener('input', majVisibles);
+    $('#modalBody').addEventListener('change', majVisibles);
 
     /* L'etat de depart, releve apres le cablage des champs lies : `majCible()`
        reconstruit la liste dependante et peut changer sa valeur, le relever
@@ -13068,6 +13140,11 @@ function showFileModeBanner() {
 
 function applyField(f) {
   const path = f.dataset.path;
+  if (/\.part$/.test(path) && f.value !== '' && !partEstValide(f.value)) {
+    f.dataset.invalide = '1';
+    return;
+  }
+  delete f.dataset.invalide;
   if (f.type === 'checkbox') { setPath(path, f.checked); return; }
   if (f.type === 'number') { setPath(path, f.value === '' ? '' : Number(f.value)); return; }
   if (f.dataset.type === 'num') { setPath(path, Number(f.value)); return; }

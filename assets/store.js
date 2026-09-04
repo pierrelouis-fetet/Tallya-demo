@@ -534,6 +534,8 @@ const classeDePoche = poche => CLASSE_DE_POCHE[poche] || null;
 const estDeclare = v => v !== undefined && v !== null && v !== ''
   && Number.isFinite(Number(v));
 
+const partEstValide = v => !estDeclare(v) || (num(v) >= 0 && num(v) <= 100);
+
 const partDetention = l => {
   if (!estDeclare(l?.part)) return 1;
   const p = num(l.part);
@@ -645,17 +647,21 @@ function acquisitionLigne(l) {
   const prixAchat = dit('prixAchat');
   const frais = dit('fraisAcquisition');
   const travaux = dit('travauxInitiaux');
-  const muet = { prixAchat, frais, travaux, total: null, source: 'inconnu', complet: false };
-  if (prixAchat !== null || frais !== null || travaux !== null) {
-    const total = (prixAchat || 0) + (frais || 0) + (travaux || 0);
-    return { prixAchat, frais, travaux, total: round2(total), source: 'detail',
-             complet: prixAchat !== null && frais !== null && travaux !== null };
-  }
+  const complet = prixAchat !== null && frais !== null && travaux !== null;
+  const dits = [prixAchat, frais, travaux].filter(v => v !== null);
+  const sousTotal = dits.length ? round2(dits.reduce((s, v) => s + v, 0)) : null;
   /* Le legacy ne distingue pas un zero d'une absence : il n'a jamais eu de quoi.
      Zero y vaut donc « non renseigne », et un vrai cout nul se declare
      desormais par `prixAchat: 0`. */
-  const legacy = num(l?.prixDeRevient);
-  return legacy ? { ...muet, total: round2(legacy), source: 'legacy' } : muet;
+  const legacy = num(l?.prixDeRevient) || null;
+  const socle = { prixAchat, frais, travaux, sousTotal, legacy };
+
+  if (complet)
+    return { ...socle, total: sousTotal, source: 'detail', complet: true };
+  if (legacy !== null)
+    return { ...socle, total: round2(legacy), source: 'legacy', complet: false };
+  return { ...socle, total: null, source: dits.length ? 'partiel' : 'inconnu',
+           complet: false };
 }
 
 const coutAcquisition = l => acquisitionLigne(l).total;
@@ -664,8 +670,11 @@ function acquisitionCompte(compte) {
   const lots = (compte?.lignes || [])
     .filter(l => (l.classe || 'immobilier') === 'immobilier');
   let entier = 0, detenu = 0, connus = 0, complets = 0, legacy = 0;
+  let sousTotal = 0, partiels = 0;
   for (const l of lots) {
     const a = acquisitionLigne(l);
+    if (a.sousTotal != null) { sousTotal += a.sousTotal; }
+    if (a.source === 'partiel') partiels++;
     if (a.total == null) continue;
     connus++;
     if (a.complet) complets++;
@@ -675,8 +684,13 @@ function acquisitionCompte(compte) {
   }
   return { entier: round2(entier), detenu: round2(detenu),
            connus, lots: lots.length,
-           /* `null` quand aucun lot ne dit son cout : zero serait un cout. */
-           total: connus ? round2(entier) : null,
+           /* `null` quand aucun lot ne dit son cout : zero serait un cout. Et un
+              lot dont le detail est partiel SANS legacy n'a pas de cout du tout,
+              donc le compte n'en a pas non plus — un total qui n'additionnerait
+              que les lots connus se ferait passer pour celui du bien. */
+           total: connus && !partiels ? round2(entier) : null,
+           sousTotal: sousTotal ? round2(sousTotal) : null,
+           partiel: partiels > 0,
            complet: connus > 0 && complets === lots.length,
            legacy: legacy > 0 && complets === 0 };
 }
@@ -975,8 +989,14 @@ function creerChargeDuCredit(d) {
 function progressionCredit(d) {
   const initial = estDeclare(d?.initial) ? num(d.initial) : null;
   const reste = num(d?.montant);
-  const muet = { initial: null, reste, rembourse: null, pct: null, incoherent: false };
-  if (initial === null || initial <= 0) return muet;
+  const muet = { initial: null, reste, rembourse: null, pct: null,
+                 incoherent: false, invalide: false };
+  if (initial === null) return muet;
+  /* Un capital emprunte declare a ZERO alors qu'il reste une dette n'est pas une
+     absence : c'est une saisie impossible, et la ranger parmi les inconnus par
+     `|| null` la ferait disparaitre sans un mot. Elle se signale. */
+  if (initial === 0) return { ...muet, invalide: reste > 0 };
+  if (initial < 0) return { ...muet, invalide: true };
   const rembourse = initial - reste;
   if (rembourse < -0.005) return { ...muet, initial, incoherent: true };
   return { initial, reste, rembourse: round2(rembourse),
@@ -6066,6 +6086,16 @@ function healthChecks() {
         + 'alors que plus aucun compte n’est rattaché. Ouvre la fiche pour retirer le crédit.')
         .replace('{v}', fmtEUR0(du)),
       'accounts');
+  }
+
+  for (const c of comptesBiens()) {
+    for (const l of (c.lignes || [])) {
+      if (partEstValide(l.part)) continue;
+      add('warn', trad('Quote-part impossible sur un bien.'),
+        `${guill(nomCompteV2(c))} · ${trad('La quote-part doit être comprise entre 0 et 100 %.')} `
+        + trad('En attendant, le bien compte en entier dans ton patrimoine.'),
+        'accounts');
+    }
   }
 
   for (const c of comptesBiens()) {
