@@ -4216,14 +4216,29 @@ function reglagesExploitation(c, idx) {
 
 const periodeDite = p => p !== 'mois' ? trad(CHARGE_PERIODE_LABEL[p]) : '';
 
-/* `revenu` porte le LIBELLE du bouton, et son absence vaut interdiction : la
-   pierre papier verse des distributions, pas un loyer, et le mot decide de ce
-   qu'on croit devoir saisir. Un seul bouton, trois mots possibles. */
-function boutonsRattachement(c, usage, revenu) {
-  const libelle = revenu || (usage === 'locative' ? trad('Loyer') : '');
+/* Les deux boutons d'un placement immobilier.
+
+   Une fonction a part plutot qu'un parametre de plus sur `boutonsRattachement` :
+   les deux mondes ne proposent pas les memes gestes, et un helper qui prend le
+   libelle du revenu, celui de la charge et le mode devient plus long a lire que
+   les six lignes qu'il economise.
+
+   « Frais » et non « Charge » : le mot du bouton decide de ce qu'on croit devoir
+   saisir, et la liste qu'il ouvre ne connait aucun poste de logement. */
+function boutonsPierrePapier(c) {
   return `
-      ${!libelle ? '' : `<button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
-              title="${trad('Créer un revenu déjà rattaché à ce bien')}">+ ${esc(libelle)}</button>`}
+      <button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
+              title="${trad('Créer un revenu déjà rattaché à ce bien')}">+ ${
+        trad('Distribution')}</button>
+      <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
+              title="${esc(chargesProposees(c).map(([l]) => trad(l)).join(', '))}">${
+        trad('+ Frais')}</button>`;
+}
+
+function boutonsRattachement(c, usage) {
+  return `
+      ${usage !== 'locative' ? '' : `<button class="btn sm ghost" data-action="ajouter-loyer" data-id="${esc(c.id)}"
+              title="${trad('Créer un revenu déjà rattaché à ce bien')}">+ ${trad('Loyer')}</button>`}
       <button class="btn sm ghost" data-action="ajouter-charge-bien" data-id="${esc(c.id)}"
               title="${esc(chargesProposees(c).map(([l]) => trad(l)).join(', '))}">${trad('+ Charge')}</button>`;
 }
@@ -4515,7 +4530,7 @@ function cartePierrePapier(c, idx, cf) {
     <div class="card-head"><h2>${trad('Performance du placement')}</h2>
       ${revenus < 0.005 ? '' : `<span class="hint">${fmtEUR0(revenus)} ${
         trad('de distributions par mois')}</span>`}
-      ${boutonsRattachement(c, '', trad('Distribution'))}</div>`;
+      ${boutonsPierrePapier(c)}</div>`;
   if (revenus < 0.005 && co.totalSorties < 0.005) return `
   <div class="card">
     ${tete}
@@ -4624,9 +4639,9 @@ function espaceBien(c, idx, t) {
           <div class="field"><label>${trad('Date d\'acquisition')}</label>
             <input type="date" data-path="comptes.${idx}.lignes.${i}.dateAcquisition"
                    value="${esc(l.dateAcquisition || '')}"></div>
-          <div class="field"><label>Surface (m²)${aide(trad("Elle donne le prix au mètre carré, le seul chiffre qui permette de confronter ton estimation aux annonces du quartier. Sans elle, « 150 000 € » ne se vérifie contre rien."))}</label>
+          ${!estBienEnDirect(c) ? '' : `<div class="field"><label>Surface (m²)${aide(trad("Elle donne le prix au mètre carré, le seul chiffre qui permette de confronter ton estimation aux annonces du quartier. Sans elle, « 150 000 € » ne se vérifie contre rien."))}</label>
             <input type="number" step="any" class="champ-large"
-                   data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>
+                   data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>`}
         </div>
         <div class="grid g-2 g-paire">
           ${!estBienEnDirect(c) ? '' : `<div class="field"><label>${trad('Usage')}${aide(trad("Il décide de ce que la fiche te montre : un logement mis en location a un rendement, celui que tu habites a un coût. Ta résidence principale sort aussi des avoirs mobilisables en quelques mois, parce que la vendre veut dire te reloger."))}</label>
@@ -4642,14 +4657,14 @@ function espaceBien(c, idx, t) {
             ${num(l.part) && (num(l.part) < 0 || num(l.part) > 100) ? `<p class="hint" style="margin:4px 0 0">${
               trad('Une part va de 0 à 100. Au-delà, le bien compte en entier.')}</p>` : ''}</div>
         </div>
-        <div class="field"><label>Adresse</label>
+        ${!estBienEnDirect(c) ? '' : `<div class="field"><label>Adresse</label>
           <textarea rows="3" data-path="comptes.${idx}.lignes.${i}.adresse"
                     placeholder="${trad('facultatif')}"
-                    style="text-align:left">${esc(l.adresse || '')}</textarea></div>
+                    style="text-align:left">${esc(l.adresse || '')}</textarea></div>`}
       </div>`).join('')}
     ${(() => {
       const surface = biens.reduce((s, { l }) => s + num(l.surface), 0);
-      if (!surface || !entiere) return '';
+      if (!estBienEnDirect(c) || !surface || !entiere) return '';
       return `<dl class="kv" style="margin-top:12px">
         <dt>${trad('Prix au m²')}<span class="sub">${trad('{v} m² au total')
           .replace('{v}', fmtNombre(surface))}</span></dt>
@@ -7798,13 +7813,26 @@ const ACTIONS = {
   async 'ajouter-charge-bien'(btn) {
     const c = compteById(btn.dataset.id);
     if (!c) return;
+    /* Les postes d'un bien sont proposes, pas imposes : taxe fonciere,
+       copropriete, travaux, plus l'assurance qui va avec son usage. Un champ
+       vide obligeait a se souvenir de ce qu'un logement coute, et la provision
+       pour travaux est justement celle qu'on oublie. Ceux deja nommes sur un
+       autre bien suivent, sans doublon.
+
+       Sur un PLACEMENT, la liste est tout autre — des frais, pas des charges de
+       proprietaire — et `chargesProposees` la choisit. La periode par defaut et
+       l'exemple en viennent aussi : ils se lisent du premier poste propose,
+       donc rien d'autre n'a a connaitre les deux mondes. */
+    const direct = estBienEnDirect(c);
     const proposes = chargesProposees(c);
     const v = await askForm({
-      titre: trad('Charge de {v}').replace('{v}', nomCompteV2(c)),
+      titre: (direct ? trad('Charge de {v}') : trad('Frais de {v}'))
+        .replace('{v}', nomCompteV2(c)),
       sous: trad('Le montant se saisit tel qu’il est facturé, le budget ramène au mois'),
       ok: 'Ajouter',
       champs: [
-        { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
+        { cle: 'label', label: direct ? 'Poste' : 'Type de frais', type: 'texte',
+          requis: true, max: NOM_LIGNE_MAX,
           exemple: trad('ex. {v}').replace('{v}', trad(proposes[0][0])),
           suggestions: [...proposes.map(([l]) => l), ...valeursConnues('posteBien')]
             .filter((l, i, t) => t.findIndex(x => x.toLowerCase() === l.toLowerCase()) === i) },

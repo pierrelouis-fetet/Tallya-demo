@@ -22887,12 +22887,13 @@ suite('La fiche d’un logement habité parle de coût, pas de rendement', () =>
         `« ${locatif} » n’a rien à faire sur le logement qu’on habite`);
     }
     /* Le bouton se tient a la garde de l'usage, et non a une liste ecrite deux
-       fois : c'est la meme fonction qui sert aux trois cartes. */
+       fois : c'est la meme fonction qui sert aux trois usages DIRECTS. La pierre
+       papier a la sienne, parce qu'elle ne propose pas les memes gestes. */
     const boutons = carte('boutonsRattachement');
-    vrai(/const libelle = revenu \|\| \(usage === 'locative' \? trad\('Loyer'\) : ''\);/
-      .test(boutons), '« + Loyer » n’apparaît que sur un bien mis en location');
-    vrai(/\$\{!libelle \? '' :/.test(boutons),
-      'et sans libellé, aucun bouton de revenu : l’absence de mot vaut interdiction');
+    vrai(/usage !== 'locative' \? '' :/.test(boutons),
+      '« + Loyer » n’apparaît que sur un bien mis en location');
+    vrai(/function boutonsRattachement\(c, usage\) \{/.test(lireSource('assets/app.js')),
+      'et la fonction n’a que ce dont elle a besoin : le bien et son usage');
     vrai(/data-action="ajouter-charge-bien"/.test(boutons),
       '« + Charge » vaut pour tous : une résidence principale a une taxe foncière');
     vrai(/boutonsRattachement\(c, usage\)/.test(residence),
@@ -28813,14 +28814,19 @@ suite('Un placement immobilier n’est pas un appartement', () => {
 
   test('son bouton dit « Distribution », jamais « Loyer »', () => {
     const fiche = bloc('cartePierrePapier');
-    vrai(/boutonsRattachement\(c, '', trad\('Distribution'\)\)/.test(fiche),
-      'le bouton porte le mot du placement');
-    /* Le libelle decide de ce qu'on croit devoir saisir : son absence vaut
-       interdiction, et « locative » reste le seul usage qui l'obtienne seul. */
+    vrai(/\$\{boutonsPierrePapier\(c\)\}/.test(fiche),
+      'le placement a ses propres boutons');
+    /* Le mot decide de ce qu'on croit devoir saisir, et « Loyer » reste au bien
+       loue en direct. Deux fonctions plutot qu'un helper a trois libelles :
+       chacune se lit d'un coup. */
+    const pp = bloc('boutonsPierrePapier');
+    vrai(/trad\('Distribution'\)/.test(pp) && /trad\('\+ Frais'\)/.test(pp),
+      '« Distribution » et « Frais », les deux mots du placement');
+    vrai(!/trad\('Loyer'\)/.test(pp) && !/\+ Charge/.test(pp),
+      'et aucun mot de logement');
     const boutons = bloc('boutonsRattachement');
-    vrai(/const libelle = revenu \|\| \(usage === 'locative' \? trad\('Loyer'\) : ''\);/
-      .test(boutons), '« Loyer » reste réservé au bien loué en direct');
-    vrai(/\$\{!libelle \? '' :/.test(boutons), 'et sans mot, aucun bouton');
+    vrai(/usage !== 'locative' \? '' :/.test(boutons),
+      '« Loyer » reste réservé au bien loué en direct');
     /* La fenetre elle-meme suit le modele : on ne demande pas a une SCPI son
        « loyer hors charges recuperables ». */
     const src = lireSource('assets/app.js');
@@ -29135,5 +29141,232 @@ suite('La valeur nette et le choix de l’usage ne se disent qu’une fois', () 
     pres(round2(budgetFrame().income), avant.revenus, 'les revenus');
     eq(JSON.stringify(Store.state.etabs[0].dettes), avant.credits, 'aucun crédit modifié');
     eq(JSON.stringify(compteById('c_b').lignes), avant.lignes, 'aucune ligne modifiée');
+  });
+});
+
+/* Deux fuites restaient : des metres carres et une adresse sur une SCPI, et un
+   bouton « + Charge » qui lui proposait une taxe fonciere. Chacune invite a
+   saisir quelque chose qui n'existe pas — et la taxe fonciere, saisie, aurait
+   ampute le rendement de charges payees par la gerance. */
+suite('La frontière entre pierre et papier passe aussi par les champs', () => {
+
+  const bloc = (nom) => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[src.indexOf('\nfunction ', i + 1),
+                                  src.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([src.length]));
+    return src.slice(i, suivante);
+  };
+  const espace = () => {
+    const src = lireSource('assets/app.js');
+    return src.slice(src.indexOf('function espaceBien'),
+                     src.indexOf('function barreValiderFiche'));
+  };
+
+  const poser = ({ type = 'scpi', surface = 0, adresse = '' } = {}) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes: [] }];
+    s.comptes = [{ id: 'c_p', etabId: 'e_bq', type, statut: 'ouvert', libelle: 'Placement',
+      cash: [], lignes: [{ id: 'l0', classe: 'immobilier', libelle: 'Parts',
+        valeur: 100000, prixDeRevient: 90000,
+        ...(surface ? { surface } : {}), ...(adresse ? { adresse } : {}) }] }];
+    s.positions = []; s.monthly = [];
+    s.budget.income = [{ label: 'Distribution', amount: 400, period: 'mois', bienId: 'c_p' }];
+    s.budget.fixedCharges = [];
+  });
+
+  test('un placement n’a ni surface, ni adresse, ni usage résidentiel', () => {
+    /* Les trois champs se tiennent a la MEME frontiere de modele. Une seule
+       question posee trois fois : ce bien, le detient-on physiquement. */
+    const e = espace();
+    vrai(/\$\{!estBienEnDirect\(c\) \? '' : `<div class="field"><label>Surface \(m²\)/.test(e),
+      'la surface ne s’écrit que pour un bien détenu en direct');
+    vrai(/\$\{!estBienEnDirect\(c\) \? '' : `<div class="field"><label>Adresse<\/label>/.test(e),
+      'l’adresse non plus');
+    vrai(/\$\{!estBienEnDirect\(c\) \? '' : `<div class="field"><label>\$\{trad\('Usage'\)\}/.test(e),
+      'et l’usage résidentiel pas davantage');
+    /* Trois gardes, et pas une de plus ni de moins : le compte le dit. */
+    eq((e.match(/\$\{!estBienEnDirect\(c\) \? '' :/g) || []).length, 3,
+      'trois champs physiques, trois gardes');
+  });
+
+  test('le prix au m² ne s’affiche pas sur une part de SCPI', () => {
+    /* Il ne dependait que de la surface : une valeur legacy suffisait donc a
+       faire apparaitre un prix au metre carre pour des parts, et l'aide invitait
+       a le comparer aux annonces du quartier. */
+    const e = espace();
+    vrai(/if \(!estBienEnDirect\(c\) \|\| !surface \|\| !entiere\) return '';/.test(e),
+      'le bloc du prix au m² se tait pour un placement');
+    /* Et il reste pour un bien physique, qui est tout son intérêt. */
+    vrai(/trad\('Prix au m²'\)/.test(e), 'le bloc existe toujours');
+  });
+
+  test('une surface ou une adresse legacy ne s’efface jamais', () => {
+    /* Elles ne s'affichent plus ; elles ne se suppriment pas. Personne ne peut
+       savoir pourquoi elles ont ete saisies, et un effacement automatique
+       emporterait une donnee que son detenteur n'a pas demande a perdre. */
+    poser({ surface: 42, adresse: '12 rue des Lilas' });
+    const l = compteById('c_p').lignes[0];
+    eq(num(l.surface), 42, 'la surface reste dans les données');
+    eq(l.adresse, '12 rue des Lilas', 'l’adresse aussi');
+    /* Aucune migration ne les touche. */
+    refreshAccounts();
+    eq(num(compteById('c_p').lignes[0].surface), 42, 'après un recalcul, toujours là');
+    eq(compteById('c_p').lignes[0].adresse, '12 rue des Lilas', 'toujours là aussi');
+    const store = lireSource('assets/store.js');
+    vrai(!/delete l\.surface|delete l\.adresse/.test(store),
+      'et rien dans le modèle ne les supprime');
+  });
+
+  test('un bien détenu en direct garde ses champs physiques', () => {
+    poser({ type: 'immo', surface: 42, adresse: '12 rue des Lilas' });
+    eq(estBienEnDirect(compteById('c_p')), true, 'il est détenu physiquement');
+    /* La garde est une condition, pas une suppression : le meme code sert les
+       deux cas, et le bien physique passe par la branche qui affiche. */
+    const e = espace();
+    /* Les trois motifs s'ecrivent en clair. Les construire depuis une chaine
+       demandait un niveau d'echappement de plus a chaque etage, et c'est
+       exactement la que celui de l'usage s'etait perdu : il cherchait
+       `<label>trad('Usage')` quand la source ecrit `<label>${trad('Usage')}`. */
+    vrai(/estBienEnDirect\(c\) \? '' : `<div class="field"><label>Surface \(m²\)/.test(e),
+      'la surface reste offerte au bien physique');
+    vrai(/estBienEnDirect\(c\) \? '' : `<div class="field"><label>Adresse<\/label>/.test(e),
+      'l’adresse aussi');
+    vrai(/estBienEnDirect\(c\) \? '' : `<div class="field"><label>\$\{trad\('Usage'\)\}/.test(e),
+      'et l’usage résidentiel');
+    vrai(/data-path="comptes\.\$\{idx\}\.lignes\.\$\{i\}\.surface"/.test(e),
+      'et la surface garde son champ de saisie');
+    vrai(/data-path="comptes\.\$\{idx\}\.lignes\.\$\{i\}\.adresse"/.test(e),
+      'l’adresse aussi');
+  });
+
+  test('les postes proposés à un placement ne sont pas ceux d’un logement', () => {
+    /* Une SCPI n'a ni taxe fonciere, ni copropriete, ni provision pour travaux :
+       la gerance les porte deja dans ce qu'elle distribue. Les saisir une
+       seconde fois amputerait le rendement de charges payees par un autre. */
+    poser();
+    const postes = chargesProposees(compteById('c_p')).map(([l]) => l);
+    for (const logement of ['Taxe foncière', 'Charges de copropriété',
+                            'Provision pour travaux', 'Assurance habitation',
+                            'Assurance propriétaire non occupant', 'Taxe d’habitation',
+                            'Frais de gestion locative']) {
+      eq(postes.includes(logement), false, `« ${logement} » n’est pas proposé à un placement`);
+    }
+    eq(postes.join(', '), 'Frais de gestion, Frais de plateforme, Frais de financement, Autres frais',
+      'ce sont des frais de placement, dans l’ordre où on y pense');
+    /* Deux listes, et aucune ne connait les postes de l'autre. */
+    const store = lireSource('assets/store.js');
+    vrai(/if \(!estBienEnDirect\(compte\)\) return FRAIS_PIERRE_PAPIER;/.test(store),
+      'la frontière du modèle choisit la liste');
+    for (const [poste] of FRAIS_PIERRE_PAPIER)
+      eq(Object.values(CHARGES_BIEN).flat().some(([l]) => l === poste), false,
+        `« ${poste} » ne vit que dans la liste des placements`);
+  });
+
+  test('un bien direct garde ses postes de propriétaire, selon son usage', () => {
+    for (const [usage, attendu] of [
+      ['principale', 'Assurance habitation'],
+      ['secondaire', 'Taxe d’habitation'],
+      ['locative', 'Assurance propriétaire non occupant'],
+    ]) {
+      poser({ type: 'immo' });
+      compteById('c_p').lignes[0].usage = usage;
+      const postes = chargesProposees(compteById('c_p')).map(([l]) => l);
+      eq(postes.includes('Taxe foncière'), true, `${usage} : la taxe foncière reste proposée`);
+      eq(postes.includes(attendu), true, `${usage} : et « ${attendu} » avec elle`);
+      eq(postes.includes('Frais de plateforme'), false,
+        `${usage} : aucun frais de placement`);
+    }
+  });
+
+  test('les quatre parcours restent distincts', () => {
+    /* Un bouton de revenu selon le monde, un bouton de charge selon le monde :
+       quatre combinaisons, et aucune n'emprunte le mot de l'autre. */
+    const pp = bloc('boutonsPierrePapier');
+    vrai(/trad\('Distribution'\)/.test(pp), 'pierre papier : + Distribution');
+    vrai(/trad\('\+ Frais'\)/.test(pp), 'pierre papier : + Frais');
+    vrai(!/\+ Charge/.test(pp), 'et jamais + Charge');
+    vrai(!/trad\('Loyer'\)/.test(pp), 'ni + Loyer');
+
+    const br = bloc('boutonsRattachement');
+    vrai(/usage !== 'locative' \? '' :/.test(br),
+      '+ Loyer reste réservé au bien loué en direct');
+    vrai(/trad\('\+ Charge'\)/.test(br), 'et + Charge vaut pour les trois usages directs');
+    vrai(!/Distribution/.test(br) && !/\+ Frais/.test(br),
+      'les mots du placement ne remontent pas ici');
+
+    /* Deux fonctions plutot qu'un helper a trois libelles : chacune se lit
+       d'un coup. */
+    vrai(/function boutonsPierrePapier\(c\) \{/.test(lireSource('assets/app.js')),
+      'la pierre papier a sa propre fonction');
+    vrai(/function boutonsRattachement\(c, usage\) \{/.test(lireSource('assets/app.js')),
+      'et celle du bien direct retrouve ses deux paramètres');
+    /* Et chaque carte appelle la sienne. */
+    vrai(/\$\{boutonsPierrePapier\(c\)\}/.test(bloc('cartePierrePapier')),
+      'la fiche du placement appelle la sienne');
+    vrai(/boutonsRattachement\(c, usage\)/.test(bloc('carteResidence')),
+      'celle du logement passe son usage');
+    vrai(/boutonsRattachement\(c, 'locative'\)/.test(bloc('carteLocatif')),
+      'et celle du locatif le sien');
+  });
+
+  test('la fenêtre de frais parle de frais, et crée une vraie charge du budget', () => {
+    const src = lireSource('assets/app.js');
+    /* La borne haute est l'action SUIVANTE dans le fichier. « ajouter-placement »
+       vit plus haut : la tranche etait donc vide, et le controle ne verifiait
+       rien tout en passant pour vert sur ses regex. */
+    const action = src.slice(src.indexOf("async 'ajouter-charge-bien'(btn) {"),
+                             src.indexOf("async 'ajouter-credit'(btn) {"));
+    vrai(action.length > 500, 'l’action doit être trouvable');
+    vrai(/const direct = estBienEnDirect\(c\);/.test(action), 'la fenêtre lit le modèle');
+    vrai(/\(direct \? trad\('Charge de \{v\}'\) : trad\('Frais de \{v\}'\)\)/.test(action),
+      'et son titre suit');
+    vrai(/label: direct \? 'Poste' : 'Type de frais'/.test(action), 'le champ aussi');
+    /* La periode par defaut et l'exemple se lisent du premier poste propose :
+       rien d'autre n'a a connaitre les deux mondes. */
+    vrai(/valeur: proposes\[0\]\[1\]/.test(action),
+      'la période par défaut vient de la liste, donc du bon monde');
+    vrai(/trad\('ex\. \{v\}'\)\.replace\('\{v\}', trad\(proposes\[0\]\[0\]\)\)/.test(action),
+      'et l’exemple aussi');
+    /* Le mecanisme du budget est inchange : meme rattachement, meme periode. */
+    vrai(/Store\.state\.budget\.fixedCharges\.push\(\{/.test(action),
+      'une charge fixe du budget, comme avant');
+    vrai(/bienId: c\.id/.test(action), 'rattachée au placement par son bienId');
+  });
+
+  test('un frais rattaché à un placement se comporte comme une charge du budget', () => {
+    /* La semantique change, la mecanique non : meme `bienId`, meme periode,
+       meme entree dans le budget. */
+    poser();
+    const avant = { brut: round2(patrimoine().brut), net: round2(patrimoine().net),
+                    dettes: round2(dettesTotal()), fixe: round2(budgetFrame().fixed) };
+    Store.state.budget.fixedCharges.push({ label: 'Frais de gestion', amount: 240,
+      period: 'an', shares: {}, bienId: 'c_p' });
+    refreshAccounts();
+    const cf = cashFlowBien(compteById('c_p'));
+    eq(cf.postesCharge.length, 1, 'le frais est vu par la fiche du placement');
+    pres(cf.charges, 20, 'deux cent quarante par an font vingt par mois');
+    pres(round2(budgetFrame().fixed), avant.fixe + 20, 'et le budget le compte une fois');
+    /* Il ne touche ni le patrimoine ni la dette : c'est un flux, pas un solde. */
+    pres(round2(patrimoine().brut), avant.brut, 'le patrimoine brut ne bouge pas');
+    pres(round2(patrimoine().net), avant.net, 'le net non plus');
+    pres(round2(dettesTotal()), avant.dettes, 'ni les dettes');
+    /* Et le net mensuel du placement le retranche une seule fois. */
+    pres(cf.loyersPleins - cf.charges - cf.mensualite, 400 - 20, 'le net mensuel suit');
+  });
+
+  test('aucune SCPI n’est requalifiée, et rien n’est supprimé', () => {
+    poser({ surface: 42, adresse: '12 rue des Lilas' });
+    const lignes = JSON.stringify(compteById('c_p').lignes);
+    const revenus = JSON.stringify(Store.state.budget.income);
+    chargesProposees(compteById('c_p'));
+    cashFlowBien(compteById('c_p'));
+    coutBien(compteById('c_p'));
+    usageEffectifBien(compteById('c_p'));
+    eq(JSON.stringify(compteById('c_p').lignes), lignes, 'les lignes sont intactes');
+    eq(JSON.stringify(Store.state.budget.income), revenus, 'les revenus aussi');
+    eq(compteById('c_p').lignes[0].usage, undefined, 'et aucun usage n’a été inventé');
+    pres(round2(patrimoine().brut), 100000, 'la valeur des parts est celle qu’on a saisie');
   });
 });

@@ -4789,7 +4789,27 @@ const CHARGES_BIEN = {
   secondaire:   [['Assurance habitation', 'an'], ['Taxe d’habitation', 'an']],
 };
 
+/* Les frais d'un placement immobilier — et rien d'un logement.
+
+   DEUX MONDES, DEUX LISTES. Une SCPI n'a ni taxe fonciere, ni charges de
+   copropriete, ni provision pour travaux : proposer ces postes a son detenteur
+   l'invite a saisir des charges qui n'existent pas chez lui, et la gerance les
+   porte deja dans ce qu'elle distribue. Les saisir une seconde fois amputerait
+   le rendement de charges payees par quelqu'un d'autre.
+
+   Une liste separee plutot qu'une entree de plus dans `CHARGES_BIEN` : cette
+   table est indexee par l'usage residentiel, une notion que la pierre papier
+   n'a pas. L'y faire entrer melangerait justement les deux mondes que la
+   frontiere du modele separe. */
+const FRAIS_PIERRE_PAPIER = [
+  ['Frais de gestion', 'an'], ['Frais de plateforme', 'an'],
+  ['Frais de financement', 'mois'], ['Autres frais', 'an'],
+];
+
 function chargesProposees(compte) {
+  /* La meme frontiere que partout ailleurs : `bienImmo` sans `direct`. Un
+     contexte, une liste — et aucune ne connait les postes de l'autre. */
+  if (!estBienEnDirect(compte)) return FRAIS_PIERRE_PAPIER;
   /* `usage &&` : sans lui, un bien dont l'usage est inconnu lisait
      `CHARGES_BIEN['']`, qui est justement le socle commun — les trois memes
      charges etaient donc proposees deux fois dans la meme liste. Un usage
