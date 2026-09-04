@@ -21166,8 +21166,13 @@ suite('Un mouvement exceptionnel dit à quel mois il appartient', () => {
     const bloc = src.slice(i, i + 320);
     vrai(/if \(c\.type === 'nombre'\) return !num\(v\);/.test(bloc),
       'un nombre obligatoire à zéro est vide');
-    vrai(/champs\.find\(c => c\.requis && vide\(c\)\)/.test(src),
+    vrai(/champs\.find\(c => estRequis\(c\) && vide\(c\)\)/.test(src),
       'et la garde passe par cette définition, pas par String()');
+    /* `estRequis` lit un booleen ou appelle une fonction des valeurs saisies :
+       un champ peut dependre d'un autre. La definition du vide, elle, ne change
+       pas -- c'est toujours elle qui fait mordre l'obligation a zero. */
+    vrai(/const estRequis = c => typeof c\.requis === 'function' \? c\.requis\(out\) : c\.requis;/
+      .test(src), 'et un champ obligatoire peut dépendre d’un autre');
   });
 
   test('date, montant et motif sont obligatoires, à la création comme à la correction', () => {
@@ -26043,9 +26048,16 @@ suite('Chercher un titre, c’est en ajouter un', () => {
     vrai(rang('qty') < rang('buyPrice'), 'puis le prix payé');
     vrai(rang('buyPrice') < rang('assetClass'),
       'et les deux viennent avant les champs de rangement');
-    /* Le zero reste accepte : on cree aussi une ligne avant de l'acheter. */
-    vrai(!/cle: 'qty'[^}]*requis/.test(bloc) && !/cle: 'buyPrice'[^}]*requis/.test(bloc),
-      'aucun des deux n’est obligatoire');
+    /* La quantite reste libre : on cree aussi une ligne avant de l'acheter, et
+       c'est ce que dit son aide. Le prix de revient, lui, devient obligatoire
+       DES QU'UNE QUANTITE EST SAISIE -- sinon la ligne nait avec un zero garde
+       tel quel, et « prix de revient manquant » s'installe pour toujours. La
+       raison d'origine tient donc toujours, elle est seulement plus precise. */
+    vrai(!/cle: 'qty'[^}]*requis/.test(bloc), 'la quantité n’est pas obligatoire');
+    vrai(/cle: 'buyPrice'[\s\S]{0,60}requis: v => num\(v\.qty\) > 0/.test(bloc),
+      'le prix de revient l’est dès qu’il y a des titres');
+    vrai(/valeur: cote \? cote\.price : ''/.test(bloc),
+      'et il arrive pré-rempli au cours du jour, donc relu plutôt que subi');
   });
 
   test('elle nomme la devise du prix qu’elle demande', () => {
@@ -28301,7 +28313,7 @@ suite('Le choix de l’usage doit être un vrai choix', () => {
       'avec une option vide en tête, sans quoi « requis » ne mord jamais');
     /* Et la garde du formulaire refuse bien une chaine vide : c'est elle qui
        transforme l'option vide en obligation reelle. */
-    vrai(/champs\.find\(c => c\.requis && vide\(c\)\)/.test(src),
+    vrai(/champs\.find\(c => estRequis\(c\) && vide\(c\)\)/.test(src),
       'le formulaire refuse un champ requis laissé vide');
   });
 
@@ -29368,5 +29380,142 @@ suite('La frontière entre pierre et papier passe aussi par les champs', () => {
     eq(JSON.stringify(Store.state.budget.income), revenus, 'les revenus aussi');
     eq(compteById('c_p').lignes[0].usage, undefined, 'et aucun usage n’a été inventé');
     pres(round2(patrimoine().brut), 100000, 'la valeur des parts est celle qu’on a saisie');
+  });
+});
+
+/* Un zero n'est pas un prix. La ligne le disait deja — « prix de revient
+   manquant », et les deux performances muettes — mais trois chemins le
+   laissaient s'installer, et un quatrieme le transformait en chiffre. */
+suite('Un prix de revient ne s’invente pas, et ne reste pas vide', () => {
+
+  const src = () => lireSource('assets/app.js');
+  const bloc = (nom) => {
+    const s = src();
+    const i = s.indexOf(`function ${nom}(`);
+    vrai(i > 0, `${nom} doit être trouvable`);
+    const suivante = Math.min(...[s.indexOf('\nfunction ', i + 1),
+                                  s.indexOf('\nconst ', i + 1)]
+      .filter(x => x > 0).concat([s.length]));
+    return s.slice(i, suivante);
+  };
+
+  test('la moyenne pondérée ne dilue plus le prix payé par une base absente', () => {
+    /* Quarante titres sans base, dix achetes a 20. L'ancienne formule faisait
+       entrer l'ancien lot A ZERO -- comme s'il avait ete recu gratuitement --
+       et ecrivait un PRU de 4. La ligne annonçait alors +400 %, un chiffre faux
+       et confiant la ou il n'y avait qu'une donnee manquante. */
+    const ligne = (buyPrice) => ({ qty: 50, buyPrice, price: 20, fx: 1, currency: 'EUR' });
+
+    const dilue = (40 * 0 + 10 * 20) / 50;
+    pres(dilue, 4, 'la moyenne pondérée avec un zéro donne quatre');
+    pres(posInvested(ligne(dilue)), 200, 'soit deux cents euros d’investi pour mille de valeur');
+    vrai(posPerfPct(ligne(dilue)) > 300,
+      'et la ligne afficherait plus de trois cents pour cent de gain');
+
+    /* Avec la base declaree, le PRU reste dans le bon ordre de grandeur. */
+    const juste = (40 * 18 + 10 * 20) / 50;
+    pres(juste, 18.4, 'l’ancien lot à dix-huit, le nouveau à vingt');
+    pres(posInvested(ligne(juste)), 920, 'neuf cent vingt euros investis');
+    vrai(Math.abs(posPerfPct(ligne(juste))) < 20, 'et une performance plausible');
+
+    /* Le code lit la base declaree, et non plus un `p.buyPrice` a zero. */
+    const s = src();
+    vrai(/const pruAvant = num\(p\.buyPrice\) \|\| num\(a\.base\);/.test(s),
+      'l’ancien lot entre au prix déclaré quand la ligne n’en portait aucun');
+    vrai(/p\.buyPrice = round4\(\(anciennes \* pruAvant \+ cout\) \/ \(anciennes \+ a\.qty\)\);/.test(s),
+      'et la moyenne pondérée part de lui');
+    vrai(!/anciennes \* num\(p\.buyPrice\) \+ cout/.test(s),
+      'l’ancienne formule, qui prenait un zéro pour un prix, est partie');
+  });
+
+  test('la fenêtre d’achat exige le prix payé', () => {
+    const f = bloc('askBuy');
+    vrai(/cle: 'price'[\s\S]{0,80}requis: true/.test(f), 'le prix unitaire est obligatoire');
+    vrai(/valeur: num\(p\.price\) \|\| ''/.test(f), 'et pré-rempli avec le dernier cours');
+    /* `vide()` compte un zero comme vide sur un champ nombre : c'est ce qui
+       fait mordre `requis` ici, et non le seul fait de laisser le champ blanc. */
+    vrai(/if \(c\.type === 'nombre'\) return !num\(v\);/.test(src()),
+      'et zéro compte comme vide sur un champ nombre, sinon la garde ne servirait à rien');
+  });
+
+  test('la fenêtre d’achat réclame la base manquante — et seulement alors', () => {
+    const f = bloc('askBuy');
+    vrai(/const baseManque = !p\.manual && num\(p\.qty\) > 0 && !num\(p\.buyPrice\);/.test(f),
+      'la question ne se pose que sur une ligne qui porte des titres sans base');
+    vrai(/\.\.\.\(!baseManque \? \[\] : \[\{/.test(f), 'et le champ n’existe que dans ce cas');
+    vrai(/cle: 'basePrice', type: 'nombre', requis: true/.test(f), 'il est obligatoire');
+    vrai(/Prix de revient des titres déjà détenus/.test(f), 'et se nomme sans ambiguïté');
+    /* Une ligne dont la valeur se saisit en total porte sa base ailleurs : la
+       moyenne ponderee ne la touche pas, donc la question ne lui est pas posee. */
+    vrai(/!p\.manual/.test(f), 'une ligne saisie en total n’est pas concernée');
+    /* Et la valeur remonte a l'appelant. */
+    vrai(/base: num\(v\.basePrice\) \|\| null/.test(f), 'la réponse remonte avec l’achat');
+  });
+
+  test('créer une ligne cotée pré-remplit le prix au cours du jour', () => {
+    /* Renversement assume : le cours ne servait que de repere en fond de champ,
+       au motif qu'un prix de revient est ce qu'on a paye. L'alternative n'etait
+       pourtant pas un champ rempli a la main, c'etait un ZERO garde tel quel. */
+    const s = src();
+    const i = s.indexOf("cle: 'buyPrice', type: 'nombre',");
+    vrai(i > 0, 'le champ doit être trouvable');
+    const champ = s.slice(i, s.indexOf('},', i));
+    vrai(/valeur: cote \? cote\.price : ''/.test(champ), 'le cours du jour remplit le champ');
+    vrai(/requis: v => num\(v\.qty\) > 0/.test(champ),
+      'et il devient obligatoire dès qu’une quantité est saisie');
+    vrai(/pré-rempli au cours du jour/.test(champ), 'l’aide dit d’où vient la valeur');
+    vrai(/ce que tu as payé peut être différent/.test(champ), 'et qu’elle se corrige');
+    /* Sans quantite, rien n'est exige : on installe aussi une ligne avant de
+       l'acheter, et c'est ce que dit l'aide de la quantite. */
+    vrai(/laisse zéro si tu n’as pas encore acheté/.test(s),
+      'une ligne peut naître avant son achat');
+  });
+
+  test('un champ obligatoire peut dépendre d’un autre', () => {
+    /* La dependance ne peut pas se decider au moment ou le champ est construit :
+       elle se lit au moment ou l'on valide. Un booleen reste un booleen. */
+    const s = src();
+    vrai(/const estRequis = c => typeof c\.requis === 'function' \? c\.requis\(out\) : c\.requis;/
+      .test(s), 'requis accepte une fonction des valeurs saisies');
+    vrai(/champs\.find\(c => estRequis\(c\) && vide\(c\)\)/.test(s),
+      'et la garde passe par elle');
+  });
+
+  test('la fiche refuse d’enregistrer des titres sans prix de revient', () => {
+    const s = src();
+    const i = s.indexOf('const baseManquante = () => {');
+    vrai(i > 0, 'la garde doit être trouvable');
+    const garde = s.slice(i, s.indexOf('const enregistrer', i));
+    /* La valeur se lit dans le CHAMP : la saisie de cette fiche est differee,
+       donc l'etat porte encore l'ancienne valeur au moment du controle. */
+    vrai(/champ\.value/.test(garde), 'la valeur se lit dans le champ, pas dans l’état');
+    vrai(/p\.manual \? 'invested' : 'buyPrice'/.test(garde),
+      'et sur le bon champ selon le régime de la ligne');
+    vrai(/titres > 0 && !num\(champ\.value\) \? champ : null/.test(garde),
+      'une ligne sans titre n’a rien à déclarer');
+    /* L'enregistrement s'arrete, et le dit. */
+    vrai(/const manque = baseManquante\(\);[\s\S]{0,220}return false;/.test(s),
+      'enregistrer refuse et rend faux');
+    vrai(/manque\.focus\(\);/.test(s), 'en désignant le champ');
+  });
+
+  test('fermer sans enregistrer reste possible', () => {
+    /* On refuse d'ENREGISTRER un silence definitif ; on n'oblige personne a
+       remplir pour abandonner ses modifications. */
+    const s = src();
+    vrai(/if \(garder && !enregistrer\(\)\) return;/.test(s),
+      '« Enregistrer et fermer » ne ferme que si l’enregistrement a eu lieu');
+    vrai(/refus: 'Fermer sans enregistrer'/.test(s),
+      'et l’abandon reste offert');
+  });
+
+  test('rien de tout cela ne change ce qu’une base absente affiche', () => {
+    /* L'invariant d'avant tient : sans base, les deux performances se taisent
+       plutot que d'annoncer un zero ou la valeur entiere de la ligne. */
+    const sansBase = { qty: 40, buyPrice: 0, price: 20, fx: 1, currency: 'EUR' };
+    eq(posInvested(sansBase), 0, 'aucun investi');
+    eq(posPerfPct(sansBase), null, 'aucun pourcentage');
+    eq(posPerfEur(sansBase), null, 'et aucun euro de plus-value');
+    pres(posValue(sansBase), 800, 'la valeur, elle, reste connue');
   });
 });

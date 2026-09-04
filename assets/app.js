@@ -3002,12 +3002,14 @@ function mountSymbolSearch() {
               { cle: 'qty', label: 'Quantité', type: 'nombre', exemple: '0',
                 aide: trad('laisse zéro si tu n’as pas encore acheté') },
               { cle: 'buyPrice', type: 'nombre',
+                requis: v => num(v.qty) > 0,
+                valeur: cote ? cote.price : '',
                 label: cote && cote.currency
                   ? `${trad('Prix de revient unitaire')} (${cote.currency})`
                   : trad('Prix de revient unitaire'),
                 exemple: cote ? String(cote.price) : '0',
                 aide: cote
-                  ? `${trad('cours du jour')} ${fmtCur(cote.price, cote.currency)} · ${
+                  ? `${trad('pré-rempli au cours du jour')} · ${
                       trad('ce que tu as payé peut être différent')}`
                   : trad('le prix payé par titre, dans la devise du titre') },
               ...(cashTargets().length ? [{
@@ -8215,7 +8217,14 @@ const ACTIONS = {
       Store.addBackup('avant achat');
       const p = Store.state.positions[a.index];
       const anciennes = num(p.qty), cout = a.qty * a.price;
-      p.buyPrice = round4((anciennes * num(p.buyPrice) + cout) / (anciennes + a.qty));
+      /* PRU pondere : l'ancien lot au prix d'avant, le nouveau au prix paye.
+
+         `a.base` porte le prix de l'ancien lot quand la ligne n'en avait aucun :
+         sans lui, `num(p.buyPrice)` valait zero et l'ancien lot entrait dans la
+         moyenne comme s'il avait ete recu gratuitement. La fenetre l'exige des
+         qu'il manque, donc il ne peut plus valoir zero ici. */
+      const pruAvant = num(p.buyPrice) || num(a.base);
+      p.buyPrice = round4((anciennes * pruAvant + cout) / (anciennes + a.qty));
       p.qty = anciennes + a.qty;
       if (a.cashAccount) {
         const enEuros = cout * (num(p.fx) || 1);
@@ -9188,7 +9197,12 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
         if (c.type === 'case') return !v;
         return !String(v ?? '').trim();
       };
-      const manquant = efface ? null : champs.find(c => c.requis && vide(c));
+      /* `requis` accepte une FONCTION des valeurs saisies : une quantite decide
+         qu'un prix de revient devient obligatoire, et cette dependance ne peut
+         pas se decider au moment ou le champ est construit. Un booleen reste un
+         booleen, la lecture est la meme pour les deux. */
+      const estRequis = c => typeof c.requis === 'function' ? c.requis(out) : c.requis;
+      const manquant = efface ? null : champs.find(c => estRequis(c) && vide(c));
       if (manquant) { $(`#f_${manquant.cle}`).focus(); toast(`${manquant.label}${deuxPoints()} ${trad('à remplir')}`); return; }
       if (suite) out.__encore = true;
       fermer(out);
@@ -9704,7 +9718,33 @@ function askPosition(index) {
       resolve(v);
     }
     const propre = () => ($('#modalBody')?.dataset.differe || 'propre') === 'propre';
+    /* Le champ du prix de revient quand il est vide alors que la ligne porte des
+       titres — et `null` sinon.
+
+       Une quantite sans prix de revient n'est pas une ligne incomplete, c'est une
+       ligne MUETTE : `posPerfEur` et `posPerfPct` rendent `null` faute de base,
+       donc rien de faux ne s'affiche, mais « prix de revient manquant » s'installe
+       et ne partira jamais tout seul. Enregistrer ce silence, c'est le rendre
+       definitif. On refuse, et on designe le champ.
+
+       La valeur se lit dans le CHAMP et non dans l'etat : la saisie de cette fiche
+       est differee, donc l'etat porte encore l'ancienne valeur au moment du
+       controle. */
+    const baseManquante = () => {
+      const champ = $(`[data-path="positions.${index}.${p.manual ? 'invested' : 'buyPrice'}"]`);
+      if (!champ) return null;
+      const qte = $(`[data-path="positions.${index}.qty"]`);
+      const titres = num(qte ? qte.value : p.qty);
+      return titres > 0 && !num(champ.value) ? champ : null;
+    };
     const enregistrer = () => {
+      const manque = baseManquante();
+      if (manque) {
+        manque.focus();
+        toast(`${trad(p.manual ? 'Prix de revient' : 'Prix de revient unitaire')}${
+          deuxPoints()} ${trad('à remplir')}`);
+        return false;
+      }
       /* `appliquerDiffere()` : la meme fonction que les panneaux d'apercu, et la
          meme que l'ecriture a la frappe, appelee une fois pour toutes. Le corps
          de cette fiche en portait sa propre copie, a deux lignes d'ecart. */
@@ -9715,6 +9755,7 @@ function askPosition(index) {
       peindre();
       $('#modalBody').scrollTop = y;
       toast(trad('Ligne enregistrée'));
+      return true;
     };
     $('#posSave').onclick = enregistrer;
     const fermerOuDemander = async () => {
@@ -9722,7 +9763,7 @@ function askPosition(index) {
       const garder = await askConfirm(trad('Modifications non enregistrées') + '\n'
         + trad('Cette ligne porte des changements qui ne sont pas encore dans tes données.'),
         { ok: 'Enregistrer et fermer', refus: 'Fermer sans enregistrer', danger: false });
-      if (garder) enregistrer();
+      if (garder && !enregistrer()) return;
       fermer('ferme');
     };
     $('#posOk').onclick = fermerOuDemander;
@@ -9809,15 +9850,24 @@ function askBuy(index) {
     const comptesCash = cashTargets();
     const cashParDefaut = compteById(defaultCashTarget(p.account));
     const dev = p.currency || 'EUR';
+    const baseManque = !p.manual && num(p.qty) > 0 && !num(p.buyPrice);
 
     const v = await askForm({
       titre: `Acheter · ${p.name}`,
-      sous: `Position actuelle : ${num(p.qty)} × ${fmtCur(p.buyPrice, dev)} de prix de revient`,
+      sous: baseManque
+        ? `${trad('Position actuelle')} : ${num(p.qty)} × ${trad('prix de revient manquant')}`
+        : `Position actuelle : ${num(p.qty)} × ${fmtCur(p.buyPrice, dev)} de prix de revient`,
       ok: 'Acheter',
       champs: [
         { cle: 'qty', label: trad('Quantité achetée'), type: 'nombre', requis: true, exemple: '0' },
-        { cle: 'price', label: `Prix unitaire (${dev})`, type: 'nombre',
+        { cle: 'price', label: `Prix unitaire (${dev})`, type: 'nombre', requis: true,
           valeur: num(p.price) || '', aide: trad('pré-rempli avec le dernier cours') },
+        ...(!baseManque ? [] : [{
+          cle: 'basePrice', type: 'nombre', requis: true,
+          label: `${trad('Prix de revient des titres déjà détenus')} (${dev})`,
+          aide: trad('Cette ligne n’en a pas encore. Sans lui, le PRU moyen après cet achat '
+            + 'serait faux : indique ce que tu as payé par titre pour ceux que tu détiens déjà.'),
+        }]),
         ...(comptesCash.length ? [{
           cle: 'cash', label: trad('Payé depuis'), type: 'liste',
           options: [...comptesCash.map(c => [c.id, sousNom('', nomCompteV2(c), nomEtabDe(c))]),
@@ -9827,7 +9877,8 @@ function askBuy(index) {
       ],
     });
     if (!v || !num(v.qty)) { resolve(null); return; }
-    resolve({ index, qty: num(v.qty), price: num(v.price), cashAccount: v.cash || null });
+    resolve({ index, qty: num(v.qty), price: num(v.price),
+              base: num(v.basePrice) || null, cashAccount: v.cash || null });
   });
 }
 
