@@ -10196,6 +10196,131 @@ suite('La transition vers la résidence principale demande, elle ne décide pas'
   });
 });
 
+/* E4.1 : deux fermetures avant de verrouiller E4. */
+suite('Le geste qui offre un retour en arrière parle en dernier', () => {
+
+  const app = () => lireSource('assets/app.js');
+
+  test('le toast de création précède la question du loyer', () => {
+    /* LE DEFAUT. Un toast remplace le precedent : annonce APRES la transition,
+       celui de la creation effaçait « retire du budget » et son bouton
+       « Annuler ». La pile d'annulation restait pleine, mais la porte de sortie
+       disparaissait de l'ecran une fraction de seconde apres s'y etre posee. */
+    const s = app();
+    const i = s.indexOf("if (bien && e3.usageBien === 'principale') await proposerTransitionLoyer();");
+    vrai(i > 0, 'la transition s’ouvre bien à la création');
+    const t = s.lastIndexOf('toast([t.label, nomContenant()', i);
+    vrai(t > 0 && t < i, 'et le toast de création parle avant elle');
+  });
+
+  test('rien ne parle après la transition, dans aucun des deux flux', () => {
+    const s = app();
+    eq(s.split('await proposerTransitionLoyer();\n  },').length - 1, 2,
+      'les deux appels ferment leur action : plus aucun toast derrière');
+  });
+
+  test('l’ordre vient des appels, jamais d’une minuterie', () => {
+    /* Un delai artificiel ferait dependre une regle d'un reglage de minuterie :
+       elle tiendrait tant que les durees ne bougent pas, et se deferait en
+       silence le jour ou l'une d'elles change. */
+    const s = app();
+    vrai(!/setTimeout\([^)]*toast/.test(s), 'aucun toast différé');
+    vrai(!/setTimeout\([^)]*proposerTransitionLoyer/.test(s), 'ni transition différée');
+  });
+
+  test('le changement d’usage annonçait déjà dans le bon ordre', () => {
+    const s = app();
+    const i = s.indexOf("if (v.usage === 'principale' && u.usage !== 'principale')");
+    vrai(i > 0, 'le second déclencheur est là');
+    const t = s.lastIndexOf('toast(`${nomCompteV2(c)} · ${trad(USAGE_BIEN_LABEL[v.usage])}`);', i);
+    vrai(t > 0 && t < i, 'et son toast parlait déjà avant la transition');
+  });
+
+  test('seul « Le terminer » retire quelque chose', () => {
+    /* « Le conserver » et « Plus tard » sortent par la meme porte, et fermer la
+       fenetre aussi : une seule branche touche aux donnees. */
+    const s = app();
+    const i = s.indexOf('async function proposerTransitionLoyer()');
+    const f = s.slice(i, s.indexOf('function focusLast(', i));
+    vrai(/if \(!v \|\| v\.quoi !== 'terminer'\) return;/.test(f),
+      'les trois autres issues ne modifient rien');
+    eq(f.split('fixedCharges.splice(').length - 1, 1, 'et un seul retrait existe');
+    vrai(/toast\(`\$\{guill\(nom\)\} \$\{trad\('retiré du budget'\)\}`, porteDeSortie\(\)\)/.test(f),
+      'qui annonce avec sa porte de sortie');
+  });
+});
+
+suite('« Rent guarantee insurance » n’est pas un loyer', () => {
+
+  const poser = (labels) => Fixture.poser(e => {
+    e.budget.fixedCharges = labels.map(l => typeof l === 'string'
+      ? { label: l, amount: 1000, period: 'mois' }
+      : { amount: 1000, period: 'mois', ...l });
+  });
+  const noms = () => loyersCourantsProbables().map(x => x.c.label).join(' | ');
+
+  test('l’anglais qui désigne un loyer payé passe', () => {
+    const oui = ['Rent', 'Rent apartment', 'Rent house', 'Rent London',
+                 'Rent - London', 'Rent: London', 'Monthly rent',
+                 'Monthly rent apartment'];
+    poser(oui);
+    eq(loyersCourantsProbables().length, oui.length, 'les huit sont reconnus');
+  });
+
+  test('l’anglais qui désigne une prestation autour du loyer ne passe pas', () => {
+    /* Toutes s'ouvrent par le mot, et la regle du mot en tete les laissait
+       passer — puis proposait de supprimer la garantie loyers impayes. */
+    poser(['Rent guarantee insurance', 'Rent guarantee', 'Rent insurance',
+           'Rental management', 'Rent collection fee', 'Rent guarantee premium',
+           'Rent protection', 'Rent arrears cover', 'Monthly rent guarantee']);
+    eq(noms(), '', 'aucune n’est proposée');
+  });
+
+  test('le français n’est pas touché par ce durcissement', () => {
+    poser(['Loyer', 'Loyer appartement', 'Loyer maison', 'Loyer Paris',
+           'Loyer - Paris', 'Loyer : Paris']);
+    eq(loyersCourantsProbables().length, 6, 'les six passent toujours');
+    poser(['Garantie loyers impayés', 'Assurance loyers impayés', 'Gestion locative',
+           'Frais de gestion locative', 'Revenus locatifs', 'Loyers impayés']);
+    eq(noms(), '', 'et les six autres restent dehors');
+  });
+
+  test('la structure gagne toujours sur le texte', () => {
+    poser([{ label: 'Rent', creditId: 'd_pret' },
+           { label: 'Rent', bienId: 'c_immo' },
+           { label: 'Loyer', creditId: 'd_pret' }]);
+    eq(noms(), '', 'un lien vers un crédit ou un bien écarte, quel que soit le libellé');
+  });
+
+  test('le reste d’E4 ne bouge pas', () => {
+    Fixture.poser(e => {
+      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+      e.budget.fixedCharges = [
+        { label: 'Loyer Paris', amount: 2000, period: 'mois', shares: { p1: 800 } },
+        { label: 'Loyer studio', amount: 500, period: 'mois' },
+        { label: 'Loyer payé par l’autre', amount: 900, period: 'mois', shares: { p1: 900 } },
+        { label: 'Rent guarantee insurance', amount: 40, period: 'mois' }];
+    });
+    const l = loyersCourantsProbables();
+    eq(l.map(x => x.c.label).join(' | '), 'Loyer Paris | Loyer studio',
+      'deux candidats : ni celui qui ne coûte rien, ni la garantie');
+    pres(l[0].mensuel, 1200, 'et le premier s’annonce pour sa part personnelle');
+
+    const moisAvant = JSON.stringify(Store.state.monthly);
+    const depAvant = JSON.stringify(Store.state.budget.expenses || []);
+    const brut = round2(patrimoine().brut), dette = round2(patrimoine().dettes);
+    Store.state.budget.fixedCharges.splice(l[1].i, 1);          // on en cible UN
+    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' | '),
+      'Loyer Paris | Loyer payé par l’autre | Rent guarantee insurance',
+      'les autres lignes restent');
+    eq(contributors().length, 1, 'la personne qui partage aussi');
+    eq(JSON.stringify(Store.state.monthly), moisAvant, 'les relevés sont intacts');
+    eq(JSON.stringify(Store.state.budget.expenses || []), depAvant, 'les dépenses aussi');
+    pres(round2(patrimoine().brut), brut, 'le patrimoine ne bouge pas');
+    pres(round2(patrimoine().dettes), dette, 'ni la dette');
+  });
+});
+
 suite('Les postes proposés suivent l’usage du bien', () => {
 
   const proposes = (usage) => {

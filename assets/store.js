@@ -4304,12 +4304,16 @@ function expenseCategories() {
    est un loyer RECU, il n'a rien a voir avec ce qu'on paie. */
 const DEBUT_LOYER = /^(loyer|monthly rent|rent)(?:[\s:,\-]|$)/;
 
+const RENT_PROPRIETAIRE =
+  /^(monthly )?rent[\s:,\-]+(guarantee|insurance|collection|management|protection|arrears)/;
+
 function estLoyerProbable(c) {
   if (!c) return false;
   if (c.creditId) return false;          // une mensualite, pas un loyer
   if (c.bienId) return false;            // une charge de proprietaire
   const mot = String(c.label || '').trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (RENT_PROPRIETAIRE.test(mot)) return false;
   return DEBUT_LOYER.test(mot);
 }
 

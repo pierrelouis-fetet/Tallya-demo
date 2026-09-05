@@ -7636,7 +7636,6 @@ const ACTIONS = {
       cash, lignes,
     });
     refreshAccounts(); Store.save(); render();
-    if (bien && e3.usageBien === 'principale') await proposerTransitionLoyer();
     toast([t.label, nomContenant() || String(e3.nom || '').trim()].filter(Boolean).join(' · ')
       + (t.titres ? trad(', les placements s’ajoutent dans Marchés')
                   : bien ? (num(e3.credit)
@@ -7644,6 +7643,7 @@ const ACTIONS = {
                           .replace('{v}', fmtEUR0(num(e3.valeur)))
                           .replace('{c}', fmtEUR0(num(e3.credit)))}`
                       : ` · ${fmtEUR0(num(e3.valeur))}`) : ''));
+    if (bien && e3.usageBien === 'principale') await proposerTransitionLoyer();
   },
 
   'fiche-compte'(btn) {
