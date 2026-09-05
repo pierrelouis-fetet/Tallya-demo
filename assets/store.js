@@ -4058,6 +4058,102 @@ const chargePeriode = c => (c && CHARGE_MOIS_COUVERTS[c.period]) ? c.period : 'm
 const auMois = (valeur, c) => num(valeur) / CHARGE_MOIS_COUVERTS[chargePeriode(c)];
 const chargeMensuelle = c => auMois(c.amount, c);
 
+/* --- la repartition theorique d'une charge, entre plusieurs personnes ----
+
+   TROIS NOTIONS DISTINCTES, ET LES FONDRE EST LE DEFAUT DEJA COMMIS ICI.
+
+     1. le MONTANT FACTURE : ce qui est debite du compte ;
+     2. la PART THEORIQUE d'un autre : la repartition convenue entre vous ;
+     3. la CONTRIBUTION REELLEMENT RECUE : une entree d'argent, saisie dans les
+        revenus, la ou vivent le salaire et les autres rentrees.
+
+   Le budget compte 1 et 3. Il ne compte JAMAIS 2. La version d'avant retranchait
+   la part theorique du total des charges alors que la contribution arrivait deja
+   par les revenus : la meme somme comptait deux fois, en plus a l'entree et en
+   moins a la sortie. Sur des donnees reelles les deux saisies ne s'accordaient
+   meme pas — 900 EUR declares en entree contre 1 180 EUR de parts sur les lignes
+   — et le reste pour vivre etait surevalue de plus de mille euros par mois.
+
+   Ces fonctions sont donc PUREMENT INFORMATIVES. Aucune n'est lue par
+   `fixedTotal`, `budgetFrame`, `savingsReconciliation`, `suggestedMonthly`, ni
+   par aucune carte de budget, ni par le cash-flow d'un bien. Un test l'exige, et
+   il ne le lit pas dans la source : il compare des totaux avec et sans parts
+   declarees, et ils doivent etre egaux au centime.
+
+   `shares` reste la source unique de cette repartition : aucun champ parallele
+   n'est cree, et rien ne se migre. */
+const contributors = () => B().contributors || [];
+const shareOf = (c, id) => num(((c && c.shares) || {})[id]);
+const sharedOn = c => Object.values((c && c.shares) || {})
+  .reduce((s, v) => s + num(v), 0);
+const shareMensuelle = (c, id) => auMois(shareOf(c, id), c);
+
+function partTheoriqueMensuelle(id) {
+  return (B().fixedCharges || []).reduce((s, c) => s + shareMensuelle(c, id), 0);
+}
+
+/* Les trois montants d'un ecran de partage, tous mensuels.
+
+   `resteTheorique` et non « a ma charge » : ce nom-la laissait entendre que le
+   budget ne comptait que le reliquat, ce qui etait le defaut meme. Le budget
+   compte `total`, toujours. */
+function sharedTotals() {
+  const charges = B().fixedCharges || [];
+  const total = charges.reduce((s, c) => s + chargeMensuelle(c), 0);
+  const partage = charges.reduce((s, c) => s + auMois(sharedOn(c), c), 0);
+  return {
+    total, partage, resteTheorique: total - partage,
+    parPersonne: contributors().map(g => ({
+      id: g.id, nom: g.name, total: partTheoriqueMensuelle(g.id),
+    })),
+  };
+}
+
+/* --- ce qu'une part saisie doit respecter -------------------------------
+
+   Meme forme que la regle des credits : la clef du champ fautif et sa phrase,
+   ou `null`. Les fenetres nomment leurs champs `part_<id>`, la regle le sait, et
+   les deux portes de saisie d'une charge l'appellent — une regle recopiee a deux
+   endroits finit par diverger.
+
+   Vide vaut zero, zero est une reponse, un negatif ne veut rien dire, et la
+   somme des parts ne depasse pas ce qui est facture : au-dela, la repartition
+   ne decrit plus la charge qu'elle pretend repartir.
+
+   Elle ne change AUCUN calcul du budget : elle garde une saisie propre, voila
+   tout. */
+const CLE_PART = id => 'part_' + id;
+
+function validerPartsSaisies(v, montant, ids) {
+  let somme = 0;
+  let premiere = null;
+  for (const id of ids || []) {
+    const saisi = (v || {})[CLE_PART(id)];
+    if (!estDeclare(saisi)) continue;
+    if (num(saisi) < 0) {
+      return { cle: CLE_PART(id),
+               message: trad('Une part théorique ne peut pas être négative.') };
+    }
+    if (premiere === null) premiere = id;
+    somme += num(saisi);
+  }
+  if (premiere !== null && somme > num(montant) + 0.005) {
+    return { cle: CLE_PART(premiere),
+             message: trad('Les parts théoriques ne peuvent pas dépasser le montant facturé.') };
+  }
+  return null;
+}
+
+function ecrirePartsSaisies(charge, v, ids) {
+  charge.shares = charge.shares || {};
+  for (const id of ids || []) {
+    const saisi = (v || {})[CLE_PART(id)];
+    if (estDeclare(saisi)) charge.shares[id] = num(saisi);
+    else delete charge.shares[id];
+  }
+  return charge;
+}
+
 /* La date au format des cles, sans passer par l'UTC.
 
    `toISOString()` convertit en UTC : a Paris, une date construite a minuit local

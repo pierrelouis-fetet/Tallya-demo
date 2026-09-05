@@ -1951,6 +1951,13 @@ const I18N = {
     "Part de tes revenus qui contribue à l’augmentation de ton patrimoine : ta capacité d’épargne, plus le capital de crédit remboursé.":
       "The share of your income that contributes to growing your wealth: your saving capacity, plus the loan principal repaid.",
     "Partage": "Split",
+    'Part de {n} (€)': '{n}\u2019s share (€)',
+    "Part théorique de {n} sur cette charge. Elle sert au suivi de la répartition et ne réduit pas le montant compté dans ton budget.":
+      '{n}\u2019s theoretical share of this cost. It is only used to track how the cost is split and does not reduce the amount counted in your budget.',
+    'Part théorique de {n}': '{n}\u2019s theoretical share',
+    'Une part théorique ne peut pas être négative.': 'A theoretical share cannot be negative.',
+    'Les parts théoriques ne peuvent pas dépasser le montant facturé.':
+      'Theoretical shares cannot exceed the billed amount.',
 
     "Net": "Net",
     "Cette page suit les placements dont le cours arrive tout seul, du marché. Tes placements non cotés, ton immobilier et tes liquidités se déclarent dans Actifs, où c’est toi qui en donnes la valeur : ils comptent dans ton patrimoine, ta répartition et ton autonomie exactement comme le reste.":

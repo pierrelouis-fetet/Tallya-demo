@@ -10299,8 +10299,13 @@ suite('Une charge fixe vaut ce qui sort du compte', () => {
     const store = lireSource('assets/store.js');
     const app = lireSource('assets/app.js');
     const code = s => s.replace(/\/\*[\s\S]*?\*\//g, ' ');
-    for (const mort of ['chargeMensuellePersonnelle', 'myShareMensuelle', 'sharedTotals',
-                        'partageExcessif', 'shareOf', 'sharedOn', 'fixedSharePK']) {
+    /* CE QUI RESTE INTERDIT, ce sont les REDUCTEURS : les fonctions qui
+       retranchaient une part d'une charge du budget. La repartition theorique,
+       elle, est revenue comme information — `shareOf`, `sharedOn`,
+       `shareMensuelle`, `sharedTotals` — et aucune n'entre dans un total du
+       budget. La suite juste en dessous le prouve par les nombres. */
+    for (const mort of ['chargeMensuellePersonnelle', 'myShareMensuelle', 'myShare(',
+                        'partageExcessif', 'fixedSharePK']) {
       vrai(!code(store).includes(mort), `« ${mort} » n’est plus dans store.js`);
       vrai(!code(app).includes(mort), `ni dans app.js`);
     }
@@ -10321,10 +10326,12 @@ suite('Une charge fixe vaut ce qui sort du compte', () => {
        Les champs sont ceux que la table de partage produisait, donc la liste est
        close par construction : la fonction n'existe plus, elle n’en produira
        jamais un de plus. */
-    for (const champ of ['st.mine', 'st.partage', 'st.parPersonne', 'gens.length']) {
-      vrai(!code(app).includes(champ),
-        `« ${champ} » est encore lu : le producteur est parti, pas son lecteur`);
-    }
+    /* « A ma charge » est le seul champ qui ne peut pas revenir : il nommait ce
+       que le budget comptait a la place du facture, et c'est la convention qui a
+       ete retiree. Les autres — la part de chacun, le total partage — sont
+       redevenus des informations, et se lisent a nouveau. */
+    vrai(!code(app).includes('st.mine') && !/\bmine\b/.test(corpsDe(code(store), 'sharedTotals')),
+      '« à ma charge » ne peut pas revenir : le budget compte le facturé');
     /* Et le pied de la liste somme ce qu'elle affiche, comme celui du tableau. */
     const carte = code(app).slice(code(app).indexOf('data-anchor="charges"'),
                                   code(app).indexOf('id="chargesTable"'));
@@ -33093,5 +33100,310 @@ suite('Un pourcentage sans dénominateur n’existe pas', () => {
        se suffit, la ou « 900 € par mois, 0 % de tes revenus » ment. */
     vrai(/f\.fixedPct == null \? '' :/.test(src),
       'et les mentions en ligne se taisent plutôt que de chiffrer zéro');
+  });
+});
+
+/* LA REPARTITION THEORIQUE EST UNE INFORMATION, JAMAIS UN MONTANT DU BUDGET.
+
+   Trois notions, et les fondre est le defaut deja commis ici : le montant
+   FACTURE, la part THEORIQUE d'un autre, et la contribution REELLEMENT RECUE,
+   qui est une entree saisie dans les revenus. Le budget compte la premiere et la
+   troisieme, jamais la deuxieme. */
+suite('Modifier les parts ne change jamais le total des charges', () => {
+
+  /* Le scenario du brief, celui qui a coute mille euros par mois de reste pour
+     vivre : la contribution comptee en entree ET retranchee des charges. */
+  const scenario = (parts = { loyer: 945, elec: 100, net: 50 }) => Fixture.poser(s => {
+    s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+    s.budget.income = [{ label: 'Salaire', amount: 3200 },
+                       { label: 'Complément', amount: 900 }];
+    s.budget.fixedCharges = [
+      { label: 'Loyer', amount: 1890, period: 'mois', shares: { pk: parts.loyer } },
+      { label: 'Électricité', amount: 200, period: 'mois', shares: { pk: parts.elec } },
+      { label: 'Internet', amount: 100, period: 'mois', shares: { pk: parts.net } },
+    ];
+  });
+
+  test('le contrôle central : la part n’est jamais comptée deux fois', () => {
+    scenario();
+    pres(incomeTotal(), 4100, '3 200 de salaire et 900 de complément');
+    pres(fixedTotal(), 2190, '1 890 + 200 + 100, les montants facturés');
+    pres(budgetFrame().fixed, 2190, 'et le cadre du budget lit le même total');
+    pres(budgetFrame().available, 1910, '4 100 − 2 190');
+    pres(partTheoriqueMensuelle('pk'), 1095, 'la part théorique vaut 1 095 €');
+    vrai(Math.abs(fixedTotal() - 1095) > 1,
+      'le total des charges n’est PAS la part théorique');
+    vrai(Math.abs(budgetFrame().available - 3005) > 1,
+      'et le reste pour vivre n’est pas gonflé de la part, comptée une seconde fois');
+  });
+
+  test('trois parts différentes, un seul et même total', () => {
+    /* Zero, la moitie, la totalite : le budget ne bouge pas d'un centime. */
+    const totaux = new Set();
+    for (const part of [0, 945, 1890]) {
+      Fixture.poser(s => {
+        s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+        s.budget.income = [{ label: 'Salaire', amount: 3200 }];
+        s.budget.fixedCharges = [{ label: 'Loyer', amount: 1890, period: 'mois',
+                                   shares: { pk: part } }];
+      });
+      pres(fixedTotal(), 1890, `part de ${part} € : la charge vaut son montant facturé`);
+      totaux.add(round2(budgetFrame().available));
+    }
+    eq(totaux.size, 1, 'et le reste pour vivre est le même dans les trois cas');
+  });
+
+  test('tous les lecteurs du budget voient le même chiffre brut', () => {
+    /* Un seul chiffre partout : le total des charges, le cadre, la
+       reconciliation d'epargne, le versement propose, l'autonomie. */
+    const lire = () => ({
+      fixed: round2(fixedTotal()),
+      cadre: round2(budgetFrame().fixed),
+      reco: round2(savingsReconciliation().fixed),
+      verse: suggestedMonthly(),
+      mois: round2(runway().months),
+    });
+    scenario({ loyer: 0, elec: 0, net: 0 });
+    const sans = lire();
+    scenario();
+    const avec = lire();
+    eq(JSON.stringify(avec), JSON.stringify(sans),
+      `déclarer des parts a changé un montant du budget : ${JSON.stringify(sans)} `
+      + `puis ${JSON.stringify(avec)}`);
+    pres(avec.fixed, 2190, 'et ce montant est bien le facturé');
+  });
+
+  test('aucun calcul du budget ne lit une part', () => {
+    /* Sur le CODE, jamais sur un commentaire : l'arbre publie les retire. */
+    const code = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    for (const f of ['fixedTotal', 'budgetFrame', 'incomeTotal', 'savingsReconciliation',
+                     'suggestedMonthly']) {
+      const corps = corpsDe(code, f);
+      vrai(corps.length > 20, `${f} doit se relire depuis sa source`);
+      vrai(!/share|contributor/i.test(corps),
+        `« ${f} » lit une part : le budget compte le facturé, et lui seul`);
+    }
+    vrai(/return B\(\)\.fixedCharges\.reduce\(\(s, c\) => s \+ chargeMensuelle\(c\), 0\);/
+      .test(code), 'le total des charges somme les montants facturés');
+  });
+
+  test('plusieurs personnes se partagent une charge sans la réduire', () => {
+    Fixture.poser(s => {
+      s.budget.contributors = [{ id: 'pk', name: 'PK' }, { id: 'alex', name: 'Alex' }];
+      s.budget.income = [{ label: 'Salaire', amount: 3200 }];
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 2000, period: 'mois',
+                                 shares: { pk: 600, alex: 400 } }];
+    });
+    pres(fixedTotal(), 2000, 'le budget compte les 2 000 € facturés');
+    pres(partTheoriqueMensuelle('pk'), 600, 'la part de la première');
+    pres(partTheoriqueMensuelle('alex'), 400, 'celle de la seconde');
+    const st = sharedTotals();
+    pres(st.total, 2000, 'le facturé');
+    pres(st.partage, 1000, 'la part théorique totale');
+    pres(st.resteTheorique, 1000, 'et ce qui resterait après partage');
+    eq(st.parPersonne.length, 2, 'les deux personnes sont nommées');
+    eq(st.parPersonne.map(x => x.nom).join(' | '), 'PK | Alex', 'dans l’ordre déclaré');
+    /* Et ce « reste theorique » n'alimente aucun calcul du budget. */
+    pres(budgetFrame().fixed, 2000, 'le cadre du budget ignore le partage');
+  });
+
+  test('une part suit la périodicité de sa charge', () => {
+    for (const [periode, mensuel, part] of [['an', 100, 50], ['semestre', 200, 100],
+                                            ['trimestre', 400, 200], ['mois', 1200, 600]]) {
+      Fixture.poser(s => {
+        s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+        s.budget.fixedCharges = [{ label: 'Assurance', amount: 1200, period: periode,
+                                   shares: { pk: 600 } }];
+      });
+      pres(chargeMensuelle(Store.state.budget.fixedCharges[0]), mensuel,
+        `1 200 € ${periode} pèsent ${mensuel} € par mois`);
+      pres(partTheoriqueMensuelle('pk'), part, `et la part théorique ${part} €`);
+      pres(fixedTotal(), mensuel, 'le budget compte le facturé ramené au mois');
+    }
+    /* La semaine vaut 52/12 mois, comme le montant qu'elle partage. */
+    Fixture.poser(s => {
+      s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+      s.budget.fixedCharges = [{ label: 'Courses', amount: 52, period: 'semaine',
+                                 shares: { pk: 26 } }];
+    });
+    pres(fixedTotal(), 52 * 52 / 12, 'cinquante-deux semaines dans l’année');
+    pres(partTheoriqueMensuelle('pk'), 26 * 52 / 12, 'et la part suit le même facteur');
+  });
+
+  test('une part vide, nulle ou absente vaut zéro, jamais NaN', () => {
+    Fixture.poser(s => {
+      s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+      s.budget.fixedCharges = [
+        { label: 'A', amount: 100, period: 'mois', shares: { pk: '' } },
+        { label: 'B', amount: 100, period: 'mois', shares: { pk: 0 } },
+        { label: 'C', amount: 100, period: 'mois', shares: {} },
+        { label: 'D', amount: 100, period: 'mois' },
+      ];
+    });
+    for (const c of Store.state.budget.fixedCharges) {
+      eq(shareOf(c, 'pk'), 0, `« ${c.label} » : aucune part déclarée vaut zéro`);
+      vrai(Number.isFinite(shareMensuelle(c, 'pk')), 'et le mensuel reste un nombre');
+    }
+    eq(partTheoriqueMensuelle('pk'), 0, 'le total des parts est zéro, pas NaN');
+    pres(fixedTotal(), 400, 'et les quatre charges comptent entières');
+    eq(partTheoriqueMensuelle('inconnu'), 0, 'une personne inconnue ne casse rien');
+  });
+
+  test('les parts se valident à la saisie, sans toucher au calcul', () => {
+    const ids = ['pk'];
+    eq(validerPartsSaisies({ part_pk: 945 }, 1890, ids), null, '945 sur 1 890 : valide');
+    eq(validerPartsSaisies({ part_pk: 1890 }, 1890, ids), null, 'la totalité aussi');
+    eq(validerPartsSaisies({ part_pk: 0 }, 1890, ids), null, 'zéro est une réponse');
+    eq(validerPartsSaisies({ part_pk: '' }, 1890, ids), null, 'et le vide n’est pas une faute');
+    eq(validerPartsSaisies({}, 1890, ids), null, 'ni l’absence de champ');
+    const trop = validerPartsSaisies({ part_pk: 2000 }, 1890, ids);
+    vrai(trop, '2 000 sur 1 890 : refusé');
+    eq(trop.cle, 'part_pk', 'et la fenêtre désigne le champ');
+    vrai(/dépasser le montant facturé/.test(trop.message), `« ${trop.message} »`);
+    const moins = validerPartsSaisies({ part_pk: -1 }, 1890, ids);
+    vrai(moins && moins.cle === 'part_pk', 'un négatif est refusé aussi');
+    /* A deux, c'est la SOMME qui est bornee. */
+    const deux = validerPartsSaisies({ part_pk: 1200, part_alex: 900 }, 2000, ['pk', 'alex']);
+    vrai(deux, '1 200 + 900 dépassent 2 000');
+    eq(validerPartsSaisies({ part_pk: 1200, part_alex: 800 }, 2000, ['pk', 'alex']), null,
+      'et 1 200 + 800 tiennent exactement');
+    for (const cle of ['Une part théorique ne peut pas être négative.',
+                       'Les parts théoriques ne peuvent pas dépasser le montant facturé.',
+                       'Part de {n} (€)', 'Part théorique de {n}',
+                       'Part théorique de {n} sur cette charge. Elle sert au suivi de la '
+                       + 'répartition et ne réduit pas le montant compté dans ton budget.']) {
+      vrai(I18N.en[cle], `« ${cle} » doit avoir sa traduction`);
+    }
+  });
+
+  test('écrire une part ne touche qu’aux personnes déclarées', () => {
+    const c = { label: 'Loyer', amount: 1890, period: 'mois', shares: { parti: 300 } };
+    ecrirePartsSaisies(c, { part_pk: 945 }, ['pk']);
+    eq(c.shares.pk, 945, 'la part saisie s’écrit');
+    eq(c.shares.parti, 300,
+      'et celle d’une personne qui n’est plus déclarée reste dans le fichier');
+    ecrirePartsSaisies(c, { part_pk: '' }, ['pk']);
+    eq(c.shares.pk, undefined, 'un champ vidé retire la part');
+    eq(c.shares.parti, 300, 'sans toucher au reste');
+    ecrirePartsSaisies(c, { part_pk: 0 }, ['pk']);
+    eq(c.shares.pk, 0, 'un zéro tapé est une déclaration, et il s’écrit');
+  });
+
+  test('la fiche d’une charge porte le champ, et il lit `shares`', () => {
+    const app = lireSource('assets/app.js');
+    const code = app.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    vrai(/cle: CLE_PART\(g\.id\)/.test(code),
+      'le champ se nomme par la même porte que la règle et l’écriture');
+    vrai(/valeur: estDeclare\(\(\(charge \|\| \{\}\)\.shares \|\| \{\}\)\[g\.id\]\)/.test(code),
+      'et il lit charge.shares[id], sans champ parallèle');
+    vrai(/label: 'Partage', type: 'section'/.test(code), 'sous une section « Partage »');
+    /* Les deux portes de saisie l'appellent, et valident. */
+    const porte = (nom, fin) => {
+      const d = code.indexOf(nom);
+      vrai(d > 0, `la porte « ${nom} » doit exister`);
+      return code.slice(d, code.indexOf(fin, d));
+    };
+    for (const [nom, fin] of [["async 'add-charge'", "'del-charge'"],
+                              ["async 'edit-charge'", "async 'add-income'"]]) {
+      const bloc = porte(nom, fin);
+      vrai(/champsPartage\(/.test(bloc), `« ${nom} » n’offre pas la section Partage`);
+      vrai(/validerPartsSaisies\(/.test(bloc), `« ${nom} » ne valide pas les parts`);
+      vrai(/ecrirePartsSaisies\(/.test(bloc), `« ${nom} » n’écrit pas les parts`);
+    }
+    /* Et aucun champ parallele n'est ne. */
+    for (const invente of ['partPK', 'partTheorique:', 'shareInfo', 'contributionDue']) {
+      vrai(!code.includes(invente) && !lireSource('assets/store.js').includes(invente),
+        `« ${invente} » : la répartition a déjà sa source, c’est shares`);
+    }
+  });
+
+  test('la carte montre le facturé, la part seulement en second', () => {
+    const app = lireSource('assets/app.js');
+    const code = app.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const carte = code.slice(code.indexOf('data-anchor="charges"'),
+                             code.indexOf('id="chargesTable"'));
+    vrai(carte.length > 200, 'la carte des charges doit se relire depuis sa source');
+    vrai(/valeur: `\$\{fmtEUR\(chargeMensuelle\(c\)\)\}/.test(carte),
+      'le montant de la ligne est le facturé ramené au mois');
+    vrai(/partsLisibles\(c\)\]\.filter\(Boolean\)/.test(carte),
+      'et la part théorique vit dans la mention grise, jamais dans le montant');
+    vrai(/<dt>\$\{trad\('Total \/ mois'\)\}<\/dt><dd>\$\{fmtEUR\(brut\)\}<\/dd>/.test(carte),
+      'le total reste celui des montants facturés');
+    vrai(/Part théorique de \{n\}/.test(carte),
+      'la part de chacun se lit sous ce total, nommée comme théorique');
+    /* Et le calcul, lui, ne bouge pas. */
+    scenario();
+    pres(fixedTotal(), 2190, 'la carte annonce 2 190 €, pas 1 095 €');
+    pres(chargeMensuelle(Store.state.budget.fixedCharges[0]), 1890,
+      'et la ligne du loyer 1 890 €, pas 945 €');
+  });
+
+  test('l’export donne au facturé et à la part deux colonnes distinctes', () => {
+    /* Le harnais ne charge pas `app.js` : la feuille se lit donc dans sa source,
+       et les nombres qu'elle produira se vérifient par le modèle qu'elle appelle. */
+    const feuille = corpsDe(lireSource('assets/app.js').replace(/\/\*[\s\S]*?\*\//g, ' '),
+                            'sheetFixedCharges');
+    vrai(feuille.length > 200, 'la feuille doit se relire depuis sa source');
+    vrai(!/à ma charge/i.test(feuille),
+      'aucune colonne ne prétend dire ce que le budget compte à la place du facturé');
+    const iPct = feuille.indexOf("'% des charges'");
+    const iPart = feuille.indexOf('Part théorique de ${g.name} / mois');
+    const iOrg = feuille.indexOf("{ h: 'Organisme'");
+    vrai(iPct > 0 && iPart > iPct && iOrg > iPart,
+      'la part théorique a sa propre colonne, entre le poids et l’organisme');
+    vrai(/round2\(chargeMensuelle\(c\)\), poids\(c\),/.test(feuille),
+      'la colonne mensuelle porte le facturé, et le poids s’y rapporte');
+    vrai(/\.\.\.gens\.map\(g => round2\(shareMensuelle\(c, g\.id\)\)\)/.test(feuille),
+      'la part de chacun est mensuelle, dans sa propre colonne');
+    vrai(/total: \['Total', null, '', round2\(brut\)/.test(feuille),
+      'le total de la colonne mensuelle est le brut');
+    vrai(/\.\.\.gens\.map\(g => round2\(partTheoriqueMensuelle\(g\.id\)\)\), ''\]/.test(feuille),
+      'et celui des parts est à part');
+    vrai(/const brut = Store\.state\.budget\.fixedCharges\s*\.reduce\(\(s, c\) => s \+ chargeMensuelle\(c\), 0\)/
+      .test(feuille), 'le total de la feuille somme les montants facturés');
+
+    /* Et les nombres qu'elle rendra sur ce jeu d'essai. */
+    Fixture.poser(s => {
+      s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1890, period: 'mois',
+                                 shares: { pk: 945 } }];
+    });
+    const c = Store.state.budget.fixedCharges[0];
+    pres(num(c.amount), 1890, 'Montant : le facturé');
+    pres(chargeMensuelle(c), 1890, '€ / mois : le facturé ramené au mois');
+    pres(shareMensuelle(c, 'pk'), 945, 'et la part théorique à côté');
+    pres(fixedTotal(), 1890, 'le total des charges est 1 890 €, pas 945 €');
+    pres(partTheoriqueMensuelle('pk'), 945, 'la part totale vit dans sa colonne');
+  });
+
+  test('le crédit et le bien ne connaissent pas les parts', () => {
+    /* Une mensualite facturee 1 600 EUR sort pour 1 600 EUR, part ou pas, et le
+       capital restant du ne se divise jamais. E2 a E5 ne sont pas rouverts. */
+    Fixture.poser(s => {
+      s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+      const c = s.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) l.usage = 'locative';
+      const d = s.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = null;
+      s.budget.income = [{ label: 'Loyer', amount: 900, bienId: 'c_immo' }];
+      s.budget.fixedCharges = [
+        { label: 'Prêt', amount: 1600, period: 'mois', shares: { pk: 600 },
+          creditId: 'd_pret', bienId: 'c_immo' },
+        { label: 'Copropriété', amount: 300, period: 'mois', shares: { pk: 150 },
+          bienId: 'c_immo' }];
+    });
+    const d = etabById('e_bien').dettes[0];
+    pres(mensualiteCredit(d), 1600, 'la mensualité vaut le prélèvement entier');
+    pres(num(d.montant), 120000, 'et le capital restant dû ne se divise jamais');
+    pres(dettesTotal(), 120000, 'ni le total des dettes');
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.mensualite, 1600, 'le cash-flow du bien lit la mensualité entière');
+    pres(cf.charges, 300, 'et la charge entière');
+    pres(coutBien(compteById('c_immo')).totalSorties, 1900, '1 600 + 300');
+    const store = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    vrai(!/share/i.test(corpsDe(store, 'cashFlowBien')),
+      'le cash-flow d’un bien ne lit aucune part');
+    vrai(!/share/i.test(corpsDe(store, 'dettesTotal')),
+      'ni le total des dettes');
   });
 });

@@ -2007,6 +2007,44 @@ function sortPositions(entries) {
    Le glissement ne servait que cette liste-la : personne d'autre ne posait
    l'attribut de rang qu'il lisait. Il part donc en entier, plutot que de rester
    arme sur un ordre que plus rien n'affiche. */
+/* --- la part theorique, a l'ecran -------------------------------------
+
+   Une information, jamais un montant du budget. Elle ne change ni la valeur
+   affichee a droite de la ligne, ni la barre, ni le pourcentage, ni le total :
+   ce qui sort du compte sort en entier, et ce qu'on te reverse entre par les
+   revenus, une seule fois.
+
+   Les champs se nomment `part_<id>` : c'est la convention que `validerPartsSaisies`
+   et `ecrirePartsSaisies` connaissent, et les deux fenetres de charge la
+   partagent. Sans personne declaree, la section n'existe pas. */
+function champsPartage(charge) {
+  const gens = contributors();
+  if (!gens.length) return [];
+  return [
+    { cle: 'section_partage', label: 'Partage', type: 'section' },
+    ...gens.map(g => ({
+      cle: CLE_PART(g.id),
+      label: trad('Part de {n} (€)').replace('{n}', g.name),
+      type: 'nombre', exemple: '0',
+      valeur: estDeclare(((charge || {}).shares || {})[g.id])
+        ? num(charge.shares[g.id]) : '',
+      aide: trad('Part théorique de {n} sur cette charge. Elle sert au suivi de '
+        + 'la répartition et ne réduit pas le montant compté dans ton budget.')
+        .replace('{n}', g.name),
+    })),
+  ];
+}
+
+/* La mention grise sous une ligne de charge. `ligneListe` echappe ce qu'on lui
+   donne, donc du texte nu, et le nom d'une personne avec. */
+function partsLisibles(c) {
+  return contributors()
+    .filter(g => shareMensuelle(c, g.id) > 0.005)
+    .map(g => `${trad('Part théorique de {n}').replace('{n}', g.name)} ${
+      fmtEUR0(shareMensuelle(c, g.id))}`)
+    .join(' · ');
+}
+
 function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, jauge }) {
   const part = jauge == null ? null : Math.max(-1, Math.min(1, num(jauge)));
   return `
@@ -5925,12 +5963,16 @@ function viewBudget(section = 'depenses') {
               return cr.capital != null
                 ? `${trad('rembourse')} ${guill(cr.libelle)}, ${trad('dont')} ${fmtEUR0(cr.capital)} ${trad('de capital')}`
                 : `${trad('rembourse')} ${guill(cr.libelle)}`;
-            })()].filter(Boolean).join(' · '),
+            })(),
+            partsLisibles(c)].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
           second: '',
         })}`).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(brut)}</dd>
+          ${sharedTotals().parPersonne.filter(x => x.total > 0.005).map(x => `
+          <dt class="muted">${esc(trad('Part théorique de {n}').replace('{n}', x.nom))}</dt>
+          <dd class="muted">${fmtEUR(x.total)}</dd>`).join('')}
         </dl>
       </div>
       </div>
@@ -6466,18 +6508,24 @@ function sheetFixedCharges() {
   const brut = Store.state.budget.fixedCharges
     .reduce((s, c) => s + chargeMensuelle(c), 0);
   const poids = c => brut ? chargeMensuelle(c) / brut : 0;
+  const gens = contributors();
   return {
     name: 'Charges fixes',
     cols: [
       { h: 'Poste', t: 'text', w: 32 }, { h: 'Montant', t: 'eur', w: 15 },
       { h: 'Période', t: 'text', w: 13 }, { h: '€ / mois', t: 'eur', w: 15 },
-      { h: '% des charges', t: 'pct', w: 15 }, { h: 'Organisme', t: 'text', w: 24 },
+      { h: '% des charges', t: 'pct', w: 15 },
+      ...gens.map(g => ({ h: `Part théorique de ${g.name} / mois`, t: 'eur', w: 26 })),
+      { h: 'Organisme', t: 'text', w: 24 },
     ],
     rows: Store.state.budget.fixedCharges.map(c => [
       c.label, round2(num(c.amount)), trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]),
-      round2(chargeMensuelle(c)), poids(c), c.provider || '',
+      round2(chargeMensuelle(c)), poids(c),
+      ...gens.map(g => round2(shareMensuelle(c, g.id))),
+      c.provider || '',
     ]),
-    total: ['Total', null, '', round2(brut), brut ? 1 : 0, ''],
+    total: ['Total', null, '', round2(brut), brut ? 1 : 0,
+      ...gens.map(g => round2(partTheoriqueMensuelle(g.id))), ''],
   };
 }
 
@@ -8723,14 +8771,18 @@ const ACTIONS = {
             label: trad('Charge d’un bien immobilier ?'), options: optionsBiens(), valeur: '',
             aide: trad('taxe foncière, copropriété, assurance PNO : elle entrera dans le ')
                 + 'cash-flow du bien' }] : []),
+          ...champsPartage(null),
         ],
+        valide: v => validerPartsSaisies(v, v.amount, contributors().map(g => g.id)),
       });
       if (!v) return;
-      Store.state.budget.fixedCharges.push({
+      const posee = {
         label: v.label, amount: v.amount, period: v.period, provider: v.provider, shares: {},
         echeanceLe: v.echeanceLe || '',
         creditId: v.creditId || null, bienId: v.bienId || null,
-      });
+      };
+      ecrirePartsSaisies(posee, v, contributors().map(g => g.id));
+      Store.state.budget.fixedCharges.push(posee);
       Store.save(); render();
       toast(`${guill(v.label)} ${trad('ajoutée')} · ${fmtEUR(chargeMensuelle({ amount: v.amount, period: v.period }))} ${trad('/ mois')}`);
       if (!v.__encore) return;
@@ -8768,9 +8820,13 @@ const ACTIONS = {
           valeur: c.bienId || '',
           aide: trad('taxe foncière, copropriété, assurance PNO : elle entrera dans le ')
               + 'cash-flow du bien' }] : []),
+        ...champsPartage(c),
         { cle: 'supprimer', label: trad('Supprimer cette charge'), type: 'case',
           aide: trad('La ligne disparaît en validant. Réversible avec Ctrl+Z') },
       ],
+      /* `askForm` ne valide pas une ligne qu'on efface : rien a garder sur un
+         objet qui part. */
+      valide: v => validerPartsSaisies(v, v.amount, contributors().map(g => g.id)),
     });
     if (!v) return;
     if (v.supprimer) {
@@ -8782,6 +8838,7 @@ const ACTIONS = {
     }
     c.label = v.label; c.amount = v.amount; c.period = v.period; c.provider = v.provider;
     c.echeanceLe = v.echeanceLe || '';
+    ecrirePartsSaisies(c, v, contributors().map(g => g.id));
     if (v.creditId !== undefined) c.creditId = v.creditId || null;
     if (v.bienId !== undefined) c.bienId = v.bienId || null;
     Store.save(); render();
