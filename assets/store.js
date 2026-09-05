@@ -1002,7 +1002,7 @@ function chargeDuCredit(id) {
 
 function mensualiteCredit(d) {
   const lien = chargeDuCredit(d.id);
-  return lien ? chargeMensuellePersonnelle(lien.charge) : num(d.mensualite) || 0;
+  return lien ? chargeMensuelle(lien.charge) : num(d.mensualite) || 0;
 }
 
 function creerChargeDuCredit(d) {
@@ -4060,67 +4060,33 @@ function prochaineEcheance(c, aujourdhui = todayISO()) {
   return isoDeDate(d);
 }
 
+/* Le total des charges fixes du BUDGET : ce qui sort vraiment du compte.
+
+   IL AVAIT ETE RENDU « PERSONNEL », ET C'ETAIT UN DOUBLE COMPTAGE. Un
+   prelevement de 1 890 EUR sort du compte pour 1 890 EUR, meme si quelqu'un
+   reverse la moitie separement. Retrancher cette moitie ici, alors qu'elle
+   arrive deja par les revenus, la comptait deux fois : les entrees montaient de
+   ce qu'on recoit ET les sorties baissaient d'autant. Sur des donnees reelles,
+   le reste pour vivre s'en trouvait surevalue de plus de mille euros par mois,
+   et les deux saisies ne s'accordaient meme pas entre elles.
+
+   LA REGLE EST DONC : une charge fixe vaut ce qui est DEBITE. Ce que quelqu'un
+   te reverse est une entree, saisie une fois, la ou vivent le salaire et les
+   autres rentrees. Une entree de 945 EUR et une sortie de 1 890 EUR donnent
+   deja le bon solde ; il n'y a rien a retrancher une seconde fois.
+
+   LE PARTAGE A DONC QUITTE LES CALCULS ET L'ECRAN. Vivaient ici les
+   contributeurs, la part de chacun sur une charge, ce qui restait a sa charge et
+   les totaux de la page de partage. Deux endroits enregistraient le meme fait —
+   la part sur la ligne et la contribution en revenu — et ils divergeaient. Un
+   seul reste.
+
+   `budget.contributors` et les `shares` de chaque charge NE SONT PAS EFFACES :
+   personne ne peut savoir ce qu'ils voulaient dire, et une donnee qu'on ne sait
+   pas relire ne se detruit pas. Plus rien ne les lit, voila tout. */
 function fixedTotal() {
-  return B().fixedCharges.reduce((s, c) => s + chargeMensuellePersonnelle(c), 0);
+  return B().fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0);
 }
-
-function contributors() { return B().contributors || []; }
-
-function shareOf(charge, id) { return num((charge.shares || {})[id]); }
-
-function sharedOn(charge) {
-  return contributors().reduce((s, p) => s + shareOf(charge, p.id), 0);
-}
-
-function myShare(charge) { return num(charge.amount) - sharedOn(charge); }
-
-const shareMensuelle = (charge, id) => auMois(shareOf(charge, id), charge);
-const myShareMensuelle = charge => chargeMensuelle(charge) - auMois(sharedOn(charge), charge);
-
-/* CE QU'UNE CHARGE COUTE VRAIMENT, CHAQUE MOIS, A QUI TIENT CE TABLEAU.
-
-   Tallya est un tableau de bord PERSONNEL. Un prelevement de 2 000 EUR partage
-   en deux ne coute pas 2 000 EUR a celui qui le lit : le budget, le cout d'un
-   logement, le cash-flow d'un locatif doivent tous raconter la meme histoire, et
-   c'est celle-la. Une seule porte, donc, plutot que la regle des parts recopiee
-   dans chaque calcul — c'est ainsi que « Liquidites » a deja valu deux choses
-   differentes sur deux pages, les deux totaux justes.
-
-   SANS PARTAGE, ELLE REND EXACTEMENT LE MONTANT BRUT. `sharedOn` vaut zero, et
-   tout detenteur qui n'utilise pas le partage retrouve ses chiffres d'avant, au
-   centime. C'est l'invariant qui tient toute cette etape.
-
-   ZERO EST UNE VRAIE REPONSE : une charge entierement couverte par les autres ne
-   pese rien, et ce n'est ni le montant brut, ni une donnee absente.
-
-   Le plancher a zero ne corrige pas une saisie, il refuse d'en inventer une
-   autre : des parts qui depassent le montant rendraient une charge NEGATIVE, ce
-   qui n'est pas une depense mais une rentree, et le budget s'en trouverait
-   augmente en silence. Le cas est nomme ailleurs -- `partageExcessif` le
-   signale, et la fenetre de saisie le refuse -- plutot que corrige ici. */
-const chargeMensuellePersonnelle = charge => Math.max(0, myShareMensuelle(charge));
-
-const partageExcessif = charge => sharedOn(charge) - num(charge.amount) > 0.005;
-
-/* Les trois montants d'une page de partage : le BRUT, ce que les autres
-   versent, et ce qui reste. Ils gardent chacun leur sens — un ecran qui montre
-   un partage doit pouvoir nommer les deux cotes.
-
-   `mine` se lit desormais dans `fixedTotal`, qui EST le total personnel, au lieu
-   de se recalculer par soustraction. Deux additions du meme fait finissent par
-   diverger, et celle-ci l'aurait fait des qu'une part depasse son montant : la
-   soustraction rendait un negatif la ou le total personnel plancherait a zero. */
-function sharedTotals() {
-  const lignes = B().fixedCharges;
-  const parPersonne = contributors().map(p => ({
-    ...p, total: lignes.reduce((s, c) => s + shareMensuelle(c, p.id), 0),
-  }));
-  const partage = parPersonne.reduce((s, p) => s + p.total, 0);
-  const brut = lignes.reduce((s, c) => s + chargeMensuelle(c), 0);
-  return { parPersonne, partage, mine: fixedTotal(), brut, total: brut };
-}
-
-function fixedSharePK() { return sharedTotals().partage; }
 
 function budgetFrame() {
   const income = incomeTotal();
@@ -4319,7 +4285,7 @@ function estLoyerProbable(c) {
 
 function loyersCourantsProbables() {
   return (B().fixedCharges || [])
-    .map((c, i) => ({ c, i, mensuel: chargeMensuellePersonnelle(c) }))
+    .map((c, i) => ({ c, i, mensuel: chargeMensuelle(c) }))
     .filter(x => estLoyerProbable(x.c) && x.mensuel > 0.005);
 }
 
@@ -4943,12 +4909,11 @@ function cashFlowBien(compte) {
   const postesCharge = B().fixedCharges
     .map((c, i) => ({ c, i }))
     .filter(({ c }) => c.bienId === compte.id && !rembourses.has(c.creditId))
-    /* `mensuel` est la part PERSONNELLE, `montant` reste le montant facture :
-       le premier entre dans le cash-flow, le second se lit en sous-titre et se
-       corrige dans la fenetre. Un calcul personnel et un montant a editer ne
-       sont pas le meme nombre. */
+    /* `mensuel` est l'equivalent MENSUEL de ce qui est debite, `montant` le
+       montant tel qu'il est facture : le premier entre dans le cash-flow, le
+       second se lit en sous-titre quand la periode n'est pas le mois. */
     .map(({ c, i }) => ({ i, label: c.label || trad('Charge fixe'),
-                          mensuel: chargeMensuellePersonnelle(c),
+                          mensuel: chargeMensuelle(c),
                           periode: chargePeriode(c), montant: num(c.amount) }));
   const charges = postesCharge.reduce((s, x) => s + x.mensuel, 0);
   const idxEtab = ETABS().findIndex(e => e.id === compte.etabId);
@@ -6573,14 +6538,6 @@ function healthChecks() {
   if (depEnAttente.missing)
     add('action', trad('Dépenses de {m} à saisir').replace('{m}', depEnAttente.label),
       trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
-
-  for (const c of (b.fixedCharges || [])) {
-    if (!partageExcessif(c)) continue;
-    add('warn', trad('Parts au-dessus du montant sur {n}')
-          .replace('{n}', guill(c.label || trad('Charge fixe'))),
-      trad('{p} partagés pour {m} facturés : cette charge compte pour zéro dans ton budget')
-        .replace('{p}', fmtEUR0(sharedOn(c))).replace('{m}', fmtEUR0(num(c.amount))), 'budget');
-  }
 
   const f = budgetFrame();
   if (f.income > 0 && f.available < f.target)

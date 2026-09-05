@@ -9252,9 +9252,10 @@ suite('Ce qui sort chaque mois', () => {
     Fixture.poser(CHARGES);
     pres(chargeMensuelle({ amount: 120, period: 'an' }), 10, '120 € par an font 10 € par mois');
     pres(chargeMensuelle({ amount: 30, period: 'mois' }), 30, 'un mensuel ne bouge pas');
-    /* 490 et non 940 : la moitie du loyer est versee par le colocataire, et le
-       budget ne retranche que ce qui sort vraiment du compte. */
-    pres(fixedTotal(), 490, '450 de ma part de loyer + 10 d’assurance + 30 d’abonnement');
+    /* 940, et non 490 : les 900 EUR de loyer sortent du compte en entier, meme
+       si le colocataire en reverse la moitie. Ce versement-la est une ENTREE, et
+       le retrancher ici en plus le compterait deux fois. */
+    pres(fixedTotal(), 940, '900 de loyer + 10 d’assurance + 30 d’abonnement');
   });
 
   test('le total sur douze mois vaut douze fois le mois', () => {
@@ -9262,22 +9263,8 @@ suite('Ce qui sort chaque mois', () => {
     /* Le chiffre affiché est `f.fixed * 12`. Il doit valoir la somme des charges
        ramenées à l'année, sinon l'annuel et le mensuel de la même carte se
        contrediraient. */
-    pres(budgetFrame().fixed * 12, 490 * 12, '5 880 € par an, ma part');
+    pres(budgetFrame().fixed * 12, 940 * 12, '11 280 € par an');
     pres(budgetFrame().fixed, fixedTotal(), 'et le cadre du budget lit le même total');
-  });
-
-  test('ce qui est partagé plus ce qui reste font le total', () => {
-    Fixture.poser(CHARGES);
-    const st = sharedTotals();
-    pres(st.partage + st.mine, st.total, 'partagé + à ma charge = charges fixes');
-    /* `total` est le BRUT, `mine` est ce que le budget retranche. Les deux
-       existent, et l'ecran de partage montre les trois : le facture, ce que les
-       autres versent, ce qui reste. */
-    pres(st.total, 940, 'le total facturé, celui du tableau de partage');
-    pres(st.mine, fixedTotal(), 'et ma part est celle que le budget compte');
-    pres(st.partage, 450, 'la moitié du loyer');
-    pres(st.mine, 490, 'l’autre moitié, plus l’assurance et l’abonnement');
-    pres(st.parPersonne[0].total, 450, 'nommément, la part du colocataire');
   });
 
   test('la liste des postes somme le total affiché', () => {
@@ -9286,7 +9273,7 @@ suite('Ce qui sort chaque mois', () => {
        caractères — c'est ce que la mention promet. */
     Fixture.poser(CHARGES);
     const postes = Store.state.budget.fixedCharges
-      .map(c => chargeMensuellePersonnelle(c)).filter(v => v > 0);
+      .map(c => chargeMensuelle(c)).filter(v => v > 0);
     pres(postes.reduce((s, v) => s + v, 0), budgetFrame().fixed,
       'aucun poste hors du total, aucun compté deux fois');
     eq(postes.length, 3, 'trois postes dans ce jeu d’essai');
@@ -9297,621 +9284,6 @@ suite('Ce qui sort chaque mois', () => {
    Les crédits en cours
    ------------------------------------------------------------------ */
 /* E3 : un tableau de bord PERSONNEL compte ce qui sort vraiment du compte. */
-suite('Une charge partagée ne coûte que sa part', () => {
-
-  const poser = (charges) => Fixture.poser(e => {
-    e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-    e.budget.fixedCharges = charges;
-  });
-  const un = () => Store.state.budget.fixedCharges[0];
-
-  test('sans partage, la part personnelle EST le montant brut', () => {
-    /* L'invariant qui tient toute l'etape : qui n'utilise pas le partage
-       retrouve ses chiffres d'avant, au centime. */
-    poser([{ label: 'Abonnement', amount: 30, period: 'mois' },
-           { label: 'Assurance', amount: 120, period: 'an', shares: {} }]);
-    for (const c of Store.state.budget.fixedCharges) {
-      pres(chargeMensuellePersonnelle(c), chargeMensuelle(c),
-        `« ${c.label} » ne bouge pas`);
-    }
-    pres(fixedTotal(), 40, '30 + 10, comme avant');
-  });
-
-  test('une charge partagée ne compte que ce qui reste', () => {
-    poser([{ label: 'Loyer', amount: 2000, period: 'mois', shares: { p1: 800 } }]);
-    pres(chargeMensuelle(un()), 2000, 'le montant facturé ne bouge pas');
-    pres(chargeMensuellePersonnelle(un()), 1200, 'et 1 200 € restent à ma charge');
-    pres(fixedTotal(), 1200, 'c’est ce que le budget retranche');
-  });
-
-  test('entièrement payée par les autres, elle vaut zéro', () => {
-    /* Zero est une vraie reponse : ni le montant brut, ni une donnee absente. */
-    poser([{ label: 'Loyer', amount: 900, period: 'mois', shares: { p1: 900 } }]);
-    eq(chargeMensuellePersonnelle(un()), 0, 'rien ne sort de mon compte');
-    vrai(chargeMensuellePersonnelle(un()) !== null, 'et ce zéro est un nombre, pas une absence');
-    pres(fixedTotal(), 0, 'le budget ne retranche rien');
-  });
-
-  test('la période se ramène au mois avant comme après le partage', () => {
-    /* Les parts suivent la periode de leur charge : sur une assurance annuelle,
-       on note ce que l'autre verse PAR AN. Les deux se divisent par douze. */
-    poser([{ label: 'Assurance', amount: 1200, period: 'an', shares: { p1: 480 } }]);
-    pres(chargeMensuelle(un()), 100, '1 200 € l’an font 100 € par mois');
-    pres(chargeMensuellePersonnelle(un()), 60, 'et ma part, 720 € l’an, en fait 60');
-    pres(fixedTotal(), 60, 'c’est ce montant-là qui entre dans le budget');
-  });
-
-  test('un trimestriel se ramène au mois de la même façon', () => {
-    poser([{ label: 'Copropriété', amount: 600, period: 'trimestre', shares: { p1: 150 } }]);
-    pres(chargeMensuelle(un()), 200, '600 € par trimestre font 200 € par mois');
-    pres(chargeMensuellePersonnelle(un()), 150, 'et ma part, 450 € par trimestre, en fait 150');
-  });
-
-  test('des parts au-dessus du montant ne rendent jamais un négatif', () => {
-    /* Une charge negative n'est pas une depense, c'est une rentree : le budget
-       s'en trouverait augmente en silence. Le cas est NOMME, pas corrige. */
-    poser([{ label: 'Loyer', amount: 900, period: 'mois', shares: { p1: 1200 } }]);
-    eq(chargeMensuellePersonnelle(un()), 0, 'le plancher est zéro');
-    vrai(chargeMensuellePersonnelle(un()) >= 0, 'jamais un montant négatif');
-    vrai(partageExcessif(un()), 'et la contradiction se dit');
-    const dits = JSON.stringify(healthChecks() || []);
-    vrai(/Parts au-dessus du montant/.test(dits),
-      'le diagnostic la signale, au lieu de la corriger dans le dos');
-    pres(num(un().amount), 900, 'la donnée saisie n’est pas réécrite');
-    pres(shareOf(un(), 'p1'), 1200, 'ni la part déclarée');
-  });
-
-  test('la fenêtre de saisie refuse un partage qui dépasse sa charge', () => {
-    /* Le refus se fait la ou l'on sait encore ce qu'on voulait dire. */
-    const src = lireSource('assets/app.js');
-    const f = src.slice(src.indexOf("async 'edit-charge'(btn)"),
-                        src.indexOf("async 'add-income'()"));
-    vrai(f.length > 500, 'la fenêtre doit être trouvable');
-    vrai(/valide: v => \{/.test(f), 'elle porte une règle de validation');
-    vrai(/parts - num\(v\.amount\) <= 0\.005/.test(f),
-      'qui compare la somme des parts au montant facturé');
-    vrai(/Les parts dépassent le montant facturé/.test(f), 'et le dit');
-  });
-});
-
-suite('Le budget retranche ce qui sort vraiment du compte', () => {
-
-  const poser = () => Fixture.poser(e => {
-    e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-    e.budget.income = [{ label: 'Salaire', amount: 4000, period: 'mois' }];
-    e.budget.fixedCharges = [
-      { label: 'Crédit logement', amount: 2000, period: 'mois', shares: { p1: 1000 } },
-      { label: 'Assurance', amount: 100, period: 'mois', shares: { p1: 50 } },
-    ];
-  });
-
-  test('deux charges partagées se somment sur leurs parts', () => {
-    poser();
-    pres(fixedTotal(), 1050, '1 000 de crédit + 50 d’assurance');
-    pres(budgetFrame().fixed, 1050, 'et le cadre du budget lit le même total');
-    pres(budgetFrame().available, 4000 - 1050, 'le reste pour vivre suit');
-    vrai(budgetFrame().available !== 4000 - 2100,
-      'et non ce qu’il resterait si l’on retranchait les montants facturés');
-  });
-
-  test('le partage garde ses trois montants', () => {
-    poser();
-    const st = sharedTotals();
-    pres(st.total, 2100, 'le facturé');
-    pres(st.brut, 2100, 'nommé aussi « brut », pour qui le cherche');
-    pres(st.partage, 1050, 'ce que l’autre verse');
-    pres(st.mine, 1050, 'et ce qui reste');
-    pres(st.parPersonne[0].total, 1050, 'nommément');
-    pres(st.partage + st.mine, st.total, 'les deux parts font le facturé');
-  });
-
-  test('lire ne réécrit jamais les données', () => {
-    poser();
-    const avant = JSON.stringify(Store.state.budget);
-    fixedTotal(); budgetFrame(); sharedTotals();
-    for (const c of Store.state.budget.fixedCharges) chargeMensuellePersonnelle(c);
-    eq(JSON.stringify(Store.state.budget), avant, 'le budget est intact');
-  });
-
-  test('la carte du budget somme les mêmes postes que son total', () => {
-    /* La regle cardinale : un total egale la somme de ses parts. La carte
-       affiche `f.fixed` et une liste de postes -- les deux doivent venir de la
-       meme convention, sinon ses pourcentages ne font plus cent. */
-    const src = lireSource('assets/app.js');
-    const carte = src.slice(src.indexOf("<h2>${trad('Ce qui sort chaque mois')}</h2>"),
-                            src.indexOf('charges-tete'));
-    vrai(carte.length > 400, 'la carte doit être trouvable');
-    vrai(/chargeMensuellePersonnelle\(c\) > 0/.test(carte),
-      'le compte des postes porte sur ce qui pèse vraiment');
-    vrai(/v: chargeMensuellePersonnelle\(c\)/.test(carte),
-      'et les postes aussi');
-    vrai(!/v: chargeMensuelle\(c\)/.test(carte), 'plus aucun montant brut dans le total');
-    const panneau = src.slice(src.indexOf('  chargesFixes: () => {'),
-                              src.indexOf('  chargesFixes: () => {') + 900);
-    vrai(/v: chargeMensuellePersonnelle\(c\)/.test(panneau),
-      'le panneau qu’elle ouvre compte pareil');
-    vrai(/facture: num\(c\.amount\)/.test(panneau),
-      'et garde le montant facturé à côté, qui est ce qu’on relit sur l’avis');
-  });
-
-  test('le tableau du partage garde le montant facturé sur chaque ligne', () => {
-    /* Un ecran de partage doit pouvoir nommer les deux cotes : le facture se
-       corrige, la part se lit. Remplacer l'un par l'autre partout aurait rendu
-       le tableau illisible. */
-    const src = lireSource('assets/app.js');
-    const i = src.indexOf('<tbody id="chargesTable">');
-    /* La borne haute se cherche A PARTIR de la borne basse : `indexOf` sans
-       depart trouve la premiere balise du fichier, qui appartient a un autre
-       tableau, et la tranche etait vide. */
-    const t = src.slice(i, src.indexOf('</tbody>', i));
-    vrai(/fmtEUR\(num\(c\.amount\)\)/.test(t), 'la colonne « Montant » reste le facturé');
-    vrai(/fmtEUR\(chargeMensuelle\(c\)\)/.test(t), 'la colonne « € / mois » aussi');
-    vrai(/fmtEUR\(chargeMensuellePersonnelle\(c\)\)/.test(t),
-      'et « À ma charge » dit la part, par la porte qui plancherait à zéro');
-  });
-});
-
-/* E3.1 : trois endroits ou le brut et le personnel se croisaient encore. */
-suite('Un écran ne dit jamais deux vérités sur le même montant', () => {
-
-  const poser = (charges) => Fixture.poser(e => {
-    e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-    e.budget.income = [{ label: 'Salaire', amount: 4000, period: 'mois' }];
-    e.budget.fixedCharges = charges;
-  });
-  const un = () => Store.state.budget.fixedCharges[0];
-  const app = () => lireSource('assets/app.js');
-  /* La borne haute se cherche A PARTIR de la borne basse : `indexOf` sans
-     depart trouve la premiere occurrence du fichier, qui est ailleurs, et la
-     tranche revient vide. */
-  const tranche = (a, b) => { const s = app(); const i = s.indexOf(a); return s.slice(i, s.indexOf(b, i)); };
-  /* La borne haute de la feuille est la FONCTION suivante, jamais la banniere de
-     commentaire qui la precede : le filtre de publication retire les
-     commentaires, la tranche courait alors bien au-dela et retrouvait ailleurs
-     ce qu'elle cherchait a exclure. Vert en local, rouge sur l'arbre publie. */
-  const feuille = () => tranche('function sheetFixedCharges()', 'function focusLast(');
-
-  /* --- « A ma charge » ------------------------------------------------- */
-
-  test('sans partage, à ma charge vaut le montant', () => {
-    poser([{ label: 'Abonnement', amount: 100, period: 'mois' }]);
-    pres(chargeMensuellePersonnelle(un()), 100, '100 € facturés, 100 € à ma charge');
-  });
-
-  test('partagée, à ma charge vaut ce qui reste', () => {
-    poser([{ label: 'Abonnement', amount: 100, period: 'mois', shares: { p1: 40 } }]);
-    pres(chargeMensuellePersonnelle(un()), 60, '100 − 40');
-  });
-
-  test('entièrement payée par l’autre, à ma charge vaut zéro', () => {
-    poser([{ label: 'Abonnement', amount: 100, period: 'mois', shares: { p1: 100 } }]);
-    eq(chargeMensuellePersonnelle(un()), 0, 'et ce zéro est un nombre');
-  });
-
-  test('des parts au-dessus du montant affichent zéro, jamais un négatif', () => {
-    /* LE DEFAUT QUE CETTE PASSE FERME. Le budget comptait deja zero pour cette
-       ligne, mais la liste detaillee lisait `myShareMensuelle` en direct et
-       ecrivait « −20 € a ma charge » juste en dessous. Deux verites sur le meme
-       ecran, et la plus visible etait la fausse. */
-    poser([{ label: 'Abonnement', amount: 100, period: 'mois', shares: { p1: 120 } }]);
-    pres(myShareMensuelle(un()), -20, 'le calcul brut de la part rend bien un négatif');
-    eq(chargeMensuellePersonnelle(un()), 0, 'la porte, elle, plancherait à zéro');
-    pres(fixedTotal(), 0, 'et le budget compte zéro');
-
-    const src = app();
-    const t = src.slice(src.indexOf('<tbody id="chargesTable">'),
-                        src.indexOf('</tbody>', src.indexOf('<tbody id="chargesTable">')));
-    vrai(/fmtEUR\(chargeMensuellePersonnelle\(c\)\)/.test(t),
-      'le tableau affiche la part par la porte');
-    vrai(!/fmtEUR\(myShareMensuelle\(c\)\)/.test(src),
-      'et plus aucun écran ne lit le calcul brut en direct');
-  });
-
-  test('la donnée legacy reste signalée, et n’est jamais migrée', () => {
-    poser([{ label: 'Abonnement', amount: 100, period: 'mois', shares: { p1: 120 } }]);
-    vrai(partageExcessif(un()), 'la contradiction se dit toujours');
-    const dits = JSON.stringify(healthChecks() || []);
-    vrai(/Parts au-dessus du montant/.test(dits), 'le diagnostic la porte');
-    /* Et rien ne la corrige : c'est au detenteur de trancher. */
-    for (const f of [fixedTotal, budgetFrame, sharedTotals]) f();
-    chargeMensuellePersonnelle(un());
-    pres(num(un().amount), 100, 'le montant facturé est intact');
-    pres(shareOf(un(), 'p1'), 120, 'et la part déclarée aussi');
-  });
-
-  /* --- le poids dans les charges --------------------------------------- */
-
-  test('le poids d’une charge se rapporte au total FACTURÉ', () => {
-    /* Le denominateur etait le total du cadre du budget, devenu personnel : une
-       charge de 2 000 EUR partagee moitie-moitie dans un budget de 1 000 EUR
-       s'annoncait a 200 %. Brut sur brut, ou personnel sur personnel, jamais
-       l'un sur l'autre. */
-    poser([{ label: 'A', amount: 2000, period: 'mois' },
-           { label: 'B', amount: 1000, period: 'mois' }]);
-    const st = sharedTotals();
-    pres(st.brut, 3000, 'le total facturé');
-    const poids = c => st.brut ? chargeMensuelle(c) / st.brut * 100 : 0;
-    pres(poids(Store.state.budget.fixedCharges[0]), 200000 / 3000, '66,7 %');
-    pres(poids(Store.state.budget.fixedCharges[1]), 100000 / 3000, '33,3 %');
-    pres(Store.state.budget.fixedCharges.reduce((s, c) => s + poids(c), 0), 100,
-      'et les deux font cent');
-  });
-
-  test('partager une charge ne change pas son poids brut', () => {
-    poser([{ label: 'A', amount: 2000, period: 'mois' },
-           { label: 'B', amount: 1000, period: 'mois' }]);
-    const st1 = sharedTotals();
-    const avant = chargeMensuelle(Store.state.budget.fixedCharges[0]) / st1.brut;
-    poser([{ label: 'A', amount: 2000, period: 'mois', shares: { p1: 1000 } },
-           { label: 'B', amount: 1000, period: 'mois' }]);
-    const st2 = sharedTotals();
-    pres(chargeMensuelle(Store.state.budget.fixedCharges[0]) / st2.brut, avant,
-      'ce qu’elle pèse dans le facturé ne dépend pas de qui la paie');
-    pres(st2.mine, 2000, 'alors que ma part, elle, a changé');
-  });
-
-  test('la colonne ne divise plus par le total personnel', () => {
-    const src = app();
-    const t = src.slice(src.indexOf('<tbody id="chargesTable">'),
-                        src.indexOf('</tbody>', src.indexOf('<tbody id="chargesTable">')));
-    vrai(/st\.brut \? chargeMensuelle\(c\) \/ st\.brut \* 100 : 0/.test(t),
-      'brut sur brut, avec sa garde contre la division par zéro');
-    vrai(!/f\.fixed \? chargeMensuelle\(c\)/.test(src),
-      'l’ancienne division par le total du cadre a disparu');
-  });
-
-  test('un total brut nul ne rend ni NaN ni Infinity', () => {
-    poser([{ label: 'A', amount: 0, period: 'mois' }]);
-    const st = sharedTotals();
-    eq(st.brut, 0, 'rien n’est facturé');
-    const poids = st.brut ? chargeMensuelle(un()) / st.brut * 100 : 0;
-    vrai(Number.isFinite(poids), 'le poids reste un nombre');
-    eq(poids, 0, 'et vaut zéro');
-  });
-
-  /* --- les periodes ----------------------------------------------------- */
-
-  test('trois périodes, un même poids quand le mois est le même', () => {
-    poser([{ label: 'An', amount: 1200, period: 'an' },
-           { label: 'Trimestre', amount: 300, period: 'trimestre' },
-           { label: 'Mois', amount: 100, period: 'mois' }]);
-    const l = Store.state.budget.fixedCharges;
-    pres(chargeMensuelle(l[0]), 100, '1 200 € l’an font 100 € par mois');
-    pres(chargeMensuelle(l[1]), 100, '300 € par trimestre aussi');
-    pres(chargeMensuelle(l[2]), 100, 'et 100 € par mois ne bougent pas');
-    const st = sharedTotals();
-    pres(st.brut, 300, 'le total facturé, ramené au mois');
-    for (const c of l) pres(chargeMensuelle(c) / st.brut * 100, 100 / 3,
-      `« ${c.label} » pèse un tiers`);
-  });
-
-  test('le partage suit la période de sa charge, des deux côtés', () => {
-    poser([{ label: 'Assurance', amount: 1200, period: 'an', shares: { p1: 480 } }]);
-    pres(chargeMensuelle(un()), 100, 'le facturé au mois');
-    pres(chargeMensuellePersonnelle(un()), 60, 'et ma part, 720 € l’an, au mois');
-  });
-
-  /* --- l'export ---------------------------------------------------------- */
-
-  test('l’export ne divise plus un montant natif par un total mensuel', () => {
-    /* Une taxe fonciere de 1 200 EUR l'an sur un budget de 1 000 EUR par mois
-       s'annoncait a 120 %, alors qu'elle pese 100 EUR par mois. */
-    const f = feuille();
-    vrai(f.length > 600, 'la feuille doit être trouvable');
-    vrai(!/num\(c\.amount\) \/ f\.fixed/.test(f), 'l’ancienne division a disparu');
-    vrai(!/budgetFrame\(\)/.test(f), 'et la feuille ne lit plus le cadre du budget');
-    vrai(/const poids = c => st\.brut \? chargeMensuelle\(c\) \/ st\.brut : 0;/.test(f),
-      'le poids se calcule sur des équivalents mensuels, des deux côtés');
-  });
-
-  test('chaque colonne de l’export dit son unité', () => {
-    const f = feuille();
-    for (const entete of ["{ h: 'Montant', t: 'eur'", "{ h: 'Période', t: 'text'",
-                          "{ h: '€ / mois', t: 'eur'", "{ h: '% des charges', t: 'pct'",
-                          "{ h: 'À ma charge / mois', t: 'eur'"]) {
-      vrai(f.includes(entete), `la colonne ${entete.slice(6, 24)} est là`);
-    }
-    vrai(/Part de \$\{p\.name\} \/ mois/.test(f),
-      'les parts de chacun sont mensuelles, et le disent');
-    vrai(/trad\(CHARGE_PERIODE_LABEL\[chargePeriode\(c\)\]\)/.test(f),
-      'la période se lit dans la même table que partout ailleurs');
-  });
-
-  test('l’export respecte le partage, et le plancher à zéro', () => {
-    const f = feuille();
-    vrai(/round2\(shareMensuelle\(c, p\.id\)\)/.test(f),
-      'la part de chacun est mensualisée');
-    vrai(/round2\(chargeMensuellePersonnelle\(c\)\)/.test(f),
-      'et « à ma charge » passe par la porte, donc jamais un négatif');
-    vrai(!/round2\(myShare\(c\)\)/.test(f), 'le calcul brut de la part n’y est plus');
-  });
-
-  test('le montant natif n’a pas de total, les colonnes mensuelles en ont un', () => {
-    /* Additionner une taxe annuelle et un abonnement mensuel rendrait un nombre
-       qui ne veut rien dire. */
-    const f = feuille();
-    vrai(/total: \['Total', null, '', round2\(st\.brut\), st\.brut \? 1 : 0,/.test(f),
-      'le natif se tait, le mensuel totalise, et le pourcentage fait cent');
-    vrai(/round2\(st\.mine\), ''\]/.test(f), 'et « à ma charge » totalise ma part');
-  });
-
-  /* --- ce qui ne bouge pas ---------------------------------------------- */
-
-  test('la vue de partage garde ses trois montants', () => {
-    poser([{ label: 'Crédit', amount: 2000, period: 'mois', shares: { p1: 1000 } }]);
-    const st = sharedTotals();
-    pres(round2(num(un().amount)), 2000, 'le montant facturé');
-    pres(shareOf(un(), 'p1'), 1000, 'la part de l’autre');
-    pres(chargeMensuellePersonnelle(un()), 1000, 'et ce qui reste');
-    pres(st.brut, 2000, 'le total facturé');
-    pres(st.mine, 1000, 'et le total personnel');
-    const src = app();
-    const t = src.slice(src.indexOf('<tbody id="chargesTable">'),
-                        src.indexOf('</tbody>', src.indexOf('<tbody id="chargesTable">')));
-    vrai(/fmtEUR\(num\(c\.amount\)\)/.test(t), 'la colonne « Montant » reste brute');
-    vrai(/fmtEUR\(chargeMensuelle\(c\)\)/.test(t), '« € / mois » aussi');
-  });
-
-  test('les conventions d’E3 tiennent toujours', () => {
-    Fixture.poser(e => {
-      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
-      d.montant = 120000; d.taux = 2; d.mensualite = null;
-      for (const l of e.comptes.find(c => c.id === 'c_immo').lignes) l.usage = 'locative';
-      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
-      e.budget.fixedCharges = [
-        { label: 'Prêt', amount: 2000, period: 'mois', shares: { p1: 800 },
-          creditId: 'd_pret', bienId: 'c_immo' },
-        { label: 'Copropriété', amount: 300, period: 'mois', shares: { p1: 90 },
-          bienId: 'c_immo' }];
-    });
-    pres(mensualiteCredit(etabById('e_bien').dettes[0]), 1200, 'la mensualité reste personnelle');
-    pres(num(etabById('e_bien').dettes[0].montant), 120000, 'la dette reste entière');
-    const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.charges, 210, 'les charges du bien restent personnelles');
-    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'et son coût aussi');
-    pres(fixedTotal(), 1410, 'le budget compte les deux parts');
-    pres(budgetFrame().fixed, fixedTotal(), 'et le cadre lit le même total');
-    eq(cf.fiscalite.source, 'inconnue', 'la fiscalité E1 ne bouge pas');
-    vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
-      .includes('Charges de copropriété non récupérables'),
-      'ni les suggestions E2');
-  });
-
-  test('sans partage déclaré, tout vaut ce qu’il valait avant E3', () => {
-    Fixture.poser(s => {
-      s.budget.fixedCharges = [{ label: 'Assurance', amount: 1200, period: 'an' },
-                               { label: 'Abonnement', amount: 30, period: 'mois' }];
-    });
-    const brut = Store.state.budget.fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0);
-    pres(fixedTotal(), brut, 'le total personnel EST le total brut');
-    pres(sharedTotals().mine, sharedTotals().brut, 'les deux totaux se confondent');
-    const p = patrimoine();
-    pres(round2(p.brut), round2(Fixture.BRUT), 'le patrimoine brut ne bouge pas');
-    pres(round2(p.dettes), round2(Fixture.DETTE), 'ni la dette');
-    pres(round2(p.net), round2(Fixture.BRUT - Fixture.DETTE), 'ni le net');
-  });
-});
-
-suite('Un crédit partagé coûte sa part, mais la dette reste entière', () => {
-
-  /* Le pret du studio, rembourse par une charge partagee moitie-moitie. */
-  const poser = ({ part = 800, sansCharge = false } = {}) => Fixture.poser(e => {
-    e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-    const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
-    d.montant = 120000; d.taux = 2; d.initial = 150000;
-    if (sansCharge) { d.mensualite = 2000; e.budget.fixedCharges = []; return; }
-    d.mensualite = null;
-    e.budget.fixedCharges = [{ label: 'Prêt immobilier', amount: 2000, period: 'mois',
-                               shares: part ? { p1: part } : {}, creditId: 'd_pret' }];
-  });
-  const pret = () => etabById('e_bien').dettes[0];
-
-  test('sans partage, la mensualité ne bouge pas', () => {
-    poser({ part: 0 });
-    pres(mensualiteCredit(pret()), 2000, 'le prélèvement entier');
-  });
-
-  test('sans charge liée, la mensualité notée sur le crédit fait foi', () => {
-    poser({ sansCharge: true });
-    pres(mensualiteCredit(pret()), 2000, 'le repli d’avant, intact');
-  });
-
-  test('partagée, elle vaut la part réellement payée', () => {
-    poser({ part: 800 });
-    pres(mensualiteCredit(pret()), 1200, '2 000 € prélevés, 800 € versés par l’autre');
-  });
-
-  test('la dette, elle, ne se partage jamais', () => {
-    /* Un credit dans Tallya EST la dette personnelle : le capital restant du et
-       le capital emprunte se saisissent deja au niveau du detenteur. Les
-       multiplier par une part de depense les compterait deux fois. */
-    poser({ part: 800 });
-    pres(num(pret().montant), 120000, 'le capital restant dû est celui qu’on a saisi');
-    pres(num(pret().initial), 150000, 'et le capital emprunté aussi');
-    const ligne = creditsEnCours().lignes.find(x => x.id === 'd_pret');
-    pres(ligne.reste, 120000, 'la carte des crédits lit la dette entière');
-    pres(ligne.mensualite, 1200, 'et la mensualité personnelle');
-    pres(dettesTotal(), 120000, 'le total des dettes ne bouge pas d’un centime');
-    pres(round2(patrimoine().dettes), 120000, 'ni celui du patrimoine');
-  });
-
-  test('l’échéancier travaille sur la dette entière et la mensualité personnelle', () => {
-    poser({ part: 800 });
-    const e = echeancierCredit(pret());
-    vrai(e, 'l’échéancier existe');
-    pres(e.interetsDuMois, 120000 * 0.02 / 12, 'les intérêts portent sur la dette entière');
-    pres(e.capitalDuMois, 1200 - assuranceMensuelleCredit(pret()) - 120000 * 0.02 / 12,
-      'et le capital est ce que la mensualité personnelle laisse après eux');
-    const p = projectionCredit(pret());
-    vrai(p, 'la projection aussi');
-  });
-
-  test('la quote-part immobilière ne touche pas la mensualité', () => {
-    /* Deux notions que rien ne doit melanger : la quote-part decoupe la VALEUR
-       du bien, la part de depense decoupe un PRELEVEMENT. */
-    poser({ part: 800 });
-    const c = compteById('c_immo');
-    for (const l of c.lignes) l.part = 50;
-    pres(mensualiteCredit(pret()), 1200, 'toujours 1 200 €');
-    pres(num(pret().montant), 120000, 'et la dette est toujours entière');
-  });
-
-  test('une charge de crédit ne se compte pas deux fois sur le bien', () => {
-    Fixture.poser(e => {
-      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
-      d.montant = 120000; d.taux = 2; d.mensualite = null;
-      for (const l of e.comptes.find(c => c.id === 'c_immo').lignes) l.usage = 'locative';
-      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
-      e.budget.fixedCharges = [{ label: 'Prêt immobilier', amount: 2000, period: 'mois',
-                                 shares: { p1: 800 }, creditId: 'd_pret', bienId: 'c_immo' }];
-    });
-    const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.mensualite, 1200, 'la mensualité personnelle');
-    pres(cf.charges, 0, 'et elle n’est pas comptée une seconde fois en charge');
-    eq(cf.postesCharge.length, 0, 'aucun poste de charge : la seule ligne rembourse le crédit');
-  });
-});
-
-suite('Une fiche de bien montre ce qui sort de ton compte', () => {
-
-  /* Un locatif : 900 de loyer, un credit partage, une copropriete partagee. */
-  const poser = ({ usage = 'locative', partCredit = 800, partCopro = 90 } = {}) =>
-    Fixture.poser(e => {
-      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
-      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
-      d.montant = 120000; d.taux = 2; d.mensualite = null;
-      for (const l of e.comptes.find(c => c.id === 'c_immo').lignes) l.usage = usage;
-      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
-      e.budget.fixedCharges = [
-        { label: 'Prêt immobilier', amount: 2000, period: 'mois',
-          shares: { p1: partCredit }, creditId: 'd_pret', bienId: 'c_immo' },
-        { label: 'Charges de copropriété non récupérables', amount: 300, period: 'mois',
-          shares: { p1: partCopro }, bienId: 'c_immo' },
-      ];
-    });
-
-  test('les charges du bien entrent pour leur part personnelle', () => {
-    poser();
-    const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.charges, 210, '300 € facturés, 90 € versés par l’autre');
-    pres(cf.postesCharge[0].mensuel, 210, 'la ligne affichée porte la part');
-    pres(cf.postesCharge[0].montant, 300, 'et le montant facturé reste lisible à côté');
-  });
-
-  test('la mensualité du bien est la mensualité personnelle', () => {
-    poser();
-    const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.mensualite, 1200, '2 000 € prélevés, 1 200 € à ma charge');
-    pres(cf.cashFlow, 900 - 210 - 1200, 'et le cash-flow s’en déduit');
-  });
-
-  test('le coût mensuel d’une résidence principale est personnel', () => {
-    poser({ usage: 'principale', partCredit: 800, partCopro: 150 });
-    const co = coutBien(compteById('c_immo'));
-    pres(co.mensualite, 1200, 'la part de la mensualité');
-    pres(co.autresCharges, 150, 'la part de la copropriété');
-    pres(co.totalSorties, 1350, '1 350 € sortent vraiment, pas 2 300');
-  });
-
-  test('une résidence secondaire compte pareil', () => {
-    poser({ usage: 'secondaire', partCredit: 800, partCopro: 150 });
-    const co = coutBien(compteById('c_immo'));
-    pres(co.totalSorties, 1350, 'mensualité personnelle plus charges personnelles');
-  });
-
-  test('le capital remboursé reste hors du cash-flow', () => {
-    poser();
-    const cf = cashFlowBien(compteById('c_immo'));
-    const co = coutBien(compteById('c_immo'));
-    pres(cf.cashFlow, cf.loyers - cf.charges - cf.mensualite - num(cf.impot),
-      'le cash-flow est la somme de ses termes, capital non compris');
-    vrai(co.capitalMois > 0, 'le capital du mois existe');
-    vrai(cf.cashFlow !== cf.cashFlow + co.capitalMois, 'et il ne s’y ajoute pas');
-  });
-
-  test('la mensualité n’entre pas dans le rendement, le cash-flow oui', () => {
-    poser();
-    const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.rendementNet, (cf.loyers - cf.charges) * 12 / cf.base * 100,
-      'le rendement net porte sur loyer moins charges, sans le crédit');
-    vrai(cf.mensualite > 0, 'alors que la mensualité existe');
-    vrai(cf.cashFlow < cf.loyers - cf.charges, 'et qu’elle pèse bien sur le cash-flow');
-  });
-
-  test('la quote-part ne divise ni le loyer, ni la charge, ni la dette', () => {
-    /* La quote-part sert au PATRIMOINE. Le loyer saisi est celui qu'on recoit,
-       la charge celle qu'on paie, la dette celle qu'on doit. */
-    poser();
-    const avant = cashFlowBien(compteById('c_immo'));
-    const dette = dettesTotal();
-    for (const l of compteById('c_immo').lignes) l.part = 50;
-    const apres = cashFlowBien(compteById('c_immo'));
-    pres(apres.loyers, avant.loyers, 'le loyer ne bouge pas');
-    pres(apres.charges, avant.charges, 'la charge non plus');
-    pres(apres.mensualite, avant.mensualite, 'ni la mensualité');
-    pres(dettesTotal(), dette, 'ni la dette');
-    /* Elle agit, en revanche, la ou c'est son role : la valeur detenue. */
-    vrai(lignesDe(compteById('c_immo'))[0].valeur < lignesDe(compteById('c_immo'))[0].valeurEntiere,
-      'seule la valeur patrimoniale suit la quote-part');
-  });
-});
-
-/* Deux phrases, deux endroits, et pas une de plus : la convention se dit la ou
-   elle se joue. */
-suite('La convention personnelle se dit là où elle se joue', () => {
-
-  const app = () => lireSource('assets/app.js');
-
-  test('la fiche d’un bien dit que ses montants sont personnels, et seulement si ça sert', () => {
-    /* Chez qui ne partage rien, la phrase enoncerait une evidence. Chez qui
-       partage, un ecart avec l'avis de copropriete se lirait sinon comme une
-       erreur de l'application. */
-    const src = app();
-    const i = src.indexOf('function ligneCharges(');
-    const fn = src.slice(i, src.indexOf('\nfunction ', i + 1));
-    vrai(fn.length > 300, 'la ligne des charges doit être trouvable');
-    vrai(/const perso = !contributors\(\)\.length \? '' :/.test(fn),
-      'la phrase ne paraît qu’en présence de quelqu’un qui partage');
-    vrai(/ce qui reste réellement à ta charge/.test(fn), 'et elle le dit');
-    vrai(/aideTxt: perso/.test(fn), 'à une seule charge, elle est portée par la ligne');
-    vrai(/aideSuite: perso/.test(fn), 'à plusieurs, elle suit l’aide du total');
-  });
-
-  test('la seconde phrase d’une aide est traduite à part', () => {
-    /* Concatener avant `trad()` ferait chercher une clef qui n'existe pas, et
-       l'interface anglaise afficherait du francais. */
-    const src = app();
-    const i = src.indexOf('function ligneTotal(');
-    const fn = src.slice(i, src.indexOf('\nfunction ', i + 1));
-    vrai(/aideSuite = ''/.test(fn), 'le paramètre existe, et il est facultatif');
-    vrai(/aide\(trad\(aideTxt\) \+ \(aideSuite \? /.test(fn),
-      'la traduction s’applique à la première phrase, la seconde arrive déjà traduite');
-    const dico = lireSource('assets/i18n.js');
-    vrai(dico.includes('"Les montants de cette fiche sont ce qui reste réellement à ta charge'),
-      'et la seconde a bien sa clef');
-  });
-
-  test('la dette se saisit personnelle, et le champ le dit', () => {
-    /* La convention du credit : le prelevement se partage, la dette non. Elle se
-       dit au moment ou l'on tape le chiffre, une fois. */
-    const src = app();
-    const f = src.slice(src.indexOf("async 'ajouter-credit'(btn)"),
-                        src.indexOf("async 'modifier-credit'") > 0
-                          ? src.indexOf("async 'modifier-credit'")
-                          : src.indexOf("async 'ajouter-credit'(btn)") + 4000);
-    vrai(/Capital restant dû/.test(f), 'le champ de la dette doit être trouvable');
-    vrai(/la dette réellement à ta charge/.test(f), 'il porte la convention');
-    vrai(/jamais la dette qui se divise/.test(f), 'et dit ce que le partage ne fait pas');
-  });
-});
-
-/* E4 : de locataire a proprietaire, sans laisser le loyer et la mensualite
-   s'additionner dans le dos. */
-/* E5 : la finition. Ce que la fiche dit, dans quel ordre, et ce qu'elle a
-   cesse de dire. */
-/* Le parcours de creation, mis au niveau de ce que le moteur sait deja faire. */
 suite('Créer un bien ne laisse plus passer une réponse sans suite', () => {
 
   const app = () => lireSource('assets/app.js');
@@ -10104,12 +9476,12 @@ suite('Créer un bien ne laisse plus passer une réponse sans suite', () => {
     eq(cf.fiscalite.source, 'inconnue', 'E1');
     vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
       .includes('Charges de copropriété non récupérables'), 'E2');
-    pres(cf.charges, 210, 'E3, charges');
-    pres(cf.mensualite, 1200, 'E3, mensualité');
-    pres(sharedTotals().brut, 2300, 'E3.1');
+    pres(cf.charges, 300, 'les charges valent ce qui est débité');
+    pres(cf.mensualite, 2000, 'la mensualité aussi');
+    pres(fixedTotal(), 2300, 'le total des charges fixes');
     eq(loyersCourantsProbables().length, 0, 'E4');
-    pres(cf.cashFlowAvantImpot, 900 - 210 - 1200, 'E5, la cascade');
-    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'et le coût personnel');
+    pres(cf.cashFlowAvantImpot, 900 - 300 - 2000, 'E5, la cascade');
+    pres(coutBien(compteById('c_immo')).totalSorties, 2300, 'et le coût du bien');
   });
 });
 
@@ -10358,12 +9730,12 @@ suite('La fiche d’un bien se lit dans l’ordre où l’argent sort', () => {
     eq(cf.impot, null, 'et aucun impôt inventé');
     vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
       .includes('Charges de copropriété non récupérables'), 'E2 : les suggestions');
-    pres(cf.charges, 210, 'E3 : charges personnelles');
-    pres(cf.mensualite, 1200, 'E3 : mensualité personnelle');
+    pres(cf.charges, 300, 'les charges valent ce qui est débité');
+    pres(cf.mensualite, 2000, 'la mensualité aussi');
     pres(num(etabById('e_bien').dettes[0].montant), 120000, 'la dette reste entière');
-    pres(sharedTotals().brut, 2300, 'E3.1 : le total facturé');
+    pres(fixedTotal(), 2300, 'le total des charges fixes les additionne');
     eq(loyersCourantsProbables().length, 0, 'E4 : aucune de ces charges n’est un loyer');
-    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'et le coût reste personnel');
+    pres(coutBien(compteById('c_immo')).totalSorties, 2300, 'et le coût du bien aussi');
   });
 });
 
@@ -10412,17 +9784,21 @@ suite('Un loyer qu’on paie encore se reconnaît, prudemment', () => {
     eq(noms(), '', 'une mensualité et une charge de propriétaire n’en sont pas');
   });
 
-  test('un loyer entièrement payé par quelqu’un d’autre ne dérange pas', () => {
-    poser([{ label: 'Loyer', amount: 1500, period: 'mois', shares: { p1: 1500 } }]);
-    eq(noms(), '', 'il ne coûte rien : il ne crée pas le double coût qu’on prévient');
-  });
-
-  test('un loyer partagé se présente pour ce qu’il coûte', () => {
+  test('un loyer se présente pour ce qui est débité', () => {
+    /* Les parts d'une autre personne ne le reduisent plus : ce sont bien
+       2 000 EUR qui sortent du compte, et c'est ce double cout-la qu'on
+       previent en changeant de logement. */
     poser([{ label: 'Loyer', amount: 2000, period: 'mois', shares: { p1: 800 } }]);
     const l = loyersCourantsProbables();
     eq(l.length, 1, 'il est proposé');
-    pres(l[0].mensuel, 1200, 'pour 1 200 €, pas 2 000');
-    pres(num(l[0].c.amount), 2000, 'et son montant facturé reste lisible à côté');
+    pres(l[0].mensuel, 2000, 'pour 2 000 €, le prélèvement entier');
+    pres(num(l[0].c.amount), 2000, 'qui est aussi son montant facturé');
+  });
+
+  test('un loyer à zéro ne se propose pas', () => {
+    /* Une ligne a zero ne coute rien, et rien ne se propose pour elle. */
+    poser([{ label: 'Loyer', amount: 0, period: 'mois' }]);
+    eq(noms(), '', 'aucun candidat');
   });
 
   test('la quote-part d’un bien ne touche pas au montant du loyer', () => {
@@ -10601,19 +9977,18 @@ suite('La transition vers la résidence principale demande, elle ne décide pas'
     pres(budgetFrame().fixed, fixedTotal(), 'le cadre lit le même total');
   });
 
-  test('retirer un loyer ne touche ni aux personnes ni aux autres partages', () => {
+  test('retirer un loyer ne touche à aucune autre ligne', () => {
     Fixture.poser(e => {
-      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
       e.budget.fixedCharges = [
-        { label: 'Loyer', amount: 2000, period: 'mois', shares: { p1: 800 } },
-        { label: 'Internet', amount: 40, period: 'mois', shares: { p1: 20 } }];
+        { label: 'Loyer', amount: 2000, period: 'mois' },
+        { label: 'Internet', amount: 40, period: 'mois' }];
     });
     const cible = loyersCourantsProbables()[0];
-    pres(cible.mensuel, 1200, 'la fenêtre annonce 1 200 € à ma charge');
+    pres(cible.mensuel, 2000, 'la fenêtre annonce ce qui est débité');
     Store.state.budget.fixedCharges.splice(cible.i, 1);
-    eq(contributors().length, 1, 'la personne reste disponible pour les autres charges');
-    pres(shareOf(Store.state.budget.fixedCharges[0], 'p1'), 20, 'et sa part sur elles aussi');
-    pres(fixedTotal(), 20, 'le budget ne compte plus que ma part de l’internet');
+    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' | '), 'Internet',
+      'seule la ligne visée est partie');
+    pres(fixedTotal(), 40, 'et le budget ne compte plus que l’internet');
   });
 
   test('deux loyers : en retirer un laisse l’autre', () => {
@@ -10665,17 +10040,15 @@ suite('La transition vers la résidence principale demande, elle ne décide pas'
           bienId: 'c_immo' }];
     });
     eq(loyersCourantsProbables().length, 0, 'aucune de ces deux charges n’est un loyer');
-    pres(mensualiteCredit(etabById('e_bien').dettes[0]), 1200, 'E3 : mensualité personnelle');
+    pres(mensualiteCredit(etabById('e_bien').dettes[0]), 2000, 'la mensualité débitée');
     pres(num(etabById('e_bien').dettes[0].montant), 120000, 'la dette reste entière');
     const cf = cashFlowBien(compteById('c_immo'));
-    pres(cf.charges, 210, 'E3 : charges personnelles');
-    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'E3 : coût personnel');
+    pres(cf.charges, 300, 'les charges débitées');
+    pres(coutBien(compteById('c_immo')).totalSorties, 2300, 'et le coût du bien');
     eq(cf.fiscalite.source, 'inconnue', 'E1 : la fiscalité garde son troisième état');
     vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
       .includes('Charges de copropriété non récupérables'), 'E2 : les suggestions tiennent');
-    const st = sharedTotals();
-    pres(st.brut, 2300, 'E3.1 : le total facturé');
-    pres(st.mine, fixedTotal(), 'et le total personnel');
+    pres(fixedTotal(), 2300, 'le total des charges fixes les additionne');
   });
 });
 
@@ -10785,9 +10158,9 @@ suite('« Rent guarantee insurance » n’est pas un loyer', () => {
         { label: 'Rent guarantee insurance', amount: 40, period: 'mois' }];
     });
     const l = loyersCourantsProbables();
-    eq(l.map(x => x.c.label).join(' | '), 'Loyer Paris | Loyer studio',
-      'deux candidats : ni celui qui ne coûte rien, ni la garantie');
-    pres(l[0].mensuel, 1200, 'et le premier s’annonce pour sa part personnelle');
+    eq(l.map(x => x.c.label).join(' | '), 'Loyer Paris | Loyer studio | Loyer payé par l’autre',
+      'trois candidats : la garantie reste dehors, les loyers entrent tous');
+    pres(l[0].mensuel, 2000, 'et le premier s’annonce pour ce qui est débité');
 
     const moisAvant = JSON.stringify(Store.state.monthly);
     const depAvant = JSON.stringify(Store.state.budget.expenses || []);
@@ -10796,11 +10169,142 @@ suite('« Rent guarantee insurance » n’est pas un loyer', () => {
     eq(Store.state.budget.fixedCharges.map(c => c.label).join(' | '),
       'Loyer Paris | Loyer payé par l’autre | Rent guarantee insurance',
       'les autres lignes restent');
-    eq(contributors().length, 1, 'la personne qui partage aussi');
+    eq((Store.state.budget.contributors || []).length, 1,
+      'la donnee de partage n’est pas effacée pour autant');
     eq(JSON.stringify(Store.state.monthly), moisAvant, 'les relevés sont intacts');
     eq(JSON.stringify(Store.state.budget.expenses || []), depAvant, 'les dépenses aussi');
     pres(round2(patrimoine().brut), brut, 'le patrimoine ne bouge pas');
     pres(round2(patrimoine().dettes), dette, 'ni la dette');
+  });
+});
+
+/* UNE CHARGE FIXE VAUT CE QUI EST DEBITE. La convention d'avant retranchait ce
+   qu'une autre personne reverse, alors que cette somme arrive deja par les
+   revenus : elle etait comptee deux fois, en plus a l'entree et en moins a la
+   sortie. */
+suite('Une charge fixe vaut ce qui sort du compte', () => {
+
+  const poser = (charges, revenus) => Fixture.poser(e => {
+    e.budget.income = revenus;
+    e.budget.fixedCharges = charges;
+  });
+
+  test('un loyer partagé compte pour son montant entier', () => {
+    /* LE CAS REEL. 1 890 EUR sortent du compte ; la personne qui partage en
+       reverse 945 separement, et ce versement est saisi en entree. */
+    poser([{ label: 'Loyer', amount: 1890, period: 'mois', shares: { p1: 945 } }],
+          [{ label: 'Salaire', amount: 4500, period: 'mois' },
+           { label: 'Contribution', amount: 945, period: 'mois' }]);
+    pres(fixedTotal(), 1890, 'la charge vaut ce qui est débité');
+    pres(incomeTotal(), 5445, 'et la contribution entre du côté des entrées');
+    pres(budgetFrame().available, 5445 - 1890, 'le solde tient les deux mouvements');
+    pres(budgetFrame().available - 4500, -945, 'soit un impact net de −945 €');
+  });
+
+  test('trois charges se somment sans aucune réduction', () => {
+    poser([{ label: 'Loyer', amount: 1890, period: 'mois', shares: { p1: 945 } },
+           { label: 'Assurance', amount: 60, period: 'mois', shares: { p1: 30 } },
+           { label: 'Abonnement', amount: 30, period: 'mois' }],
+          [{ label: 'Salaire', amount: 4500, period: 'mois' }]);
+    pres(fixedTotal(), 1980, '1 890 + 60 + 30');
+    pres(budgetFrame().fixed, 1980, 'et le cadre du budget lit le même total');
+    pres(budgetFrame().fixed * 12, 1980 * 12, 'les douze mois suivent');
+  });
+
+  test('une contribution ajoutée aux entrées ne touche pas aux charges', () => {
+    poser([{ label: 'Loyer', amount: 1890, period: 'mois' }],
+          [{ label: 'Salaire', amount: 4500, period: 'mois' }]);
+    const avant = round2(fixedTotal());
+    Store.state.budget.income.push({ label: 'Contribution', amount: 500, period: 'mois' });
+    pres(incomeTotal(), 5000, 'les entrées montent de 500 €');
+    pres(fixedTotal(), avant, 'et les charges ne bougent pas d’un centime');
+  });
+
+  test('rien ne déduit deux fois une contribution', () => {
+    /* La preuve par la comparaison : avec et sans parts declarees sur la charge,
+       le budget doit rendre exactement le meme solde. */
+    const solde = () => round2(budgetFrame().available);
+    poser([{ label: 'Loyer', amount: 1890, period: 'mois' }],
+          [{ label: 'Salaire', amount: 4500, period: 'mois' },
+           { label: 'Contribution', amount: 945, period: 'mois' }]);
+    const sans = solde();
+    poser([{ label: 'Loyer', amount: 1890, period: 'mois', shares: { p1: 945 } }],
+          [{ label: 'Salaire', amount: 4500, period: 'mois' },
+           { label: 'Contribution', amount: 945, period: 'mois' }]);
+    pres(solde(), sans, 'des parts déclarées ne changent plus rien au solde');
+    pres(sans, 3555, 'et il vaut 5 445 − 1 890');
+  });
+
+  test('les périodes se ramènent au mois, sans partage à retirer', () => {
+    poser([{ label: 'Assurance', amount: 1200, period: 'an', shares: { p1: 480 } },
+           { label: 'Copropriété', amount: 600, period: 'trimestre' }],
+          [{ label: 'Salaire', amount: 4500, period: 'mois' }]);
+    pres(fixedTotal(), 100 + 200, '1 200 € l’an et 600 € par trimestre, au mois');
+  });
+
+  test('la mensualité d’un crédit vaut le prélèvement entier', () => {
+    Fixture.poser(e => {
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = null;
+      e.budget.fixedCharges = [{ label: 'Prêt', amount: 2000, period: 'mois',
+                                 shares: { p1: 800 }, creditId: 'd_pret' }];
+    });
+    pres(mensualiteCredit(etabById('e_bien').dettes[0]), 2000,
+      'c’est ce qui est prélevé, pas ce qui reste après remboursement');
+    pres(num(etabById('e_bien').dettes[0].montant), 120000, 'et la dette ne bouge pas');
+  });
+
+  test('un bien compte ses charges et sa mensualité entières', () => {
+    Fixture.poser(e => {
+      const c = e.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) l.usage = 'locative';
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = null;
+      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
+      e.budget.fixedCharges = [
+        { label: 'Prêt', amount: 2000, period: 'mois', shares: { p1: 800 },
+          creditId: 'd_pret', bienId: 'c_immo' },
+        { label: 'Copropriété', amount: 300, period: 'mois', shares: { p1: 90 },
+          bienId: 'c_immo' }];
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.charges, 300, 'la charge vaut ce qui est débité');
+    pres(cf.mensualite, 2000, 'la mensualité aussi');
+    pres(coutBien(compteById('c_immo')).totalSorties, 2300, 'et le coût du bien les additionne');
+    pres(cf.cashFlow, 900 - 300 - 2000, 'le cash-flow s’en déduit');
+  });
+
+  test('le partage a quitté les calculs et l’écran', () => {
+    const store = lireSource('assets/store.js');
+    const app = lireSource('assets/app.js');
+    const code = s => s.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    for (const mort of ['chargeMensuellePersonnelle', 'myShareMensuelle', 'sharedTotals',
+                        'partageExcessif', 'shareOf', 'sharedOn', 'fixedSharePK']) {
+      vrai(!code(store).includes(mort), `« ${mort} » n’est plus dans store.js`);
+      vrai(!code(app).includes(mort), `ni dans app.js`);
+    }
+    vrai(!/add-contributor|del-contributor/.test(code(app)),
+      'et les personnes ne se gèrent plus');
+    vrai(/reduce\(\(s, c\) => s \+ chargeMensuelle\(c\), 0\)/.test(store),
+      'le total des charges somme les montants débités');
+  });
+
+  test('les données de partage ne sont pas effacées', () => {
+    /* Personne ne peut savoir ce qu'elles voulaient dire : une donnee qu'on ne
+       sait pas relire ne se detruit pas. Plus rien ne la lit, voila tout. */
+    Fixture.poser(e => {
+      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+      e.budget.fixedCharges = [{ label: 'Loyer', amount: 1890, period: 'mois',
+                                 shares: { p1: 945 } }];
+    });
+    const avant = JSON.stringify(Store.state.budget);
+    fixedTotal(); budgetFrame(); healthChecks();
+    eq(JSON.stringify(Store.state.budget), avant, 'lire ne réécrit rien');
+    eq(Store.state.budget.fixedCharges[0].shares.p1, 945, 'la part reste dans le fichier');
+    eq(Store.state.budget.contributors.length, 1, 'et la personne aussi');
+    const store = lireSource('assets/store.js');
+    vrai(/if \(!Array\.isArray\(s\.budget\.contributors\)\)/.test(store),
+      'la migration d’origine n’est pas défaite');
   });
 });
 
@@ -10887,71 +10391,6 @@ suite('Les postes proposés suivent l’usage du bien', () => {
       'la ligne existante garde son libellé');
     const store = lireSource('assets/store.js');
     vrai(!/\.label = .*non récupérables/.test(store), 'et rien ne le réécrit');
-  });
-});
-
-suite('E2 et E3 ne changent rien sans partage déclaré', () => {
-
-  /* L'invariant majeur : la fixture n'a aucun contributeur, donc tout doit
-     valoir ce que les etapes A a E1 ont fige. */
-  const mesures = () => {
-    const p = patrimoine();
-    const cf = cashFlowBien(compteById('c_immo'));
-    return {
-      brut: round2(p.brut), net: round2(p.net), dettes: round2(p.dettes),
-      fixes: round2(fixedTotal()), reste: round2(budgetFrame().available),
-      mensualite: round2(cashFlowBien(compteById('c_immo')).mensualite),
-      charges: round2(cf.charges), fiscalite: cf.fiscalite.source, impot: cf.impot,
-      habite: round2(poches().mobilisable.habite),
-    };
-  };
-
-  test('aucun contributeur : chaque agrégat garde sa valeur', () => {
-    Fixture.poser(s => {
-      for (const l of s.comptes.find(c => c.id === 'c_immo').lignes) l.usage = 'locative';
-      s.budget.income.push({ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' });
-      s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 1200, period: 'an',
-                                   bienId: 'c_immo' });
-    });
-    eq((Store.state.budget.contributors || []).length, 0, 'personne ne partage');
-    const m = mesures();
-    /* Les memes nombres, calcules a la main : la part personnelle d'une charge
-       sans partage EST son montant. */
-    pres(m.charges, 100, '1 200 € l’an font 100 € par mois, sans partage');
-    pres(m.fixes, round2(Store.state.budget.fixedCharges
-      .reduce((s, c) => s + chargeMensuelle(c), 0)),
-      'le total des charges fixes vaut la somme des montants bruts');
-    eq(m.fiscalite, 'inconnue', 'la fiscalité E1 reste dans son troisième état');
-    eq(m.impot, null, 'et l’impôt n’est pas inventé');
-  });
-
-  test('une quote-part invalide reste écartée, et le logement habité aussi', () => {
-    Fixture.poser(s => {
-      const c = s.comptes.find(x => x.id === 'c_immo');
-      for (const l of c.lignes) { l.usage = 'principale'; l.part = 150; }
-    });
-    eq(lotsPartInvalide().length, 1, 'le lot invalide est signalé');
-    eq(partDetention({ part: 150 }), null, 'et sa part n’a pas de valeur');
-    Fixture.poser(s => {
-      for (const l of s.comptes.find(x => x.id === 'c_immo').lignes) l.usage = 'principale';
-    });
-    vrai(poches().mobilisable.habite > 0,
-      'un logement qu’on habite reste hors des actifs mobilisables');
-  });
-
-  test('l’acquisition et les rattachements ne bougent pas', () => {
-    Fixture.poser(s => {
-      const l = s.comptes.find(c => c.id === 'c_immo').lignes[0];
-      l.prixAchat = 100000; l.fraisAcquisition = 8000; l.travauxInitiaux = 2000;
-      s.budget.fixedCharges.push({ label: 'Taxe foncière', amount: 1200, period: 'an',
-                                   bienId: 'c_immo', creditId: null });
-    });
-    const a = acquisitionLigne(compteById('c_immo').lignes[0]);
-    eq(a.source, 'detail', 'le détail fait le coût');
-    pres(a.total, 110000, 'et il vaut la somme de ses trois parts');
-    const c = Store.state.budget.fixedCharges.find(x => x.bienId === 'c_immo');
-    eq(c.bienId, 'c_immo', 'le rattachement au bien tient');
-    eq(c.creditId, null, 'et celui au crédit aussi');
   });
 });
 
