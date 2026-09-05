@@ -5930,8 +5930,7 @@ function viewBudget(section = 'depenses') {
           second: '',
         })}`).join('')}
         <dl class="kv repart-pied">
-          <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
-          ${gens.length ? `<dt><b>${trad('À ma charge')}</b></dt><dd><b>${fmtEUR(st.mine)}</b></dd>` : ''}
+          <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(brut)}</dd>
         </dl>
       </div>
       </div>

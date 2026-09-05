@@ -10308,6 +10308,32 @@ suite('Une charge fixe vaut ce qui sort du compte', () => {
       'et les personnes ne se gèrent plus');
     vrai(/reduce\(\(s, c\) => s \+ chargeMensuelle\(c\), 0\)/.test(store),
       'le total des charges somme les montants débités');
+
+    /* ET AUCUN LECTEUR NE SURVIT AU PRODUCTEUR RETIRE.
+
+       Le contrôle ci-dessus nommait les fonctions supprimées, et il passait :
+       le pied de la liste des charges ne les appelait pas, il lisait le RÉSULTAT
+       de l'une d'elles à travers une variable locale. Ce reste levait une
+       exception à chaque rendu, la carte entière disparaissait, et son bouton
+       « + Ligne » avec elle. Rien ne l'a signalé : le harnais ne rend aucune vue,
+       il lit `app.js` comme du texte.
+
+       Les champs sont ceux que la table de partage produisait, donc la liste est
+       close par construction : la fonction n'existe plus, elle n’en produira
+       jamais un de plus. */
+    for (const champ of ['st.mine', 'st.partage', 'st.parPersonne', 'gens.length']) {
+      vrai(!code(app).includes(champ),
+        `« ${champ} » est encore lu : le producteur est parti, pas son lecteur`);
+    }
+    /* Et le pied de la liste somme ce qu'elle affiche, comme celui du tableau. */
+    const carte = code(app).slice(code(app).indexOf('data-anchor="charges"'),
+                                  code(app).indexOf('id="chargesTable"'));
+    vrai(carte.length > 200, 'la carte des charges doit se relire depuis sa source');
+    vrai(/<dt>\$\{trad\('Total \/ mois'\)\}<\/dt><dd>\$\{fmtEUR\(brut\)\}<\/dd>/.test(carte),
+      'le pied de la liste totalise les lignes affichées, par la même variable '
+      + 'que le pied du tableau');
+    vrai(/const brut = b\.fixedCharges\.reduce/.test(carte),
+      'et cette variable est bien déclarée dans la carte');
   });
 
   test('les données de partage ne sont pas effacées', () => {
