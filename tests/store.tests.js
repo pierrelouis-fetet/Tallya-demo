@@ -9888,6 +9888,262 @@ suite('La convention personnelle se dit là où elle se joue', () => {
 
 /* E4 : de locataire a proprietaire, sans laisser le loyer et la mensualite
    s'additionner dans le dos. */
+/* E5 : la finition. Ce que la fiche dit, dans quel ordre, et ce qu'elle a
+   cesse de dire. */
+suite('La fiche d’un bien se lit dans l’ordre où l’argent sort', () => {
+
+  const app = () => lireSource('assets/app.js');
+  /* Les bornes sont du CODE : une banniere de commentaire disparait sur l'arbre
+     publie, et la tranche courrait bien au-dela. */
+  const bloc = (nom, fin) => { const s = app(); const i = s.indexOf(`function ${nom}(`);
+    return s.slice(i, s.indexOf(`function ${fin}(`, i)); };
+
+  const bien = ({ loyer = 900, charges = 150, mensualite = 500,
+                  moisLoues = 12, fisc = null, usage = 'locative' } = {}) =>
+    Fixture.poser(e => {
+      const c = e.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) l.usage = usage;
+      c.moisLoues = moisLoues;
+      if (fisc !== null) c.fiscaliteEstimeeAnnuelle = fisc;
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = mensualite || null;
+      e.budget.income = loyer
+        ? [{ label: 'Loyer', amount: loyer, period: 'mois', bienId: 'c_immo' }] : [];
+      e.budget.fixedCharges = charges
+        ? [{ label: 'Taxe foncière', amount: charges, period: 'mois', bienId: 'c_immo' }] : [];
+    });
+
+  /* --- la cascade ------------------------------------------------------- */
+
+  test('la cascade suit l’ordre où l’argent sort', () => {
+    /* Loyer, charges, credit, puis l'impot. La fiscalite se posait AVANT la
+       mensualite : elle s'y lisait comme une charge du bien, alors qu'elle porte
+       sur ce que le bien degage — et le sous-total qui la precede n'existait
+       nulle part. */
+    const f = bloc('lignesDuMois', 'ligneFiscalite');
+    const iCharges = f.indexOf('ligneCharges(cf, -1)');
+    const iMens = f.indexOf('ligneMensualite(cf, -1)');
+    const iFisc = f.indexOf('ligneFiscalite(cf)');
+    vrai(iCharges > 0 && iMens > iCharges, 'les charges précèdent la mensualité');
+    vrai(iFisc > iMens, 'et la fiscalité vient après le crédit, en dernier');
+  });
+
+  test('le sous-total d’avant fiscalité ne paraît que si elle est connue', () => {
+    /* Sinon il EST le chiffre de tete deux lignes plus bas : l'ecrire deux fois
+       est la meilleure facon de faire douter des deux. Meme regle que
+       « Loyer retenu », qui ne parait qu'en presence d'une vacance. */
+    const f = bloc('lignesDuMois', 'ligneFiscalite');
+    vrai(/\.\.\.\(cf\.fiscalite\.source === 'inconnue' \? \[\] : \[`/.test(f),
+      'la ligne est conditionnée à l’état de la fiscalité');
+    vrai(/<dt class="kv-sous">\$\{trad\('Cash-flow avant fiscalité'\)\}/.test(f),
+      'et c’est un sous-total, pas un terme de plus');
+    vrai(/fmtSigned\(cf\.cashFlowAvantImpot\)/.test(f),
+      'il lit le montant que le modèle calcule déjà');
+  });
+
+  test('le chiffre de tête dit s’il est avant ou après la fiscalité', () => {
+    const carte = bloc('carteLocatif', 'lignesDuMois');
+    vrai(/\? trad\('Cash-flow avant fiscalité'\) : trad\('Cash-flow après fiscalité'\)/.test(carte),
+      'les deux noms existent, et l’état tranche');
+    vrai(!/trad\('Cash-flow'\)/.test(carte), 'le nom nu, qui ne disait pas lequel, est parti');
+    bien({ fisc: null });
+    eq(cashFlowBien(compteById('c_immo')).fiscalite.source, 'inconnue',
+      'sans fiscalité déclarée, l’état est inconnu');
+    bien({ fisc: 1200 });
+    eq(cashFlowBien(compteById('c_immo')).fiscalite.source, 'declaree',
+      'et déclaré quand un montant annuel existe');
+    bien({ fisc: 0 });
+    eq(cashFlowBien(compteById('c_immo')).fiscalite.source, 'declaree',
+      'zéro déclaré est une fiscalité connue, pas une absence');
+  });
+
+  test('la vacance ne s’affiche que si elle existe', () => {
+    const f = bloc('lignesDuMois', 'ligneFiscalite');
+    vrai(/const vacance = cf\.vacanceEuros > 0\.005;/.test(f), 'la cascade la mesure');
+    vrai(/!vacance \? cf\.sourcesLoyer\.map/.test(f),
+      'et se réduit à la seule ligne de loyer quand il n’y en a pas');
+    bien({ moisLoues: 12 });
+    pres(cashFlowBien(compteById('c_immo')).vacanceEuros, 0, 'douze mois loués : rien à retirer');
+    bien({ moisLoues: 11 });
+    vrai(cashFlowBien(compteById('c_immo')).vacanceEuros > 0, 'onze mois : la vacance existe');
+  });
+
+  /* --- les rendements --------------------------------------------------- */
+
+  test('trois rendements, et le crédit n’entre dans aucun', () => {
+    bien({ loyer: 900, charges: 150, mensualite: 500, fisc: 1200 });
+    const x = cashFlowBien(compteById('c_immo'));
+    pres(x.rendementBrut, x.loyers * 12 / x.base * 100, 'le brut : le loyer sur la base');
+    pres(x.rendementNet, (x.loyers - x.charges) * 12 / x.base * 100,
+      'le net : moins les charges, jamais moins le crédit');
+    pres(x.rendementNetNet, (x.loyers - x.charges - x.impot) * 12 / x.base * 100,
+      'et le troisième, moins la fiscalité');
+    vrai(x.mensualite > 0, 'alors que la mensualité existe');
+    vrai(x.cashFlow < x.loyers - x.charges, 'et pèse bien sur le cash-flow');
+  });
+
+  test('sans fiscalité connue, le troisième rendement n’existe pas', () => {
+    bien({ fisc: null });
+    eq(cashFlowBien(compteById('c_immo')).rendementNetNet, null, 'rien n’est inventé');
+    const carte = bloc('carteLocatif', 'lignesDuMois');
+    vrai(/cf\.rendementNetNet == null \? '' :/.test(carte), 'et la ligne ne se rend pas');
+  });
+
+  test('sans base, aucun pourcentage n’est écrit à sa place', () => {
+    Fixture.poser(e => {
+      const c = e.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) { l.usage = 'locative'; l.valeur = 0; delete l.prixDeRevient;
+        delete l.prixAchat; delete l.fraisAcquisition; delete l.travauxInitiaux; }
+      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
+    });
+    eq(cashFlowBien(compteById('c_immo')).rendementBrut, null, 'la base manque');
+    const l = bloc('ligneRendement', 'carteResidence');
+    vrai(/Base à renseigner/.test(l), 'et l’écran le dit au lieu d’écrire zéro');
+  });
+
+  /* --- le logement ------------------------------------------------------ */
+
+  test('un logement dit ce qui sort, et rien d’une rentabilité', () => {
+    const carte = bloc('carteResidence', 'carteLocatif');
+    vrai(/trad\('À ta charge'\)/.test(carte), 'le montant central est ce qui reste à ta charge');
+    vrai(/ligneCharges\(cf, 0, 'Autres charges'\)/.test(carte),
+      'et ses charges ne se disent pas « propriétaire »');
+    for (const absent of ['Rendement', 'Cash-flow', 'cashFlow', 'rendementBrut',
+                          'Fiscalité estimée', 'ligneFiscalite']) {
+      vrai(!carte.includes(absent), `« ${absent} » n’a rien à faire sur un logement`);
+    }
+    vrai(/blocCapitalRembourse\(co\)/.test(carte), 'le capital remboursé, lui, reste');
+  });
+
+  test('le capital remboursé reste séparé, sur les deux cartes', () => {
+    bien({ usage: 'principale', mensualite: 500 });
+    const co = coutBien(compteById('c_immo'));
+    vrai(co.capitalMois > 0, 'du capital se rembourse');
+    pres(co.totalSorties, co.mensualite + co.autresCharges,
+      'et il n’entre pas dans ce qui sort du compte');
+    const b = bloc('blocCapitalRembourse', 'noteVentilation');
+    vrai(/Capital remboursé ce mois/.test(b), 'il porte son nom');
+    vrai(!/Gain total|Profit|cashFlow \+/.test(b), 'et ne s’additionne à aucun flux');
+  });
+
+  /* --- ce que la finition a retire -------------------------------------- */
+
+  test('le rendement sur apport a quitté la carte, pas le modèle', () => {
+    /* Quatre pourcentages sous une cascade de sept lignes font une carte qu'on
+       ne parcourt plus, et celui-la repondait a une question d'investisseur
+       quand les trois autres decrivent le bien. */
+    const carte = bloc('carteLocatif', 'lignesDuMois');
+    vrai(!/Rendement sur apport/.test(carte), 'il n’est plus affiché');
+    vrai(!/cashOnCash/.test(carte), 'ni calculé dans la vue');
+    bien({ loyer: 900 });
+    Store.state.comptes.find(c => c.id === 'c_immo').apport = 30000;
+    vrai(cashFlowBien(compteById('c_immo')).cashOnCash !== undefined,
+      'le modèle le calcule toujours : rien n’est perdu');
+  });
+
+  test('les réglages disent qu’ils sont des réglages', () => {
+    const f = bloc('reglagesExploitation', 'boutonsRattachement');
+    vrai(/Paramètres locatifs/.test(f), 'un intitulé les sépare des montants');
+    vrai(/sous-titre-carte/.test(f), 'avec le style des sous-titres de carte');
+    vrai(/comptes\.\$\{idx\}\.moisLoues/.test(f) && /fiscaliteEstimeeAnnuelle/.test(f),
+      'et les champs sont toujours là');
+  });
+
+  test('la mensualité porte un nom court, le détail reste dans Financement', () => {
+    const f = bloc('ligneMensualite', 'blocCapitalRembourse');
+    vrai(/nom: 'Mensualités'/.test(f), 'au pluriel quand il y a plusieurs crédits');
+    vrai(/trad\('Mensualité'\)/.test(f), 'au singulier sinon');
+    vrai(/trad\('\{n\} crédits'\)/.test(f), 'et le sous-texte compte les prêts');
+    vrai(!/détaillés dans Financement/.test(f),
+      'sans redire où ils se lisent : l’aide le dit déjà');
+  });
+
+  /* --- ce qui ne bouge pas ---------------------------------------------- */
+
+  test('les boutons suivent l’usage', () => {
+    const f = bloc('boutonsRattachement', 'ligneSource');
+    vrai(/usage !== 'locative' \? '' :/.test(f), '« + Loyer » n’existe que sur un locatif');
+    vrai(/data-action="ajouter-charge-bien"/.test(f), '« + Charge » vaut pour tous');
+    const src = app();
+    /* La borne est la fonction SUIVANTE, `boutonsRattachement` : viser la carte
+       faisait traverser les boutons du bien direct, ou le loyer vit legitimement. */
+    const pp = src.slice(src.indexOf('function boutonsPierrePapier('),
+                         src.indexOf('function boutonsRattachement('));
+    /* L'action est la meme -- creer un revenu rattache au bien -- et c'est le
+       LIBELLE qui separe les deux mondes : une SCPI distribue, elle ne loue
+       pas. Le controle porte donc sur le mot, pas sur le geste. */
+    vrai(/trad\('Distribution'\)/.test(pp), 'une SCPI propose une distribution');
+    vrai(!/\+ \$\{trad\('Loyer'\)\}/.test(pp), 'et jamais un loyer');
+  });
+
+  test('aucune phrase entière ne se refuse à revenir à la ligne', () => {
+    /* `sans-veuve` pose `white-space: nowrap` : elle sert a coller un dernier
+       mot a ce qui le suit, jamais a tenir un paragraphe sur une ligne. Posee
+       sur la phrase des lots mixtes, elle demandait 391 px dans une carte de
+       341 et faisait defiler la fiche horizontalement a 375 px. */
+    const src = app();
+    const i = src.indexOf('const DEMANDES = {');
+    const f = src.slice(i, src.indexOf("<h2>${trad('Le bien')}</h2>", i));
+    vrai(f.length > 300, 'le bloc des demandes doit être trouvable');
+    vrai(!/sans-veuve/.test(f), 'la phrase revient à la ligne comme n’importe quel texte');
+    vrai(/\$\{trad\(q\.quoi\)\}/.test(f), 'et elle est toujours affichée');
+    /* Et la classe garde son emploi legitime ailleurs : un mot, pas une phrase. */
+    const css = lireSource('assets/styles.css');
+    vrai(/\.sans-veuve \{ white-space: nowrap; \}/.test(css), 'la classe existe toujours');
+    vrai(/<span class="sans-veuve">\$\{trad\('non coté compris'\)\}/.test(src),
+      'et sert encore là où un mot doit rester collé à ce qui le suit');
+  });
+
+  test('la pierre papier garde sa frontière', () => {
+    const carte = bloc('cartePierrePapier', 'carteUsageBien');
+    for (const absent of ['Surface', 'm²', 'Adresse', 'Vacance', 'Loyer potentiel',
+                          'Mois loués', 'Taxe foncière', 'Assurance habitation']) {
+      vrai(!carte.includes(absent), `« ${absent} » n’entre pas chez un placement`);
+    }
+    vrai(/Distribution/.test(carte) && /Frais/.test(carte), 'ses deux notions sont là');
+  });
+
+  test('un usage inconnu ne fabrique aucune carte', () => {
+    const src = app();
+    const f = src.slice(src.indexOf('function carteUsageInconnu('),
+                        src.indexOf('function carteUsageLots('));
+    for (const absent of ['Rendement', 'Cash-flow', 'coutBien', 'cashFlowBien']) {
+      vrai(!f.includes(absent), `« ${absent} » ne s’invente pas sans usage déclaré`);
+    }
+    vrai(/data-action="changer-usage"/.test(f) || /usage/i.test(f), 'et la question se pose');
+    const lots = src.slice(src.indexOf('function carteUsageLots('),
+                           src.indexOf('function cartePierrePapier('));
+    vrai(!/Rendement|Cash-flow/.test(lots), 'un usage mixte n’en invente pas davantage');
+  });
+
+  test('E1 à E4.1 tiennent toujours', () => {
+    Fixture.poser(e => {
+      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+      const c = e.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) l.usage = 'locative';
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = null;
+      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
+      e.budget.fixedCharges = [
+        { label: 'Prêt', amount: 2000, period: 'mois', shares: { p1: 800 },
+          creditId: 'd_pret', bienId: 'c_immo' },
+        { label: 'Copropriété', amount: 300, period: 'mois', shares: { p1: 90 },
+          bienId: 'c_immo' }];
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    eq(cf.fiscalite.source, 'inconnue', 'E1 : le troisième état');
+    eq(cf.impot, null, 'et aucun impôt inventé');
+    vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
+      .includes('Charges de copropriété non récupérables'), 'E2 : les suggestions');
+    pres(cf.charges, 210, 'E3 : charges personnelles');
+    pres(cf.mensualite, 1200, 'E3 : mensualité personnelle');
+    pres(num(etabById('e_bien').dettes[0].montant), 120000, 'la dette reste entière');
+    pres(sharedTotals().brut, 2300, 'E3.1 : le total facturé');
+    eq(loyersCourantsProbables().length, 0, 'E4 : aucune de ces charges n’est un loyer');
+    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'et le coût reste personnel');
+  });
+});
+
 suite('Un loyer qu’on paie encore se reconnaît, prudemment', () => {
 
   const poser = (charges, extra) => Fixture.poser(e => {
@@ -18254,11 +18510,12 @@ suite('Un montant n’a qu’un porteur', () => {
     /* `<dt` et non `<dt>` : le sous-total du loyer retenu porte une classe, et
        le motif d'avant serait passe a cote sans rien dire. */
     const litteraux = bloc.match(/<dt[ >][^\n]*/g) || [];
-    /* CINQ et non quatre : la fiscalite en ecrit deux, une par etat. Celle qui
-       porte un montant, et celle qui dit « non estimee » quand personne n'en a
-       donne — c'est une ligne de plus dans le fichier, jamais deux a l'ecran. */
-    eq(litteraux.length, 5,
-      'cinq lignes seulement s’écrivent à la main : les autres passent par ligneSource');
+    /* SIX. La fiscalite en ecrit deux, une par etat — celle qui porte un montant
+       et celle qui dit « non estimee » — et la cascade en ajoute une sixieme, le
+       sous-total d'avant fiscalite, qui ne parait que lorsque la fiscalite est
+       connue. Six dans le fichier, jamais six a l'ecran. */
+    eq(litteraux.length, 6,
+      'six lignes seulement s’écrivent à la main : les autres passent par ligneSource');
     /* La regle qui compte n'est pas le nombre de lignes, c'est qu'aucune ne
        laisse chercher : chacune porte une aide qui dit ou le montant se regle.
        La vacance et l'impot renvoient a un champ de la meme carte, le total des
@@ -24247,7 +24504,12 @@ suite('La fiche d’un logement habité parle de coût, pas de rendement', () =>
     const residence = carte('carteResidence');
     vrai(/usage === 'principale' \? 'Coût mensuel du logement' : 'Coût mensuel du bien'/
       .test(residence), 'le titre suit l’usage, et lui seul');
-    vrai(/trad\('Total payé'\)/.test(residence), 'les deux affichent le total payé');
+    vrai(/trad\('À ta charge'\)/.test(residence),
+      'les deux affichent ce qui reste à ta charge');
+    /* « Autres charges » et non « Charges proprietaire » : sur un logement qu'on
+       habite, le mot designe un statut qui n'apprend rien. */
+    vrai(/ligneCharges\(cf, 0, 'Autres charges'\)/.test(residence),
+      'et le mot du locatif ne deborde pas sur le logement');
     /* Et une seule fonction les sert : deux jumelles de quatre-vingts lignes
        auraient diverge au premier correctif applique a une seule. */
     const src = lireSource('assets/app.js');
@@ -30163,7 +30425,9 @@ suite('Un bien loué montre ses flux en cascade', () => {
     pres(x.cashFlow, 1200 - 1000, 'le cash-flow l’ignore : cet argent est bien sorti');
     /* A l'ecran, il est dans son propre bloc, hors de la liste qui totalise. */
     const carte = bloc('carteLocatif');
-    const iTotal = carte.indexOf("trad('Cash-flow')");
+    /* Ancre sur la MISE EN FORME du total et non sur son libelle : celui-ci dit
+       « avant » ou « apres fiscalite » selon ce qu'on en sait. */
+    const iTotal = carte.indexOf('${cls(cf.cashFlow)}');
     vrai(iTotal > 0, 'le cash-flow doit être trouvable');
     /* La mesure part du cash-flow et non du debut de la fonction : la branche
        sans loyer porte elle aussi le bloc du capital, et plus haut. Chercher sa
@@ -30188,7 +30452,7 @@ suite('Un bien loué montre ses flux en cascade', () => {
 
   test('la hiérarchie est celle des questions : le cash-flow d’abord', () => {
     const carte = bloc('carteLocatif');
-    const iCash = carte.indexOf("trad('Cash-flow')");
+    const iCash = carte.indexOf('${cls(cf.cashFlow)}');
     /* Le libelle du rendement passe desormais par `ligneRendement`, qui traduit
        elle-meme : il s'ecrit en clair et non plus enveloppe de `trad`. */
     const iBrut = carte.indexOf("nom: 'Rendement brut'");
@@ -30198,14 +30462,21 @@ suite('Un bien loué montre ses flux en cascade', () => {
     /* « Net d'impot » annonçait une verite forte que la fiscalite actuelle ne
        porte pas : elle est declarative, pas modelisee. Le libelle le dit. */
     vrai(!/Net d'impôt/.test(carte), 'l’ancien libellé, trop affirmatif, est parti');
-    vrai(/Rendement après estimation fiscale/.test(carte), 'le nouveau reste honnête');
+    vrai(/Rendement après fiscalité/.test(carte), 'le nouveau reste honnête, et court');
     vrai(!/<dd><b>\$\{fmtPct\(cf\.rendementNetNet/.test(carte),
       'et il n’est plus mis en gras comme une conclusion');
     /* La comparaison avec un livret a disparu : elle reduisait un montage a
        credit, avec son levier et son risque, a un placement sans risque. */
     vrai(!/livret/i.test(carte), 'plus de comparaison simpliste avec un livret');
-    vrai(/Le cash-flow annuel rapporté à ton apport initial/.test(carte),
-      'l’aide reste neutre et dit seulement ce que le chiffre est');
+    /* TROIS RENDEMENTS, ET PAS UN DE PLUS. Le rendement sur apport a quitte
+       cette carte : quatre pourcentages sous une cascade de sept lignes font une
+       carte qu'on ne parcourt plus, et celui-la repondait a une question
+       d'investisseur quand les trois autres decrivent le bien. Le modele le
+       calcule toujours, l'apport se lit dans « Financement ». */
+    vrai(!/Rendement sur apport/.test(carte), 'le quatrième a quitté la carte');
+    vrai(!/cashOnCash/.test(carte), 'et son calcul avec lui');
+    eq((carte.match(/ligneRendement\(\{/g) || []).length, 3,
+      'trois rendements, jamais quatre');
   });
 
   test('la base du rendement se dit, et ne change jamais en silence', () => {
@@ -30232,7 +30503,7 @@ suite('Un bien loué montre ses flux en cascade', () => {
     /* Ni cash-flow ni rendement : les deux supposeraient un loyer declare a zero,
        alors que la donnee manque simplement. */
     const iVide = carte.indexOf('Aucun loyer renseigné');
-    const iCash = carte.indexOf("trad('Cash-flow')");
+    const iCash = carte.indexOf('${cls(cf.cashFlow)}');
     vrai(iCash > iVide, 'le cash-flow vit sur l’autre branche');
     vrai(/if \(!loue\) return `/.test(carte), 'et cette branche rend tout de suite');
     /* Le cout, lui, reste vrai et reste dit. */
@@ -30634,7 +30905,7 @@ suite('Zéro est une réponse, l’inconnu n’en est pas une', () => {
     /* Et les trois rendements de la fiche locative passent par elle. */
     const locatif = bloc('carteLocatif');
     for (const nom of ['Rendement brut', 'Rendement net de charges',
-                       'Rendement après estimation fiscale']) {
+                       'Rendement après fiscalité']) {
       vrai(new RegExp(`ligneRendement\\(\\{[\\s\\S]{0,120}${nom}`).test(locatif),
         `« ${nom} » passe par la ligne qui sait se taire`);
     }

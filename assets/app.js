@@ -4170,7 +4170,8 @@ function pageAvantDonnees(phrase, cle = 'comptes') {
 
 function reglagesExploitation(c, idx) {
   return `
-    <div class="grid g-3" style="margin-top:12px">
+    <p class="sous-titre-carte" style="margin-top:12px">${trad('Paramètres locatifs')}</p>
+    <div class="grid g-3">
       <div class="field"><label>${trad('Mois loués par an')}${aide(trad("Douze si le locataire ne part jamais. Un mois de vacance entre deux baux coûte 8 % du loyer annuel, et le rendement calculé sur douze mois pleins ne le voit pas."))}</label>
         <input type="number" step="1" min="0" max="12" class="champ-large"
                data-path="comptes.${idx}.moisLoues" value="${estDeclare(c.moisLoues) ? num(c.moisLoues) : ''}"
@@ -4275,11 +4276,11 @@ function ligneMensualite(cf, signe) {
   if (!avec.length) return '';
   const total = avec.reduce((s, x) => s + x.mensualite, 0);
   if (avec.length > 1)
-    return ligneTotal({ nom: 'Mensualité totale', montant: total, signe,
+    return ligneTotal({ nom: 'Mensualités', montant: total, signe,
       aideTxt: 'Le total des mensualités des crédits rattachés à ce bien. Chaque prêt se lit séparément dans « Financement », plus bas.',
-      sub: trad('{n} crédits, détaillés dans Financement').replace('{n}', avec.length) });
+      sub: trad('{n} crédits').replace('{n}', avec.length) });
   const x = avec[0];
-  return ligneSource({ nom: trad('Mensualité totale'), montant: total, signe,
+  return ligneSource({ nom: trad('Mensualité'), montant: total, signe,
     action: x.chargeIndex != null ? 'edit-charge' : 'editer-credit',
     donnees: x.chargeIndex != null ? { i: x.chargeIndex } : { etab: x.etabId, i: x.index } });
 }
@@ -4359,10 +4360,15 @@ function carteResidence(c, idx, cf, usage) {
   <div class="card">
     ${tete}
     <dl class="kv">
-      <dt><b>${trad('Total payé')}</b>${aide(trad('Ce que ce bien fait sortir de ton compte chaque mois : la mensualité des crédits rattachés, plus les charges que tu paies en tant que propriétaire.'))}</dt>
+      <dt><b>${trad('À ta charge')}</b>${aide(trad('Ce que ce bien fait sortir de ton compte chaque mois : la mensualité des crédits rattachés, plus les charges que tu paies en tant que propriétaire.'))}</dt>
         <dd><b>${fmtEUR(co.totalSorties)} ${trad('/ mois')}</b></dd>
       ${ligneMensualite(cf, 0)}
-      ${ligneCharges(cf, 0)}
+      ${/* « Autres charges » et non « Charges proprietaire » : sur un logement
+            qu'on habite, le mot designe un statut qui n'apprend rien — on est
+            proprietaire de tout ce qui est sur cette fiche. Il garde son sens
+            sur un locatif, ou il distingue ce qui reste au bailleur de ce que
+            le locataire rembourse. */ ''}
+      ${ligneCharges(cf, 0, 'Autres charges')}
     </dl>
     ${blocCapitalRembourse(co)}
     ${noteVentilation(co)}
@@ -4403,7 +4409,7 @@ function carteLocatif(c, idx, cf) {
     <dl class="kv">
       ${lignesDuMois(cf)}
       <dt><b>${cf.fiscalite.source === 'inconnue'
-        ? trad('Cash-flow avant fiscalité') : trad('Cash-flow')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
+        ? trad('Cash-flow avant fiscalité') : trad('Cash-flow après fiscalité')}</b>${aide(trad("Ce qui reste sur ton compte en fin de mois, une fois le crédit payé. La somme des lignes au-dessus, chacune ouvrable par son nom. Négatif les premières années d’un crédit, c’est fréquent et ce n’est pas une erreur : tu rembourses du capital, donc ton patrimoine monte pendant que ta trésorerie baisse. Les deux chiffres sont vrais."))}</dt>
         <dd class="${cls(cf.cashFlow)}"><b>${fmtSigned(cf.cashFlow)} ${trad('/ mois')}</b></dd>
     </dl>
     ${blocCapitalRembourse(co)}
@@ -4414,13 +4420,22 @@ function carteLocatif(c, idx, cf) {
         sub: `${trad('sur')} ${baseDite}, ${fmtEUR0(cf.base)}` })}
       ${!cf.charges ? '' : ligneRendement({ nom: 'Rendement net de charges',
         valeur: cf.rendementNet })}
+      ${/* TROIS RENDEMENTS, ET PAS UN DE PLUS.
+
+            Le rendement sur apport a quitte cette carte. Il etait juste, et il
+            reste calcule par le modele — mais quatre pourcentages sous une
+            cascade de sept lignes font une carte qu'on ne parcourt plus, et
+            celui-la repondait a une question d'INVESTISSEUR quand les trois
+            autres decrivent le bien. L'apport se lit dans « Financement », ou il
+            se saisit.
+
+            L'aide du troisieme est partie aussi : elle decrivait un taux
+            applique au loyer moins les charges, ce qui n'est plus vrai depuis
+            que la fiscalite peut etre un montant annuel declare — et la ligne
+            « Fiscalite estimee » de la cascade porte deja ce concept, une fois,
+            au bon endroit. */ ''}
       ${cf.rendementNetNet == null ? '' : ligneRendement({
-        nom: 'Rendement après estimation fiscale', valeur: cf.rendementNetNet,
-        aideTxt: 'Ton taux appliqué au loyer moins les charges. Il vient de toi, pas d’un régime fiscal que l’application aurait deviné : tant que Tallya ne modélise pas ta déclaration, ce chiffre reste une estimation, pas un net d’impôt.' })}
-      ${cf.cashOnCash == null ? '' : `<dt>${trad('Rendement sur apport')}${
-        aide(trad('Le cash-flow annuel rapporté à ton apport initial. Il se calcule sur l’apport, qui ne bouge pas : le rapporter au capital déjà remboursé le ferait baisser tout seul à mesure que tu rembourses, alors que rien ne se dégrade.'))}
-        <span class="sub">${fmtEUR0(cf.apport)} ${trad('engagés')}</span></dt>
-        <dd class="${cls(cf.cashOnCash)}">${fmtSignedPct(cf.cashOnCash, 1)}</dd>`}
+        nom: 'Rendement après fiscalité', valeur: cf.rendementNetNet })}
     </dl>
     ${reglagesExploitation(c, idx)}
   </div>`;
@@ -4449,8 +4464,11 @@ function lignesDuMois(cf) {
         <dd>${fmtEUR(cf.loyers)} ${trad('/ mois')}</dd>`,
     ]),
     ligneCharges(cf, -1),
-    ligneFiscalite(cf),
     ligneMensualite(cf, -1),
+    ...(cf.fiscalite.source === 'inconnue' ? [] : [`
+      <dt class="kv-sous">${trad('Cash-flow avant fiscalité')}${aide(trad('Le loyer retenu, moins les charges du propriétaire et la mensualité. La fiscalité se retire juste en dessous.'))}</dt>
+        <dd>${fmtSigned(cf.cashFlowAvantImpot)} ${trad('/ mois')}</dd>`]),
+    ligneFiscalite(cf),
   ].filter(Boolean).join('');
 }
 
@@ -4823,7 +4841,7 @@ function espaceBien(c, idx, t) {
       return `
     <p class="perimetre" style="margin:0 0 12px">
       <b>${trad(q.titre)}</b>
-      <span class="sans-veuve">${trad(q.quoi)}</span>
+      ${trad(q.quoi)}
       ${!q.bouton ? '' : `<button type="button" class="btn xs" data-action="choisir-usage"
               data-id="${esc(c.id)}" style="margin-left:8px">${trad(q.bouton)}</button>`}
     </p>`;
