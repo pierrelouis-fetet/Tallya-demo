@@ -4056,16 +4056,30 @@ function viewAccounts() {
 function viewComptesArchives() {
   const { archives, clos } = comptesAnciens();
 
+  /* UN ETAT, UNE ACTION.
+
+     La poubelle se posait sur toutes les lignes, et la restauration seulement
+     sur celles qui l'acceptent : un compte archive portait donc les deux. Or
+     « Restaurer » a cote d'une poubelle demande de choisir entre garder et
+     detruire au meme endroit, sur un compte qu'on a justement mis de cote pour
+     le garder. Les deux etats cessent de se distinguer des qu'ils partagent
+     leurs gestes.
+
+     Le partage se fait sur `restaurable`, la donnee du modele — jamais sur le
+     titre de la section, qui est un intitule et non un etat.
+
+     La poubelle porte un nom lisible a la voix : « Supprimer » seul, repete
+     douze fois, ne dit pas lequel des douze. */
   const ligne = x => `
       <div class="arch-ligne">
         <span class="arch-nom"><b>${esc(x.label)}</b>${
           x.etab ? `<span class="sub">${esc(x.etab)}</span>` : ''}</span>
         <span class="arch-actes">
-          ${!x.restaurable ? '' : `<button class="btn sm ghost arch-agir" data-action="restaurer-compte"
-            data-id="${esc(x.id)}">${trad('Restaurer')}</button>`}
-          <button class="btn icon arch-jeter arch-agir" data-action="supprimer-compte-clos"
-                  data-id="${esc(x.id)}" title="${trad('Supprimer définitivement')}"
-                  aria-label="${esc(trad('Supprimer définitivement {n}').replace('{n}', x.label))}">🗑</button>
+          ${x.restaurable ? `<button class="btn sm ghost arch-agir" data-action="restaurer-compte"
+                data-id="${esc(x.id)}">${trad('Restaurer')}</button>`
+            : `<button class="btn icon arch-jeter arch-agir" data-action="supprimer-compte-clos"
+                data-id="${esc(x.id)}" title="${trad('Supprimer définitivement')}"
+                aria-label="${esc(trad('Supprimer définitivement {n}').replace('{n}', x.label))}">🗑</button>`}
         </span>
       </div>`;
 
@@ -6958,8 +6972,11 @@ const ACTIONS = {
   },
 
   async 'supprimer-compte-clos'(btn) {
-    const anciens = comptesAnciens();
-    const x = [...anciens.archives, ...anciens.clos].find(a => a.id === btn.dataset.id);
+    /* `clos` seulement, jamais `archives` : un compte qui se rouvre ne se
+       supprime pas ici. La meme regle est posee cote modele par
+       `supprimerCompteClos`, et les deux se valent — l'absence d'un bouton ne
+       protege que ce qu'on voit. */
+    const x = comptesAnciens().clos.find(a => a.id === btn.dataset.id);
     if (!x) return;
     if (!await askConfirm(
       trad('Supprimer définitivement ce compte clos ?') + '\n\n' + x.label + '\n\n'
@@ -6970,7 +6987,7 @@ const ACTIONS = {
       + '\n\n' + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
       { ok: 'Supprimer', danger: true })) return;
     Store.addBackup('avant suppression d’un compte clos');
-    if (!retirerComptesClos([x.id])) return;
+    if (!supprimerCompteClos(x.id)) return;
     Store.save();
     render();
     toast(`${guill(x.label)} ${trad('supprimé')}`);

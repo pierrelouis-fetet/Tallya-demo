@@ -1514,6 +1514,25 @@ function retirerComptesClos(ids) {
   return cibles.size;
 }
 
+/* Supprimer UN compte clos, et seulement un compte clos.
+
+   `retirerComptesClos` retire ce qu'on lui nomme parmi les comptes hors totaux,
+   sans distinguer celui qui a encore une fiche de celui qui n'en a plus. C'est
+   la bonne definition pour elle : elle nettoie une liste.
+
+   Ce n'est pas la bonne porte pour un geste d'ecran. Un compte ARCHIVE est mis
+   de cote pour etre garde, et il se rouvre ; un compte CLOS est fini, et il ne
+   se rouvre pas. Offrir la suppression sur le premier revient a proposer de
+   detruire ce qu'on a justement choisi de conserver — et le garde-fou ne peut
+   pas etre l'absence d'un bouton, qui ne protege que ce qu'on voit.
+
+   La condition est `restaurable`, la donnee du modele : elle dit s'il reste une
+   fiche a rouvrir, jamais dans quelle section un ecran range la ligne. */
+function supprimerCompteClos(id) {
+  if (!comptesAnciens().clos.some(x => x.id === id)) return 0;
+  return retirerComptesClos([id]);
+}
+
 function accountTypes() { return Store.state.accountTypes; }
 function accountType(id) {
   return accountTypes().find(t => t.id === id)

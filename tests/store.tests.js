@@ -27737,7 +27737,7 @@ suite('Les anciens comptes se gèrent depuis Actifs, et nulle part ailleurs', ()
     vrai(!/Retirer les \{n\} comptes/.test(s), 'plus de « Retirer les {n} comptes »');
     vrai(!/Supprimer définitivement les \{n\} comptes/.test(s),
       'ni « Supprimer définitivement les {n} comptes »');
-    vrai(/retirerComptesClos\(\[x\.id\]\)/.test(s),
+    vrai(/supprimerCompteClos\(x\.id\)/.test(s),
       'la suppression ne vise qu’un identifiant, celui de la ligne');
   });
 
@@ -27787,11 +27787,24 @@ suite('Les anciens comptes se gèrent depuis Actifs, et nulle part ailleurs', ()
     vrai(clos.every(x => !x.restaurable), 'le second n’a pas de fiche à rouvrir');
     vrai(!archives.some(x => x.id === 'c_ouvert') && !clos.some(x => x.id === 'c_ouvert'),
       'et un compte ouvert n’entre dans aucune des deux listes');
-    const e = ecran();
-    vrai(/\$\{!x\.restaurable \? '' : /.test(e),
-      'l’écran n’affiche « Restaurer » que sur ce qui se restaure');
-    vrai(/data-action="supprimer-compte-clos"/.test(e),
-      'et la poubelle sur chaque ligne');
+    /* UN ETAT, UNE ACTION. Un archive ne porte que « Restaurer », un clos que
+       la poubelle : « Restaurer » a cote d'une poubelle demanderait de choisir
+       entre garder et detruire sur un compte qu'on a mis de cote pour le
+       garder, et les deux etats cesseraient de se distinguer. */
+    const l = tranche('const ligne = x => `', 'const section = (titre');
+    const i = l.indexOf('${x.restaurable ?');
+    vrai(i > 0, 'l’affichage se décide sur « restaurable », la donnée du modèle');
+    const sep = l.indexOf(': `', i);
+    const r = l.indexOf('data-action="restaurer-compte"');
+    const p = l.indexOf('data-action="supprimer-compte-clos"');
+    vrai(i < r && r < sep, '« Restaurer » vit dans la branche restaurable, seul');
+    vrai(sep < p, 'et la poubelle dans l’autre, seule');
+    eq(l.split('data-action="restaurer-compte"').length - 1, 1,
+      'un seul bouton de restauration dans la ligne');
+    eq(l.split('data-action="supprimer-compte-clos"').length - 1, 1,
+      'et une seule poubelle');
+    vrai(!/Archivés|Clos/.test(l),
+      'et la ligne ne lit jamais le titre de sa section : un intitulé n’est pas un état');
   });
 
   test('supprimer A ne supprime pas B', () => {
@@ -27801,6 +27814,28 @@ suite('Les anciens comptes se gèrent depuis Actifs, et nulle part ailleurs', ()
     vrai((Store.state.comptes || []).some(c => c.id === 'c_b'), 'B est toujours là');
     vrai((Store.state.accounts || []).some(a => a.id === 'c_vieux'),
       'et l’entrée d’ancien format aussi');
+  });
+
+  test('un archivé ne se supprime pas, même en visant son identifiant', () => {
+    /* LE GARDE-FOU NE PEUT PAS ETRE L'ABSENCE D'UN BOUTON : elle ne protege que
+       ce qu'on voit. Un compte archive est mis de cote pour etre GARDE, et il se
+       rouvre ; le supprimer detruirait ce qu'on a choisi de conserver. La regle
+       vit donc dans le modele, et l'ecran ne fait que la refleter. */
+    poser();
+    const totalAvant = round2(rowTotal(Store.state.monthly[0]));
+    const brutAvant = round2(patrimoine().brut);
+
+    eq(supprimerCompteClos('c_a'), 0, 'un compte restaurable n’est pas un compte clos');
+    eq(supprimerCompteClos('c_inconnu'), 0, 'ni un identifiant qui ne désigne rien');
+    vrai((Store.state.comptes || []).some(c => c.id === 'c_a'), 'A est toujours là');
+    eq(ids(comptesAnciens().archives), 'c_a,c_b', 'et les deux archivés avec lui');
+
+    eq(supprimerCompteClos('c_vieux'), 1, 'l’entrée d’ancien format, elle, part');
+    vrai(!(Store.state.accounts || []).some(a => a.id === 'c_vieux'), 'et elle seule');
+    eq(ids(comptesAnciens().archives), 'c_a,c_b', 'les archivés n’ont pas bougé');
+    pres(round2(rowTotal(Store.state.monthly[0])), totalAvant,
+      'le total du mois ne bouge pas d’un centime');
+    pres(round2(patrimoine().brut), brutAvant, 'ni le patrimoine du jour');
   });
 
   test('restaurer vise un seul compte', () => {
@@ -27989,7 +28024,7 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
     vrai(/askConfirm\(/.test(f), 'elle demande avant');
     vrai(/\+ x\.label \+/.test(f), 'et nomme le compte qui part');
     vrai(/Store\.addBackup\(/.test(f), 'une sauvegarde est prise avant');
-    vrai(f.indexOf('Store.addBackup(') < f.indexOf('retirerComptesClos(['),
+    vrai(f.indexOf('Store.addBackup(') < f.indexOf('supprimerCompteClos('),
       'avant le retrait, pas après');
     vrai(/danger: true/.test(f), 'et le dialogue s’annonce comme destructeur');
   });
@@ -28102,8 +28137,10 @@ suite('Un compte clos que des relevés portent se supprime aussi', () => {
     vrai(/Store\.addBackup\(/.test(f), 'il prend une sauvegarde');
     vrai(/relevés qui le mentionnent gardent leur total/.test(f),
       'et dit ce que les relevés gardent');
-    vrai(/retirerComptesClos\(\[x\.id\]\)/.test(f),
+    vrai(/supprimerCompteClos\(x\.id\)/.test(f),
       'il ne retire que le compte visé');
+    vrai(/comptesAnciens\(\)\.clos\.find/.test(f),
+      'et il ne lit que les comptes clos : un archivé n’ouvre même pas le dialogue');
     vrai(/data-action="supprimer-compte-clos"/.test(src), 'le bouton existe');
   });
 
