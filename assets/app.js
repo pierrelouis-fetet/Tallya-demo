@@ -3608,7 +3608,7 @@ function mountHistory() {
 }
 
 let compteVue = 'banque';            // banque | type
-let allocFinancier = false;
+let allocFinancier = true;
 /* Une transition a montrer au prochain montage des anneaux, et une seule.
 
    Meme mecanique que `evoTransition` pour la courbe, et pour la meme raison :

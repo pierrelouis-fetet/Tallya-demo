@@ -2211,6 +2211,27 @@ suite('Les anneaux d’Allocation se transforment quand le périmètre change', 
     }
   });
 
+  test('Allocation s’ouvre sur « Financier »', () => {
+    /* Elle ouvrait sur « Tout », et le premier ecran etait celui qu'elle ne sait
+       pas rendre utile : un appartement y pese l'essentiel du net, les autres
+       poches se serrent sous deux pour cent et leurs traits deviennent
+       invisibles. On ne reequilibre pas un logement, et cette page existe pour
+       montrer ce qui se pilote. */
+    const app = lireSource('assets/app.js');
+    vrai(/let allocFinancier = true;/.test(app), 'le périmètre financier est le défaut');
+    vrai(!/let allocFinancier = false;/.test(app), 'et l’ancien défaut est parti');
+    /* « Tout » reste a un geste : rien n'est retire, seule la porte d'entree
+       change. */
+    vrai(/\['financier', 'Financier'\], \['tout', 'Tout'\]/.test(app),
+      '« Financier » ouvre la barre, « Tout » reste à côté');
+    vrai(/allocFinancier \? 'financier' : 'tout'/.test(app),
+      'et l’actif suit la variable, jamais une valeur écrite à côté');
+    /* Sans actif hors perimetre, les deux lectures se confondent et la barre ne
+       s'affiche meme pas : ce defaut ne change alors rien. */
+    vrai(/horsFinancierExiste\(\) \? barreCommutateur\(/.test(app),
+      'la barre ne paraît que si les deux lectures diffèrent');
+  });
+
   test('recliquer le périmètre déjà allumé n’anime rien', () => {
     /* Une transition de zero vers zero est un clignotement. Meme garde que la
        bascule de la courbe, et pour la meme raison. */
