@@ -163,8 +163,8 @@ const I18N = {
     'de ce qui est investi': 'of what is invested',
     'de dettes déjà déduites': 'of debt already subtracted',
     'tes crédits sont déduits': 'your loans are subtracted',
-    "Une seule base sur cette page : ton patrimoine net, tout ce que tu possèdes moins ce que tu dois encore. Un bien financé y compte pour sa valeur moins son crédit, et la dette n’est retirée qu’une fois. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre.":
-      'One base on this page: your net worth, everything you own minus what you still owe. A financed asset counts for its value minus its loan, and the debt is taken out only once. Every card shares this base, so their percentages compare with one another and each total gives back the same number.',
+    "Deux bases sur cette page, et chaque carte annonce la sienne. « Patrimoine net » pour la répartition : tout ce que tu possèdes moins ce que tu dois encore, un bien financé y comptant pour sa valeur moins son crédit. « Tes avoirs » pour les cartes qui disent où ton argent est posé et en combien de temps il ressort : une dette n’est posée sur aucun compte et n’a pas de délai de sortie, elle ne s’y retranche donc pas. Chaque total redonne la base annoncée juste au-dessus de lui.":
+      'Two bases on this page, and each card names its own. “Net worth” for the breakdown: everything you own minus what you still owe, a financed asset counting for its value minus its loan. “Your holdings” for the cards that say where your money sits and how long it takes to come back out: a debt sits on no account and has no exit delay, so it is not subtracted there. Every total gives back the base announced just above it.',
     'de ta part arbitrable est en': 'of the part you can steer sits in',
     ', si tu empruntes le reste. Ajoute le crédit quand il existera : Tallya n’en crée aucun toute seule.':
       ', if you borrow the rest. Add the loan once it exists: Tallya never creates one on its own.',
@@ -978,6 +978,9 @@ const I18N = {
     "de capital de crédit remboursé": "of loan principal repaid",
     "Repris de ta capacité d’épargne dans Budget": "Based on your savings capacity from Budget",
     "Valeur figée. Ta capacité d’épargne est de": "Pinned value. Your savings capacity is",
+    'Valeur figée.': 'Pinned value.',
+    'Aucune capacité d’épargne positive connue dans Budget':
+      'No positive saving capacity is currently known from Budget',
     "Voir le calcul": "See calculation",
     "Voir le Budget": "Open Budget",
     "ce que ton budget laisse disponible chaque mois": "what your budget leaves available each month",
@@ -1006,6 +1009,7 @@ const I18N = {
       "The share of your monthly payments that repays the principal of your loans. It cuts your debt, so it raises your net worth.",
     "Accumulation patrimoniale ÷ revenus.": "Net worth accumulation ÷ income.",
     "Aucun revenu déclaré pour l’instant.": "No income declared yet.",
+    'aucun revenu déclaré': 'no income declared',
     "Accumulation patrimoniale": "Net worth accumulation",
     "Capacité d’épargne + capital remboursé.":
       "Savings capacity + principal repaid.",
@@ -1223,6 +1227,11 @@ const I18N = {
     "Renseigne les trois montants (prix, frais, travaux) pour obtenir un coût total. Un poste manquant n’est pas un poste à zéro.": "Enter all three amounts - price, costs, renovation - to get a total cost. A missing item is not an item at zero.",
     "Ce bien n’est pas inclus dans les montants personnels qui dépendent de ta part tant que la valeur n’est pas corrigée.": "This property is not included in the personal amounts that depend on your share until the value is corrected.",
     "Le capital emprunté au départ doit être supérieur à 0 lorsqu’un capital restant dû est renseigné.": "The original loan amount must be greater than 0 when an outstanding principal is entered.",
+    "Le capital restant dû ne peut pas être négatif : une dette négative ferait monter ton patrimoine net au lieu de le baisser.":
+      'The outstanding principal cannot be negative: a negative debt would push your net worth up instead of down.',
+    'Capital restant dû invalide : {l}': 'Invalid outstanding principal: {l}',
+    "{v} chez {e}. Un capital restant dû négatif fait monter ton patrimoine net au lieu de le baisser. Ouvre la fiche du crédit pour le corriger.":
+      '{v} at {e}. A negative outstanding principal pushes your net worth up instead of down. Open the loan to correct it.',
     "Quote-part à corriger": "Ownership share to correct",
     "{v} % n’est pas une quote-part valide.": "{v}% is not a valid ownership share.",
     "à corriger": "to correct",

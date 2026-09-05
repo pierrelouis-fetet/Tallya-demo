@@ -696,7 +696,9 @@ function carteAccumulation() {
       <dt class="somme cle"><b>${trad('= Accumulation patrimoniale')}</b>${aide(aideTotal)}</dt>
         <dd class="somme cle"><b class="${cls(rec.theoretical)}">${aEcran(rec.theoretical)}</b></dd>
       <dt class="sobre">${trad('Taux d’accumulation')}${aide(aideTaux)}</dt>
-        <dd class="sobre">${fmtPct(rec.theoreticalRate, 1)}</dd>
+        <dd class="sobre">${rec.theoreticalRate == null
+          ? `<span class="muted">${trad('aucun revenu déclaré')}</span>`
+          : fmtPct(rec.theoreticalRate, 1)}</dd>
     </dl>
     ${rec.realPerMonth == null ? '' : `
     <div class="kv-filet"></div>
@@ -1539,15 +1541,21 @@ function viewObjective() {
                 s.monthly,
                 /* La condition suit `monthlyAuto` et non la valeur : depuis que
                    zero veut dire zero, un versement fige a 0 est un choix. */
-                s.monthlyAuto
-                  ? `${trad('Repris de ta capacité d’épargne dans Budget')}
-                     <button type="button" class="mois-lien" data-action="apercu"
-                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>`
-                  : `${trad('Valeur figée. Ta capacité d’épargne est de')} ${fmtEUR0(suggestedMonthly())}
-                     <button type="button" class="mois-lien" data-action="apercu"
-                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>
+                (() => {
+                  const suggere = suggestedMonthly();
+                  const calcul = `<button type="button" class="mois-lien" data-action="apercu"
+                             data-apercu="capaciteEpargne">${trad('Voir le calcul')}</button>`;
+                  const rien = trad('Aucune capacité d’épargne positive connue dans Budget');
+                  if (s.monthlyAuto) {
+                    return `${suggere > 0 ? trad('Repris de ta capacité d’épargne dans Budget')
+                                          : rien} ${calcul}`;
+                  }
+                  if (!(suggere > 0)) return `${trad('Valeur figée.')} ${rien} ${calcul}`;
+                  return `${trad('Valeur figée. Ta capacité d’épargne est de')} ${fmtEUR0(suggere)}
+                     ${calcul}
                      <button type="button" class="mois-lien" data-action="proj-use-budget"
-                             >${trad('Reprendre ce montant')}</button>`)}
+                             >${trad('Reprendre ce montant')}</button>`;
+                })())}
         ${champText('Affectation des versements', 'meta.projVersementVers', VERSEMENT_VERS,
                 s.versementVers,
                 trad('Ces euros capitalisent au taux de la poche que tu choisis. '
@@ -3081,7 +3089,7 @@ function viewAllocation() {
       : trad('tes crédits sont déduits')}</b>${deuxPoints()}
     ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
       ? trad("Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.")
-      : trad("Une seule base sur cette page : ton patrimoine net, tout ce que tu possèdes moins ce que tu dois encore. Un bien financé y compte pour sa valeur moins son crédit, et la dette n’est retirée qu’une fois. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux et chaque total redonne ce même nombre."))}.</span></p>
+      : trad("Deux bases sur cette page, et chaque carte annonce la sienne. « Patrimoine net » pour la répartition : tout ce que tu possèdes moins ce que tu dois encore, un bien financé y comptant pour sa valeur moins son crédit. « Tes avoirs » pour les cartes qui disent où ton argent est posé et en combien de temps il ressort : une dette n’est posée sur aucun compte et n’a pas de délai de sortie, elle ne s’y retranche donc pas. Chaque total redonne la base annoncée juste au-dessus de lui."))}.</span></p>
 
   <div class="card repart">
     ${disponibilite.map(x => `
@@ -3116,22 +3124,22 @@ function viewAllocation() {
 
   <div class="card">
     <div class="card-head"><h2>${trad('Où est placé ton argent')}</h2></div>
-    <p class="tete-legende">${mentionBase(baseAlloc(), valeurBaseAlloc())}</p>
+    <p class="tete-legende">${mentionBase(baseAvoirsAlloc(), valeurAvoirsAlloc())}</p>
     <h3 class="sous-titre-carte">${trad('Par type de détention')}</h3>
     <div class="chart" id="aType"></div>
-    ${tbl(byType, baseAlloc().nom, byType.reduce((s, i) => s + i.value, 0))}
+    ${tbl(byType, baseAvoirsAlloc().nom, byType.reduce((s, i) => s + i.value, 0))}
     <h3 class="sous-titre-carte">${trad('Par compte')}</h3>
     <div class="chart" id="aAcct"></div>
   </div>
 
   <div class="card" data-anchor="disponibilite">
     <div class="card-head"><h2>${trad('Par disponibilité')}</h2></div>
-    <p class="tete-legende">${mentionBase(baseAlloc(), valeurBaseAlloc())}</p>
+    <p class="tete-legende">${mentionBase(baseAvoirsAlloc(), valeurAvoirsAlloc())}</p>
     <p class="hint" style="margin:0 0 12px">${trad('Quand cet argent peut redevenir disponible.')}${aide(allocFinancier
       ? trad("Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Tes murs et tes objets de valeur sont écartés de cette vue, et c’est ce qui fait disparaître le palier du logement que tu habites.")
       : trad("Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Le logement que tu habites et ce qui est bloqué jusqu’à une échéance figurent ici parce qu’ils font partie de tes avoirs, mais l’autonomie financière de l’accueil les écarte de son cumul : elle compte ce sur quoi tu peux vivre, pas ce que tu possèdes."))}</p>
     <div class="chart" id="aDispo"></div>
-    ${tbl(dispo, baseAlloc().nom, dispo.reduce((s, i) => s + i.value, 0))}
+    ${tbl(dispo, baseAvoirsAlloc().nom, dispo.reduce((s, i) => s + i.value, 0))}
   </div>
 
 `;
@@ -3151,14 +3159,14 @@ function mountAllocation() {
   const bt = teinterParRang(byAccountType({ financier: allocFinancier }));
   Charts.donut($('#aType'), {
     anime: animAlloc,
-    height: 200, centerLabel: baseAlloc().nom,
+    height: 200, centerLabel: baseAvoirsAlloc().nom,
     centerValue: bt.reduce((s, i) => s + i.value, 0),
     items: bt.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
   const bd = teinterParRang(allocationParDisponibilite({ financier: allocFinancier }));
   Charts.donut($('#aDispo'), {
     anime: animAlloc,
-    height: 200, centerLabel: baseAlloc().nom,
+    height: 200, centerLabel: baseAvoirsAlloc().nom,
     centerValue: bd.reduce((s, i) => s + i.value, 0),
     items: bd.map(x => ({ label: x.label, value: x.value, color: x.couleur })),
   });
@@ -3626,11 +3634,14 @@ let relanceGraphes = false;
    ses parts, sur la carte meme, et le pire des defauts de cette base de code
    puisqu'il rassure. Le preambule et la carte des usages avaient le meme.
 
-   Une base qui se derive a huit endroits finit par en oublier un. Elle se
-   nomme donc ici, et un test interdit desormais `BASES.avoirs` ailleurs dans
-   cette page. */
+   Une base qui se derive a huit endroits finit par en oublier un. Elles se
+   nomment donc ici, toutes les deux, et un test interdit desormais d'ecrire
+   `BASES.net`, `BASES.avoirs` ou `BASES.financier` ailleurs dans cette page :
+   une carte prend sa base par l'une de ces deux fonctions, jamais a la main. */
 const baseAlloc = () => (allocFinancier ? BASES.financier : BASES.net);
 const valeurBaseAlloc = () => (allocFinancier ? totalFinancier() : nowTotals().net);
+const baseAvoirsAlloc = () => (allocFinancier ? BASES.financier : BASES.avoirs);
+const valeurAvoirsAlloc = () => (allocFinancier ? totalFinancier() : patrimoine().brut);
 const partsAllocLisibles = () => valeurBaseAlloc() > 0.005;
 let compteRecherche = '';
 /* L'etat vit dans `meta`, pas dans une variable qui le recopie : le `Set`
@@ -5858,7 +5869,7 @@ function viewBudget(section = 'depenses') {
       <div class="charges-tete">
         <div class="ct-chiffre">
           <b>${fmtEUR(f.fixed)}</b>
-          <span class="muted">${trad('par mois,')} ${fmtPct(f.fixedPct, 1)} ${trad('de tes revenus')}</span>
+          <span class="muted">${trad('par mois,')}${f.fixedPct == null ? '' : ` ${fmtPct(f.fixedPct, 1)} ${trad('de tes revenus')}`}</span>
         </div>
         <div class="ct-cote">
           <div class="ct-petit">
@@ -5892,7 +5903,7 @@ function viewBudget(section = 'depenses') {
     <div class="card" data-anchor="charges">
       <div class="card-head"><h2>${trad('Charges fixes')}</h2>
         <div class="row">
-          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} ${trad('des revenus')}</span>
+          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')}${f.fixedPct == null ? '' : ` · ${fmtPct(f.fixedPct, 1)} ${trad('des revenus')}`}</span>
           <button class="btn sm ghost" data-action="add-charge">${trad('+ Ligne')}</button>
         </div>
       </div>
@@ -7429,13 +7440,14 @@ const ACTIONS = {
       valide: v => {
         if (v.aCredit === 'oui' && !(num(v.credit) > 0))
           return { cle: 'credit', message: trad('Le capital restant dû doit être supérieur à 0 si tu déclares avoir encore un crédit.') };
-        if (v.aCredit === 'oui' && num(v.credit) > 0
-            && estDeclare(v.initial) && num(v.initial) === 0)
-          return { cle: 'initial', message: trad('Le capital emprunté au départ doit être '
-            + 'supérieur à 0 lorsqu’un capital restant dû est renseigné.') };
+        /* Les cinq champs du credit passent par la regle centrale, celle-la
+           meme qu'appliquent l'ajout depuis un etablissement et l'edition : ici
+           le capital restant du se nomme `credit`, d'ou la table des clefs. Une
+           regle recopiee a trois endroits finit par diverger. */
+        const faute = validerCreditSaisi(v, { montant: 'credit' });
+        if (faute) return faute;
         for (const cle of ['valeur', 'prixAchat', 'fraisAcquisition', 'travauxInitiaux',
-                           'apport', 'revient', 'credit', 'initial', 'mensualite',
-                           'taux', 'tauxAssurance']) {
+                           'apport', 'revient']) {
           if (estDeclare(v[cle]) && num(v[cle]) < 0)
             return { cle, message: trad('Un montant négatif ne peut pas être enregistré.') };
         }
@@ -8097,6 +8109,7 @@ const ACTIONS = {
       titre: trad('Crédit chez {e}').replace('{e}', e.nom),
       sous: trad('Il pèse en négatif sur le patrimoine net'),
       ok: 'Ajouter',
+      valide: v => validerCreditSaisi(v),
       champs: [
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, exemple: 'ex. Prêt immobilier' },
         { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
@@ -8212,6 +8225,7 @@ const ACTIONS = {
           aide: `${trad('Le patrimoine net remontera de')} ${fmtEUR0(num(d.montant))}. ${
             trad('Réversible avec Ctrl+Z.')}` },
       ],
+      valide: v => (v.supprimer ? null : validerCreditSaisi(v)),
     });
     if (!v) return;
     if (v.supprimer) {
@@ -11179,7 +11193,8 @@ const APERCUS = {
       titre: trad('Ce qui sort chaque mois'),
       sous: `${postes.length} ${postes.length > 1 ? trad('postes') : trad('poste')} · ${fmtEUR0(total * 12)} ${trad('sur douze mois')}`,
       total,
-      totalNote: `${fmtPct(budgetFrame().fixedPct, 1)} ${trad('de tes revenus')}`,
+      totalNote: budgetFrame().fixedPct == null ? trad('aucun revenu déclaré')
+        : `${fmtPct(budgetFrame().fixedPct, 1)} ${trad('de tes revenus')}`,
       /*         Le total a l'annee etait deja en sous-titre — 29 332 EUR — mais poste par
          poste il fallait multiplier de tete, et c'est a cette echelle qu'on decide
          de garder un abonnement : 21 EUR par mois se lisent autrement a 252 EUR

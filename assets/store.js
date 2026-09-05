@@ -979,6 +979,50 @@ function dettesTotal() {
   return ETABS().reduce((s, e) => s + (e.dettes || []).reduce((x, d) => x + num(d.montant), 0), 0);
 }
 
+/* --- ce qu'un credit saisi doit respecter -------------------------------
+
+   UN CAPITAL RESTANT DU NEGATIF ENRICHIT. La dette s'additionne en negatif dans
+   le patrimoine net : moins mille euros de dette font mille euros de plus. Le
+   nombre est faux, et il est faux dans le bon sens, donc rien ne le trahit.
+
+   La tentation est de le redresser a la lecture, par un plancher a zero dans le
+   total. Ce serait cacher la saisie au lieu de l'empecher : le chiffre reste
+   faux dans le fichier, l'export l'emporte, et chaque nouvelle lecture doit se
+   souvenir de le redresser — une regle qui vit a N endroits en oublie un.
+
+   La regle vit donc a l'ENTREE, une seule fois, et les trois portes qui
+   saisissent un credit l'appellent : la creation d'un bien finance, l'ajout
+   depuis un etablissement, et l'edition. Elle rend la clef du champ fautif et
+   sa phrase, ou `null` si tout va bien : la forme exacte qu'attend `valide`.
+
+   Les noms de champs different d'une porte a l'autre — la creation appelle
+   `credit` ce que les deux autres appellent `montant` — donc la table des clefs
+   se passe en argument plutot que de dupliquer la regle.
+
+   Ce qui existe deja dans les fichiers ne s'efface pas pour autant : une regle
+   neuve ne repare pas un etat deja ecrit, et un controle de sante le signale. */
+const CLES_CREDIT = { montant: 'montant', initial: 'initial', mensualite: 'mensualite',
+                      taux: 'taux', tauxAssurance: 'tauxAssurance' };
+
+function validerCreditSaisi(v, cles) {
+  const c = { ...CLES_CREDIT, ...(cles || {}) };
+  const lu = k => (v || {})[c[k]];
+  if (estDeclare(lu('montant')) && num(lu('montant')) < 0) {
+    return { cle: c.montant, message: trad('Le capital restant dû ne peut pas être '
+      + 'négatif : une dette négative ferait monter ton patrimoine net au lieu de le baisser.') };
+  }
+  for (const k of ['initial', 'mensualite', 'taux', 'tauxAssurance']) {
+    if (estDeclare(lu(k)) && num(lu(k)) < 0) {
+      return { cle: c[k], message: trad('Un montant négatif ne peut pas être enregistré.') };
+    }
+  }
+  if (num(lu('montant')) > 0 && estDeclare(lu('initial')) && num(lu('initial')) === 0) {
+    return { cle: c.initial, message: trad('Le capital emprunté au départ doit être '
+      + 'supérieur à 0 lorsqu’un capital restant dû est renseigné.') };
+  }
+  return null;
+}
+
 /* --- la charge fixe qui rembourse un credit ------------------------------
    Une mensualite de pret etait saisie deux fois : en charge fixe, parce que
    c'est de l'argent qui sort tous les mois et que le budget doit le savoir, et
@@ -4093,13 +4137,22 @@ function budgetFrame() {
   const fixed = fixedTotal();
   const available = income - fixed;
   const target = num(B().monthlyTarget);
+  /* `null` et non zero quand il n'y a pas de revenu a diviser.
+
+     « 0 % de tes revenus » sous 2 444 EUR de charges fixes se lit comme une
+     mesure : il dit que ces charges ne pesent rien. C'est l'inverse — elles
+     pesent tout, puisque rien n'entre. Zero est une reponse, et il ne doit
+     jamais servir a dire l'absence de reponse : c'est la regle que ce fichier
+     applique deja aux taux, aux quote-parts et aux poches d'Allocation.
+
+     Les vues conditionnent leur affichage : aucune n'imprime « null % ». */
   return {
     income, fixed, available, target,
-    fixedPct: income ? fixed / income * 100 : 0,
-    availablePct: income ? available / income * 100 : 0,
-    targetPct: income ? target / income * 100 : 0,
+    fixedPct: income > 0 ? fixed / income * 100 : null,
+    availablePct: income > 0 ? available / income * 100 : null,
+    targetPct: income > 0 ? target / income * 100 : null,
     investTarget: available - target,
-    investTargetPct: income ? (available - target) / income * 100 : 0,
+    investTargetPct: income > 0 ? (available - target) / income * 100 : null,
   };
 }
 
@@ -4634,7 +4687,9 @@ function savingsReconciliation() {
     capitalRembourse: capital,
     investable,
     theoretical,
-    theoreticalRate: f.income ? theoretical / f.income * 100 : 0,
+    /* `null` et non zero : sans revenu, il n'y a pas de taux a mesurer, et
+       « 0,0 % » se lirait comme un taux mesure a zero. */
+    theoreticalRate: f.income > 0 ? theoretical / f.income * 100 : null,
     targetSaving: f.investTarget,
     realPerMonth, monthsSpan,
     gap: realPerMonth == null ? null : realPerMonth - theoretical,
@@ -5829,7 +5884,7 @@ function repartitionVersement(s = projectionSettings()) {
 }
 
 /* Versement mensuel proposé par défaut : le cash que ton budget laisse
-   vraiment, sinon le rythme réellement observé sur tes relevés.
+   vraiment, et rien d'autre.
 
    `investable` et non `theoretical` : le capital rembourse sur un credit
    augmente le patrimoine net, mais il n'est pas disponible pour investir. Le
@@ -5838,14 +5893,22 @@ function repartitionVersement(s = projectionSettings()) {
    compte deux fois : une fois par la dette qui baisse, une fois par un
    placement imaginaire.
 
-   Le repli sur le rythme observe, lui, garde sa nature : c'est une variation de
-   patrimoine, pas un flux de budget, mais c'est tout ce qu'on a quand aucun
-   revenu n'est declare. */
+   LE REPLI SUR LE RYTHME OBSERVE EST PARTI, et c'etait la meme faute d'un cran
+   plus loin. `realPerMonth` mesure la VARIATION DU PATRIMOINE d'un mois sur
+   l'autre : elle porte les gains de marche, la reevaluation d'un bien et le
+   capital rembourse. La reinjecter comme versement mensuel faisait capitaliser
+   la croissance sur elle-meme — une hausse de marche de 900 EUR devenait
+   900 EUR verses chaque mois, qui produisaient a leur tour du rendement. La
+   projection s'emballait d'autant plus que le patrimoine avait monte, ce qui est
+   exactement l'inverse d'une prevision prudente.
+
+   Sans budget, la suggestion vaut donc zero, et l'ecran le dit : « aucune
+   capacite d'epargne positive connue ». Un zero annonce vaut mieux qu'un nombre
+   dont personne ne peut dire d'ou il vient. `realPerMonth` reste rendu par
+   `savingsReconciliation` : la carte du budget le montre comme rythme observe,
+   ce qu'il est, et le compare a l'epargne theorique. */
 function suggestedMonthly() {
-  const rec = savingsReconciliation();
-  const brut = rec.investable > 0 ? rec.investable
-             : (rec.realPerMonth > 0 ? rec.realPerMonth : 0);
-  return Math.round(brut);
+  return Math.round(Math.max(0, savingsReconciliation().investable));
 }
 
 /* `plat` : la part du patrimoine que la projection porte sans lui appliquer de
@@ -6000,17 +6063,29 @@ function configProjection(opts = {}) {
    n'arrive sur aucun compte — donc il ne capitalise a aucun taux. Il entre dans
    `contributed`, comme un euro mis de cote, et jamais dans les gains.
 
-   Une dette sans taux ou sans mensualite reste constante : sans taux on ne sait
-   pas separer capital et interets, et on ne devine pas. Meme regle que
-   `capitalRembourseParMois()`, dont ceci est la version mois par mois. */
+   Une dette sans taux DECLARE ou sans mensualite reste constante : sans taux on
+   ne sait pas separer capital et interets, et on ne devine pas. Meme regle que
+   `capitalRembourseParMois()`, dont ceci est la version mois par mois.
+
+   UN ZERO DECLARE EST UN TAUX. `num(d.taux)` rendait zero pour un pret familial
+   a 0 % comme pour un pret dont personne n'a dit le taux, et le test `!taux`
+   confondait les deux : le pret le plus simple a projeter — pas d'interets, la
+   mensualite entiere en capital — etait le seul que la projection laissait
+   constant. Sa dette ne descendait jamais, et le patrimoine net de dix ans
+   plus tard etait faux de tout le capital rembourse.
+
+   `tauxCreditDeclare` distingue le zero de l'ignorance, et c'est deja la porte
+   qu'empruntent l'echeancier et la projection d'un credit : trois lecteurs, une
+   seule convention. */
 function dettesAmortissables() {
   const out = [];
   for (const e of ETABS()) {
     for (const d of (e.dettes || [])) {
       const reste = num(d.montant);
-      const taux = num(d.taux) / 100 / 12;
+      const tauxAn = tauxCreditDeclare(d);
+      const taux = (tauxAn || 0) / 100 / 12;
       const mens = mensualiteCredit(d);
-      if (!reste || !taux || !mens) continue;
+      if (!reste || tauxAn === null || !mens) continue;
       const assurance = assuranceMensuelleCredit(d);
       if (mens - assurance <= reste * taux) continue;
       out.push({ reste, taux, mens: mens - assurance });
@@ -6311,6 +6386,28 @@ function healthChecks() {
   }
 
   sujet = 'credits';
+  /* --- un capital restant dû négatif ---
+     Il ne peut plus se saisir : les trois portes passent par
+     `validerCreditSaisi`. Mais une regle neuve ne repare pas un fichier deja
+     ecrit, et celui-ci compte a l'envers — la dette s'additionne en negatif,
+     donc elle AJOUTE au patrimoine net. Rien ne le trahit, puisque le total
+     penche du bon cote.
+
+     Il ne se corrige pas tout seul : personne ne peut savoir si « −12 000 »
+     voulait dire 12 000 ou zero, et choisir a la place du detenteur ecrirait
+     un chiffre invente. Le controle le montre, la fiche le corrige. */
+  for (const e of ETABS()) {
+    for (const d of (e.dettes || [])) {
+      if (num(d.montant) >= 0) continue;
+      add('error', trad('Capital restant dû invalide : {l}')
+          .replace('{l}', d.libelle || trad('Crédit')),
+        trad('{v} chez {e}. Un capital restant dû négatif fait monter ton patrimoine '
+          + 'net au lieu de le baisser. Ouvre la fiche du crédit pour le corriger.')
+          .replace('{v}', fmtEUR0(num(d.montant))).replace('{e}', e.nom),
+        'accounts');
+    }
+  }
+
   for (const e of ETABS()) {
     const du = (e.dettes || []).reduce((s, d) => s + num(d.montant), 0);
     if (!du) continue;

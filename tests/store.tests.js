@@ -3259,6 +3259,12 @@ suite('Une seule base par mode, et la somme des parts la redonne', () => {
       'la base de « Tout » est le patrimoine net');
     vrai(/const baseAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.net\);/.test(app),
       'et elle se nomme comme telle');
+    /* Et la base des cartes qui decrivent des AVOIRS. Elle n'existait pas :
+       trois cartes annonçaient le net, deux le totalisaient. */
+    vrai(/const valeurAvoirsAlloc = \(\) => \(allocFinancier \? totalFinancier\(\) : patrimoine\(\)\.brut\);/.test(app),
+      'la base des avoirs vaut le brut en vue globale');
+    vrai(/const baseAvoirsAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.avoirs\);/.test(app),
+      'et elle se nomme « Tes avoirs »');
     /* Les deux lectures des poches passent le même mode, et le net avec. */
     eq((app.match(/pochesPatrimoine\(\{ financier: allocFinancier, net: true \}\)/g) || []).length, 2,
       'le tableau et le camembert lisent la même chose');
@@ -9310,15 +9316,25 @@ suite('Créer un bien ne laisse plus passer une réponse sans suite', () => {
   });
 
   test('aucun montant négatif n’est enregistré, et aucun n’est ramené à zéro', () => {
-    /* Une valeur qu'on ne sait pas lire se refuse ; elle ne se remplace pas. */
+    /* Une valeur qu'on ne sait pas lire se refuse ; elle ne se remplace pas.
+
+       Les six montants du BIEN se controlent ici. Les cinq du CREDIT sont partis
+       dans `validerCreditSaisi`, la regle que partagent les trois portes qui
+       saisissent un credit : la meme chaine recopiee a trois endroits finit par
+       diverger, et deux d'entre elles ne controlaient rien. */
     const r = regle();
     for (const cle of ['valeur', 'prixAchat', 'fraisAcquisition', 'travauxInitiaux',
-                       'apport', 'revient', 'credit', 'initial', 'mensualite',
-                       'taux', 'tauxAssurance']) {
+                       'apport', 'revient']) {
       vrai(r.includes(`'${cle}'`), `« ${cle} » est contrôlé`);
     }
     vrai(/estDeclare\(v\[cle\]\) && num\(v\[cle\]\) < 0/.test(r),
       'le contrôle porte sur le déclaré, et sur le signe');
+    vrai(/validerCreditSaisi\(v, \{ montant: 'credit' \}\)/.test(r),
+      'et les cinq champs du crédit passent par la règle centrale');
+    for (const cle of ['credit', 'initial', 'mensualite', 'taux', 'tauxAssurance']) {
+      const f = validerCreditSaisi({ [cle]: -1 }, { montant: 'credit' });
+      vrai(f && f.cle === cle, `« ${cle} » à −1 doit être refusé, et désigné`);
+    }
     vrai(!/Math\.max\(0/.test(r) && !/\|\| 0/.test(r),
       'rien n’est corrigé en douce');
   });
@@ -9327,9 +9343,14 @@ suite('Créer un bien ne laisse plus passer une réponse sans suite', () => {
     /* Des frais nuls, des travaux nuls, un apport nul, un taux a zero : autant
        de reponses justes. Seul le capital emprunte a zero avec une dette qui
        reste decrit un pret impossible. */
-    const r = regle();
-    vrai(/estDeclare\(v\.initial\) && num\(v\.initial\) === 0/.test(r),
+    vrai(/validerCreditSaisi\(/.test(regle()),
+      'le zéro du crédit se juge dans la règle centrale');
+    const f = validerCreditSaisi({ credit: 120000, initial: 0 }, { montant: 'credit' });
+    vrai(f && f.cle === 'initial',
       'le seul zéro refusé est celui du capital emprunté avec une dette');
+    eq(validerCreditSaisi({ credit: 120000, initial: 150000, mensualite: 0,
+                            taux: 0, tauxAssurance: 0 }, { montant: 'credit' }), null,
+      'une mensualité, un taux et une assurance à zéro restent des réponses');
     eq(estDeclare(0), true, 'zéro est déclaré');
     eq(estDeclare(''), false, 'le vide ne l’est pas');
   });
@@ -19490,7 +19511,10 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
        revenus, ni addition du capital. */
     vrai(!/investable\s*\+\s*/.test(c) && !/income\s*-\s*/.test(c),
       'et elle n’en refait aucune : le total vient de rec.theoretical');
-    vrai(!/theoreticalRate\s*=/.test(c), 'le taux non plus ne se recalcule pas');
+    /* `=[^=]` et non `=` seul : la vue COMPARE desormais le taux a `null` pour
+       ne pas imprimer un pourcentage sans denominateur, et `==` tombait sous un
+       motif qui cherche une affectation. */
+    vrai(!/theoreticalRate\s*=[^=]/.test(c), 'le taux non plus ne se recalcule pas');
     /* Le modele n'a pas ete touche : la formule est toujours celle-la. */
     Fixture.poser();
     const rec = savingsReconciliation();
@@ -26804,12 +26828,28 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
        fonction, donc hors de la vue, et son appel a la source y echappait. */
     const montage = corpsDe(src, 'mountAllocation')
       + corpsDe(src, 'phraseConcentration');
-    const mentions = [...vue.matchAll(/mentionBase\(([^,]+),/g)].map(m => m[1].trim());
+    /* Deux bases, et deux seulement. Celle de la page — le patrimoine net —
+       et celle des avoirs, pour les cartes qui disent ou l'argent est pose :
+       une dette n'est posee sur aucun compte et n'a pas de delai de sortie.
+       Toutes deux suivent le commutateur, et une mention nomme une base ET le
+       montant de CETTE base : le nom de l'une avec le montant de l'autre est
+       exactement le defaut que ce controle traque. */
+    const FAMILLES = { baseAlloc: 'valeurBaseAlloc', baseAvoirsAlloc: 'valeurAvoirsAlloc' };
+    const brutes = (vue.match(/mentionBase\(/g) || []).length;
+    const mentions = [...vue.matchAll(/mentionBase\((\w+)\(\), (\w+)\(\)\)/g)]
+      .map(m => [m[1], m[2]]);
     vrai(mentions.length > 0, 'la page doit annoncer au moins une base');
-    const suivent = mentions.filter(m => /baseAlloc\(\)/.test(m));
-    eq(suivent.length, mentions.length,
-      `${mentions.length - suivent.length} mention(s) de base ne suivent pas le `
-      + 'commutateur : elles nommeraient une base que les parts ne totalisent plus');
+    eq(mentions.length, brutes,
+      'une mention de base nomme deux fonctions, un nom et son montant : '
+      + `${brutes - mentions.length} n’en nomme pas`);
+    for (const [nom, valeur] of mentions) {
+      vrai(FAMILLES[nom],
+        `« ${nom}() » ne suit pas le commutateur : la mention nommerait une base `
+        + 'que les parts ne totalisent plus');
+      eq(valeur, FAMILLES[nom],
+        `« ${nom}() » est annoncé avec « ${valeur}() » : le nom d’une base et le `
+        + 'montant d’une autre');
+    }
 
     /* Et aucune base ecrite en dur ne subsiste sur cette page.
        C'est le controle qui manquait : le ternaire se recopiait a huit endroits,
@@ -26834,6 +26874,10 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
       'la définition de baseAlloc doit nommer les deux bases : ' + def.slice(0, 70));
     vrai(!/baseAlloc\(\)/.test(def.slice(def.indexOf('=>'))),
       'la définition de baseAlloc s’appelle elle-même : la page dépasse la pile');
+    const defA = src.slice(src.indexOf('const baseAvoirsAlloc ='),
+                           src.indexOf('const baseAvoirsAlloc =') + 200);
+    vrai(!/baseAvoirsAlloc\(\)/.test(defA.slice(defA.indexOf('=>'))),
+      'la définition de baseAvoirsAlloc s’appelle elle-même');
 
     /* Le commutateur fait suivre les cartes, il n'en cache aucune.
 
@@ -26847,14 +26891,17 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
       'aucune carte ne doit disparaître quand le commutateur change : elles suivent');
 
     const region = vue + montage;
-    eq((region.match(/BASES\.avoirs/g) || []).length, 0,
-      'la page nomme sa base par baseAlloc(), jamais par BASES.avoirs en dur');
+    for (const dure of ['BASES.net', 'BASES.avoirs', 'BASES.financier']) {
+      eq(region.split(dure).length - 1, 0,
+        `« ${dure} » est écrit en dur sur la page : une base se prend par `
+        + 'baseAlloc() ou baseAvoirsAlloc(), les seules qui suivent le commutateur');
+    }
     eq((montage.match(/centerLabel: trad\(/g) || []).length, 0,
       'le centre d’un anneau nomme la base de la page, jamais une chaîne écrite là');
 
     /* Le centre de chaque anneau nomme la base ET vaut la somme de ses parts. */
     for (const centre of [...montage.matchAll(/centerLabel: ([^,]+),/g)]) {
-      vrai(/baseAlloc\(\)\.nom/.test(centre[1]),
+      vrai(/^(baseAlloc|baseAvoirsAlloc)\(\)\.nom$/.test(centre[1].trim()),
         `un anneau annonce « ${centre[1].trim()} » au centre au lieu de sa base`);
     }
 
@@ -26881,6 +26928,68 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
        objet de valeur, ses deux boutons donnent la meme page. */
     vrai(/horsFinancierExiste\(\) \? barreCommutateur/.test(vue),
       'le commutateur se tait quand il n’y a rien à retirer');
+  });
+
+  test('chaque carte annonce la base que ses parts totalisent', () => {
+    /* Le defaut, en vue globale : la mention grise disait « Patrimoine net ·
+       98 250 EUR » au-dessus de tableaux dont les lignes font 138 250. Deux des
+       trois cartes decrivent OU l'argent est pose — par type de detention, par
+       compte, par delai de sortie — et une dette n'est posee sur aucun compte,
+       ne ressort d'aucun palier : elles totalisent donc les avoirs. La
+       troisieme decrit CE QUE vaut le patrimoine, et compte le net.
+
+       Un total qui n'egale pas la somme de ses parts est le pire defaut de
+       cette base de code, parce qu'il rassure. */
+    Fixture.poser();
+    const total = l => round2(l.reduce((s, x) => s + num(x.value), 0));
+    const brut = round2(patrimoine().brut);
+    const net = round2(nowTotals().net);
+    pres(brut, Fixture.BRUT, 'le brut du jeu d’essai');
+    pres(net, Fixture.BRUT - Fixture.DETTE, 'et son net');
+    vrai(Math.abs(brut - net) > 1,
+      'sans dette, ce contrôle ne prouverait rien : les deux bases se confondraient');
+
+    /* `pochesPatrimoine` est la vue de `poidsPoches`, qui porte les nombres. */
+    pres(total(poidsPoches({ financier: false, net: true })), net,
+      'la répartition totalise le patrimoine net');
+    pres(total(byAccountType({ financier: false })), brut,
+      'le type de détention totalise les avoirs');
+    pres(total(allocationByAccount({ financier: false })), brut,
+      'et le compte aussi');
+    /* Absente de la demonstration : la carte des delais n'y a jamais ete portee. */
+    if (typeof allocationParDisponibilite === 'function') {
+      pres(total(allocationParDisponibilite({ financier: false })), brut,
+        'le délai de sortie également : une dette n’en a pas');
+    }
+
+    /* En vue financiere les deux bases se confondent, et c'est ce qui rend le
+       defaut invisible tant qu'on ne bascule pas : le perimetre ecarte deja le
+       bien que le credit finance. */
+    for (const l of [poidsPoches({ financier: true, net: true }),
+                     byAccountType({ financier: true }),
+                     allocationByAccount({ financier: true })]) {
+      pres(total(l), round2(totalFinancier()), 'une seule base en vue financière');
+    }
+
+    /* Et la vue annonce bien ces bases-la, une par carte : la mention grise et
+       les tableaux qu'elle chapeaute nomment la MEME fonction. Une carte se lit
+       d'un conteneur au suivant. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewAllocation()'),
+                          src.indexOf('function mountAllocation'));
+    const cartes = vue.split('<div class="card').slice(1);
+    let basees = 0;
+    for (const carte of cartes) {
+      const noms = new Set();
+      for (const m of carte.matchAll(/mentionBase\((\w+)\(\)/g)) noms.add(m[1]);
+      for (const m of carte.matchAll(/tbl\(\w+, (\w+)\(\)\.nom/g)) noms.add(m[1]);
+      if (!noms.size) continue;
+      basees++;
+      eq(noms.size, 1,
+        `une carte annonce « ${[...noms].join(' » et « ')} » : deux bases sous un `
+        + 'seul titre, et un total qui n’égale pas la somme de ses parts');
+    }
+    vrai(basees >= 3, `attendu au moins trois cartes basées, vu ${basees}`);
   });
 
   test('un camembert a son tableau, des barres classées n’en ont pas', () => {
@@ -32502,18 +32611,24 @@ suite('Un capital emprunté nul reste nul dans l’onboarding', () => {
     const p = parcours();
     /* La regle a quitte l'expression flechee d'une ligne pour un corps : elles
        sont plusieurs desormais, et la premiere qui parle rend la main. */
-    vrai(/v\.aCredit === 'oui' && num\(v\.credit\) > 0/.test(p),
+    vrai(/v\.aCredit === 'oui' && !\(num\(v\.credit\) > 0\)/.test(p),
       'la règle regarde les deux champs à la fois');
-    vrai(/estDeclare\(v\.initial\) && num\(v\.initial\) === 0/.test(p),
-      'et ne vise que le zéro explicite');
-    vrai(/Le capital emprunté au départ doit être /.test(p), 'le message dit pourquoi');
+    /* Le zero du capital emprunte se juge desormais dans la regle centrale des
+       credits, celle que partagent les trois portes de saisie. La creation la
+       nomme, elle ne la recopie pas. */
+    vrai(/validerCreditSaisi\(v, \{ montant: 'credit' \}\)/.test(p),
+      'et elle délègue le crédit à la règle centrale');
+    const store = lireSource('assets/store.js');
+    vrai(/Le capital emprunté au départ doit être /.test(store), 'le message dit pourquoi');
     /* La phrase entiere vit dans le dictionnaire : c'est elle qui s'affiche, et
        la source la coupe en deux par concatenation. */
     vrai(I18N.en['Le capital emprunté au départ doit être supérieur à 0 lorsqu’un capital '
       + 'restant dû est renseigné.'], 'et elle a sa traduction');
-    vrai(/cle: 'initial'/.test(p.slice(p.indexOf('valide: v =>'), p.indexOf('champs: bien'))),
-      'et le curseur revient sur le bon champ');
+    const zero = validerCreditSaisi({ credit: 120000, initial: 0 }, { montant: 'credit' });
+    vrai(zero && zero.cle === 'initial', 'et le curseur revient sur le bon champ');
     /* Un capital ABSENT avec une dette reste autorise : c'est « je ne sais pas ». */
+    eq(validerCreditSaisi({ credit: 120000 }, { montant: 'credit' }), null,
+      'absent, il reste « je ne sais pas »');
     const s = lireSource('assets/app.js');
     vrai(/const souci = efface \? null : valide\?\.\(out\);/.test(s),
       'la fenêtre lit la règle croisée');
@@ -32614,5 +32729,343 @@ suite('D.2 ne change rien aux données valides', () => {
       .test(st), 'D.1 : le détail ne prend la main que complet');
     vrai(!/capitalMois \+ [^;]*cashFlow|cashFlow \+ [^;]*capitalMois/.test(src),
       'et le capital remboursé ne rejoint aucun cash-flow');
+  });
+});
+
+/* P0.2 : UN CREDIT SE VALIDE A L'ENTREE, PAS A LA LECTURE. Un capital restant du
+   negatif s'additionne en negatif dans le patrimoine net : il ENRICHIT, et le
+   total penche du bon cote, donc rien ne le trahit. Un plancher a zero dans le
+   total cacherait la saisie au lieu de l'empecher. */
+suite('Un capital restant dû négatif ne peut plus se saisir', () => {
+
+  test('la règle refuse un capital restant dû négatif, et nomme le champ', () => {
+    const f = validerCreditSaisi({ montant: -1000 });
+    vrai(f, 'la saisie est refusée');
+    eq(f.cle, 'montant', 'et c’est ce champ-là que la fenêtre désigne');
+    vrai(/négatif/.test(f.message), `le message dit pourquoi : « ${f.message} »`);
+  });
+
+  test('elle laisse passer ce qui est honnête', () => {
+    eq(validerCreditSaisi({}), null, 'un crédit dont rien n’est renseigné');
+    eq(validerCreditSaisi({ montant: 0 }), null, 'un prêt soldé vaut zéro, pas une faute');
+    eq(validerCreditSaisi({ montant: 120000, initial: 150000, mensualite: 800,
+                            taux: 0, tauxAssurance: 0 }), null,
+      'et un prêt à 0 % reste une déclaration, pas une absence');
+  });
+
+  test('aucun des cinq montants ne passe en négatif', () => {
+    for (const cle of ['montant', 'initial', 'mensualite', 'taux', 'tauxAssurance']) {
+      const f = validerCreditSaisi({ montant: 1000, [cle]: -1 });
+      vrai(f, `« ${cle} » à −1 doit être refusé`);
+      eq(f.cle, cle, `et la fenêtre doit désigner « ${cle} »`);
+    }
+  });
+
+  test('un capital emprunté à zéro face à un restant dû', () => {
+    const f = validerCreditSaisi({ montant: 120000, initial: 0 });
+    vrai(f && f.cle === 'initial', 'le second ne peut pas venir du premier');
+    eq(validerCreditSaisi({ montant: 120000 }), null,
+      'mais le champ reste facultatif : un vieux prêt dont on a oublié le départ s’en passe');
+  });
+
+  test('la table des clefs suit la porte qui appelle', () => {
+    /* La creation d'un bien nomme `credit` ce que les deux autres portes
+       nomment `montant`. Une regle recopiee a trois endroits finit par diverger :
+       c'est donc la clef qui voyage, jamais la regle. */
+    const f = validerCreditSaisi({ credit: -1 }, { montant: 'credit' });
+    vrai(f, 'refusé sous son autre nom aussi');
+    eq(f.cle, 'credit', 'et la fenêtre désigne le champ qui existe chez elle');
+    eq(validerCreditSaisi({ montant: -1 }, { montant: 'credit' }), null,
+      'sans lire un champ que cette fenêtre-là n’a pas');
+  });
+
+  test('les trois portes appellent la règle, aucune ne la recopie', () => {
+    /* Sur le CODE, jamais sur un commentaire : un controle ancre sur de la prose
+       passe ici et rougit sur l'arbre publie, ou les commentaires sont retires. */
+    const code = lireSource('assets/app.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const entre = (nom, fin) => {
+      const d = code.indexOf(nom);
+      vrai(d > 0, `la porte « ${nom} » doit exister`);
+      const f = code.indexOf(fin, d);
+      return code.slice(d, f > d ? f : d + 8000);
+    };
+    vrai(/validerCreditSaisi\(/.test(entre("async 'ajouter-credit'", "async 'editer-credit'")),
+      'l’ajout depuis un établissement ne valide pas sa saisie');
+    vrai(/validerCreditSaisi\(/.test(entre("async 'editer-credit'", "async 'retirer-credit'")),
+      'l’édition d’un crédit ne valide pas sa saisie');
+    vrai(/validerCreditSaisi\(v, \{ montant: 'credit' \}\)/.test(code),
+      'la création d’un bien financé passe par la même règle');
+    /* Et la regle vit dans le modele, la ou elle se teste. */
+    vrai(/function validerCreditSaisi\(/.test(lireSource('assets/store.js')),
+      'la règle appartient au modèle, pas à une fenêtre');
+  });
+
+  test('le total des dettes n’est pas rafistolé à la lecture', () => {
+    const total = corpsDe(lireSource('assets/store.js'), 'dettesTotal');
+    vrai(/reduce/.test(total), 'le total se lit bien ici');
+    vrai(!/Math\.max/.test(total),
+      'le total somme ce qui est écrit : le redresser cacherait la saisie fautive '
+      + 'au lieu de l’empêcher, et l’export l’emporterait quand même');
+  });
+
+  test('un état déjà écrit se signale au lieu de se corriger tout seul', () => {
+    /* Personne ne peut savoir si « −12 000 » voulait dire 12 000 ou zero :
+       choisir a la place du detenteur ecrirait un chiffre invente. */
+    Fixture.poser(e => {
+      e.etabs.find(x => (x.dettes || []).length).dettes[0].montant = -12000;
+    });
+    pres(dettesTotal(), -12000, 'le total dit la vérité, aussi fausse soit-elle');
+    const ligne = healthChecks().find(h => /Capital restant dû invalide/.test(h.title));
+    vrai(ligne, 'la cloche le signale');
+    eq(ligne.level, 'error', 'comme une erreur, pas comme un avis');
+    eq(ligne.view, 'accounts', 'avec la porte pour aller le corriger');
+    Store.state.etabs.find(x => (x.dettes || []).length).dettes[0].montant = 12000;
+    vrai(!healthChecks().some(h => /Capital restant dû invalide/.test(h.title)),
+      'et il se tait dès que le signe est corrigé');
+  });
+});
+
+/* P0.3 : UN ZERO DECLARE EST UN TAUX, PAS UNE ABSENCE. C'est deja la convention
+   de l'echeancier et de la projection d'un credit ; la projection de patrimoine
+   etait le dernier lecteur a confondre les deux, et elle laissait constant le
+   pret le plus simple a amortir. */
+suite('Un prêt à 0 % s’amortit dans la projection', () => {
+
+  /* On remplace la dette du jeu d'essai, sans toucher aux etablissements : les
+     comptes y sont rattaches, et les detacher fausserait tous les totaux. */
+  const pretDe = champs => Fixture.poser(s => {
+    const e = s.etabs.find(x => (x.dettes || []).length);
+    e.dettes = [{ id: 'd0', libelle: 'Prêt familial', montant: 12000,
+                  initial: 24000, ...champs }];
+  });
+
+  test('un taux déclaré à zéro entre dans les dettes amortissables', () => {
+    pretDe({ taux: 0, mensualite: 500 });
+    const l = dettesAmortissables();
+    eq(l.length, 1, 'le prêt est amortissable : pas d’intérêts, tout en capital');
+    pres(l[0].taux, 0, 'à taux zéro');
+    pres(l[0].mens, 500, 'et la mensualité entière rembourse');
+  });
+
+  test('un taux absent reste une absence, et rien ne se projette', () => {
+    /* La regle ne change pas : sans taux declare, on ne sait pas separer le
+       capital des interets, et on ne devine pas. */
+    pretDe({ mensualite: 500 });
+    eq(dettesAmortissables().length, 0, 'aucune projection sur un taux inconnu');
+    pretDe({ taux: null, mensualite: 500 });
+    eq(dettesAmortissables().length, 0, 'un taux nul explicite ne vaut pas zéro');
+    pretDe({ taux: '', mensualite: 500 });
+    eq(dettesAmortissables().length, 0, 'ni un champ vide');
+    pretDe({ taux: 0 });
+    eq(dettesAmortissables().length, 0, 'et sans mensualité, rien ne rembourse');
+  });
+
+  test('les trois lecteurs d’un taux partagent la même porte', () => {
+    /* `tauxCreditDeclare` distingue le zero de l'ignorance. Trois lecteurs le
+       lisent : l'echeancier, la projection d'un credit, et la projection de
+       patrimoine — la derniere a l'avoir appris. Le controle porte sur le CODE :
+       les commentaires disparaissent de l'arbre publie. */
+    const code = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const corps = corpsDe(code, 'dettesAmortissables');
+    vrai(corps.length > 100, 'la fonction doit se relire depuis sa source');
+    vrai(/tauxCreditDeclare\(d\)/.test(corps),
+      'la projection de patrimoine lit le taux par la porte commune');
+    vrai(!/num\(d\.taux\)/.test(corps),
+      'et non par un num() qui confondrait zéro et inconnu');
+  });
+
+  test('la dette descend vraiment, et la part plate monte avec', () => {
+    /* La preuve par le moteur : 12 000 EUR a 0 %, rembourses 500 EUR par mois,
+       s'eteignent en vingt-quatre mois. */
+    pretDe({ taux: 0, mensualite: 500 });
+    const un = moteurProjection(configProjection({ years: 1 })).final.plat;
+    const deux = moteurProjection(configProjection({ years: 2 })).final.plat;
+    const trois = moteurProjection(configProjection({ years: 3 })).final.plat;
+    vrai(deux > un, `la part plate monte avec le temps, vu ${Math.round(un)} puis ${Math.round(deux)}`);
+    pres(deux - un, 6000, 'de six mille euros la deuxième année, comme la première');
+    pres(trois, deux,
+      'puis plus rien : au vingt-quatrième mois la dette est éteinte');
+  });
+
+  test('un taux minuscule et un taux nul projettent la même chose', () => {
+    /* Le defaut se mesure : 0,01 % passait, 0 % non, et l'ecart entre les deux
+       projections etait de tout le capital rembourse. */
+    pretDe({ taux: 0, mensualite: 500 });
+    const zero = moteurProjection(configProjection({ years: 2 })).final.plat;
+    pretDe({ taux: 0.01, mensualite: 500 });
+    const presque = moteurProjection(configProjection({ years: 2 })).final.plat;
+    vrai(Math.abs(zero - presque) < 50,
+      `0 % et 0,01 % doivent projeter presque la même chose, vu ${Math.round(zero)} et ${Math.round(presque)}`);
+  });
+});
+
+/* P0.4 : UNE CROISSANCE DE PATRIMOINE N'EST PAS UNE CAPACITE D'EPARGNE. Le
+   versement propose se repliait sur le rythme observe des releves quand le
+   budget ne laissait rien : une hausse de marche de 900 EUR devenait 900 EUR
+   verses chaque mois, qui produisaient a leur tour du rendement. */
+suite('Le versement proposé vient du budget, ou de rien', () => {
+
+  const RELEVES = [{ date: '2026-01-31', comment: '', v: { c_courant: 1000 } },
+                   { date: '2026-02-28', comment: '', v: { c_courant: 2000 } },
+                   { date: '2026-03-31', comment: '', v: { c_courant: 3000 } }];
+
+  /* Un patrimoine qui monte de mille euros par mois, et un budget muet. */
+  const sansBudget = () => Fixture.poser(s => {
+    s.budget.income = []; s.budget.fixedCharges = []; s.budget.expenses = [];
+    s.monthly = RELEVES.map(r => ({ ...r, v: { ...r.v } }));
+  });
+
+  test('la suggestion est l’épargne investissable, et rien d’autre', () => {
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 3850, period: 'mois' }];
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1200, period: 'mois' }];
+      s.budget.expenses = [{ month: '2026-01', v: { Courses: 900 }, note: '' }];
+    });
+    const rec = savingsReconciliation();
+    vrai(rec.investable > 0, 'le jeu d’essai laisse de quoi investir');
+    eq(suggestedMonthly(), Math.round(rec.investable), 'exactement cette somme');
+  });
+
+  test('une croissance de patrimoine n’est pas une capacité d’épargne', () => {
+    sansBudget();
+    const rec = savingsReconciliation();
+    vrai(rec.realPerMonth > 0,
+      `le rythme observé doit être positif, vu ${rec.realPerMonth} : sans lui ce contrôle ne prouve rien`);
+    vrai(!(rec.investable > 0), 'et le budget ne laisse rien à investir');
+    eq(suggestedMonthly(), 0,
+      'la suggestion vaut donc zéro : elle ne reprend pas la croissance du patrimoine');
+  });
+
+  test('le rythme observé reste rendu, là où il décrit ce qu’il est', () => {
+    /* Il ne disparait pas du modele : la carte du budget le montre comme rythme
+       observe et le compare a l'epargne theorique. C'est sa nature, et c'est le
+       seul endroit ou il est juste. */
+    sansBudget();
+    const rec = savingsReconciliation();
+    vrai(rec.realPerMonth != null, 'le rythme observé est toujours calculé');
+    pres(rec.gap, rec.realPerMonth - rec.theoretical, 'et l’écart s’en déduit');
+    const corps = corpsDe(lireSource('assets/store.js'), 'suggestedMonthly');
+    vrai(corps.length > 30, 'la fonction doit se relire depuis sa source');
+    vrai(!/realPerMonth/.test(corps), 'mais la suggestion de versement ne le lit plus');
+    vrai(/investable/.test(corps), 'elle ne lit que l’épargne investissable');
+  });
+
+  test('sans capacité d’épargne, la projection ne verse rien', () => {
+    sansBudget();
+    Store.state.meta.projScenario = 'central';
+    delete Store.state.meta.projMonthly;
+    const s = projectionSettings();
+    eq(s.monthlyAuto, true, 'aucune valeur réglée : le budget décide');
+    eq(s.monthly, 0, 'et il ne décide rien de positif');
+    const p = capitalisation({ years: 10 });
+    pres(p.points[10].contributed, p.points[0].contributed,
+      'aucun euro versé en dix ans : la courbe ne s’emballe plus toute seule');
+  });
+
+  test('l’écran ne dit pas « repris » quand rien n’a été repris', () => {
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('const suggere = suggestedMonthly();');
+    vrai(i > 0, 'la mention sous le champ interroge la suggestion');
+    const bloc = src.slice(i, i + 1800);
+    vrai(/suggere > 0 \? trad\('Repris de ta capacité d’épargne dans Budget'\)/.test(bloc),
+      '« Repris de » ne se dit que si un montant a été repris');
+    vrai(/Aucune capacité d’épargne positive connue dans Budget/.test(bloc),
+      'sinon la phrase dit qu’il n’y a rien à reprendre');
+    /* Un versement fige reste fige, meme a zero : c'est un choix. */
+    const j = bloc.indexOf('if (!(suggere > 0))');
+    vrai(j > 0, 'le cas figé sans capacité connue est traité à part');
+    const branche = bloc.slice(j, bloc.indexOf('\n', j));
+    vrai(/trad\('Valeur figée\.'\)/.test(branche), 'et la phrase le nomme');
+    vrai(!/proj-use-budget/.test(branche), 'sans proposer de reprendre zéro');
+    for (const cle of ['Aucune capacité d’épargne positive connue dans Budget',
+                       'Valeur figée.']) {
+      vrai(I18N.en[cle], `« ${cle} » doit avoir sa traduction`);
+    }
+  });
+});
+
+/* P0.5 : ZERO EST UNE REPONSE, ET IL NE DIT JAMAIS L'ABSENCE DE REPONSE.
+   « 0 % de tes revenus » sous 900 EUR de charges fixes se lit comme une mesure :
+   il dit que ces charges ne pesent rien. C'est l'inverse — elles pesent tout,
+   puisque rien n'entre. */
+suite('Un pourcentage sans dénominateur n’existe pas', () => {
+
+  const sansRevenu = () => Fixture.poser(s => {
+    s.budget.income = [];
+    s.budget.fixedCharges = [{ label: 'Loyer', amount: 900, period: 'mois' }];
+  });
+
+  test('les quatre parts du budget valent null, jamais zéro', () => {
+    sansRevenu();
+    const f = budgetFrame();
+    eq(f.income, 0, 'aucun revenu déclaré');
+    pres(f.fixed, 900, 'et pourtant 900 € de charges fixes');
+    for (const cle of ['fixedPct', 'availablePct', 'targetPct', 'investTargetPct']) {
+      eq(f[cle], null, `« ${cle} » : l’absence de mesure, pas une mesure à zéro`);
+    }
+    /* Les montants, eux, restent vrais : on ne force rien a zero. */
+    pres(f.available, -900, 'le solde dit la vérité, aussi désagréable soit-elle');
+    pres(f.investTarget, f.available - f.target, 'et l’objectif d’investissement aussi');
+  });
+
+  test('avec un revenu, les quatre parts se calculent comme avant', () => {
+    Fixture.poser(s => {
+      s.budget.monthlyTarget = 600;
+      s.budget.income = [{ label: 'Salaire', amount: 3000, period: 'mois' }];
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 900, period: 'mois' }];
+    });
+    const f = budgetFrame();
+    pres(f.fixedPct, 30, '900 sur 3 000');
+    pres(f.availablePct, 70, 'et le reste');
+    pres(f.targetPct, 20, '600 sur 3 000');
+    pres(f.investTargetPct, 50, 'et ce qui reste une fois l’objectif retiré');
+  });
+
+  test('le taux d’accumulation suit la même règle', () => {
+    sansRevenu();
+    eq(savingsReconciliation().theoreticalRate, null,
+      'un taux sans revenu au dénominateur n’est pas un taux à zéro');
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 3000, period: 'mois' }];
+    });
+    const rec = savingsReconciliation();
+    vrai(rec.theoreticalRate != null, 'il redevient un nombre dès qu’un revenu existe');
+    pres(rec.theoreticalRate, rec.theoretical / rec.income * 100, 'et vaut le rapport annoncé');
+  });
+
+  test('aucune vue n’imprime « 0 % » à la place d’une absence', () => {
+    /* `fmtPct(null)` rendrait « 0,00 % », parce que `num(null)` vaut zero :
+       le mensonge qu'on vient de retirer du modele reviendrait par l'affichage
+       si une vue oubliait sa condition. Le controle porte sur les six lectures
+       de ces cinq champs, nommees une a une — `targetPct` existe aussi sur les
+       cibles d'Allocation, ou il a toujours un denominateur. */
+    const src = lireSource('assets/app.js');
+    const echappe = s => s.replace(/[.()]/g, '\\$&');
+    const cibles = ['f.fixedPct', 'f.availablePct', 'f.targetPct', 'f.investTargetPct',
+                    'budgetFrame().fixedPct', 'rec.theoreticalRate'];
+    let vues = 0;
+    for (const cible of cibles) {
+      const motif = new RegExp('fmtPct\\(\\s*' + echappe(cible), 'g');
+      for (const m of [...src.matchAll(motif)]) {
+        vues++;
+        const autour = src.slice(Math.max(0, m.index - 500), m.index + 60);
+        vrai(/== null|income\s*\?|!f\.income/.test(autour),
+          `« ${cible} » s’imprime sans garde : fmtPct(null) rendrait « 0,00 % »`);
+      }
+    }
+    vrai(vues >= 3, `au moins trois lectures attendues, vu ${vues}`);
+  });
+
+  test('la vue nomme l’absence au lieu de la chiffrer', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/rec\.theoreticalRate == null[\s\S]{0,120}trad\('aucun revenu déclaré'\)/.test(src),
+      'le taux d’accumulation dit ce qui manque');
+    vrai(/budgetFrame\(\)\.fixedPct == null \? trad\('aucun revenu déclaré'\)/.test(src),
+      'et le panneau des charges fixes aussi');
+    vrai(I18N.en['aucun revenu déclaré'], 'la phrase a sa traduction');
+    /* Les deux mentions en ligne, elles, retirent la clause : « 900 € par mois »
+       se suffit, la ou « 900 € par mois, 0 % de tes revenus » ment. */
+    vrai(/f\.fixedPct == null \? '' :/.test(src),
+      'et les mentions en ligne se taisent plutôt que de chiffrer zéro');
   });
 });
