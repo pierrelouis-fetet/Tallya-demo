@@ -6521,7 +6521,7 @@ async function proposerTransitionLoyer() {
   const v = await askForm({
     titre: plusieurs ? 'Tu as plusieurs loyers dans ton budget'
                      : 'Tu as déjà un loyer dans ton budget',
-    sous: trad('Tu viens d’ajouter une résidence principale. Ce loyer est toujours compté dans tes charges fixes.'),
+    sous: trad('Ce bien est maintenant ta résidence principale. Ce loyer est toujours compté dans tes charges fixes.'),
     ok: 'Enregistrer',
     champs: [
       ...(plusieurs
@@ -7445,14 +7445,46 @@ const ACTIONS = {
                   : t.sansCash ? trad('Nommer le contrat')
                   : `${BASES.liquidites.nom} ${trad('sur ce compte')}`,
       sous: `${trad('Étape')} ${etapes} ${trad('sur.etape', 'sur')} ${etapes}${bien
-        ? `, ${trad('la plus-value se calcule sur ces deux montants')}`
+        ? `, ${trad('la valeur actuelle se compare au coût d’acquisition')}`
         : t.sansCash ? `, ${trad('sa valeur viendra des supports que tu y ajouteras')}` : ''}`,
       ok: 'Créer',
-      valide: v => (v.aCredit === 'oui' && num(v.credit) > 0
-                    && estDeclare(v.initial) && num(v.initial) === 0)
-        ? { cle: 'initial', message: trad('Le capital emprunté au départ doit être '
-            + 'supérieur à 0 lorsqu’un capital restant dû est renseigné.') }
-        : null,
+      /* LES REGLES DE LA FENETRE, DANS L'ORDRE OU ELLES SE POSENT.
+
+         « OUI » DOIT CREER UN CREDIT. La creation ne posait la dette que si le
+         capital restant du etait positif : repondre « oui », laisser le champ
+         vide et saisir une mensualite creait un bien SANS credit, en silence, et
+         le patrimoine net naissait faux. Une reponse qui n'a pas de suite est
+         pire qu'une question qu'on n'a pas posee.
+
+         Un capital emprunte declare a ZERO alors qu'un capital restant est
+         renseigne decrit un pret impossible. Le champ reste FACULTATIF — absent,
+         il veut dire que la valeur n'est pas connue, et c'est une reponse
+         legitime. C'est le zero explicite qui ne l'est pas.
+
+         AUCUN MONTANT NEGATIF, et aucun n'est ramene a zero en douce : une
+         valeur qu'on ne sait pas lire se refuse, elle ne se remplace pas. Le
+         zero explicite, lui, reste une reponse partout ou il en est une — des
+         frais nuls, des travaux nuls, un apport nul, un taux a zero.
+
+         La quote-part passe par `partEstValide`, la meme porte que la fiche :
+         150 % n'y devient jamais 100 %, ici pas davantage. */
+      valide: v => {
+        if (v.aCredit === 'oui' && !(num(v.credit) > 0))
+          return { cle: 'credit', message: trad('Le capital restant dû doit être supérieur à 0 si tu déclares avoir encore un crédit.') };
+        if (v.aCredit === 'oui' && num(v.credit) > 0
+            && estDeclare(v.initial) && num(v.initial) === 0)
+          return { cle: 'initial', message: trad('Le capital emprunté au départ doit être '
+            + 'supérieur à 0 lorsqu’un capital restant dû est renseigné.') };
+        for (const cle of ['valeur', 'prixAchat', 'fraisAcquisition', 'travauxInitiaux',
+                           'apport', 'revient', 'credit', 'initial', 'mensualite',
+                           'taux', 'tauxAssurance']) {
+          if (estDeclare(v[cle]) && num(v[cle]) < 0)
+            return { cle, message: trad('Un montant négatif ne peut pas être enregistré.') };
+        }
+        if (!partEstValide(v.part))
+          return { cle: 'part', message: trad('La quote-part doit être comprise entre 0 et 100 %.') };
+        return null;
+      },
       champs: bien ? [
         ...(t.sansEtab ? [{ cle: 'nom', label: trad('Nom du bien'), type: 'texte', requis: true,
           max: NOM_LIGNE_MAX, exemple: 'ex. Rolex Submariner',
@@ -7463,9 +7495,11 @@ const ACTIONS = {
            les repartitions. Il n'y a rien a inventer pour la remplir — c'est la
            seule chose qu'on sache a coup sur en creant un bien. */
         { cle: 'valeur', requis: true,
-          label: `${estDetenuEnDirect(t) ? 'Valeur estimée' : 'Valeur actuelle'} (€)`,
+          label: estDetenuEnDirect(t) ? trad('Valeur estimée du bien entier (€)')
+                                      : trad('Valeur actuelle (€)'),
           type: 'nombre', exemple: '0',
-          aide: estDetenuEnDirect(t) ? 'ce que tu en tirerais en le vendant aujourd’hui'
+          aide: estDetenuEnDirect(t)
+              ? trad('Sa valeur totale aujourd’hui. Si tu n’en détiens qu’une part, renseigne ta quote-part séparément.')
               : 'ce que cela vaut aujourd’hui' },
         ...(bien && estDetenuEnDirect(t) ? [
         { cle: 'section_acq', label: 'Acquisition', type: 'section' },
@@ -7509,6 +7543,9 @@ const ACTIONS = {
           type: 'liste', requis: true, valeur: '',
           options: [['', trad('Choisir…')], ...USAGES_BIEN],
           aide: trad('il décide de ce que la fiche te montre : un rendement, ou un coût') }] : []),
+        ...(bien && estDetenuEnDirect(t) ? [{ cle: 'part', label: trad('Ta part (%)'),
+          type: 'nombre', exemple: '100',
+          aide: trad('À remplir seulement si tu détiens ce bien à plusieurs. La valeur saisie reste celle du bien entier ; ton patrimoine ne compte que ta part.') }] : []),
         ...(t.sansEtab ? [] : (() => {
         /* La question d'abord, les champs ensuite — et seulement si la reponse
            est oui. Un bien paye comptant traversait six champs de pret vides
@@ -7523,16 +7560,16 @@ const ACTIONS = {
           valeur: 'non', options: [['non', trad('Non')], ['oui', trad('Oui')]] },
         { cle: 'credit', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
           montreSi: avecCredit,
-          aide: trad('ce que tu dois encore aujourd’hui : la dette se déduit du patrimoine net') },
+          aide: trad('Ce que tu dois encore personnellement aujourd’hui. Cette dette se déduit de ton patrimoine net.') },
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre',
           exemple: '0', montreSi: avecCredit,
-          aide: trad('facultatif, il donne la part déjà remboursée') },
+          aide: trad('Le capital emprunté à ta charge au départ, facultatif. Il permet de suivre ce que tu as déjà remboursé.') },
         { cle: 'preteur', label: 'Prêteur', type: 'texte', exemple: 'ex. Crédit Agricole',
           suggestions: valeursConnues('preteur'), montreSi: avecCredit,
           aide: trad('la banque qui prête, si ce n’est pas toi') },
-        { cle: 'mensualite', label: trad('Mensualité totale (€)'), type: 'nombre', exemple: '0',
+        { cle: 'mensualite', label: trad('Mensualité facturée (€)'), type: 'nombre', exemple: '0',
           montreSi: avecCredit,
-          aide: trad('facultatif, assurance incluse : c’est elle qui entre dans ton budget') },
+          aide: trad('Assurance incluse. Elle sera ajoutée aux charges fixes ; tu pourras ensuite indiquer la part payée par quelqu’un d’autre.') },
         { cle: 'taux', label: trad('Taux annuel (%)'), type: 'nombre', exemple: '0',
           montreSi: avecCredit,
           aide: trad('facultatif, il sert à suivre le capital qui reste') },
@@ -7596,7 +7633,12 @@ const ACTIONS = {
           ? { travauxInitiaux: num(e3.travauxInitiaux) } : {}),
         ...(estDeclare(e3.revient) ? { prixDeRevient: num(e3.revient) } : {}),
         dateAcquisition: e3.ouvertLe || '', estimeLe: e3.estimeLe || todayISO(),
-        ...(e3.usageBien ? { usage: e3.usageBien } : {}) });
+        ...(e3.usageBien ? { usage: e3.usageBien } : {}),
+        /* Vide reste vide : sans quote-part declaree, la ligne n'en porte pas,
+           et `partDetention` rend le tout. Un zero declare s'ecrit, lui — c'est
+           la reponse juste pour un bien qu'on ne detient plus mais qu'on garde
+           en memoire. */
+        ...(estDeclare(e3.part) ? { part: num(e3.part) } : {}) });
       if (num(e3.credit)) {
         const et = etabById(etabId);
         et.dettes = et.dettes || [];
@@ -7730,7 +7772,7 @@ const ACTIONS = {
     retour();
   },
 
-  'enregistrer-fiche'() {
+  async 'enregistrer-fiche'() {
     /* Le blur d'abord : sur iOS, un champ encore actif peut n'avoir pas emis son
        dernier `input`, et l'ecriture se ferait sans lui. Et il fait aussi passer
        la derniere frappe par `applyField`, donc par la garde ci-dessous. */
@@ -7753,6 +7795,25 @@ const ACTIONS = {
       toast(trad('La quote-part doit être comprise entre 0 et 100 %.'));
       return;
     }
+    /* LA TRANSITION SUIT LE GESTE, pas le rendu. La fiche porte un select qui
+       ecrit l'usage par `data-path` : changer un bien en residence principale
+       par ce chemin-la ne posait donc pas la question de l'ancien loyer, alors
+       que le petit atelier « Choisir l'usage » la posait. Deux chemins pour un
+       meme fait metier, et un seul des deux tenait la promesse.
+
+       L'etat d'AVANT vient de l'instantane de la fiche, pris au premier rendu de
+       la route : c'est lui qui dit si l'usage a change, et il evite de reposer
+       la question a qui reenregistre le meme choix. Rien n'est branche sur
+       `applyField` ni sur un ecouteur de champ — un rendu, une ouverture de
+       fiche, une valeur corrigee ne declenchent rien. */
+    const devientPrincipale = (() => {
+      if (!ficheAvant || !String(ficheAvant.cle).startsWith('compte:')) return false;
+      const c = objetDeFiche(ficheAvant.cle);
+      if (!c || !estBienEnDirect(c) || usageBien(c) !== 'principale') return false;
+      let avant = null;
+      try { avant = JSON.parse(ficheAvant.copie); } catch (e) { return false; }
+      return usageBien(avant) !== 'principale';
+    })();
     retourHaptique();
     Store.save();
     toast(trad('Enregistré ✓'));
@@ -7766,6 +7827,7 @@ const ACTIONS = {
     const y = window.scrollY;
     refreshAccounts(); render();
     window.scrollTo(0, y);
+    if (devientPrincipale) await proposerTransitionLoyer();
   },
 
   async 'choisir-usage'(btn) {
@@ -8000,15 +8062,19 @@ const ACTIONS = {
          comment un ancien texte a ete lu. Seule la convention des saisies a venir
          change, et l'aide le dit. */
       sous: direct
-        ? trad('Le loyer hors charges récupérables. Les charges du propriétaire se déclarent séparément et sont déduites une seule fois')
+        ? trad('Le loyer hors charges récupérables que tu perçois personnellement. Les charges du propriétaire se déclarent séparément et sont déduites une seule fois.')
         : trad('Ce que ce placement te verse. Les frais se déclarent séparément et sont déduits une seule fois'),
       ok: 'Ajouter',
+      valide: v => num(v.amount) > 0 ? null
+        : { cle: 'amount', message: direct ? trad('Le loyer mensuel doit être supérieur à 0.')
+                                           : trad('Le montant mensuel doit être supérieur à 0.') },
       champs: [
         { cle: 'label', label: 'Source', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
           valeur: direct ? `Loyer ${nomCompteV2(c)}`
                          : `${trad('Distribution')} ${nomCompteV2(c)}`,
           exemple: 'ex. Loyer studio Lyon' },
-        { cle: 'amount', label: trad('Montant mensuel (€)'), type: 'nombre', exemple: '0' },
+        { cle: 'amount', label: trad('Montant mensuel (€)'), type: 'nombre',
+          requis: true, exemple: '0' },
       ],
     });
     if (!v) return;

@@ -9890,6 +9890,208 @@ suite('La convention personnelle se dit là où elle se joue', () => {
    s'additionner dans le dos. */
 /* E5 : la finition. Ce que la fiche dit, dans quel ordre, et ce qu'elle a
    cesse de dire. */
+/* Le parcours de creation, mis au niveau de ce que le moteur sait deja faire. */
+suite('Créer un bien ne laisse plus passer une réponse sans suite', () => {
+
+  const app = () => lireSource('assets/app.js');
+  /* La borne est du CODE : la fenetre de creation se lit entre son ouverture et
+     le premier champ, et la banniere de commentaire disparait sur l'arbre
+     publie. */
+  const regle = () => { const s = app(); const i = s.indexOf('valide: v => {');
+    return s.slice(i, s.indexOf('champs: bien ? [', i)); };
+
+  test('« Oui, j’ai un crédit » exige un capital restant dû', () => {
+    /* LE DEFAUT. La dette n'etait posee que si le capital restant etait positif :
+       repondre « oui », laisser le champ vide et saisir une mensualite creait un
+       bien SANS credit, en silence, et le patrimoine net naissait faux. Une
+       reponse qui n'a pas de suite est pire qu'une question qu'on n'a pas posee. */
+    const r = regle();
+    vrai(r.length > 200, 'la règle doit être trouvable');
+    vrai(/if \(v\.aCredit === 'oui' && !\(num\(v\.credit\) > 0\)\)/.test(r),
+      'vide, zéro et négatif sont refusés ensemble');
+    vrai(/cle: 'credit'/.test(r), 'et le curseur revient sur le champ');
+    vrai(/Le capital restant dû doit être supérieur à 0 si tu déclares avoir encore un crédit\./.test(r),
+      'avec un message qui dit pourquoi');
+    vrai(I18N.en['Le capital restant dû doit être supérieur à 0 si tu déclares avoir encore un crédit.'],
+      'et il a sa traduction');
+  });
+
+  test('aucun montant négatif n’est enregistré, et aucun n’est ramené à zéro', () => {
+    /* Une valeur qu'on ne sait pas lire se refuse ; elle ne se remplace pas. */
+    const r = regle();
+    for (const cle of ['valeur', 'prixAchat', 'fraisAcquisition', 'travauxInitiaux',
+                       'apport', 'revient', 'credit', 'initial', 'mensualite',
+                       'taux', 'tauxAssurance']) {
+      vrai(r.includes(`'${cle}'`), `« ${cle} » est contrôlé`);
+    }
+    vrai(/estDeclare\(v\[cle\]\) && num\(v\[cle\]\) < 0/.test(r),
+      'le contrôle porte sur le déclaré, et sur le signe');
+    vrai(!/Math\.max\(0/.test(r) && !/\|\| 0/.test(r),
+      'rien n’est corrigé en douce');
+  });
+
+  test('le zéro explicite reste une réponse', () => {
+    /* Des frais nuls, des travaux nuls, un apport nul, un taux a zero : autant
+       de reponses justes. Seul le capital emprunte a zero avec une dette qui
+       reste decrit un pret impossible. */
+    const r = regle();
+    vrai(/estDeclare\(v\.initial\) && num\(v\.initial\) === 0/.test(r),
+      'le seul zéro refusé est celui du capital emprunté avec une dette');
+    eq(estDeclare(0), true, 'zéro est déclaré');
+    eq(estDeclare(''), false, 'le vide ne l’est pas');
+  });
+
+  test('la quote-part se déclare à la création, et passe par la même porte', () => {
+    const s = app();
+    vrai(/cle: 'part', label: trad\('Ta part \(%\)'\)/.test(s), 'le champ existe');
+    vrai(/exemple: '100'/.test(s), 'avec cent pour repère');
+    vrai(/if \(!partEstValide\(v\.part\)\)/.test(s),
+      'et la validation réutilise la porte de la fiche, jamais une seconde');
+    vrai(/\.\.\.\(estDeclare\(e3\.part\) \? \{ part: num\(e3\.part\) \} : \{\}\)/.test(s),
+      'vide ne s’écrit pas, déclaré s’écrit tel quel');
+  });
+
+  test('la quote-part écrite agit tout de suite, et ne déborde sur rien', () => {
+    Fixture.poser(e => {
+      const c = e.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) { l.usage = 'locative'; l.valeur = 400000; l.part = 50; }
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.mensualite = 800;
+      e.budget.income = [{ label: 'Loyer', amount: 1000, period: 'mois', bienId: 'c_immo' }];
+      e.budget.fixedCharges = [{ label: 'Taxe foncière', amount: 300, period: 'mois',
+                                 bienId: 'c_immo' }];
+    });
+    const l = lignesDe(compteById('c_immo'))[0];
+    pres(l.valeurEntiere, 400000, 'la valeur saisie est celle du bien entier');
+    pres(l.valeur, 200000, 'et le patrimoine n’en compte que la moitié');
+    pres(dettesTotal(), 120000, 'la dette n’est jamais divisée');
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.loyers, 1000, 'ni le loyer');
+    pres(cf.charges, 300, 'ni les charges');
+    pres(cf.mensualite, 800, 'ni la mensualité');
+  });
+
+  test('une part de zéro s’écrit, une part hors bornes se refuse', () => {
+    eq(partDetention({ part: 0 }), 0, 'zéro pour cent est une réponse');
+    eq(partDetention({ part: 100 }), 1, 'cent aussi');
+    pres(partDetention({ part: 50 }), 0.5, 'et cinquante vaut la moitié');
+    eq(partDetention({}), 1, 'absente, elle vaut le tout');
+    eq(partEstValide(-1), false, 'négative, elle se refuse');
+    eq(partEstValide(150), false, 'au-delà de cent aussi');
+    eq(partDetention({ part: 150 }), null, 'et 150 ne devient jamais 100');
+  });
+
+  test('la valeur se dit du bien entier, la dette personnelle', () => {
+    const s = app();
+    vrai(/Sa valeur totale aujourd’hui\. Si tu n’en détiens qu’une part, renseigne ta quote-part séparément\./.test(s),
+      'l’aide de la valeur dit qu’elle est entière');
+    vrai(/Ce que tu dois encore personnellement aujourd’hui\. Cette dette se déduit de ton patrimoine net\./.test(s),
+      'celle du capital restant dû dit qu’elle est personnelle');
+    vrai(/Le capital emprunté à ta charge au départ, facultatif\./.test(s),
+      'et celle du capital emprunté aussi');
+  });
+
+  test('la mensualité se saisit facturée, avant tout partage', () => {
+    const s = app();
+    vrai(/label: trad\('Mensualité facturée \(€\)'\)/.test(s), 'le mot le dit');
+    vrai(/Assurance incluse\. Elle sera ajoutée aux charges fixes ; tu pourras ensuite indiquer la part payée par quelqu’un d’autre\./.test(s),
+      'et l’aide dit ce qui vient après');
+    /* Le modele ne bouge pas : la charge nait avec le montant facture et des
+       parts vides. */
+    const store = lireSource('assets/store.js');
+    vrai(/amount: num\(d\.mensualite\), period: 'mois',/.test(store),
+      'la charge du crédit porte le montant facturé');
+    vrai(/shares: \{\}, creditId: d\.id,/.test(store), 'et des parts vides');
+  });
+
+  test('le sous-titre ne parle plus de plus-value', () => {
+    const s = app();
+    vrai(/la valeur actuelle se compare au coût d’acquisition/.test(s), 'le mot est sobre');
+    vrai(!/la plus-value se calcule sur ces deux montants/.test(s), 'l’ancien est parti');
+    vrai(!I18N.en['la plus-value se calcule sur ces deux montants'], 'sa clef aussi');
+  });
+
+  test('un loyer se saisit, il ne reste pas à zéro', () => {
+    const s = app();
+    const f = s.slice(s.indexOf("async 'ajouter-loyer'(btn)"),
+                      s.indexOf("async 'ajouter-charge-bien'(btn)"));
+    vrai(f.length > 400, 'la fenêtre doit être trouvable');
+    vrai(/valide: v => num\(v\.amount\) > 0 \? null/.test(f),
+      'vide, zéro et négatif sont refusés ensemble');
+    vrai(/Le loyer mensuel doit être supérieur à 0\./.test(f), 'le message le dit');
+    vrai(/cle: 'amount', label: trad\('Montant mensuel \(€\)'\), type: 'nombre',\s*\n\s*requis: true/.test(f),
+      'et le champ est requis');
+    vrai(/que tu perçois personnellement/.test(f),
+      'la convention du loyer personnel est écrite');
+  });
+
+  test('la transition n’a plus qu’une porte, et elle suit le geste', () => {
+    /* La fiche porte un select qui ecrit l'usage par `data-path` : changer un
+       bien en residence principale par ce chemin-la ne posait pas la question de
+       l'ancien loyer, alors que le petit atelier la posait. Deux chemins pour un
+       meme fait metier, et un seul tenait la promesse. */
+    const s = app();
+    const f = s.slice(s.indexOf("async 'enregistrer-fiche'()"),
+                      s.indexOf("async 'choisir-usage'(btn)"));
+    vrai(f.length > 400, 'l’action doit être trouvable');
+    vrai(/const devientPrincipale = \(\(\) => \{/.test(f), 'la transition se décide sur l’état d’avant');
+    vrai(/JSON\.parse\(ficheAvant\.copie\)/.test(f), 'lu dans l’instantané de la fiche');
+    vrai(/usageBien\(avant\) !== 'principale'/.test(f),
+      'et rien ne se repose à qui réenregistre le même choix');
+    vrai(/if \(devientPrincipale\) await proposerTransitionLoyer\(\);/.test(f),
+      'la question vient après');
+    const iSave = f.indexOf('Store.save();'), iAppel = f.indexOf('await proposerTransitionLoyer()');
+    vrai(iSave > 0 && iAppel > iSave, 'sur un état enregistré');
+    vrai(f.indexOf("toast(trad('Enregistré ✓'))") < iAppel,
+      'et après le toast, pour que celui de la transition reste le dernier');
+    /* Rien n'est branche sur un champ ni sur un rendu. */
+    /* Sur le CODE seul : le commentaire de l'action NOMME l'ecriture de champ
+       pour dire qu'elle n'y touche pas, et le controle s'y accrocherait. */
+    vrai(!/applyField/.test(f.replace(/\/\*[\s\S]*?\*\//g, ' ')),
+      'aucun branchement sur l’écriture d’un champ');
+    const applique = s.slice(s.indexOf('function applyField'), s.indexOf('(async function init()'));
+    vrai(!/proposerTransitionLoyer/.test(applique), 'ni dans l’écriture elle-même');
+  });
+
+  test('le texte de la transition est vrai dans les deux cas', () => {
+    /* « Tu viens d'ajouter » etait faux des qu'on changeait l'usage d'un bien
+       qu'on avait deja depuis des annees. */
+    const s = app();
+    vrai(/Ce bien est maintenant ta résidence principale\. Ce loyer est toujours compté dans tes charges fixes\./.test(s),
+      'le texte vaut à la création comme au changement d’usage');
+    vrai(!/Tu viens d’ajouter une résidence principale/.test(s), 'l’ancien est parti');
+    vrai(I18N.en['Ce bien est maintenant ta résidence principale. Ce loyer est toujours compté dans tes charges fixes.'],
+      'et le nouveau a sa traduction');
+  });
+
+  test('le moteur E1 à E5 n’a pas été refait', () => {
+    /* Cette passe ne touche qu'au parcours de saisie : le modele est intact. */
+    Fixture.poser(e => {
+      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+      const c = e.comptes.find(x => x.id === 'c_immo');
+      for (const l of c.lignes) l.usage = 'locative';
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = null;
+      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
+      e.budget.fixedCharges = [
+        { label: 'Prêt', amount: 2000, period: 'mois', shares: { p1: 800 },
+          creditId: 'd_pret', bienId: 'c_immo' },
+        { label: 'Copropriété', amount: 300, period: 'mois', shares: { p1: 90 },
+          bienId: 'c_immo' }];
+    });
+    const cf = cashFlowBien(compteById('c_immo'));
+    eq(cf.fiscalite.source, 'inconnue', 'E1');
+    vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
+      .includes('Charges de copropriété non récupérables'), 'E2');
+    pres(cf.charges, 210, 'E3, charges');
+    pres(cf.mensualite, 1200, 'E3, mensualité');
+    pres(sharedTotals().brut, 2300, 'E3.1');
+    eq(loyersCourantsProbables().length, 0, 'E4');
+    pres(cf.cashFlowAvantImpot, 900 - 210 - 1200, 'E5, la cascade');
+    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'et le coût personnel');
+  });
+});
+
 suite('La fiche d’un bien se lit dans l’ordre où l’argent sort', () => {
 
   const app = () => lireSource('assets/app.js');
@@ -10279,8 +10481,12 @@ suite('La transition vers la résidence principale demande, elle ne décide pas'
     /* Ni une valeur corrigee, ni un credit modifie, ni l'ouverture de la fiche,
        ni un rendu : le detenteur serait harcele a chaque saisie. */
     const s = app();
-    eq(s.split('proposerTransitionLoyer()').length - 1, 3,
-      'la fonction est définie une fois et appelée deux fois, pas davantage');
+    /* TROIS PORTES, et pas une de plus : la creation d'un bien declare
+       principale, le petit atelier « Choisir l'usage », et l'enregistrement de
+       la fiche quand son select vient de changer l'usage. Chacune suit un geste
+       explicite ; aucune ne suit un rendu. */
+    eq(s.split('proposerTransitionLoyer()').length - 1, 4,
+      'la fonction est définie une fois et appelée trois fois, pas davantage');
     const f = fenetre();
     vrai(/if \(!loyers\.length\) return;/.test(f),
       'et sans candidat, elle ne montre rien du tout');
@@ -10471,8 +10677,8 @@ suite('Le geste qui offre un retour en arrière parle en dernier', () => {
 
   test('rien ne parle après la transition, dans aucun des deux flux', () => {
     const s = app();
-    eq(s.split('await proposerTransitionLoyer();\n  },').length - 1, 2,
-      'les deux appels ferment leur action : plus aucun toast derrière');
+    eq(s.split('await proposerTransitionLoyer();\n  },').length - 1, 3,
+      'les trois appels ferment leur action : plus aucun toast derrière');
   });
 
   test('l’ordre vient des appels, jamais d’une minuterie', () => {
@@ -15357,8 +15563,12 @@ suite('Un bien se crée seul, s’estime, et se modifie par un bouton', () => {
       'la fenêtre d’un placement reçoit le type, pas seulement la classe');
     vrai(/const estime = estDetenuEnDirect\(type\);/.test(src),
       'et c’est le drapeau qui décide de l’intitulé');
-    vrai(/estDetenuEnDirect\(t\) \? 'Valeur estimée' : 'Valeur actuelle'/.test(src),
-      'le parcours de création dit la même chose');
+    /* Le parcours de creation dit la meme chose, et un mot de plus : la valeur
+       saisie est celle du bien ENTIER, ce qui compte des qu'une quote-part
+       existe. Les deux intitules passent par le dictionnaire. */
+    vrai(/estDetenuEnDirect\(t\) \? trad\('Valeur estimée du bien entier \(€\)'\)/.test(src),
+      'le parcours de création parle de valeur estimée, du bien entier');
+    vrai(/: trad\('Valeur actuelle \(€\)'\)/.test(src), 'et de valeur actuelle sinon');
     vrai(!/t\.classes\.includes\('bienValeur'\) \? 'Valeur estimée'/.test(src),
       'plus de test sur une classe en particulier');
 
@@ -32830,7 +33040,9 @@ suite('Un capital emprunté nul reste nul dans l’onboarding', () => {
 
   test('un capital emprunté nul avec une dette est refusé, pas effacé', () => {
     const p = parcours();
-    vrai(/valide: v => \(v\.aCredit === 'oui' && num\(v\.credit\) > 0/.test(p),
+    /* La regle a quitte l'expression flechee d'une ligne pour un corps : elles
+       sont plusieurs desormais, et la premiere qui parle rend la main. */
+    vrai(/v\.aCredit === 'oui' && num\(v\.credit\) > 0/.test(p),
       'la règle regarde les deux champs à la fois');
     vrai(/estDeclare\(v\.initial\) && num\(v\.initial\) === 0/.test(p),
       'et ne vise que le zéro explicite');
