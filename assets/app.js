@@ -5910,7 +5910,11 @@ function viewBudget(section = 'depenses') {
                 : `${trad('rembourse')} ${guill(cr.libelle)}`;
             })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
-          second: gens.length ? `${fmtEUR(myShareMensuelle(c))} ${trad('à ma charge')}` : '',
+          /* LA PORTE, et non le calcul brut de la part : sur une donnee legacy
+             ou les parts depassent leur montant, `myShareMensuelle` rend un
+             NEGATIF. Le budget compte deja zero pour cette ligne, et deux
+             verites sur le meme ecran valent moins qu'une seule. */
+          second: gens.length ? `${fmtEUR(chargeMensuellePersonnelle(c))} ${trad('à ma charge')}` : '',
         })}`).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(st.total)}</dd>
@@ -5949,9 +5953,9 @@ function viewBudget(section = 'depenses') {
             <td>${esc(trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]))}${prochaineEcheance(c)
               ? `<span class="sub">${trad('prochaine le')} ${fmtJourMois(prochaineEcheance(c))}</span>` : ''}</td>
             <td class="${chargePeriode(c) === 'mois' ? 'muted' : ''}">${fmtEUR(chargeMensuelle(c))}</td>
-            <td class="muted">${fmtPct(f.fixed ? chargeMensuelle(c) / f.fixed * 100 : 0, 1)}</td>
+            <td class="muted">${fmtPct(st.brut ? chargeMensuelle(c) / st.brut * 100 : 0, 1)}</td>
             ${gens.map(p => `<td>${shareOf(c, p.id) ? fmtEUR(shareOf(c, p.id)) : ''}</td>`).join('')}
-            <td><b>${fmtEUR(myShareMensuelle(c))}</b></td>
+            <td><b>${fmtEUR(chargeMensuellePersonnelle(c))}</b></td>
             <td class="name">${esc(c.provider || '')}</td>
             <td><button class="btn icon" data-action="del-charge" data-i="${i}" title="${trad('Supprimer')}">✕</button></td>
           </tr>`).join('')}</tbody>
@@ -6468,23 +6472,25 @@ function sheetExpenses() {
 }
 
 function sheetFixedCharges() {
-  const f = budgetFrame();
   const gens = contributors();          // une colonne par personne qui partage
   const st = sharedTotals();
+  const poids = c => st.brut ? chargeMensuelle(c) / st.brut : 0;
   return {
     name: 'Charges fixes',
     cols: [
       { h: 'Poste', t: 'text', w: 32 }, { h: 'Montant', t: 'eur', w: 15 },
+      { h: 'Facturé', t: 'text', w: 13 }, { h: '€ / mois', t: 'eur', w: 15 },
       { h: '% des charges', t: 'pct', w: 15 },
-      ...gens.map(p => ({ h: `Part de ${p.name}`, t: 'eur', w: 15 })),
-      { h: 'À ma charge', t: 'eur', w: 15 }, { h: 'Organisme', t: 'text', w: 24 },
+      ...gens.map(p => ({ h: `Part de ${p.name} / mois`, t: 'eur', w: 18 })),
+      { h: 'À ma charge / mois', t: 'eur', w: 18 }, { h: 'Organisme', t: 'text', w: 24 },
     ],
     rows: Store.state.budget.fixedCharges.map(c => [
-      c.label, round2(num(c.amount)), f.fixed ? num(c.amount) / f.fixed : 0,
-      ...gens.map(p => shareOf(c, p.id) || null),
-      round2(myShare(c)), c.provider || '',
+      c.label, round2(num(c.amount)), trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]),
+      round2(chargeMensuelle(c)), poids(c),
+      ...gens.map(p => round2(shareMensuelle(c, p.id)) || null),
+      round2(chargeMensuellePersonnelle(c)), c.provider || '',
     ]),
-    total: ['Total', round2(st.total), 1,
+    total: ['Total', null, '', round2(st.brut), st.brut ? 1 : 0,
       ...st.parPersonne.map(p => round2(p.total)), round2(st.mine), ''],
   };
 }
