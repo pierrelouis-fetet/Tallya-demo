@@ -3257,13 +3257,13 @@ suite('Une seule base par mode, et la somme des parts la redonne', () => {
     const app = lireSource('assets/app.js');
     vrai(/const valeurBaseAlloc = \(\) => \(allocFinancier \? totalFinancier\(\) : nowTotals\(\)\.net\);/.test(app),
       'la base de « Tout » est le patrimoine net');
-    vrai(/const baseAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.net\);/.test(app),
+    vrai(/const baseAlloc = \(\) => \(allocFinancier \? BASES\.avoirsFinanciers : BASES\.net\);/.test(app),
       'et elle se nomme comme telle');
     /* Et la base des cartes qui decrivent des AVOIRS. Elle n'existait pas :
        trois cartes annonçaient le net, deux le totalisaient. */
     vrai(/const valeurAvoirsAlloc = \(\) => \(allocFinancier \? totalFinancier\(\) : patrimoine\(\)\.brut\);/.test(app),
       'la base des avoirs vaut le brut en vue globale');
-    vrai(/const baseAvoirsAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.avoirs\);/.test(app),
+    vrai(/const baseAvoirsAlloc = \(\) => \(allocFinancier \? BASES\.avoirsFinanciers : BASES\.avoirs\);/.test(app),
       'et elle se nomme « Tes avoirs »');
     /* Les deux lectures des poches passent le même mode, et le net avec. */
     eq((app.match(/pochesPatrimoine\(\{ financier: allocFinancier, net: true \}\)/g) || []).length, 2,
@@ -26907,7 +26907,7 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
     /* La base de « Tout » est le patrimoine NET : la page comptait en brut, si
        bien qu'un appartement y pesait sa valeur entiere alors que la moitie
        appartient encore a la banque. */
-    vrai(/BASES\.financier/.test(def) && /BASES\.net/.test(def),
+    vrai(/BASES\.avoirsFinanciers/.test(def) && /BASES\.net/.test(def),
       'la définition de baseAlloc doit nommer les deux bases : ' + def.slice(0, 70));
     vrai(!/baseAlloc\(\)/.test(def.slice(def.indexOf('=>'))),
       'la définition de baseAlloc s’appelle elle-même : la page dépasse la pile');
@@ -26927,7 +26927,15 @@ suite('La page Allocation dit la base qu’elle emploie', () => {
     vrai(!/allocFinancier \? '' :/.test(vue),
       'aucune carte ne doit disparaître quand le commutateur change : elles suivent');
 
-    const region = vue + montage;
+    /* L'interdiction porte sur les CARTES, pas sur l'entete.
+
+       Une carte annonce une base que ses parts totalisent : elle la prend donc
+       par l'une des deux fonctions, jamais a la main. L'entete, lui, ne repartit
+       rien — il POSE une soustraction, avoirs financiers moins dettes du
+       perimetre, et nomme ses trois termes. Lui interdire de nommer une base
+       reviendrait a lui interdire de dire ce qu'il additionne. */
+    const cartes = vue.slice(vue.indexOf('<div class="card'));
+    const region = cartes + montage;
     for (const dure of ['BASES.net', 'BASES.avoirs', 'BASES.financier']) {
       eq(region.split(dure).length - 1, 0,
         `« ${dure} » est écrit en dur sur la page : une base se prend par `
@@ -33688,7 +33696,7 @@ suite('Le wording des crédits dit la convention du montant facturé', () => {
     const store = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
     /* P0.1 : Allocation ouvre sur Financier, et chaque carte garde sa base. */
     vrai(/let allocFinancier = true;/.test(app), 'Allocation ouvre sur Financier');
-    vrai(/const baseAvoirsAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.avoirs\);/
+    vrai(/const baseAvoirsAlloc = \(\) => \(allocFinancier \? BASES\.avoirsFinanciers : BASES\.avoirs\);/
       .test(app), 'et les cartes des avoirs gardent leur base');
     /* P0.2 : un capital restant du negatif se refuse toujours. */
     const f = validerCreditSaisi({ montant: -1000 });
@@ -33706,5 +33714,221 @@ suite('Le wording des crédits dit la convention du montant facturé', () => {
     Fixture.poser(s => { s.budget.income = []; });
     eq(budgetFrame().fixedPct, null, 'un rapport sans dénominateur vaut null');
     eq(savingsReconciliation().theoreticalRate, null, 'le taux d’accumulation aussi');
+  });
+});
+
+/* QUELLES DETTES LE PERIMETRE FINANCIER PORTE-T-IL ?
+
+   Il ecarte les murs et les objets de valeur. Il ecartait AUSSI toutes les
+   dettes, sous un raisonnement juste sur un seul cas : le pret finance le bien,
+   le bien est deja dehors. Vrai d'un credit immobilier, faux d'une marge de
+   courtier ou d'un pret personnel — ceux-la disparaissaient entierement de la
+   lecture financiere, et une dette qui ne se voit nulle part est le pire des
+   chiffres faux. */
+suite('Le périmètre financier porte les dettes qui ne sont pas parties avec un mur', () => {
+
+  /* Un appartement detenu en direct, son credit, et de quoi piloter a cote. */
+  const patrimoine50k = (dettes) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e_bq', nom: 'Banque', notes: '', dettes }];
+    s.comptes = [
+      { id: 'c_appt', etabId: 'e_bq', type: 'immo', statut: 'ouvert', libelle: 'Appartement',
+        court: 'Appartement', ouvertLe: '2020-01-01', numero: '', notes: '', alloc: '',
+        cash: [], lignes: [{ id: 'l_a', classe: 'immobilier', libelle: 'Appartement',
+                             valeur: 300000, prixDeRevient: 300000, quantite: 1,
+                             dateAcquisition: '', usage: 'principale' }] },
+      { id: 'c_cto', etabId: 'e_bq', type: 'cto', statut: 'ouvert', libelle: 'CTO',
+        court: 'CTO', ouvertLe: '2021-01-01', numero: '', notes: '', alloc: '',
+        cash: [{ montant: 10000, affectation: 'courant' }],
+        lignes: [{ id: 'l_e', classe: 'actions', libelle: 'ETF', valeur: 40000,
+                   prixDeRevient: 40000, quantite: 1, dateAcquisition: '' }] },
+    ];
+    s.positions = []; s.monthly = [];
+    s.budget.income = []; s.budget.fixedCharges = [];
+  });
+
+  const MORTGAGE = { id: 'd_immo', libelle: 'Prêt', montant: 200000, bienId: 'c_appt' };
+  const PERSO = { id: 'd_perso', libelle: 'Prêt personnel', montant: 10000 };
+
+  test('une dette sans lien appartient au périmètre financier', () => {
+    patrimoine50k([{ ...PERSO }]);
+    eq(detteLieeBienDirect(etabById('e_bq').dettes[0]), false, 'aucun bien déclaré');
+    pres(dettesFinancieresTotal(), 10000, 'elle compte donc dans le périmètre');
+  });
+
+  test('une dette rattachée à un logement direct en sort, quel que soit son usage', () => {
+    for (const usage of ['principale', 'secondaire', 'locative']) {
+      patrimoine50k([{ ...MORTGAGE }]);
+      compteById('c_appt').lignes[0].usage = usage;
+      eq(detteLieeBienDirect(etabById('e_bq').dettes[0]), true,
+        `un crédit rattaché à un bien « ${usage} » part avec lui`);
+      pres(dettesFinancieresTotal(), 0, 'et le périmètre financier n’en porte aucune');
+    }
+  });
+
+  test('un lien mort ne fait pas disparaître une dette', () => {
+    /* Une dette reelle ne s'efface pas parce que sa cible a ete supprimee : ce
+       serait un chiffre faux du cote qui rassure. */
+    patrimoine50k([{ ...MORTGAGE, bienId: 'c_disparu' }]);
+    eq(detteLieeBienDirect(etabById('e_bq').dettes[0]), false, 'le bien n’existe plus');
+    pres(dettesFinancieresTotal(), 200000, 'la dette reste comptée');
+  });
+
+  test('une SCPI n’est pas un logement : sa dette reste dans le périmètre', () => {
+    /* `estBienEnDirect` et non `bienImmo` : la pierre papier se pilote, on choisit
+       d'y remettre ou non. La frontiere E / C.2 ne bouge pas. */
+    patrimoine50k([{ ...MORTGAGE, bienId: 'c_scpi' }]);
+    Store.state.comptes.push({ id: 'c_scpi', etabId: 'e_bq', type: 'scpi', statut: 'ouvert',
+      libelle: 'SCPI', court: 'SCPI', ouvertLe: '2022-01-01', numero: '', notes: '',
+      alloc: '', cash: [], lignes: [] });
+    refreshAccounts();
+    eq(estBienEnDirect(compteById('c_scpi')), false, 'une SCPI n’est pas détenue en direct');
+    eq(detteLieeBienDirect(etabById('e_bq').dettes[0]), false, 'sa dette ne sort donc pas');
+    pres(dettesFinancieresTotal(), 200000, 'elle reste dans le périmètre financier');
+  });
+
+  test('SCÉNARIO A — un appartement, son crédit, et 50 k de financier', () => {
+    patrimoine50k([{ ...MORTGAGE }]);
+    pres(patrimoine().brut, 350000, 'les avoirs globaux');
+    pres(dettesTotal(), 200000, 'les dettes globales, toutes comptées une fois');
+    pres(patrimoine().net, 150000, 'le patrimoine net global');
+    pres(totalFinancier(), 50000, 'les avoirs financiers');
+    pres(dettesFinancieresTotal(), 0, 'aucune dette dans le périmètre financier');
+    pres(netFinancier(), 50000, 'le net financier vaut donc le brut');
+  });
+
+  test('SCÉNARIO B — le même, plus un crédit personnel de 10 k', () => {
+    patrimoine50k([{ ...MORTGAGE }, { ...PERSO }]);
+    pres(patrimoine().brut, 350000, 'les avoirs globaux ne bougent pas');
+    pres(dettesTotal(), 210000, 'les dettes globales les comptent toutes les deux');
+    pres(patrimoine().net, 140000, 'le patrimoine net global');
+    pres(totalFinancier(), 50000, 'les avoirs financiers non plus');
+    pres(dettesFinancieresTotal(), 10000, 'seul le prêt personnel y entre');
+    pres(netFinancier(), 40000, '50 000 − 10 000');
+  });
+
+  test('SCÉNARIO C — une marge, et rien à répartir dedans', () => {
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_ct', nom: 'Courtier', notes: '',
+                   dettes: [{ id: 'd_m', libelle: 'Marge', montant: 20000 }] }];
+      s.comptes = [{ id: 'c_cto', etabId: 'e_ct', type: 'cto', statut: 'ouvert',
+        libelle: 'CTO', court: 'CTO', ouvertLe: '2021-01-01', numero: '', notes: '',
+        alloc: '', cash: [], lignes: [{ id: 'l_e', classe: 'actions', libelle: 'ETF',
+          valeur: 100000, prixDeRevient: 100000, quantite: 1, dateAcquisition: '' }] }];
+      s.positions = []; s.monthly = [];
+    });
+    pres(totalFinancier(), 100000, 'les avoirs financiers');
+    pres(netFinancier(), 80000, 'et le net, une fois la marge retranchée');
+    /* AUCUNE REPARTITION NE CONNAIT LA DETTE. La ventiler au prorata inventerait
+       un endroit ou elle n'est pas, et ferait bouger la quantite d'actions qu'on
+       « devrait » posseder. */
+    const somme = l => round2(l.reduce((s, x) => s + num(x.value), 0));
+    pres(somme(repartitionClasses({ financier: true })), 100000, 'par classe d’actif');
+    pres(somme(allocationByAccount({ financier: true })), 100000, 'par compte');
+    pres(somme(byAccountType({ financier: true })), 100000, 'par type de détention');
+    if (typeof allocationParDisponibilite === 'function') {
+      pres(somme(allocationParDisponibilite({ financier: true })), 100000, 'par disponibilité');
+    }
+    pres(somme(poidsPoches({ financier: true, net: true })), 100000, 'et la répartition');
+    /* Et la base des cibles reste celle des actifs pilotables. */
+    vrai(rebalanceRows().base > 0.005, 'la base des cibles existe');
+    vrai(Math.abs(rebalanceRows().base - 80000) > 1,
+      'une dette ne change pas la quantité d’actions qu’on devrait posséder');
+  });
+
+  test('SCÉNARIO D — une dette plus grosse que les avoirs, et aucun plancher', () => {
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e_ct', nom: 'Courtier', notes: '',
+                   dettes: [{ id: 'd_m', libelle: 'Marge', montant: 30000 }] }];
+      s.comptes = [{ id: 'c_cto', etabId: 'e_ct', type: 'cto', statut: 'ouvert',
+        libelle: 'CTO', court: 'CTO', ouvertLe: '2021-01-01', numero: '', notes: '',
+        alloc: '', cash: [], lignes: [{ id: 'l_e', classe: 'actions', libelle: 'ETF',
+          valeur: 20000, prixDeRevient: 20000, quantite: 1, dateAcquisition: '' }] }];
+      s.positions = []; s.monthly = [];
+    });
+    pres(totalFinancier(), 20000, 'les avoirs financiers');
+    pres(netFinancier(), -10000, 'le net est négatif, et il le reste');
+    vrai(netFinancier() < 0, 'aucun plancher à zéro ne cache la situation');
+    const somme = l => round2(l.reduce((s, x) => s + num(x.value), 0));
+    pres(somme(byAccountType({ financier: true })), 20000,
+      'et les répartitions portent toujours sur les 20 000 € d’avoirs');
+  });
+
+  test('la page annonce les avoirs sur ses cartes, le net dans sa synthèse', () => {
+    const app = lireSource('assets/app.js');
+    const code = app.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const vue = code.slice(code.indexOf('function viewAllocation()'),
+                           code.indexOf('function mountAllocation'));
+    const entete = vue.slice(0, vue.indexOf('<div class="card'));
+    const cartes = vue.slice(vue.indexOf('<div class="card'));
+    /* Les cartes : la base des avoirs financiers, par les deux fonctions. */
+    vrai(/const baseAlloc = \(\) => \(allocFinancier \? BASES\.avoirsFinanciers : BASES\.net\);/
+      .test(code), 'la base de la page nomme les avoirs financiers');
+    vrai(/const valeurBaseAlloc = \(\) => \(allocFinancier \? totalFinancier\(\) : nowTotals\(\)\.net\);/
+      .test(code), 'et elle vaut le brut financier');
+    vrai(!/netFinancier\(\)/.test(cartes),
+      'aucune carte ne montre le net : ses parts totalisent les avoirs');
+    /* L'entete : la soustraction posee, ses trois termes nommes. */
+    vrai(/dettesFinancieresTotal\(\) > 0\.005/.test(entete),
+      'la synthèse ne paraît que s’il y a quelque chose à soustraire');
+    for (const terme of ['BASES.avoirsFinanciers.nom', 'BASES.netFinancier.nom',
+                         'dettesFinancieresTotal()', 'netFinancier()']) {
+      vrai(entete.includes(terme), `la synthèse doit nommer « ${terme} »`);
+    }
+    /* Et aucune dette ne se ventile : le mot ne doit apparaitre dans aucune
+       source de repartition de la page. */
+    const store = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    for (const f of ['repartitionClasses', 'allocationByAccount', 'byAccountType',
+                     'poidsPoches']) {
+      vrai(!/dettesFinancieres/.test(corpsDe(store, f)),
+        `« ${f} » ne connaît pas les dettes du périmètre : elle répartit des avoirs`);
+    }
+  });
+
+  test('les mots disent la convention, en français et en anglais', () => {
+    const app = lireSource('assets/app.js');
+    vrai(!/le prêt finance le bien, qui est déjà écarté/.test(app),
+      'l’ancienne promesse — aucun crédit retiré — est partie');
+    for (const f of ['assets/app.js', 'assets/i18n.js']) {
+      vrai(!lireSource(f).includes('the loan finances the asset, which is already set aside'),
+        `et sa traduction aussi, dans ${f}`);
+    }
+    for (const cle of ['Avoirs financiers', 'Patrimoine financier net',
+                       'Dettes hors biens immobiliers directs',
+                       'de tes avoirs financiers', 'de ton patrimoine financier net']) {
+      vrai(I18N.en[cle], `« ${cle} » doit avoir sa traduction`);
+    }
+    /* Les deux bases existent et pointent chacune sur SA clef. On lit la clef,
+       pas le rendu : `BASES` se construit au chargement du script, donc dans la
+       langue du navigateur, et cette page-ci bascule en francais apres. */
+    const store = lireSource('assets/store.js');
+    vrai(/avoirsFinanciers: \{ nom: trad\('Avoirs financiers'\)/.test(store),
+      'un montant, un nom');
+    vrai(/netFinancier:\s+\{ nom: trad\('Patrimoine financier net'\)/.test(store),
+      'et le net a le sien');
+    vrai(!I18N.en['Patrimoine financier'],
+      'l’ancien nom, qui valait le brut sous un mot de net, est parti');
+  });
+
+  test('ce qui ne bouge pas', () => {
+    /* Le net GLOBAL retranche toujours toutes les dettes, une fois. */
+    patrimoine50k([{ ...MORTGAGE }, { ...PERSO }]);
+    pres(patrimoine().net, patrimoine().brut - dettesTotal(),
+      'le patrimoine net global reste avoirs moins toutes les dettes');
+    pres(dettesTotal(), 210000, 'et `dettesTotal` les somme toutes');
+    /* Le CRD ne se divise pas, la validation refuse toujours un negatif. */
+    const f = validerCreditSaisi({ montant: -1 });
+    vrai(f && f.cle === 'montant', 'un capital restant dû négatif est toujours refusé');
+    /* Le Budget ne connait pas ces grandeurs. */
+    const store = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    for (const f2 of ['fixedTotal', 'budgetFrame', 'savingsReconciliation',
+                      'suggestedMonthly', 'cashFlowBien', 'dettesAmortissables']) {
+      vrai(!/netFinancier|dettesFinancieresTotal/.test(corpsDe(store, f2)),
+        `« ${f2} » ne lit pas le périmètre financier`);
+    }
+    /* Et aucun champ de dette n'a ete invente. */
+    for (const invente of ['natureDette', 'typeDette', 'detteFinanciere', 'isMargin',
+                           'isMortgage', 'usageDette', 'assetId', 'linkedAccountId']) {
+      vrai(!store.includes(invente), `« ${invente} » : le modèle a déjà bienId`);
+    }
   });
 });

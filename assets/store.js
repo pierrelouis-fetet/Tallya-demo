@@ -83,7 +83,10 @@ const AFFECTATION_LABEL = Object.fromEntries(AFFECTATIONS);
 const BASES = {
   avoirs:      { nom: trad('Tes avoirs'),         de: trad('de tes avoirs') },          // brut
   net:         { nom: trad('Patrimoine net'),     de: trad('de ton patrimoine net') },   // brut - dettes
-  financier:   { nom: trad('Patrimoine financier'), de: trad('de ton patrimoine financier') },
+  avoirsFinanciers: { nom: trad('Avoirs financiers'),
+                      de: trad('de tes avoirs financiers') },
+  netFinancier:     { nom: trad('Patrimoine financier net'),
+                      de: trad('de ton patrimoine financier net') },
   place:       { nom: trad('Investi'),            de: trad('de ce qui est investi') },  // nowTotals().invested
   placeBourse: { nom: trad('Placé en bourse'),    de: trad('de ce qui est placé en bourse') },
   baseCibles:  { nom: trad('Base de tes cibles'), de: trad('de la base de tes cibles') },
@@ -1339,6 +1342,24 @@ const CLASSE_COULEURS = new Proxy({}, {
    Allocation ne change pas : elle n'a pas de commutateur et declare une base
    unique. Deux pages, deux bases, chacune nommee — c'est le motif autorise ici,
    celui qu'un total muet violait. */
+/* Le patrimoine financier : tout sauf les murs et les objets.
+
+   Un appartement ecrase le reste. Mesure sur le jeu de demonstration : 81,2 % du
+   brut, et quatre classes sur six tombent sous 2 % — des traits invisibles sur un
+   camembert. La page cesse alors de montrer ce qu'on pilote, alors que c'est sa
+   seule raison d'exister : personne ne reequilibre un mur.
+
+   Deux classes sortent, et pas trois : l'immobilier et les biens de valeur. Le
+   non cote reste, parce qu'il se pilote — on choisit d'y remettre ou non, alors
+   qu'on ne vend pas trois metres carres de salon.
+
+   Les DETTES de cette vue se choisissent, elles aussi, et par le lien qu'elles
+   portent : voir `detteLieeBienDirect`. Un credit rattache a un mur part avec le
+   mur ; toute autre dette reste, et le net financier la retranche.
+
+   La regle vit ici et nulle part ailleurs : cinq sources alimentent la page
+   Allocation, et cinq listes de classes a exclure auraient fini par ne plus dire
+   la meme chose. */
 const CLASSES_HORS_FINANCIER = ['immobilier', 'bienValeur'];
 const horsFinancier = classe => CLASSES_HORS_FINANCIER.includes(classe);
 
@@ -1392,6 +1413,62 @@ function totalFinancier() {
 function horsFinancierTotal() {
   const p = patrimoine();
   return CLASSES_HORS_FINANCIER.reduce((s, c) => s + num(p.classes[c]), 0);
+}
+
+/* --- quelles dettes sortent du perimetre financier ? --------------------
+
+   La vue financiere ecarte les murs et les objets de valeur. Elle ecartait AUSSI
+   toutes les dettes, sous un raisonnement juste sur un seul cas : le pret finance
+   le bien, le bien est deja dehors, donc retrancher le pret retirerait deux fois
+   la meme chose. Vrai d'un credit immobilier. Faux de tout le reste — une marge
+   de courtier, un pret personnel, un emprunt pris pour investir : ceux-la ne
+   financent aucun mur, et ils disparaissaient entierement de la lecture
+   financiere. Une dette qui ne se voit nulle part est le pire des chiffres faux.
+
+   LA PREUVE DU LIEN EST LE LIEN, jamais un libelle. Ni « pret immobilier », ni le
+   nom du preteur, ni le montant, ni la presence d'un appartement quelque part :
+   `bienId` existe pour ca, et lui seul dit ce qu'un credit finance.
+
+   `estBienEnDirect` et non `bienImmo` : une SCPI porte le premier drapeau et pas
+   le second. Elle reste dans le perimetre financier — on choisit d'y remettre ou
+   non, alors qu'on ne vend pas trois metres carres de salon — donc un credit qui
+   la financerait reste avec elle.
+
+   Un `bienId` qui ne designe plus rien ne fait pas sortir la dette : elle ne
+   s'efface pas parce que sa cible a ete supprimee. Le controle de sante des
+   credits non rattaches, lui, continue de le signaler. */
+function detteLieeBienDirect(d) {
+  if (!d || !d.bienId) return false;
+  const bien = compteById(d.bienId);
+  return !!bien && estBienEnDirect(bien);
+}
+
+/* Les dettes que le perimetre financier porte : toutes celles qui ne sont pas
+   parties avec un mur.
+
+   Une dette ambigue — sans `bienId`, chez quelqu'un qui possede deux
+   appartements — en fait partie, et c'est volontairement conservateur : une
+   dette reelle ne s'efface pas parce que sa destination est inconnue. Rien ne la
+   devine ici, et rien ne la migre. */
+function dettesFinancieresTotal() {
+  return ETABS().reduce((s, e) => s + (e.dettes || [])
+    .filter(d => !detteLieeBienDirect(d))
+    .reduce((x, d) => x + num(d.montant), 0), 0);
+}
+
+/* DEUX GRANDEURS, DEUX QUESTIONS, ET LES CONFONDRE EST LA FAUTE.
+
+   `totalFinancier()` dit ce qu'on possede et qu'on peut piloter. C'est la base de
+   toutes les repartitions, et elle le reste : une dette ne se range dans aucun
+   compte, dans aucune classe d'actif, dans aucun palier de disponibilite. La
+   ventiler au prorata inventerait un endroit ou elle n'est pas, et ferait bouger
+   la quantite d'actions qu'on « devrait » posseder.
+
+   `netFinancier()` dit ce que ce perimetre vaut une fois ses dettes payees. Il
+   peut etre negatif — trente mille de marge sur vingt mille d'avoirs — et il le
+   reste : un plancher a zero cacherait exactement la situation qu'il faut voir. */
+function netFinancier() {
+  return totalFinancier() - dettesFinancieresTotal();
 }
 
 function repartitionClasses({ net = false, financier = false } = {}) {
@@ -2837,24 +2914,18 @@ function historySeries({ includeNow = true } = {}) {
    traces bruts plutot que de se voir appliquer une dette d'aujourd'hui qui n'etait
    pas la leur. La courbe se corrige d'elle-meme, un releve par mois.
 
-   **En vue financiere, aucune dette ne se retranche, et c'est un choix de
-   justesse, pas un raccourci.** Une dette n'est pas rattachee a un actif dans ce
-   modele : elle vit sur un etablissement (`etabs[].dettes[]`) et ne porte aucun
-   lien vers le compte ou la ligne qu'elle finance. Retrancher les credits d'un
-   perimetre dont on vient de retirer les murs donnerait 70 000 EUR d'avoirs
-   financiers moins 150 000 EUR de credit immobilier, soit -80 000 EUR : un
-   patrimoine financier negatif chez quelqu'un qui n'a aucune dette financiere.
-   Le chiffre serait faux, et faux du cote qui alarme.
+   **En vue financiere, aucune dette ne se retranche de la COURBE, et la raison a
+   change.** Le modele porte desormais le lien : une dette declare le bien qu'elle
+   finance, et `detteLieeBienDirect` sait donc laquelle appartient au perimetre
+   financier. Ce que la courbe ne peut pas faire, c'est appliquer la dette
+   D'AUJOURD'HUI aux points d'HIER : un mois clos ne portait pas la marge ouverte
+   la semaine derniere, et la retrancher de son point ferait descendre un passe
+   qui n'a pas eu lieu. Seul le dernier point connait la dette du jour, et c'est
+   deja la regle de la vue globale — les mois anterieurs restent bruts.
 
-   Inventer ici un rattachement -- deviner qu'un pret dont le libelle contient
-   « immo » finance un bien -- serait une convention de plus, tenue par une seule
-   fonction, que rien ne verifie. Tant que le modele ne porte pas le lien, le
-   financier net vaut le financier brut. C'est deja la regle de
-   `repartitionClasses()` en vue financiere, et deux calculs qui repondent a la
-   meme question doivent donner le meme chiffre.
-
-   Le jour ou une dette declarera l'actif qu'elle finance, c'est ici et dans
-   `repartitionClasses()` que la deduction se posera, aux deux endroits a la fois.
+   La lecture d'AUJOURD'HUI, elle, retranche bien : la synthese de la page
+   Allocation annonce les avoirs financiers, les dettes du perimetre et le net.
+   Deux endroits, deux questions, et aucun des deux ne ment sur ce qu'il montre.
 
    La vue et le montage appellent tous deux cette fonction : la legende ne peut
    donc pas annoncer une serie que la courbe ne trace pas. */

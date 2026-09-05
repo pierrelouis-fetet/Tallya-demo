@@ -3118,11 +3118,21 @@ function viewAllocation() {
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
-      ? trad('immobilier et biens de valeur écartés')
+      ? trad('immobilier et biens de valeur écartés, avec leurs crédits')
       : trad('tes crédits sont déduits')}</b>${deuxPoints()}
     ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
-      ? trad("Une seule base sur cette page : « Patrimoine financier », tout ce que tu possèdes sauf tes murs et tes objets de valeur. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Toutes les cartes partagent cette base, donc leurs pourcentages se comparent entre eux. Tes crédits n’en sont pas retirés : le prêt finance le bien, qui est déjà écarté.")
+      ? trad("Les biens immobiliers détenus en direct et les biens de valeur sont écartés, et les crédits qui leur sont explicitement rattachés le sont avec eux. Les autres dettes, une marge ou un prêt personnel, se déduisent du patrimoine financier net, annoncé en tête dès qu’il en existe une. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Les répartitions ci-dessous portent toutes sur tes avoirs financiers : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.")
       : trad("Deux bases sur cette page, et chaque carte annonce la sienne. « Patrimoine net » pour la répartition : tout ce que tu possèdes moins ce que tu dois encore, un bien financé y comptant pour sa valeur moins son crédit. « Tes avoirs » pour les cartes qui disent où ton argent est posé et en combien de temps il ressort : une dette n’est posée sur aucun compte et n’a pas de délai de sortie, elle ne s’y retranche donc pas. Chaque total redonne la base annoncée juste au-dessus de lui."))}.</span></p>
+
+  ${allocFinancier && dettesFinancieresTotal() > 0.005 ? `
+  <dl class="kv perimetre-net">
+    <dt>${BASES.avoirsFinanciers.nom}</dt><dd>${fmtEUR0(totalFinancier())}</dd>
+    <dt>${trad('Dettes hors biens immobiliers directs')}${aide(trad(
+      'Un crédit explicitement rattaché à un logement détenu en direct est écarté avec lui. Toutes les autres dettes restent ici : une marge de courtier, un prêt personnel, un crédit dont le bien n’est pas renseigné.'))}</dt>
+      <dd>${montantSigne(-dettesFinancieresTotal())}</dd>
+    <dt><b>${BASES.netFinancier.nom}</b></dt>
+      <dd><b>${fmtEUR(netFinancier())}</b></dd>
+  </dl>` : ''}
 
   <div class="card repart">
     ${disponibilite.map(x => `
@@ -3671,9 +3681,9 @@ let relanceGraphes = false;
    nomment donc ici, toutes les deux, et un test interdit desormais d'ecrire
    `BASES.net`, `BASES.avoirs` ou `BASES.financier` ailleurs dans cette page :
    une carte prend sa base par l'une de ces deux fonctions, jamais a la main. */
-const baseAlloc = () => (allocFinancier ? BASES.financier : BASES.net);
+const baseAlloc = () => (allocFinancier ? BASES.avoirsFinanciers : BASES.net);
 const valeurBaseAlloc = () => (allocFinancier ? totalFinancier() : nowTotals().net);
-const baseAvoirsAlloc = () => (allocFinancier ? BASES.financier : BASES.avoirs);
+const baseAvoirsAlloc = () => (allocFinancier ? BASES.avoirsFinanciers : BASES.avoirs);
 const valeurAvoirsAlloc = () => (allocFinancier ? totalFinancier() : patrimoine().brut);
 const partsAllocLisibles = () => valeurBaseAlloc() > 0.005;
 let compteRecherche = '';
