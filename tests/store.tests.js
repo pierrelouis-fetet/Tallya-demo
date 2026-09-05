@@ -33329,8 +33329,12 @@ suite('Modifier les parts ne change jamais le total des charges', () => {
     vrai(carte.length > 200, 'la carte des charges doit se relire depuis sa source');
     vrai(/valeur: `\$\{fmtEUR\(chargeMensuelle\(c\)\)\}/.test(carte),
       'le montant de la ligne est le facturé ramené au mois');
-    vrai(/partsLisibles\(c\)\]\.filter\(Boolean\)/.test(carte),
-      'et la part théorique vit dans la mention grise, jamais dans le montant');
+    /* Et la ligne ne porte QUE ca : la mention grise a deja quatre choses a
+       dire, et la part y arrivait tronquee sur un telephone. Elle se lit au
+       pied, une ligne par personne, et dans la fiche ou on la saisit. */
+    const avantPied = carte.slice(0, carte.indexOf('repart-pied'));
+    vrai(!/partsLisibles|Part théorique/.test(avantPied),
+      'la ligne d’une charge ne porte pas la part : elle est déjà au pied et dans la fiche');
     vrai(/<dt>\$\{trad\('Total \/ mois'\)\}<\/dt><dd>\$\{fmtEUR\(brut\)\}<\/dd>/.test(carte),
       'le total reste celui des montants facturés');
     vrai(/Part théorique de \{n\}/.test(carte),

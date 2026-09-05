@@ -2040,16 +2040,6 @@ function champsPartage(charge) {
   ];
 }
 
-/* La mention grise sous une ligne de charge. `ligneListe` echappe ce qu'on lui
-   donne, donc du texte nu, et le nom d'une personne avec. */
-function partsLisibles(c) {
-  return contributors()
-    .filter(g => shareMensuelle(c, g.id) > 0.005)
-    .map(g => `${trad('Part théorique de {n}').replace('{n}', g.name)} ${
-      fmtEUR0(shareMensuelle(c, g.id))}`)
-    .join(' · ');
-}
-
 function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, marque, ancre, classe, jauge }) {
   const part = jauge == null ? null : Math.max(-1, Math.min(1, num(jauge)));
   return `
@@ -5968,8 +5958,7 @@ function viewBudget(section = 'depenses') {
               return cr.capital != null
                 ? `${trad('rembourse')} ${guill(cr.libelle)}, ${trad('dont')} ${fmtEUR0(cr.capital)} ${trad('de capital')}`
                 : `${trad('rembourse')} ${guill(cr.libelle)}`;
-            })(),
-            partsLisibles(c)].filter(Boolean).join(' · '),
+            })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
           second: '',
         })}`).join('')}
