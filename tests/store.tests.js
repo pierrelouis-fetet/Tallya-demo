@@ -9594,6 +9594,55 @@ suite('Une fiche de bien montre ce qui sort de ton compte', () => {
   });
 });
 
+/* Deux phrases, deux endroits, et pas une de plus : la convention se dit la ou
+   elle se joue. */
+suite('La convention personnelle se dit là où elle se joue', () => {
+
+  const app = () => lireSource('assets/app.js');
+
+  test('la fiche d’un bien dit que ses montants sont personnels, et seulement si ça sert', () => {
+    /* Chez qui ne partage rien, la phrase enoncerait une evidence. Chez qui
+       partage, un ecart avec l'avis de copropriete se lirait sinon comme une
+       erreur de l'application. */
+    const src = app();
+    const i = src.indexOf('function ligneCharges(');
+    const fn = src.slice(i, src.indexOf('\nfunction ', i + 1));
+    vrai(fn.length > 300, 'la ligne des charges doit être trouvable');
+    vrai(/const perso = !contributors\(\)\.length \? '' :/.test(fn),
+      'la phrase ne paraît qu’en présence de quelqu’un qui partage');
+    vrai(/ce qui reste réellement à ta charge/.test(fn), 'et elle le dit');
+    vrai(/aideTxt: perso/.test(fn), 'à une seule charge, elle est portée par la ligne');
+    vrai(/aideSuite: perso/.test(fn), 'à plusieurs, elle suit l’aide du total');
+  });
+
+  test('la seconde phrase d’une aide est traduite à part', () => {
+    /* Concatener avant `trad()` ferait chercher une clef qui n'existe pas, et
+       l'interface anglaise afficherait du francais. */
+    const src = app();
+    const i = src.indexOf('function ligneTotal(');
+    const fn = src.slice(i, src.indexOf('\nfunction ', i + 1));
+    vrai(/aideSuite = ''/.test(fn), 'le paramètre existe, et il est facultatif');
+    vrai(/aide\(trad\(aideTxt\) \+ \(aideSuite \? /.test(fn),
+      'la traduction s’applique à la première phrase, la seconde arrive déjà traduite');
+    const dico = lireSource('assets/i18n.js');
+    vrai(dico.includes('"Les montants de cette fiche sont ce qui reste réellement à ta charge'),
+      'et la seconde a bien sa clef');
+  });
+
+  test('la dette se saisit personnelle, et le champ le dit', () => {
+    /* La convention du credit : le prelevement se partage, la dette non. Elle se
+       dit au moment ou l'on tape le chiffre, une fois. */
+    const src = app();
+    const f = src.slice(src.indexOf("async 'ajouter-credit'(btn)"),
+                        src.indexOf("async 'modifier-credit'") > 0
+                          ? src.indexOf("async 'modifier-credit'")
+                          : src.indexOf("async 'ajouter-credit'(btn)") + 4000);
+    vrai(/Capital restant dû/.test(f), 'le champ de la dette doit être trouvable');
+    vrai(/la dette réellement à ta charge/.test(f), 'il porte la convention');
+    vrai(/jamais la dette qui se divise/.test(f), 'et dit ce que le partage ne fait pas');
+  });
+});
+
 suite('Les postes proposés suivent l’usage du bien', () => {
 
   const proposes = (usage) => {

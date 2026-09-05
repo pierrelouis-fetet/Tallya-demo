@@ -2395,6 +2395,8 @@ const I18N = {
     "Crédit": "Loan",
     "patrimoine net": "net worth",
     "Taxe foncière": "Property tax",
+    "Les montants de cette fiche sont ce qui reste réellement à ta charge : les parts versées par quelqu’un d’autre en sont déjà retirées.": "The amounts on this sheet are what is really left for you to pay: shares paid by somebody else are already taken out.",
+    "la dette réellement à ta charge : si le prélèvement est partagé, c’est ta part qui sert au budget, jamais la dette qui se divise": "the debt really on you: if the payment is shared, it is your share that feeds the budget, never the debt that gets divided",
     "Charges de copropriété non récupérables": "Non-recoverable service charges",
     "Garantie loyers impayés": "Rent guarantee insurance",
     "Autres charges propriétaire": "Other landlord costs",

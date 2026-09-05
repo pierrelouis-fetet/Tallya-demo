@@ -4244,24 +4244,28 @@ function ligneSource({ nom, montant, signe, action, donnees, sub = '', aideTxt =
         <dd class="${teinte}">${devant}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
 }
 
-function ligneTotal({ nom, montant, signe, aideTxt, sub = '' }) {
+/* `aideSuite` arrive DEJA TRADUITE, et c'est la raison de son existence :
+   concatener deux phrases avant `trad()` ferait chercher une clef qui n'existe
+   pas, et l'anglais afficherait du francais. */
+function ligneTotal({ nom, montant, signe, aideTxt, sub = '', aideSuite = '' }) {
   const teinte = signe > 0 ? 'up' : signe < 0 ? 'dette' : '';
   const devant = signe > 0 ? '+' : signe < 0 ? '−' : '';
   return `
-      <dt>${trad(nom)}${aide(trad(aideTxt))}${sub ? `
+      <dt>${trad(nom)}${aide(trad(aideTxt) + (aideSuite ? ` ${aideSuite}` : ''))}${sub ? `
         <span class="sub">${sub}</span>` : ''}</dt>
         <dd class="${teinte}">${devant}${fmtEUR(Math.abs(montant))} ${trad('/ mois')}</dd>`;
 }
 
 function ligneCharges(cf, signe, nom = 'Charges propriétaire') {
   if (!cf.postesCharge.length) return '';
+  const perso = !contributors().length ? '' : trad('Les montants de cette fiche sont ce qui reste réellement à ta charge : les parts versées par quelqu’un d’autre en sont déjà retirées.');
   if (cf.postesCharge.length === 1) {
     const p = cf.postesCharge[0];
     return ligneSource({ nom: p.label, montant: p.mensuel, signe,
-      action: 'edit-charge', donnees: { i: p.i },
+      action: 'edit-charge', donnees: { i: p.i }, aideTxt: perso,
       sub: p.periode !== 'mois' ? `${fmtEUR0(p.montant)} ${periodeDite(p.periode)}` : '' });
   }
-  return ligneTotal({ nom, montant: cf.charges, signe,
+  return ligneTotal({ nom, montant: cf.charges, signe, aideSuite: perso,
     aideTxt: 'Le total des charges rattachées à ce bien. Chacune se corrige dans le budget, où elle porte son nom.',
     sub: trad('{n} charges').replace('{n}', cf.postesCharge.length) });
 }
@@ -8008,7 +8012,8 @@ const ACTIONS = {
       ok: 'Ajouter',
       champs: [
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, exemple: 'ex. Prêt immobilier' },
-        { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0' },
+        { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
+          aide: trad('la dette réellement à ta charge : si le prélèvement est partagé, c’est ta part qui sert au budget, jamais la dette qui se divise') },
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
         { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: trad('facultatif') },
