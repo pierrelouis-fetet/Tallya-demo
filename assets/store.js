@@ -1002,7 +1002,7 @@ function chargeDuCredit(id) {
 
 function mensualiteCredit(d) {
   const lien = chargeDuCredit(d.id);
-  return lien ? chargeMensuelle(lien.charge) : num(d.mensualite) || 0;
+  return lien ? chargeMensuellePersonnelle(lien.charge) : num(d.mensualite) || 0;
 }
 
 function creerChargeDuCredit(d) {
@@ -4061,7 +4061,7 @@ function prochaineEcheance(c, aujourdhui = todayISO()) {
 }
 
 function fixedTotal() {
-  return B().fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0);
+  return B().fixedCharges.reduce((s, c) => s + chargeMensuellePersonnelle(c), 0);
 }
 
 function contributors() { return B().contributors || []; }
@@ -4077,14 +4077,47 @@ function myShare(charge) { return num(charge.amount) - sharedOn(charge); }
 const shareMensuelle = (charge, id) => auMois(shareOf(charge, id), charge);
 const myShareMensuelle = charge => chargeMensuelle(charge) - auMois(sharedOn(charge), charge);
 
+/* CE QU'UNE CHARGE COUTE VRAIMENT, CHAQUE MOIS, A QUI TIENT CE TABLEAU.
+
+   Tallya est un tableau de bord PERSONNEL. Un prelevement de 2 000 EUR partage
+   en deux ne coute pas 2 000 EUR a celui qui le lit : le budget, le cout d'un
+   logement, le cash-flow d'un locatif doivent tous raconter la meme histoire, et
+   c'est celle-la. Une seule porte, donc, plutot que la regle des parts recopiee
+   dans chaque calcul — c'est ainsi que « Liquidites » a deja valu deux choses
+   differentes sur deux pages, les deux totaux justes.
+
+   SANS PARTAGE, ELLE REND EXACTEMENT LE MONTANT BRUT. `sharedOn` vaut zero, et
+   tout detenteur qui n'utilise pas le partage retrouve ses chiffres d'avant, au
+   centime. C'est l'invariant qui tient toute cette etape.
+
+   ZERO EST UNE VRAIE REPONSE : une charge entierement couverte par les autres ne
+   pese rien, et ce n'est ni le montant brut, ni une donnee absente.
+
+   Le plancher a zero ne corrige pas une saisie, il refuse d'en inventer une
+   autre : des parts qui depassent le montant rendraient une charge NEGATIVE, ce
+   qui n'est pas une depense mais une rentree, et le budget s'en trouverait
+   augmente en silence. Le cas est nomme ailleurs -- `partageExcessif` le
+   signale, et la fenetre de saisie le refuse -- plutot que corrige ici. */
+const chargeMensuellePersonnelle = charge => Math.max(0, myShareMensuelle(charge));
+
+const partageExcessif = charge => sharedOn(charge) - num(charge.amount) > 0.005;
+
+/* Les trois montants d'une page de partage : le BRUT, ce que les autres
+   versent, et ce qui reste. Ils gardent chacun leur sens — un ecran qui montre
+   un partage doit pouvoir nommer les deux cotes.
+
+   `mine` se lit desormais dans `fixedTotal`, qui EST le total personnel, au lieu
+   de se recalculer par soustraction. Deux additions du meme fait finissent par
+   diverger, et celle-ci l'aurait fait des qu'une part depasse son montant : la
+   soustraction rendait un negatif la ou le total personnel plancherait a zero. */
 function sharedTotals() {
   const lignes = B().fixedCharges;
   const parPersonne = contributors().map(p => ({
     ...p, total: lignes.reduce((s, c) => s + shareMensuelle(c, p.id), 0),
   }));
   const partage = parPersonne.reduce((s, p) => s + p.total, 0);
-  const total = fixedTotal();
-  return { parPersonne, partage, mine: total - partage, total };
+  const brut = lignes.reduce((s, c) => s + chargeMensuelle(c), 0);
+  return { parPersonne, partage, mine: fixedTotal(), brut, total: brut };
 }
 
 function fixedSharePK() { return sharedTotals().partage; }
@@ -4856,7 +4889,12 @@ function cashFlowBien(compte) {
   const postesCharge = B().fixedCharges
     .map((c, i) => ({ c, i }))
     .filter(({ c }) => c.bienId === compte.id && !rembourses.has(c.creditId))
-    .map(({ c, i }) => ({ i, label: c.label || trad('Charge fixe'), mensuel: chargeMensuelle(c),
+    /* `mensuel` est la part PERSONNELLE, `montant` reste le montant facture :
+       le premier entre dans le cash-flow, le second se lit en sous-titre et se
+       corrige dans la fenetre. Un calcul personnel et un montant a editer ne
+       sont pas le meme nombre. */
+    .map(({ c, i }) => ({ i, label: c.label || trad('Charge fixe'),
+                          mensuel: chargeMensuellePersonnelle(c),
                           periode: chargePeriode(c), montant: num(c.amount) }));
   const charges = postesCharge.reduce((s, x) => s + x.mensuel, 0);
   const idxEtab = ETABS().findIndex(e => e.id === compte.etabId);
@@ -5086,12 +5124,19 @@ const pasAFaire = cle => !!PAS_PAR_CLE[cle] && !PAS_PAR_CLE[cle].fait();
    frais de gestion au mois. Le premier poste donne la periode par defaut de la
    fenetre, et c'est pour ca que la taxe fonciere ouvre la liste. */
 const CHARGES_BIEN = {
-  '':           [['Taxe foncière', 'an'], ['Charges de copropriété', 'trimestre'],
-                 ['Provision pour travaux', 'an']],
-  locative:     [['Assurance propriétaire non occupant', 'an'],
-                 ['Frais de gestion locative', 'mois']],
-  principale:   [['Assurance habitation', 'an']],
-  secondaire:   [['Assurance habitation', 'an'], ['Taxe d’habitation', 'an']],
+  '':           [['Taxe foncière', 'an'], ['Provision pour travaux', 'an'],
+                 ['Entretien et réparations', 'an']],
+  locative:     [['Charges de copropriété non récupérables', 'trimestre'],
+                 ['Assurance propriétaire non occupant', 'an'],
+                 ['Frais de gestion locative', 'mois'],
+                 ['Garantie loyers impayés', 'an'],
+                 ['Autres charges propriétaire', 'an']],
+  principale:   [['Charges de copropriété', 'trimestre'],
+                 ['Assurance habitation', 'an'],
+                 ['Autres charges du logement', 'an']],
+  secondaire:   [['Charges de copropriété', 'trimestre'],
+                 ['Assurance habitation', 'an'], ['Taxe d’habitation', 'an'],
+                 ['Autres charges du bien', 'an']],
 };
 
 /* Les frais d'un placement immobilier — et rien d'un logement.
@@ -6474,6 +6519,14 @@ function healthChecks() {
   if (depEnAttente.missing)
     add('action', trad('Dépenses de {m} à saisir').replace('{m}', depEnAttente.label),
       trad('Le mois est clos, ce qu’il a coûté reste à enregistrer'), 'budget');
+
+  for (const c of (b.fixedCharges || [])) {
+    if (!partageExcessif(c)) continue;
+    add('warn', trad('Parts au-dessus du montant sur {n}')
+          .replace('{n}', guill(c.label || trad('Charge fixe'))),
+      trad('{p} partagés pour {m} facturés : cette charge compte pour zéro dans ton budget')
+        .replace('{p}', fmtEUR0(sharedOn(c))).replace('{m}', fmtEUR0(num(c.amount))), 'budget');
+  }
 
   const f = budgetFrame();
   if (f.income > 0 && f.available < f.target)

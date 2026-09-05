@@ -4852,7 +4852,7 @@ function espaceBien(c, idx, t) {
                    data-path="comptes.${idx}.lignes.${i}.surface" value="${num(l.surface) || ''}"></div>`}
         </div>
         <div class="grid g-2 g-paire">
-          <div class="field"><label>${trad('Ta part (%)')}${aide(trad("À remplir seulement si tu détiens ce bien à plusieurs : indivision, SCI, achat en couple sur deux tableaux de bord. Ton patrimoine ne compte alors que ta part. La valeur ci-dessus reste celle du bien entier, c'est elle que tu compares aux annonces. Le crédit, lui, se saisit tel que tu le dois : Tallya ne le divise jamais par ta part."))}</label>
+          <div class="field"><label>${trad('Ta part (%)')}${aide(trad("À remplir seulement si tu détiens ce bien à plusieurs : indivision, SCI, achat en couple sur deux tableaux de bord. Ton patrimoine ne compte alors que ta part. La valeur ci-dessus reste celle du bien entier, c'est elle que tu compares aux annonces. Elle ne répartit rien d'autre : le crédit, les loyers et les charges se saisissent tels que tu les dois, les reçois et les paies. Une charge partagée avec quelqu'un se règle par sa part, dans le budget."))}</label>
             <input type="number" step="any" min="0" max="100" class="champ-large"
                    data-path="comptes.${idx}.lignes.${i}.part" value="${estDeclare(l.part) ? num(l.part) : ''}"
                    placeholder="100">
@@ -5809,13 +5809,17 @@ function viewBudget(section = 'depenses') {
   <div class="card">
     <div class="card-head"><h2>${trad('Ce qui sort chaque mois')}</h2>
       ${(() => {
-        const n = b.fixedCharges.filter(c => chargeMensuelle(c) > 0).length;
+        const n = b.fixedCharges.filter(c => chargeMensuellePersonnelle(c) > 0).length;
         return `<span class="hint">${n} ${n > 1 ? trad('postes') : trad('poste')}</span>`;
       })()}</div>
     ${(() => {
       const st = sharedTotals();
+      /* Le montant PERSONNEL, comme `f.fixed` juste au-dessus : le commentaire
+         d'a cote prevoyait le jour ou les deux cesseraient d'etre egaux, et
+         c'est ce jour-la. Les parts versees par les autres sortent des deux, ou
+         d'aucun — sinon les pourcentages de cette carte ne feraient plus cent. */
       const postes = b.fixedCharges
-        .map(c => ({ nom: c.label || 'Sans nom', v: chargeMensuelle(c) }))
+        .map(c => ({ nom: c.label || 'Sans nom', v: chargeMensuellePersonnelle(c) }))
         .filter(x => x.v > 0)
         .sort((a, x) => x.v - a.v);
       /* Le texte vit dans `PREMIERS_PAS` : c'est le meme que celui de l'invite,
@@ -5874,7 +5878,8 @@ function viewBudget(section = 'depenses') {
     <div class="card" data-anchor="charges">
       <div class="card-head"><h2>${trad('Charges fixes')}</h2>
         <div class="row">
-          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} ${trad('des revenus')}</span>
+          <span class="hint">${fmtEUR(f.fixed)} ${trad('/ mois')} · ${fmtPct(f.fixedPct, 1)} ${trad('des revenus')}${
+            !contributors().length ? '' : aide(trad('Ce total est ce qui reste à ta charge : les parts versées par les autres en sont déjà retirées. Chaque ligne garde son montant facturé, et ta part se lit en dessous.'))}</span>
 
           <button class="btn sm ghost" data-action="add-contributor">+ ${trad('Personne')}</button>
           <button class="btn sm ghost" data-action="add-charge">${trad('+ Ligne')}</button>
@@ -7960,6 +7965,9 @@ const ACTIONS = {
        donc rien d'autre n'a a connaitre les deux mondes. */
     const direct = estBienEnDirect(c);
     const proposes = chargesProposees(c);
+    const aidePoste = direct && usageBien(c) === 'locative'
+      ? trad('Le loyer se saisit hors charges : n’entre ici que ce qui reste à ta charge de propriétaire, une fois déduit ce que le locataire rembourse. La taxe foncière suit la même règle si une part t’est remboursée.')
+      : null;
     const v = await askForm({
       titre: (direct ? trad('Charge de {v}') : trad('Frais de {v}'))
         .replace('{v}', nomCompteV2(c)),
@@ -7969,6 +7977,7 @@ const ACTIONS = {
         { cle: 'label', label: direct ? 'Poste' : 'Type de frais', type: 'texte',
           requis: true, max: NOM_LIGNE_MAX,
           exemple: trad('ex. {v}').replace('{v}', trad(proposes[0][0])),
+          ...(aidePoste ? { aide: aidePoste } : {}),
           suggestions: [...proposes.map(([l]) => l), ...valeursConnues('posteBien')]
             .filter((l, i, t) => t.findIndex(x => x.toLowerCase() === l.toLowerCase()) === i) },
         { cle: 'amount', label: 'Montant', type: 'nombre', exemple: '0' },
@@ -8668,6 +8677,14 @@ const ACTIONS = {
             .replace('{p}', trad(CHARGE_PERIODE_LABEL[chargePeriode(c)]))
             .replace('{v}', fmtEUR(chargeMensuelle(c))),
       ok: 'Enregistrer',
+      valide: v => {
+        if (!gens.length) return null;
+        const parts = gens.reduce((s, p) => s + num(v[`part_${p.id}`]), 0);
+        if (parts - num(v.amount) <= 0.005) return null;
+        return { cle: `part_${gens[0].id}`,
+          message: trad('Les parts dépassent le montant facturé : {p} pour {m}.')
+            .replace('{p}', fmtEUR(parts)).replace('{m}', fmtEUR(num(v.amount))) };
+      },
       champs: [
         { cle: 'label', label: 'Poste', type: 'texte', requis: true, max: NOM_LIGNE_MAX, valeur: c.label },
         { cle: 'amount', label: 'Montant', type: 'nombre', valeur: num(c.amount) },
@@ -11102,7 +11119,10 @@ const APERCUS = {
 
   chargesFixes: () => {
     const postes = (Store.state.budget.fixedCharges || [])
-      .map(c => ({ nom: c.label || 'Sans nom', v: chargeMensuelle(c),
+      /* `v` est la part personnelle — c'est le total du panneau, et il doit
+         valoir celui de la carte qui l'ouvre. `facture` reste le montant
+         facture : c'est lui qu'on relit sur l'avis, pas ce qu'on en paie. */
+      .map(c => ({ nom: c.label || 'Sans nom', v: chargeMensuellePersonnelle(c),
                    periode: chargePeriode(c), facture: num(c.amount) }))
       .filter(x => x.v > 0)
       .sort((a, x) => x.v - a.v);
