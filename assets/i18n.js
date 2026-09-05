@@ -634,6 +634,7 @@ const I18N = {
     "+ Nouvelle catégorie": "+ New category",
     "+ Suivre une classe": "+ Track a class",
     "/ mois": "/ month",
+    "/ an": "/ year",
     "1 montant": "1 amount",
     "Ajouter un placement à ce compte": "Add an investment to this account",
     "Ajouter une ligne": "Add a holding",

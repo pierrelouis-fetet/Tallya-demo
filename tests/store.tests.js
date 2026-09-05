@@ -33932,3 +33932,69 @@ suite('Le périmètre financier porte les dettes qui ne sont pas parties avec un
     }
   });
 });
+
+/* DEUX CARTES, DEUX ROLES. Six barres nommaient les six plus gros postes, et la
+   carte juste en dessous nommait les treize, montant compris : deux
+   representations detaillees des memes depenses sur un seul ecran. On lisait
+   « Loyer 1 890 » deux fois en faisant defiler, et rien ne disait laquelle des
+   deux repondait a la question qu'on se posait. */
+suite('Charges fixes : une carte pèse, l’autre gère', () => {
+
+  const regions = () => {
+    const src = lireSource('assets/app.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const i = src.indexOf("trad('Ce qui sort chaque mois')");
+    const j = src.indexOf('data-anchor="charges"', i);
+    vrai(i > 0 && j > i, 'les deux cartes doivent se relire depuis leur source');
+    return { resume: src.slice(i, j), liste: src.slice(j, src.indexOf('id="chargesTable"', j)) };
+  };
+
+  test('la carte du haut ne détaille plus les postes', () => {
+    const { resume } = regions();
+    vrai(resume.length > 200, 'la carte doit se relire depuis sa source');
+    vrai(!/flow-row/.test(resume),
+      'les six barres nommaient des postes que la carte du dessous liste déjà');
+    vrai(!/x\.nom/.test(resume), 'et plus aucun libellé de charge n’y paraît');
+    /* Ce qu'elle garde : les trois nombres du poids, le mensuel en tete. */
+    vrai(/fmtEUR\(f\.fixed\)/.test(resume), 'le total mensuel reste');
+    vrai(/ct-chiffre/.test(resume), 'et il reste le chiffre dominant de la carte');
+    vrai(/f\.fixedPct == null \? '' :/.test(resume),
+      'sa part du revenu reste, gardée comme au jour où elle est devenue nulle');
+    vrai(/fmtEUR0\(f\.fixed \* 12\)/.test(resume), 'et le total à l’année');
+    /* La porte vers le detail par poste reste : le panneau a la place de montrer
+       les treize la ou la carte n'en montrait que six. */
+    vrai(/data-apercu="chargesFixes"/.test(resume), 'le détail par poste reste à un appui');
+  });
+
+  test('chaque ligne dit son mensuel et son annuel', () => {
+    const { liste } = regions();
+    vrai(/valeur: `\$\{fmtEUR\(chargeMensuelle\(c\)\)\} \$\{trad\('\/ mois'\)\}`/.test(liste),
+      'le mensuel est l’information principale, à droite');
+    vrai(/second: `\$\{fmtEUR0\(chargeMensuelle\(c\) \* 12\)\} \$\{trad\('\/ an'\)\}`/.test(liste),
+      'et l’annuel la suit, en second et plus discret');
+    vrai(/action: 'edit-charge'/.test(liste), 'le chevron ouvre toujours la ligne');
+    vrai(I18N.en['/ an'], 'le mot a sa traduction');
+    /* Douze fois le mensuel, et non une seconde conversion de periodicite :
+       `chargeMensuelle` a deja ramene la charge au mois, quelle qu'elle soit. */
+    Fixture.poser(s => {
+      s.budget.fixedCharges = [{ label: 'Assurance', amount: 1200, period: 'an' },
+                               { label: 'Loyer', amount: 1890, period: 'mois' }];
+    });
+    const [a, l] = Store.state.budget.fixedCharges;
+    pres(chargeMensuelle(a), 100, 'une charge annuelle pèse cent euros par mois');
+    pres(chargeMensuelle(a) * 12, 1200, 'et retrouve son montant à l’année');
+    pres(chargeMensuelle(l) * 12, 22680, 'un loyer de 1 890 € fait 22 680 € par an');
+  });
+
+  test('les deux cartes lisent le même total, et le budget aussi', () => {
+    Fixture.poser(s => {
+      s.budget.income = [{ label: 'Salaire', amount: 4500 }];
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1890, period: 'mois' },
+                               { label: 'Internet', amount: 30, period: 'mois' }];
+    });
+    pres(fixedTotal(), 1920, 'le total des charges');
+    pres(budgetFrame().fixed, 1920, 'la carte du haut le lit par le cadre du budget');
+    pres(Store.state.budget.fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0), 1920,
+      'et le pied de la liste somme exactement les mêmes lignes');
+    pres(fixedTotal() * 12, 23040, 'le total à l’année suit le même chemin');
+  });
+});

@@ -5901,13 +5901,6 @@ function viewBudget(section = 'depenses') {
          pourtant rien a montrer. */
       if (!postes.length) return invitePremierPas('depenses')
         || `<p class="empty" style="margin:0">${trad('Aucune charge fixe déclarée.')}</p>`;
-      /* `haut` ne sert plus aux barres, qui valent desormais la part. Il reste
-         la parce que le total, lui, doit venir des postes affiches et non de
-         `f.fixed` : les deux sont egaux aujourd'hui, et le jour ou ils
-         cesseraient de l'etre, les pourcentages de cette carte ne feraient plus
-         100 % sans que rien ne le dise. */
-      const total = postes.reduce((s, x) => s + x.v, 0);
-      const montre = postes.slice(0, 6);
       return `
       <div class="charges-tete">
         <div class="ct-chiffre">
@@ -5924,20 +5917,7 @@ function viewBudget(section = 'depenses') {
       <button type="button" class="flow-lien" style="margin-top:12px"
               data-action="apercu" data-apercu="chargesFixes"
               title="${trad('Voir les')} ${postes.length} ${trad('postes avec leur part')}">
-        <div class="flow">
-          ${montre.map(x => `
-            <div class="flow-row">
-              <span class="flow-label">${esc(x.nom)}</span>
-              <div class="flow-bar"><div style="width:${Math.max(1.5, total ? x.v / total * 100 : 0).toFixed(1)}%;
-                background:var(--degrade-budget)"></div></div>
-              <b class="flow-val">${fmtEUR0(x.v)}</b>
-              <span class="flow-pct">${fmtPct(total ? x.v / total * 100 : 0, 1)}</span>
-            </div>`).join('')}
-        </div>
-        <p class="small muted" style="margin:12px 0 0">${postes.length > montre.length
-          ? `${trad('et')} ${postes.length - montre.length} ${postes.length - montre.length > 1
-              ? trad('autres postes') : trad('autre poste')}${deuxPoints()} ${trad('voir les.minuscule', 'voir les')} ${postes.length}${trad(', avec leur part ›')}`
-          : trad('Voir la part de chaque poste ›')}</p>
+        <p class="small muted" style="margin:0">${trad('Voir la part de chaque poste ›')}</p>
       </button>`;
     })()}
   </div>
@@ -5970,7 +5950,12 @@ function viewBudget(section = 'depenses') {
                 : `${trad('rembourse')} ${guill(cr.libelle)}`;
             })()].filter(Boolean).join(' · '),
           valeur: `${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`,
-          second: '',
+          /* L'equivalent annuel, sous le mensuel et plus discret : c'est a cette
+             echelle qu'on decide de garder un abonnement, et le calculer de tete
+             sur treize lignes n'arrive jamais. Douze fois le mensuel, et non une
+             seconde regle de conversion : `chargeMensuelle` a deja ramene la
+             periodicite au mois, quelle qu'elle soit. */
+          second: `${fmtEUR0(chargeMensuelle(c) * 12)} ${trad('/ an')}`,
         })}`).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(brut)}</dd>
