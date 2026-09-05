@@ -4600,6 +4600,33 @@ details[open]::details-content { block-size: auto; }
   opacity: .8;
 }
 
+/* --- l'ecran des anciens comptes ---------------------------------------
+
+   UNE LIGNE PAR COMPTE, jamais une carte par compte : douze cartes empilees sur
+   375 px font une page qu'on ne parcourt plus, et l'action se perd dans le
+   cadre. Le nom a gauche, l'etablissement dessous en gris, l'action a droite,
+   un filet entre deux lignes.
+
+   Le filet est en HAUT et non en bas : la derniere ligne n'a alors pas de trait
+   qui la separe du bord de la carte, sans qu'une regle `:last-child` ait a le
+   reprendre. */
+.arch-titre { margin-top: 4px; }
+.arch-liste { display: flex; flex-direction: column; }
+.arch-ligne {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0; border-top: 1px solid var(--border);
+}
+.arch-ligne:first-child { border-top: 0; }
+.arch-nom { flex: 1; min-width: 0; }
+.arch-nom b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.arch-nom .sub { display: block; }
+.arch-actes { display: flex; align-items: center; gap: 8px; flex: none; }
+/* `.arch-agir` et non `.btn` : une regle posee sur `.btn`, meme portee, se lit
+   comme une redefinition du bouton d'action de toute l'application, et le
+   controle qui garde cette famille la refuse — a raison. */
+.arch-ligne .arch-agir { min-height: 40px; }
+.arch-jeter { min-width: 40px; font-size: 16px; }
+
 /* Le surplus d'une fiche : present dans le DOM, masque jusqu'au clic.
 
    `display: none` et non une hauteur : les rangees d'un tableau ne s'animent

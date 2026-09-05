@@ -12021,48 +12021,43 @@ suite('Un compte archivé reste consultable et daté', () => {
      que c'est justement pour son historique qu'on l'archive plutôt que de le
      supprimer. */
 
-  test('un compte archivé se rend comme les autres', () => {
-    /* Il avait sa propre carte, avec ses propres lignes et ses propres boutons :
-       une seconde façon d'afficher un compte, à tenir d'accord avec la première.
-       Elle rendait ses lignes sans le glissement, sans la variation, sans le
-       sous-titre standard — et son nom n'ouvrait rien du tout au départ.
-
-       Le contrôle ne cherche donc plus un attribut dans ce bloc, il vérifie la
-       délégation : les archives passent par `ligneCompte`, la fonction qui rend
-       toutes les autres. Ce qu'on lui ajoutera demain les couvrira aussi. */
+  test('l’entrée des archivés mène à leur écran, elle ne déplie plus une liste', () => {
+    /* Le groupe repliait une liste de lignes, et chaque ligne ouvrait la fiche
+       du compte. C'etait juste tant qu'on ne faisait que LIRE. Depuis que la
+       gestion de ces comptes vit ici — restaurer, supprimer — un groupe ne
+       suffit plus : ses lignes sont des boutons, et un bouton dans un bouton
+       n'existe pas. L'entree mene donc a un ecran, qui porte les gestes. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    const bloc = src.match(/const archives = COMPTES\(\)\.filter[\s\S]*?\n  \}\)\(\)\}/);
-    vrai(bloc, 'la carte des comptes archivés doit être trouvable');
-    vrai(/ligneCompte\(c\)/.test(bloc[0]),
-      'les comptes archivés doivent passer par ligneCompte, comme les autres : '
-      + 'une seconde façon de rendre un compte finit par diverger de la première');
-    vrai(/groupe\('archives'/.test(bloc[0]),
-      'et vivre dans un groupe repliable, comme les autres');
-    /* Et `ligneCompte` porte bien la porte vers la fiche : sans cela, la
-       délégation ci-dessus ne garantirait rien. */
-    const ligne = src.match(/function ligneCompte\(c, avecEtab = true\) \{[\s\S]*?\n\}/);
-    vrai(ligne && /data-action="fiche-compte"/.test(ligne[0]),
-      'une ligne de compte ouvre sa fiche : c’est ce qui rend un compte archivé '
-      + 'consultable, et c’est pour son historique qu’on l’archive');
+    const bloc = src.match(/const anciens = comptesAnciens\(\);[\s\S]*?\n  \}\)\(\)\}/);
+    vrai(bloc, 'l’entrée des comptes archivés doit être trouvable');
+    vrai(/data-view="comptes-archives"/.test(bloc[0]), 'elle mène à l’écran dédié');
+    vrai(!/groupe\('archives'/.test(bloc[0]), 'et ne rend plus un groupe repliable');
+    vrai(!/ligneCompte\(c\)/.test(bloc[0]), 'ni les lignes de la liste des comptes');
+    vrai(/'comptes-archives': \{ cle: 'accounts'/.test(src),
+      'l’écran est enregistré sous la clé « accounts » : son retour remonte à Actifs');
   });
 
-  test('restaurer se confirme, et ne vit que dans la fiche', () => {
-    /* Le bouton était sur chaque ligne de la liste des archives, à portée de
-       pouce et sans question, alors que l'action remet un montant dans tous les
-       totaux du patrimoine. « En général on ne restaure pas un compte
-       archivé. » */
+  test('restaurer se confirme, partout où le bouton existe', () => {
+    /* Le bouton avait ete retire de la liste des archives d'Actifs, et pour une
+       raison precise : il y etait a portee de pouce ET SANS QUESTION. C'est la
+       question qui manquait, et elle vit desormais dans l'acte lui-meme. Le
+       bouton peut donc revenir la ou ces comptes se GERENT — leur ecran — sans
+       que le geste redevienne muet. La page Actifs, elle, ne fait que mener. */
     const src = lireSource('assets/app.js');
-    const bloc = src.match(/const archives = COMPTES\(\)\.filter[\s\S]*?\n  \}\)\(\)\}/);
-    vrai(!/data-action="restaurer-compte"/.test(bloc[0]),
-      'la liste ne porte plus la restauration : elle sert à naviguer, la fiche à agir');
     const acte = src.match(/async 'restaurer-compte'\(btn\) \{[\s\S]*?\n  \},/);
     vrai(acte, 'la restauration doit être trouvable, et attendre une réponse');
     vrai(/askConfirm\(/.test(acte[0]),
       'et se confirmer : c’est un geste qu’on ne veut pas faire en visant autre chose');
     const fiche = src.match(/function viewFicheCompte\(id\) \{[\s\S]*?\n\}/);
     vrai(/data-action="restaurer-compte"/.test(fiche[0]),
-      'la fiche, elle, le garde : c’est là qu’on agit sur un compte');
+      'la fiche le garde : c’est là qu’on agit sur un compte');
+    const ecran = src.match(/function viewComptesArchives\(\) \{[\s\S]*?\n\}/);
+    vrai(ecran && /data-action="restaurer-compte"/.test(ecran[0]),
+      'et l’écran des archivés le porte : c’est là que ces comptes se gèrent');
+    const entree = src.match(/const anciens = comptesAnciens\(\);[\s\S]*?\n  \}\)\(\)\}/);
+    vrai(!/data-action="restaurer-compte"/.test(entree[0]),
+      'la page Actifs, elle, ne fait que mener');
   });
 
   test('archiver demande la date, restaurer l’efface', () => {
@@ -27676,6 +27671,212 @@ suite('Un relevé note sa propre ventilation', () => {
 
 /* Retirer un compte clos, c'est effacer une donnee : la suite porte surtout sur
    ce qu'on ne retire PAS. */
+/* Le deplacement lui-meme : Donnees n'en parle plus, Actifs porte tout. */
+suite('Les anciens comptes se gèrent depuis Actifs, et nulle part ailleurs', () => {
+
+  /* Deux comptes archives — ils ont une fiche, donc ils se restaurent — et une
+     entree de l'ancien modele, qu'un releve mentionne. */
+  const poser = () => {
+    Fixture.poser();
+    Store.state.comptes = [
+      { id: 'c_ouvert', type: 'courant', label: 'Courant', statut: 'ouvert',
+        cash: [{ montant: 1000, affectation: 'courant' }], lignes: [] },
+      { id: 'c_a', type: 'courant', label: 'Ancien A', statut: 'archive', cash: [], lignes: [] },
+      { id: 'c_b', type: 'courant', label: 'Ancien B', statut: 'archive', cash: [], lignes: [] },
+    ];
+    Store.state.accounts = [{ id: 'c_vieux', label: 'Vieux format', group: 'cash' }];
+    Store.state.positions = [];
+    Store.state.monthly = [{ date: '2026-01-31', v: { c_ouvert: 1000, c_vieux: 250 },
+                             comment: '', dettes: 0 }];
+    refreshAccounts();
+  };
+  const app = () => lireSource('assets/app.js');
+  /* Les bornes sont du CODE : une fenetre en caracteres se defait des que les
+     commentaires partent, et l'arbre publie n'en a aucun. */
+  const tranche = (debut, fin) => { const s = app(); return s.slice(s.indexOf(debut), s.indexOf(fin)); };
+  const ecran = () => tranche('function viewComptesArchives()', '\nfunction mountAccounts()');
+  const donnees = () => tranche('function viewData()', '\nfunction mountData()');
+  const ids = l => l.map(x => x.id).sort().join(',');
+
+  test('Données ne montre plus aucune gestion des comptes clos', () => {
+    const d = donnees();
+    vrai(d.length > 1000, 'la vue Données doit être trouvable');
+    vrai(!/Comptes clos/.test(d), 'plus de carte « Comptes clos »');
+    vrai(!/à retirer/.test(d), 'plus de compteur « X à retirer »');
+    vrai(!/comptesClosDetaches\(/.test(d) && !/comptesAnciens\(/.test(d),
+      'plus de liste des anciens comptes');
+    vrai(!/retirerComptesClos\(/.test(d), 'et plus aucune suppression');
+    const s = app();
+    vrai(!/'retirer-comptes-clos'/.test(s) && !/'supprimer-comptes-retenus'/.test(s),
+      'les deux actes globaux ont quitté le fichier');
+  });
+
+  test('un compte clos n’est pas une anomalie', () => {
+    /* « Ce compte est clos et peut etre supprime » n'est pas un defaut : c'est
+       la fin normale de la vie d'un compte. Une page de controles qui liste du
+       normal apprend a etre ignoree.
+
+       Le controle nomme les comptes de la fixture plutot que de chercher le mot
+       « clos » : un MOIS clos en est un aussi, et le diagnostic a bien le droit
+       de le reclamer. */
+    poser();
+    const dits = JSON.stringify(healthChecks() || []);
+    for (const nom of ['Ancien A', 'Ancien B', 'Vieux format']) {
+      vrai(!dits.includes(nom), `aucun contrôle ne signale « ${nom} »`);
+    }
+    const src = lireSource('assets/store.js');
+    const f = src.slice(src.indexOf('function healthChecks()'),
+                        src.indexOf('function fmtDureeMois('));
+    vrai(f.length > 2000, 'le diagnostic doit être trouvable');
+    vrai(!/comptesClosDetaches|comptesAnciens/.test(f),
+      'et il ne lit même pas la liste des anciens comptes');
+  });
+
+  test('aucun bouton ne supprime plusieurs comptes d’un coup', () => {
+    const s = app();
+    vrai(!/Retirer les \{n\} comptes/.test(s), 'plus de « Retirer les {n} comptes »');
+    vrai(!/Supprimer définitivement les \{n\} comptes/.test(s),
+      'ni « Supprimer définitivement les {n} comptes »');
+    vrai(/retirerComptesClos\(\[x\.id\]\)/.test(s),
+      'la suppression ne vise qu’un identifiant, celui de la ligne');
+  });
+
+  test('Actifs garde son entrée, et elle mène à l’écran', () => {
+    const s = app();
+    const entree = s.match(/const anciens = comptesAnciens\(\);[\s\S]*?\n  \}\)\(\)\}/);
+    vrai(entree, 'l’entrée doit être trouvable');
+    vrai(/Comptes archivés/.test(entree[0]), 'elle porte son nom');
+    vrai(/hors totaux, conservés pour l’historique/.test(entree[0]), 'et son sous-titre');
+    vrai(/data-action="goto"[\s\S]{0,80}data-view="comptes-archives"/.test(entree[0]),
+      'un clic mène à l’écran dédié');
+  });
+
+  test('le retour ramène à Actifs, pas à Données', () => {
+    const s = app();
+    vrai(/'comptes-archives': \{ cle: 'accounts', render: viewComptesArchives \}/.test(s),
+      'la clé de vue est « accounts » : le chevron de l’en-tête remonte à Actifs');
+    vrai(/data-action="goto" data-view="accounts"/.test(ecran()),
+      'et l’écran porte lui-même son retour vers Actifs');
+    vrai(!/data-view="data"/.test(ecran()), 'jamais vers Données');
+  });
+
+  test('une ligne par compte, jamais des noms collés par des virgules', () => {
+    const e = ecran();
+    vrai(e.length > 800, 'l’écran doit être trouvable');
+    vrai(/liste\.map\(ligne\)\.join\(''\)/.test(e),
+      'la liste rend une ligne par compte');
+    vrai(!/join\(', '\)/.test(e), 'aucun nom n’est concaténé dans une phrase');
+    vrai(/class="arch-ligne"/.test(e), 'chaque compte a sa propre rangée');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.arch-ligne \{[^}]*display: flex/.test(css),
+      'la rangée est une ligne : le nom à gauche, l’action à droite');
+    vrai(/\.arch-ligne \{[^}]*border-top: 1px solid var\(--border\)/.test(css),
+      'avec un filet fin entre deux, et pas une carte par compte');
+    vrai(/\.arch-ligne \.arch-agir \{[^}]*min-height: 40px/.test(css),
+      'et une cible tactile confortable');
+  });
+
+  test('un compte archivé se restaure, une entrée d’ancien format ne se restaure pas', () => {
+    /* La seule difference que l'ecran ait a montrer : l'un a une fiche a
+       rouvrir, l'autre n'existe plus que comme un nom dans d'anciens releves. */
+    poser();
+    const { archives, clos } = comptesAnciens();
+    eq(ids(archives), 'c_a,c_b', 'les deux comptes archivés sont là');
+    eq(ids(clos), 'c_vieux', 'et l’entrée d’ancien format à part');
+    vrai(archives.every(x => x.restaurable), 'les premiers se restaurent');
+    vrai(clos.every(x => !x.restaurable), 'le second n’a pas de fiche à rouvrir');
+    vrai(!archives.some(x => x.id === 'c_ouvert') && !clos.some(x => x.id === 'c_ouvert'),
+      'et un compte ouvert n’entre dans aucune des deux listes');
+    const e = ecran();
+    vrai(/\$\{!x\.restaurable \? '' : /.test(e),
+      'l’écran n’affiche « Restaurer » que sur ce qui se restaure');
+    vrai(/data-action="supprimer-compte-clos"/.test(e),
+      'et la poubelle sur chaque ligne');
+  });
+
+  test('supprimer A ne supprime pas B', () => {
+    poser();
+    eq(retirerComptesClos(['c_a']), 1, 'un seul part');
+    vrai(!(Store.state.comptes || []).some(c => c.id === 'c_a'), 'A est parti');
+    vrai((Store.state.comptes || []).some(c => c.id === 'c_b'), 'B est toujours là');
+    vrai((Store.state.accounts || []).some(a => a.id === 'c_vieux'),
+      'et l’entrée d’ancien format aussi');
+  });
+
+  test('restaurer vise un seul compte', () => {
+    const acte = app().match(/async 'restaurer-compte'\(btn\) \{[\s\S]*?\n  \},/);
+    vrai(acte, 'la restauration doit être trouvable');
+    vrai(/const c = compteById\(btn\.dataset\.id\);/.test(acte[0]),
+      'elle lit l’identifiant de la ligne cliquée');
+    vrai(!/for \(|\.forEach\(|COMPTES\(\)\.filter/.test(acte[0]),
+      'et ne parcourt aucune liste : ce compte-là, pas les autres');
+    vrai(/c\.statut = 'ouvert'/.test(acte[0]), 'elle le rouvre');
+    vrai(/refreshAccounts\(\); Store\.save\(\); render\(\);/.test(acte[0]),
+      'et l’écran se refait aussitôt');
+  });
+
+  test('la suppression se confirme, et l’écran se refait aussitôt', () => {
+    const f = tranche("async 'supprimer-compte-clos'(btn)", "async 'start-blank'()");
+    vrai(/Supprimer définitivement ce compte clos \?/.test(f),
+      'la question est celle qu’on attend');
+    vrai(/ok: 'Supprimer', danger: true/.test(f),
+      'et le dialogue s’annonce comme destructeur');
+    vrai(/Store\.save\(\);[\s\S]{0,40}render\(\);/.test(f),
+      'la liste se refait après la suppression');
+  });
+
+  test('un compte que rien ne rend supprimable ne le devient pas', () => {
+    /* Le garde-fou ne change pas : seuls les comptes CLOS entrent dans la
+       liste, et nommer autre chose ne retire rien. */
+    poser();
+    const brut = round2(patrimoine().brut);
+    eq(retirerComptesClos(['c_ouvert']), 0, 'un compte ouvert ne se supprime pas');
+    eq(retirerComptesClos(['c_inexistant']), 0, 'ni un identifiant qui ne désigne rien');
+    vrai(Store.state.comptes.some(c => c.id === 'c_ouvert'), 'il est toujours là');
+    pres(round2(patrimoine().brut), brut, 'et le patrimoine n’a pas bougé');
+  });
+
+  test('l’historique passé survit, et les totaux du jour se recalculent', () => {
+    poser();
+    const totalAvant = round2(rowTotal(Store.state.monthly[0]));
+    const brutAvant = round2(patrimoine().brut);
+    eq(retirerComptesClos(['c_vieux']), 1, 'l’entrée d’ancien format part');
+    pres(round2(rowTotal(Store.state.monthly[0])), totalAvant,
+      'le total du mois ne bouge pas d’un centime');
+    pres(round2(patrimoine().brut), brutAvant,
+      'et le patrimoine du jour non plus : ces comptes en étaient déjà sortis');
+    eq(ids(comptesAnciens().clos), '', 'la liste se met à jour, sans lui');
+    eq(ids(comptesAnciens().archives), 'c_a,c_b', 'les autres sont intacts');
+  });
+
+  test('la liste suit la restauration, elle ne la devine pas', () => {
+    poser();
+    compteById('c_a').statut = 'ouvert';
+    refreshAccounts();
+    eq(ids(comptesAnciens().archives), 'c_b', 'A a quitté les archivés');
+    vrai(comptesOuverts().some(c => c.id === 'c_a'), 'et il est revenu chez les ouverts');
+    vrai(comptesOuverts().every(c => c.id !== 'c_b'), 'B, lui, n’a pas bougé');
+  });
+
+  test('sans aucun ancien compte, l’entrée disparaît d’Actifs', () => {
+    /* Pas d'ecran vide : l'entree ne s'affiche que s'il y a quelque chose
+       derriere elle, comme le groupe qu'elle remplace. */
+    Fixture.poser();
+    Store.state.comptes = [{ id: 'c_ouvert', type: 'courant', label: 'Courant',
+      statut: 'ouvert', cash: [], lignes: [] }];
+    Store.state.accounts = [];
+    Store.state.positions = [];
+    refreshAccounts();
+    const a = comptesAnciens();
+    eq(a.archives.length + a.clos.length, 0, 'il n’y a rien à montrer');
+    const entree = app().match(/const anciens = comptesAnciens\(\);[\s\S]*?\n  \}\)\(\)\}/);
+    vrai(/if \(!vus\.length\) return '';/.test(entree[0]),
+      'et l’entrée ne se rend pas');
+    vrai(/Aucun compte archivé\./.test(ecran()),
+      'quant à l’écran, il le dit plutôt que de rester vide');
+  });
+});
+
 suite('Un compte clos ne part que si rien ne le retient', () => {
 
   /* Un etat minimal : un compte ouvert, un compte archive, et une entree
@@ -27742,13 +27943,13 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
     const avant = Store.state.monthly.map(r => round2(rowTotal(r)));
     const brutAvant = round2(patrimoine().brut);
 
-    const n = retirerComptesClos();
-    eq(n, 0, 'ici rien n’est libre : les deux sont retenus');
+    const n = retirerComptesClos([]);
+    eq(n, 0, 'sans identifiant, rien ne part');
 
     poser({ dansReleve: { c_fantome: 250 } });
     const avant2 = Store.state.monthly.map(r => round2(rowTotal(r)));
     const brut2 = round2(patrimoine().brut);
-    eq(retirerComptesClos(), 1, 'seul le compte archivé vide part');
+    eq(retirerComptesClos(['c_clos']), 1, 'le compte archivé vide part quand on le nomme');
     pres(Store.state.monthly.map(r => round2(rowTotal(r)))[0], avant2[0],
       'le total du mois ne bouge pas d’un centime');
     pres(round2(patrimoine().brut), brut2, 'ni le patrimoine du jour');
@@ -27760,16 +27961,16 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
     const tous = [...comptesClosDetaches().libres, ...comptesClosDetaches().retenus];
     vrai(!tous.some(x => x.id === 'c_ouvert'),
       'seuls les comptes clos entrent dans le tri');
-    retirerComptesClos();
+    retirerComptesClos(['c_ouvert']);
     vrai(Store.state.comptes.some(c => c.id === 'c_ouvert'),
-      'et il survit au retrait');
+      'et il survit, même nommé');
   });
 
   test('le retrait vide les deux listes où un compte clos peut vivre', () => {
     /* Un compte archive vit dans `comptes`, une entree de l'ancien modele dans
        `accounts` : n'en nettoyer qu'une laisserait l'autre reparaitre. */
     poser();
-    eq(retirerComptesClos(), 2, 'les deux partent');
+    eq(retirerComptesClos(['c_clos', 'c_fantome']), 2, 'les deux partent');
     vrai(!(Store.state.comptes || []).some(c => c.id === 'c_clos'),
       'le compte archivé quitte comptes');
     vrai(!(Store.state.accounts || []).some(a => a.id === 'c_fantome'),
@@ -27782,14 +27983,13 @@ suite('Un compte clos ne part que si rien ne le retient', () => {
        redemande, donc le dialogue doit dire quoi, et Ctrl+Z doit pouvoir. */
     const src = lireSource('assets/app.js');
     vrai(src, 'assets/app.js doit être lisible pour ce contrôle');
-    const f = src.slice(src.indexOf("async 'retirer-comptes-clos'()"),
-                        src.indexOf("async 'supprimer-comptes-retenus'()"));
+    const f = src.slice(src.indexOf("async 'supprimer-compte-clos'(btn)"),
+                        src.indexOf("async 'start-blank'()"));
     vrai(f.length > 300, 'l’action doit être trouvable');
     vrai(/askConfirm\(/.test(f), 'elle demande avant');
-    vrai(/libres\.map\(x => x\.label\)\.join\(', '\)/.test(f),
-      'et nomme les comptes qui partent');
+    vrai(/\+ x\.label \+/.test(f), 'et nomme le compte qui part');
     vrai(/Store\.addBackup\(/.test(f), 'une sauvegarde est prise avant');
-    vrai(f.indexOf('Store.addBackup(') < f.indexOf('retirerComptesClos()'),
+    vrai(f.indexOf('Store.addBackup(') < f.indexOf('retirerComptesClos(['),
       'avant le retrait, pas après');
     vrai(/danger: true/.test(f), 'et le dialogue s’annonce comme destructeur');
   });
@@ -27871,16 +28071,20 @@ suite('Un compte clos que des relevés portent se supprime aussi', () => {
     pres(round2(rowTotal(mois())), total, 'et le total avec lui');
   });
 
-  test('sans argument, seuls les comptes libres partent', () => {
-    /* Le geste d'avant ne change pas de sens : c'est le bouton de la carte, et
-       il ne touche a rien qu'un releve reclame. */
+  test('sans identifiant, rien ne part', () => {
+    /* Les identifiants sont OBLIGATOIRES, et c'est le garde-fou du geste : la
+       suppression se demande depuis la ligne d'un compte, jamais en bloc. Un
+       appel qui n'en nomme aucun ne peut pas se replier sur « tous ceux que
+       rien ne retient » — ce serait exactement le bouton global retire. */
     poser({ dansReleve: { c_fantome: 250 } });
     Store.state.comptes.push({ id: 'c_clos', type: 'courant', label: 'Vieux livret',
       statut: 'archive', cash: [], lignes: [] });
     refreshAccounts();
-    eq(retirerComptesClos(), 1, 'un seul, celui que rien ne retient');
-    vrai((Store.state.accounts || []).some(a => a.id === 'c_fantome'),
-      'le compte que le relevé porte est toujours là');
+    for (const rien of [undefined, null, []]) {
+      eq(retirerComptesClos(rien), 0, 'aucun compte nommé, aucun compte retiré');
+    }
+    eq(comptesClosDetaches().libres.length + comptesClosDetaches().retenus.length, 2,
+      'les deux comptes clos sont toujours là');
   });
 
   test('un compte ouvert ne se supprime pas, même nommé', () => {
@@ -27892,14 +28096,15 @@ suite('Un compte clos que des relevés portent se supprime aussi', () => {
 
   test('l’écran propose le geste, et dit ce qu’il protège', () => {
     const src = lireSource('assets/app.js');
-    const f = src.slice(src.indexOf("async 'supprimer-comptes-retenus'()"),
+    const f = src.slice(src.indexOf("async 'supprimer-compte-clos'(btn)"),
                         src.indexOf("async 'start-blank'()"));
     vrai(/askConfirm\(/.test(f), 'il demande avant');
     vrai(/Store\.addBackup\(/.test(f), 'il prend une sauvegarde');
-    vrai(/retenus\.map\(x => x\.label\)\.join\(', '\)/.test(f), 'il nomme ce qui part');
-    vrai(/retirerComptesClos\(retenus\.map\(x => x\.id\)\)/.test(f),
-      'et il ne retire que ceux-là');
-    vrai(/data-action="supprimer-comptes-retenus"/.test(src), 'le bouton existe');
+    vrai(/relevés qui le mentionnent gardent leur total/.test(f),
+      'et dit ce que les relevés gardent');
+    vrai(/retirerComptesClos\(\[x\.id\]\)/.test(f),
+      'il ne retire que le compte visé');
+    vrai(/data-action="supprimer-compte-clos"/.test(src), 'le bouton existe');
   });
 
   test('les comptes clos sortent des feuilles Excel', () => {

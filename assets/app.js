@@ -277,6 +277,9 @@ const VIEWS = {
   accounts:   { cle: 'accounts',    render: viewAccounts },
   data:       { cle: 'data',        render: viewData },
   settings:   { cle: 'settings',    render: viewSettings },
+  /* La cle de vue est `accounts` : c'est elle qui donne a l'ecran son chevron
+     de retour vers Actifs, exactement comme aux fiches. */
+  'comptes-archives': { cle: 'accounts', render: viewComptesArchives },
   ficheCompte:{ cle: 'accounts',    render: () => viewFicheCompte(routeParam()?.id) },
   ficheEtab:  { cle: 'accounts',    render: () => viewFicheEtab(routeParam()?.id) },
 };
@@ -4005,7 +4008,10 @@ function viewAccounts() {
   <div class="cpt-liste">${corps}</div>
 
   ${(() => {
-    if (!archives.length) return '';
+    const anciens = comptesAnciens();
+    const vus = [...anciens.archives.filter(x => x.compte && correspondAuCompte(x.compte)),
+                 ...anciens.clos.filter(x => correspond(x.label) || correspond(x.etab))];
+    if (!vus.length) return '';
     /* Aucun montant sur un compte archivé, ni ici ni dans sa fiche.
 
        Le total du groupe affichait « 0,00 € », et c'était pire qu'un vide :
@@ -4017,9 +4023,73 @@ function viewAccounts() {
        Un zéro affiché se lit comme un solde. Le sous-titre dit déjà que ces
        comptes sont hors totaux ; il n'y a pas de somme à en tirer. */
     return (sectionsAffichees ? titreSection('Archivés', 'hors de tous les totaux') : '')
-      + groupe('archives', 'Comptes archivés', 'hors totaux, conservés pour l’historique',
-               archives.map(c => ligneCompte(c)).join(''), null);
+      + `
+    <section class="cpt-groupe" style="--teinte:${teinteGroupe()}">
+      <div class="cpt-gtitre">
+        <button type="button" class="cpt-gplier" data-action="goto"
+                data-view="comptes-archives" data-anchor="">
+          <span class="cpt-pastille" aria-hidden="true"></span>
+          <span class="cpt-gnom">${trad('Comptes archivés')}<span class="sub">${
+            trad('hors totaux, conservés pour l’historique')}</span></span>
+          <span class="cpt-gtotal">${vus.length}</span>
+          <span class="cpt-chev">›</span>
+        </button>
+      </div>
+    </section>`;
   })()}`;
+}
+
+/* --- les comptes qui ne comptent plus -----------------------------------
+
+   Ils avaient deux domiciles : un groupe repliable au bas d'Actifs, qui les
+   MONTRAIT, et une carte de Donnees, qui les GERAIT. Un seul sujet, deux
+   endroits, et le second range parmi les diagnostics.
+
+   Ici, une ligne par compte, jamais une carte par compte : douze cartes
+   empilees sur 375 px font une page qu'on ne parcourt plus, et l'action se perd
+   dans le cadre. Le nom a gauche, l'etablissement dessous en gris, l'action a
+   droite, un filet entre deux lignes.
+
+   Le chevron de l'en-tete remonte a Actifs sans qu'on l'ecrive ici : la cle de
+   vue est `accounts`, et le registre en tire le retour, comme pour les fiches.
+   Le bouton en tete de page fait le meme trajet, pour le pouce. */
+function viewComptesArchives() {
+  const { archives, clos } = comptesAnciens();
+
+  const ligne = x => `
+      <div class="arch-ligne">
+        <span class="arch-nom"><b>${esc(x.label)}</b>${
+          x.etab ? `<span class="sub">${esc(x.etab)}</span>` : ''}</span>
+        <span class="arch-actes">
+          ${!x.restaurable ? '' : `<button class="btn sm ghost arch-agir" data-action="restaurer-compte"
+            data-id="${esc(x.id)}">${trad('Restaurer')}</button>`}
+          <button class="btn icon arch-jeter arch-agir" data-action="supprimer-compte-clos"
+                  data-id="${esc(x.id)}" title="${trad('Supprimer définitivement')}"
+                  aria-label="${esc(trad('Supprimer définitivement {n}').replace('{n}', x.label))}">🗑</button>
+        </span>
+      </div>`;
+
+  const section = (titre, sous, liste) => !liste.length ? '' : `
+  <div class="card">
+    <div class="card-head"><h2>${trad(titre)}</h2>
+      <span class="hint">${liste.length}</span></div>
+    <p class="small muted" style="margin:0 0 4px">${trad(sous)}</p>
+    <div class="arch-liste">${liste.map(ligne).join('')}</div>
+  </div>`;
+
+  return `
+  <button type="button" class="btn sm ghost retour-page" data-action="goto" data-view="accounts" data-anchor="">‹ ${trad('Actifs')}</button>
+
+  <h3 class="cpt-section arch-titre">${trad('Comptes archivés')}<span class="sub">${
+    trad('hors de tous les totaux, conservés pour l’historique')}</span></h3>
+  ${archives.length || clos.length ? '' : `<div class="card"><p class="empty">${
+    trad('Aucun compte archivé.')}</p></div>`}
+  ${section('Archivés',
+    'Ils gardent leur fiche et tout ce qu’ils portaient. Les restaurer les remet dans tes totaux.',
+    archives)}
+  ${section('Clos',
+    'D’un ancien format, sans fiche à rouvrir : ils n’existent plus que comme un nom dans d’anciens relevés.',
+    clos)}`;
 }
 
 function mountAccounts() {
@@ -6078,36 +6148,6 @@ function viewData() {
     </dl>
   </details>
 
-  ${(() => {
-    const { libres, retenus } = comptesClosDetaches();
-    if (!libres.length && !retenus.length) return '';
-    return `
-  <div class="card">
-    <div class="card-head"><h2>${trad('Comptes clos')}</h2>
-      <span class="hint">${libres.length + retenus.length} ${trad('clos')}</span></div>
-    <p class="small muted" style="margin:0 0 12px">${trad('Un compte clos '
-      + 'qu’aucun relevé ne mentionne n’apporte plus rien : il allonge la liste du '
-      + 'relevé mensuel, et c’est tout. Ceux qu’un relevé porte se suppriment à '
-      + 'part, parce que leur montant compte dans le total de ce mois-là.')}</p>
-    ${!libres.length
-      ? `<p class="empty" style="margin:0">${trad('Aucun compte clos à retirer.')}</p>`
-      : `<p class="small" style="margin:0 0 12px">${esc(libres.map(x => x.label).join(', '))}</p>
-    <div class="row fiche-actes apres-champs">
-      <button class="btn sm ghost" data-action="retirer-comptes-clos">${
-        trad('Retirer les {n} comptes').replace('{n}', libres.length)}</button>
-    </div>`}
-    ${!retenus.length ? '' : `
-    <p class="small muted" style="margin:12px 0 8px">${trad('Ceux-ci portent encore un relevé :')} ${
-      esc(retenus.map(r => r.label + (r.mois.length
-        ? ` (${fmtMonth(r.mois[0].date)})` : ` (${trad('valeur actuelle')})`)).join(', '))}</p>
-    <div class="row fiche-actes apres-champs">
-      <button class="btn sm ghost danger" data-action="supprimer-comptes-retenus">${
-        trad('Supprimer définitivement les {n} comptes').replace('{n}', retenus.length)}</button>
-    </div>
-    <p class="small muted" style="margin:8px 0 0">${trad('Leur fiche part, tes relevés ne bougent pas : la ventilation de chaque mois concerné est gravée avant, et ton patrimoine passé reste au centime près.')}</p>`}
-  </div>`;
-  })()}
-
   <div class="card">
     <div class="card-head"><h2>${trad('Repartir de zéro')}</h2>
       <span class="hint">${trad('Pour qu\'une autre personne parte de ses propres chiffres')}</span>
@@ -6917,41 +6957,23 @@ const ACTIONS = {
     toast(trad('Retour à tes données'));
   },
 
-  async 'retirer-comptes-clos'() {
-    const { libres, retenus } = comptesClosDetaches();
-    if (!libres.length) return;
+  async 'supprimer-compte-clos'(btn) {
+    const anciens = comptesAnciens();
+    const x = [...anciens.archives, ...anciens.clos].find(a => a.id === btn.dataset.id);
+    if (!x) return;
     if (!await askConfirm(
-      trad('Retirer {n} comptes clos ?').replace('{n}', libres.length) + '\n\n'
-      + libres.map(x => x.label).join(', ') + '\n\n'
-      + (retenus.length
-          ? trad('{k} restent : un relevé porte leur montant.').replace('{k}', retenus.length)
-            + '\n\n' : '')
-      + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
-      { ok: 'Retirer', danger: true })) return;
-    Store.addBackup('avant nettoyage des comptes clos');
-    const n = retirerComptesClos();
-    Store.save();
-    render();
-    toast(trad('{n} comptes clos retirés').replace('{n}', n));
-  },
-
-  async 'supprimer-comptes-retenus'() {
-    const { retenus } = comptesClosDetaches();
-    if (!retenus.length) return;
-    const mois = new Set();
-    for (const r of retenus) for (const m of r.mois) mois.add(m.date);
-    if (!await askConfirm(
-      trad('Supprimer définitivement {n} comptes clos ?').replace('{n}', retenus.length) + '\n\n'
-      + retenus.map(x => x.label).join(', ') + '\n\n'
-      + trad('Leur fiche part pour de bon. Les {m} relevés qui les mentionnent gardent leur total : la ventilation de chaque mois est gravée avant la suppression.')
-          .replace('{m}', mois.size) + '\n\n'
-      + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
+      trad('Supprimer définitivement ce compte clos ?') + '\n\n' + x.label + '\n\n'
+      + (x.mois.length
+          ? trad('Les {m} relevés qui le mentionnent gardent leur total : la ventilation de chaque mois est gravée avant la suppression.')
+              .replace('{m}', x.mois.length)
+          : trad('Les relevés déjà enregistrés restent conservés selon les règles actuelles.'))
+      + '\n\n' + trad('Une sauvegarde est prise avant, et Ctrl+Z annule.'),
       { ok: 'Supprimer', danger: true })) return;
-    Store.addBackup('avant suppression des comptes clos');
-    const n = retirerComptesClos(retenus.map(x => x.id));
+    Store.addBackup('avant suppression d’un compte clos');
+    if (!retirerComptesClos([x.id])) return;
     Store.save();
     render();
-    toast(trad('{n} comptes clos supprimés').replace('{n}', n));
+    toast(`${guill(x.label)} ${trad('supprimé')}`);
   },
 
   async 'start-blank'() {

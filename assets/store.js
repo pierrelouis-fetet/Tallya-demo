@@ -1439,12 +1439,45 @@ function comptesClosDetaches() {
   return { libres, retenus };
 }
 
+/* Les anciens comptes, ranges selon CE QU'ON PEUT EN FAIRE.
+
+   Le modele en connait deux sortes, et elles ne s'equivalent pas :
+
+     ARCHIVE  un compte qui vit dans `comptes` avec `statut: 'archive'`. Il a
+              une fiche, il garde tout ce qu'il portait, et il se ROUVRE.
+     CLOS     une entree orpheline de l'ancien modele, qui vit dans `accounts`
+              sans compte correspondant. Il n'y a pas de fiche a rouvrir : il
+              n'existe plus que comme un nom dans d'anciens releves.
+
+   Les deux sont hors de tous les totaux, les deux se suppriment. Seul le
+   premier se restaure, et c'est la seule difference que l'ecran ait a montrer.
+
+   Chaque entree porte ce qui la retient — les mois qui la nomment, la valeur
+   qu'elle porte encore — parce que la confirmation de suppression doit pouvoir
+   le dire avant de detruire quoi que ce soit. */
+function comptesAnciens() {
+  const clos = comptesClosDetaches();
+  const retient = new Map(clos.retenus.map(x => [x.id, x]));
+  const out = { archives: [], clos: [] };
+  for (const a of ACCOUNTS) {
+    if (!a.legacy) continue;
+    const r = retient.get(a.id);
+    const x = { id: a.id, label: a.label, etab: a.broker || '',
+                compte: a.compte || null, restaurable: !!a.compte,
+                mois: r ? r.mois : [], aujourdhui: r ? r.aujourdhui : 0 };
+    (x.restaurable ? out.archives : out.clos).push(x);
+  }
+  return out;
+}
+
 /* Retire des comptes clos, des deux listes ou ils peuvent vivre, et rend leur
    nombre. Ne sauvegarde pas : l'appelant prend une sauvegarde avant et ecrit
    apres, comme la remise a zero.
 
-   Sans argument, ceux que rien ne retient. Avec, ceux qu'on nomme — y compris
-   ceux qu'un releve porte, et c'est tout le sujet de ce qui suit.
+   Les identifiants sont OBLIGATOIRES, et c'est un garde-fou : la suppression se
+   demande compte par compte, depuis la ligne de ce compte. Un appel sans
+   argument aurait un sens — « tous ceux que rien ne retient » — et c'est
+   justement le geste global qu'on ne veut plus offrir.
 
    ON FIGE AVANT DE RETIRER. Un releve ancien ne porte que des montants par
    compte, `v`, et son total se recompose en parcourant ACCOUNTS : retirer un
@@ -1465,11 +1498,10 @@ function comptesClosDetaches() {
    connaisse, mais c'est ce qui a ete saisi ce mois-la, et rien n'oblige a le
    detruire pour retirer une fiche. Les ecrans ne montrent que les comptes qui
    existent : il ne se lit plus nulle part, il n'est pas efface pour autant. */
-function retirerComptesClos(ids = null) {
+function retirerComptesClos(ids) {
   const clos = comptesClosDetaches();
   const tous = [...clos.libres, ...clos.retenus];
-  const cibles = new Set((ids ? tous.filter(x => ids.includes(x.id)) : clos.libres)
-    .map(x => x.id));
+  const cibles = new Set(tous.filter(x => (ids || []).includes(x.id)).map(x => x.id));
   if (!cibles.size) return 0;
   for (const r of (Store.state.monthly || [])) {
     if (r.parts || r.poches) continue;
