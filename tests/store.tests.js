@@ -33497,3 +33497,214 @@ suite('Modifier les parts ne change jamais le total des charges', () => {
     }
   });
 });
+
+/* DES DEPENSES NE SONT PAS UN RELEVE. Le premier pas « enregistre ton premier
+   releve » se declarait franchi des qu'un mois de depenses etait saisi : il
+   interrogeait `aDejaServi`, qui repond a une question plus large — l'application
+   a-t-elle deja servi. Quelqu'un pouvait creer ses comptes, declarer son salaire,
+   remplir son budget, ne jamais photographier ses comptes, et Tallya considerait
+   le releve comme fait. La courbe, le rythme d'accumulation et l'autonomie
+   sortent pourtant du releve, jamais des depenses. */
+suite('Le premier relevé se demande jusqu’à ce qu’un relevé existe', () => {
+
+  const COMPTE = { id: 'c1', etabId: null, type: 'courant', statut: 'ouvert',
+                   libelle: 'Courant', court: 'Courant', ouvertLe: '2026-01-01',
+                   numero: '', notes: '', alloc: '',
+                   cash: [{ montant: 500, affectation: 'courant' }], lignes: [] };
+  const DEPENSES = [{ month: '2026-01', v: { Courses: 400 }, note: '' }];
+  const RELEVE = d => ({ date: d, comment: '', v: { c1: 500 } });
+  const VIDE = d => ({ date: d, comment: '', v: {} });
+
+  /* Un etat nu, un compte que quelqu'un a cree, et rien d'autre que ce qu'on
+     pose. `refreshAccounts` parce que la vue des comptes se derive. */
+  const poser = ({ compte = true, monthly = [], expenses = [] } = {}) => {
+    Fixture.poser(s => {
+      s.comptes = compte ? [{ ...COMPTE }] : [];
+      s.etabs = []; s.positions = [];
+      s.monthly = monthly.map(r => ({ ...r, v: { ...r.v } }));
+      s.budget.income = []; s.budget.fixedCharges = [];
+      s.budget.expenses = expenses.map(r => ({ ...r, v: { ...r.v } }));
+    });
+    refreshAccounts();
+  };
+
+  test('sans compte, le relevé ne se réclame pas', () => {
+    /* Rien a photographier : l'annoncer enverrait vers un geste impossible. */
+    poser({ compte: false, expenses: DEPENSES });
+    vrai(!aUnComptePropre(), 'aucun compte que quelqu’un a créé');
+    vrai(!pasAFaire('releves'), 'le pas attend qu’un compte existe');
+  });
+
+  test('un compte créé, aucun relevé : le pas reste à faire', () => {
+    poser();
+    vrai(aUnComptePropre(), 'un compte existe');
+    eq(aUnRelevePatrimonial(), false, 'et aucun relevé');
+    vrai(pasAFaire('releves'), 'le relevé devient le pas suivant');
+  });
+
+  test('LE DÉFAUT : des dépenses saisies ne valident plus le relevé', () => {
+    poser({ expenses: DEPENSES });
+    vrai(aDejaServi(), 'l’application a bien servi : un mois de dépenses est saisi');
+    eq(aUnRelevePatrimonial(), false, 'mais aucune photo des comptes n’existe');
+    vrai(pasAFaire('releves'),
+      'et le pas reste donc à faire : des dépenses ne sont pas un relevé');
+  });
+
+  test('une ligne de relevé vide n’est pas un relevé', () => {
+    /* Le calendrier ouvre des lignes vides toutes seules : les compter aurait
+       declare le pas franchi avant le premier montant. */
+    poser({ monthly: [VIDE('2026-08-01')], expenses: DEPENSES });
+    eq(aUnRelevePatrimonial(), false, 'une ligne technique vide ne compte pas');
+    vrai(pasAFaire('releves'), 'le pas reste à faire');
+  });
+
+  test('un seul relevé réel suffit, avec ou sans dépenses', () => {
+    /* Le texte dit qu'il en faut deux pour une pente ; le PAS n'en demande
+       qu'un, sans quoi il resterait ouvert un mois de plus. */
+    poser({ monthly: [RELEVE('2026-08-01')] });
+    eq(aUnRelevePatrimonial(), true, 'un relevé non vide existe');
+    vrai(!pasAFaire('releves'), 'le pas est franchi, sans une seule dépense saisie');
+    poser({ monthly: [RELEVE('2026-08-01')], expenses: DEPENSES });
+    vrai(!pasAFaire('releves'), 'et avec des dépenses aussi');
+  });
+
+  test('un relevé vide et un relevé rempli : il suffit d’un', () => {
+    poser({ monthly: [VIDE('2026-07-01'), RELEVE('2026-08-01')] });
+    vrai(!pasAFaire('releves'), 'la ligne remplie franchit le pas');
+    poser({ monthly: [RELEVE('2026-07-01'), RELEVE('2026-08-01')] });
+    vrai(!pasAFaire('releves'), 'deux relevés le franchissent aussi');
+  });
+
+  test('les dépenses ne touchent jamais au statut du relevé', () => {
+    /* Dans les deux sens : elles ne le valident pas, et elles ne le defont pas. */
+    poser({ expenses: DEPENSES });
+    vrai(pasAFaire('releves'), 'des dépenses seules ne valident rien');
+    Store.state.budget.expenses.push({ month: '2026-02', v: { Courses: 900 }, note: '' });
+    vrai(pasAFaire('releves'), 'en ajouter une non plus');
+    Store.state.budget.expenses[0].v.Courses = 1200;
+    vrai(pasAFaire('releves'), 'en modifier une non plus');
+
+    poser({ monthly: [RELEVE('2026-08-01')], expenses: DEPENSES });
+    vrai(!pasAFaire('releves'), 'un relevé existe : le pas est franchi');
+    Store.state.budget.expenses = [];
+    vrai(!pasAFaire('releves'), 'effacer toutes les dépenses ne le défait pas');
+    /* Et retirer le seul vrai releve le rouvre : le pas se derive des donnees,
+       il ne se souvient de rien. */
+    Store.state.monthly = [];
+    vrai(pasAFaire('releves'), 'retirer le seul relevé rouvre le pas');
+  });
+
+  test('deux questions, deux fonctions', () => {
+    /* `aDejaServi` garde son sens large et son seul appelant : le rappel du mois
+       clos, qui ne se reclame qu'a qui a deja saisi quelque chose. */
+    const code = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    vrai(/const aUnRelevePatrimonial = \(\) =>\s*\(Store\.state\.monthly \|\| \[\]\)\.some\(r => !rowIsEmpty\(r\)\);/
+      .test(code), 'la question du relevé a sa propre fonction');
+    vrai(/fait: \(\) => !aUnComptePropre\(\) \|\| aUnRelevePatrimonial\(\)/.test(code),
+      'et c’est elle que le premier pas interroge');
+    const pas = code.slice(code.indexOf("cle: 'releves'"), code.indexOf("cle: 'depenses'"));
+    vrai(!/aDejaServi/.test(pas), 'le pas ne lit plus la question large');
+    /* La question large ne se recopie pas : elle se compose de la petite. */
+    vrai(/\|\| aUnRelevePatrimonial\(\);/.test(code),
+      'et la question large réutilise la petite au lieu de la refaire');
+    /* Son appelant reste, avec son sens : ici n'importe quelle activite suffit. */
+    vrai(/missing: vide && aDejaServi\(\)/.test(code),
+      'le rappel du mois clos garde la question large');
+    poser({ expenses: DEPENSES });
+    eq(aDejaServi(), true, 'des dépenses suffisent à dire que l’application a servi');
+    eq(aUnRelevePatrimonial(), false, 'mais pas à dire qu’un relevé existe');
+  });
+
+  test('le texte du pas reste celui du métier', () => {
+    const pas = PAS_PAR_CLE.releves;
+    vrai(/premier relevé mensuel/.test(pas.quoi), 'il demande le premier relevé');
+    vrai(/photo de tes comptes/.test(pas.quoi), 'et dit ce que c’est');
+    vrai(/deux/.test(pas.quoi), 'en expliquant qu’il en faudra deux pour une pente');
+    eq(pas.bouton, 'Enregistrer un relevé', 'le bouton ne change pas');
+    eq(pas.action, 'ajouter-releve', 'ni la porte qu’il ouvre');
+  });
+});
+
+/* Le wording des credits suivait encore la convention d'avant : il annoncait que
+   « c'est ta part qui sert au budget ». Une charge fixe vaut ce qui est DEBITE
+   depuis, et le capital restant du n'a jamais eu de part. */
+suite('Le wording des crédits dit la convention du montant facturé', () => {
+
+  test('plus un texte ne dit que le budget compte une part', () => {
+    for (const f of ['assets/app.js', 'assets/i18n.js', 'assets/store.js']) {
+      const s = lireSource(f);
+      for (const mort of ['ta part qui sert au budget', 'your share that feeds the budget',
+                          'la dette qui se divise']) {
+        vrai(!s.includes(mort), `« ${mort} » vit encore dans ${f}`);
+      }
+    }
+  });
+
+  test('le capital restant dû se dit personnel, et jamais divisé', () => {
+    const app = lireSource('assets/app.js');
+    const aide = 'La dette qui reste personnellement à ta charge. Elle se déduit de ton '
+      + 'patrimoine net et n’est jamais divisée par une quote-part de bien ou une '
+      + 'répartition de charge.';
+    vrai(app.includes('La dette qui reste personnellement à ta charge.'),
+      'la fiche générique d’un crédit le dit');
+    vrai(I18N.en[aide], 'et la phrase entière a sa traduction');
+    vrai(/never divided by a property ownership share or a cost split/.test(I18N.en[aide]),
+      'qui dit la même chose');
+  });
+
+  test('la mensualité ajoutée aux charges compte le montant facturé', () => {
+    const app = lireSource('assets/app.js');
+    for (const debut of ['seulement si tu renseignes une mensualité. Si cette mensualité est ',
+                         'seulement si une mensualité est renseignée. Si cette mensualité est ']) {
+      const cle = debut + 'ajoutée aux charges fixes, Tallya compte le montant facturé ; '
+        + 'une éventuelle répartition avec une autre personne reste informative.';
+      vrai(app.includes(debut), `« ${debut.slice(0, 40)}… » doit être dans la fiche`);
+      vrai(I18N.en[cle], 'et la phrase entière doit avoir sa traduction');
+      vrai(/counts the billed amount/.test(I18N.en[cle]), 'qui dit le montant facturé');
+    }
+  });
+
+  test('et le calcul, lui, n’a pas bougé', () => {
+    /* Le scenario du partage, inchange : 1 890 EUR sortent du compte, la part
+       theorique de 945 EUR n'en retranche rien, et les 900 EUR reellement recus
+       entrent par les revenus. */
+    Fixture.poser(s => {
+      s.budget.contributors = [{ id: 'pk', name: 'PK' }];
+      s.budget.income = [{ label: 'Salaire', amount: 3200 },
+                         { label: 'Complément', amount: 900 }];
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1890, period: 'mois',
+                                 shares: { pk: 945 } }];
+    });
+    pres(incomeTotal(), 4100, 'les entrées');
+    pres(fixedTotal(), 1890, 'la charge vaut ce qui est débité');
+    pres(budgetFrame().available, 2210, '4 100 − 1 890');
+    pres(partTheoriqueMensuelle('pk'), 945, 'et la part reste informative');
+    vrai(Math.abs(fixedTotal() - 945) > 1, 'jamais 945 de charges');
+    vrai(Math.abs(budgetFrame().available - 3155) > 1, 'jamais 3 155 de reste');
+  });
+
+  test('les correctifs P0 tiennent toujours', () => {
+    const app = lireSource('assets/app.js');
+    const store = lireSource('assets/store.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    /* P0.1 : Allocation ouvre sur Financier, et chaque carte garde sa base. */
+    vrai(/let allocFinancier = true;/.test(app), 'Allocation ouvre sur Financier');
+    vrai(/const baseAvoirsAlloc = \(\) => \(allocFinancier \? BASES\.financier : BASES\.avoirs\);/
+      .test(app), 'et les cartes des avoirs gardent leur base');
+    /* P0.2 : un capital restant du negatif se refuse toujours. */
+    const f = validerCreditSaisi({ montant: -1000 });
+    vrai(f && f.cle === 'montant', 'un CRD négatif est refusé');
+    /* P0.3 : un pret a 0 % declare s'amortit toujours. */
+    Fixture.poser(s => {
+      const e = s.etabs.find(x => (x.dettes || []).length);
+      e.dettes = [{ id: 'd0', libelle: 'Prêt', montant: 12000, taux: 0, mensualite: 500 }];
+    });
+    eq(dettesAmortissables().length, 1, 'un prêt à 0 % reste amortissable');
+    /* P0.4 : le versement propose ne lit que l'epargne investissable. */
+    vrai(!/realPerMonth/.test(corpsDe(store, 'suggestedMonthly')),
+      'le versement proposé ne lit pas le rythme patrimonial');
+    /* P0.5 : sans revenu, les rapports valent null. */
+    Fixture.poser(s => { s.budget.income = []; });
+    eq(budgetFrame().fixedPct, null, 'un rapport sans dénominateur vaut null');
+    eq(savingsReconciliation().theoreticalRate, null, 'le taux d’accumulation aussi');
+  });
+});

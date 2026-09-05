@@ -8160,7 +8160,9 @@ const ACTIONS = {
       champs: [
         { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX, exemple: 'ex. Prêt immobilier' },
         { cle: 'montant', label: trad('Capital restant dû (€)'), type: 'nombre', exemple: '0',
-          aide: trad('la dette réellement à ta charge : si le prélèvement est partagé, c’est ta part qui sert au budget, jamais la dette qui se divise') },
+          aide: trad('La dette qui reste personnellement à ta charge. Elle se déduit de ton '
+            + 'patrimoine net et n’est jamais divisée par une quote-part de bien ou une '
+            + 'répartition de charge.') },
         { cle: 'initial', label: trad('Capital emprunté au départ (€)'), type: 'nombre', exemple: '0',
           aide: trad('facultatif, sert à mesurer ce qui est déjà remboursé') },
         { cle: 'mensualite', label: trad('Mensualité (€)'), type: 'nombre', exemple: '0', aide: trad('facultatif') },
@@ -8176,8 +8178,9 @@ const ACTIONS = {
           aide: trad('sans lui, ce prêteur tenant plusieurs comptes, aucune fiche '
                    + 'ne peut savoir lequel porte cette dette') }] : [],
         { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
-          aide: trad('seulement si tu renseignes une mensualité : elle entrera dans ton ')
-              + 'budget sous ce nom, et suivra le capital restant dû' },
+          aide: trad('seulement si tu renseignes une mensualité. Si cette mensualité est '
+            + 'ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle '
+            + 'répartition avec une autre personne reste informative.') },
       ],
     });
     if (!v) return;
@@ -8261,8 +8264,9 @@ const ACTIONS = {
           exemple: 'ex. Crédit Agricole', suggestions: valeursConnues('preteur') },
         ...(lien ? [] : [{ cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'),
           type: 'case', valeur: true,
-          aide: trad('seulement si une mensualité est renseignée : elle entrera dans ton ')
-              + 'budget sous ce nom, et suivra le capital restant dû' }]),
+          aide: trad('seulement si une mensualité est renseignée. Si cette mensualité est '
+            + 'ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle '
+            + 'répartition avec une autre personne reste informative.') }]),
         ...(lien ? [{ cle: 'supprimerCharge',
           label: trad('… et la charge « {l} » qui le rembourse').replace('{l}',
             lien.charge.label || trad('Charge fixe')), type: 'case', valeur: true,

@@ -3077,9 +3077,24 @@ function jourRappelAtteint() {
 const aUnComptePropre = () =>
   comptesOuverts().some(c => !typeCompte(c.type).interne);
 
+/* Existe-t-il au moins un RELEVE PATRIMONIAL ? Une question, une fonction.
+
+   Elle etait posee par `aDejaServi`, qui en pose une autre — l'application
+   a-t-elle deja servi — et repond oui des le premier mois de depenses saisi.
+   Le premier pas « enregistre ton premier releve » s'en servait, et se declarait
+   donc franchi par quelqu'un qui avait rempli son budget sans jamais
+   photographier ses comptes. Un releve et un mois de depenses sont deux objets
+   differents : la courbe, le rythme d'accumulation et l'autonomie sortent du
+   premier, jamais du second.
+
+   La definition d'un releve rempli ne se reinvente pas ici : `rowIsEmpty` la
+   porte deja, et c'est elle que la page des releves emploie. */
+const aUnRelevePatrimonial = () =>
+  (Store.state.monthly || []).some(r => !rowIsEmpty(r));
+
 const aDejaServi = () =>
   (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0))
-  || (Store.state.monthly || []).some(r => !rowIsEmpty(r));
+  || aUnRelevePatrimonial();
 
 function currentMonthPending() {
   const key = currentMonthKey();
@@ -5308,12 +5323,25 @@ const PREMIERS_PAS = [
     quoi: 'Sans revenu déclaré, cette carte n’a pas de total à partager.',
     bouton: 'Entrer ton salaire', action: 'toggle-revenus',
     fait: () => (B().income || []).length > 0 },
+  /* Le releve arrive apres les comptes, et il n'est « a faire » que lorsqu'il
+     devient faisable : sans un compte, il n'y a rien a photographier, et
+     l'annoncer serait envoyer quelqu'un vers un geste impossible. Les cartes qui
+     dependent d'une serie — l'evolution, le rythme — n'ont que lui a demander.
+
+     `aUnRelevePatrimonial` et non `aDejaServi` : la seconde repond « oui » des le
+     premier mois de depenses saisi, et ce pas se declarait franchi par quelqu'un
+     qui avait rempli son budget sans jamais photographier ses comptes. Des
+     depenses ne sont pas un releve, et elles ne l'ont jamais ete.
+
+     UN SEUL releve suffit, et le texte dit pourquoi il en faudra deux : une
+     pente demande deux points. Reclamer le second bloquerait le premier pas sur
+     un geste qui ne se fait qu'un mois plus tard. */
   { cle: 'releves',
     quoi: 'Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à '
         + 'une date. Il en faut deux pour que la courbe et le rythme d’accumulation '
         + 'aient une pente à montrer.',
     bouton: 'Enregistrer un relevé', action: 'ajouter-releve',
-    fait: () => !aUnComptePropre() || aDejaServi() },
+    fait: () => !aUnComptePropre() || aUnRelevePatrimonial() },
   { cle: 'depenses',
     quoi: 'Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident '
         + 'de ce qu’il te reste à vivre chaque mois.',

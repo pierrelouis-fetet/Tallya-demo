@@ -2439,7 +2439,12 @@ const I18N = {
     "Crédit": "Loan",
     "patrimoine net": "net worth",
     "Taxe foncière": "Property tax",
-    "la dette réellement à ta charge : si le prélèvement est partagé, c’est ta part qui sert au budget, jamais la dette qui se divise": "the debt really on you: if the payment is shared, it is your share that feeds the budget, never the debt that gets divided",
+    "La dette qui reste personnellement à ta charge. Elle se déduit de ton patrimoine net et n’est jamais divisée par une quote-part de bien ou une répartition de charge.":
+      'The debt you personally still owe. It is deducted from your net worth and is never divided by a property ownership share or a cost split.',
+    "seulement si tu renseignes une mensualité. Si cette mensualité est ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle répartition avec une autre personne reste informative.":
+      'only if you enter a monthly payment. If it is added to fixed costs, Tallya counts the billed amount; any split with another person remains informational.',
+    "seulement si une mensualité est renseignée. Si cette mensualité est ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle répartition avec une autre personne reste informative.":
+      'only if a monthly payment is entered. If it is added to fixed costs, Tallya counts the billed amount; any split with another person remains informational.',
     "Charges de copropriété non récupérables": "Non-recoverable service charges",
     "Garantie loyers impayés": "Rent guarantee insurance",
     "Autres charges propriétaire": "Other landlord costs",
