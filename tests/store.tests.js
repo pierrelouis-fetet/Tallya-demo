@@ -10309,8 +10309,12 @@ suite('Une charge fixe vaut ce qui sort du compte', () => {
       vrai(!code(store).includes(mort), `« ${mort} » n’est plus dans store.js`);
       vrai(!code(app).includes(mort), `ni dans app.js`);
     }
+    /* Les personnes se gerent a nouveau, mais par d'autres actes : ceux d'avant
+       retranchaient une part du budget, et c'est cette convention-la qui est
+       partie, pas la possibilite de declarer quelqu'un. Les nouveaux ne touchent
+       a aucun total, et la suite juste en dessous le prouve par les nombres. */
     vrai(!/add-contributor|del-contributor/.test(code(app)),
-      'et les personnes ne se gèrent plus');
+      'les actes qui réduisaient le budget ne reviennent pas sous leur ancien nom');
     vrai(/reduce\(\(s, c\) => s \+ chargeMensuelle\(c\), 0\)/.test(store),
       'le total des charges somme les montants débités');
 
@@ -33405,5 +33409,87 @@ suite('Modifier les parts ne change jamais le total des charges', () => {
       'le cash-flow d’un bien ne lit aucune part');
     vrai(!/share/i.test(corpsDe(store, 'dettesTotal')),
       'ni le total des dettes');
+  });
+
+  test('déclarer ou retirer une personne ne bouge aucun total du budget', () => {
+    scenario();
+    const lire = () => JSON.stringify({
+      fixed: round2(fixedTotal()), dispo: round2(budgetFrame().available),
+      entrees: round2(incomeTotal()), verse: suggestedMonthly() });
+    const avant = lire();
+    Store.state.budget.contributors.push(
+      { id: identifiantPersonne('Camille'), name: 'Camille' });
+    eq(lire(), avant, 'déclarer quelqu’un ne change rien');
+    eq(retirerPersonne('pk', { effacerParts: true }), 3, 'ses trois parts partent avec elle');
+    eq(contributors().map(g => g.name).join(' | '), 'Camille', 'et elle n’est plus déclarée');
+    eq(lire(), avant, 'le budget ne bouge toujours pas');
+    eq(partTheoriqueMensuelle('pk'), 0, 'seule la part théorique tombe à zéro');
+    pres(fixedTotal(), 2190, 'les charges valent toujours ce qui est facturé');
+  });
+
+  test('retirer quelqu’un peut garder ses parts, et son identifiant ne revient jamais', () => {
+    /* LE PIEGE. Garder les parts d'une personne retiree, puis redeclarer le meme
+       nom : l'identifiant se derive du nom, donc il serait le meme, et ses
+       anciennes parts ressusciteraient sans un mot. Un montant qui revient tout
+       seul est exactement ce que ce fichier traque. */
+    scenario();
+    eq(retirerPersonne('pk', { effacerParts: false }), 0, 'aucune charge touchée');
+    eq(Store.state.budget.fixedCharges[0].shares.pk, 945, 'la part reste dans le fichier');
+    eq(contributors().length, 0, 'la personne, elle, est partie');
+    const id = identifiantPersonne('PK');
+    vrai(id !== 'pk',
+      `« ${id} » : un identifiant qui traîne encore dans les parts ne se redonne pas`);
+    Store.state.budget.contributors.push({ id, name: 'PK' });
+    eq(partTheoriqueMensuelle(id), 0, 'la personne redéclarée part de zéro');
+    pres(fixedTotal(), 2190, 'et le budget n’a pas bougé d’un centime');
+  });
+
+  test('un identifiant se lit, et il ne se donne jamais deux fois', () => {
+    Fixture.poser(s => { s.budget.contributors = []; s.budget.fixedCharges = []; });
+    eq(identifiantPersonne('Camille'), 'camille', 'il vient du nom');
+    eq(identifiantPersonne('Élodie Martin'), 'elodiemartin', 'sans accent ni espace');
+    eq(identifiantPersonne('   '), 'personne', 'un nom vide en a quand même un');
+    eq(identifiantPersonne('Jean-Baptiste de la Tour'), 'jeanbaptiste', 'et il est borné à douze signes');
+    Store.state.budget.contributors = [{ id: 'camille', name: 'Camille' }];
+    eq(identifiantPersonne('Camille'), 'camille2', 'le second prend un rang');
+  });
+
+  test('ce qu’une personne porte se dit avant de la retirer', () => {
+    scenario();
+    const p = partsDePersonne('pk');
+    eq(p.lignes, 3, 'trois charges portent une part');
+    pres(p.mensuel, 1095, 'pour 1 095 € par mois');
+    eq(partsDePersonne('inconnu').lignes, 0, 'et personne d’autre n’en porte');
+    /* Une part a zero est declaree : elle compte comme une ligne portee, et
+       c'est juste — la fenetre en parle avant de l'effacer. */
+    scenario({ loyer: 0, elec: 0, net: 0 });
+    eq(partsDePersonne('pk').lignes, 3, 'un zéro déclaré est une part, et il se dit');
+    pres(partsDePersonne('pk').mensuel, 0, 'pour zéro euro');
+  });
+
+  test('les deux portes existent, et aucune ne touche au budget', () => {
+    const code = lireSource('assets/app.js').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    vrai(/data-action="ajouter-personne"/.test(code), 'un bouton déclare une personne');
+    vrai(/data-action="editer-personne"/.test(code), 'et son nom ouvre sa fiche');
+    vrai(/async 'ajouter-personne'\(\)/.test(code), 'l’acte qui déclare existe');
+    vrai(/async 'editer-personne'\(btn\)/.test(code), 'celui qui renomme et retire aussi');
+    vrai(/retirerPersonne\(id, \{ effacerParts: !!v\.effacerParts \}\)/.test(code),
+      'le retrait passe par le modèle, et la question des parts est posée');
+    vrai(/porteDeSortie\(\)/.test(code.slice(code.indexOf("async 'editer-personne'"),
+                                             code.indexOf("async 'add-income'"))),
+      'et il s’annule');
+    /* Le pied nomme TOUTE personne declaree : filtrer sur un total positif
+       laissait sans porte celui qu'on venait de declarer. */
+    vrai(/sharedTotals\(\)\.parPersonne\.map\(/.test(code),
+      'toute personne déclarée a son nom au pied de la carte, même à zéro');
+    const actes = code.slice(code.indexOf("async 'ajouter-personne'"),
+                             code.indexOf("async 'add-income'"));
+    vrai(!/fixedTotal|budgetFrame|chargeMensuelle/.test(actes),
+      'et rien dans ces deux actes ne touche à un total de charges');
+    for (const cle of ['+ Personne', 'Nouvelle personne', 'Retirer du partage',
+                       'Cette personne est déjà déclarée.', 'entre dans le partage',
+                       'retiré du partage']) {
+      vrai(I18N.en[cle], `« ${cle} » doit avoir sa traduction`);
+    }
   });
 });

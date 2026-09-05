@@ -4154,6 +4154,53 @@ function ecrirePartsSaisies(charge, v, ids) {
   return charge;
 }
 
+/* --- declarer une personne, la renommer, la retirer ---------------------
+
+   L'IDENTIFIANT SE DERIVE DU NOM, parce qu'il se lit : il vit dans le fichier et
+   dans l'export, ou `shares: { camille: 945 }` se comprend d'un coup d'oeil la
+   ou un compteur ne dit rien.
+
+   Il doit etre unique contre DEUX listes, et la seconde n'est pas evidente : les
+   personnes declarees, mais aussi tout identifiant qui traine encore dans les
+   parts d'une charge. Sans elle, retirer quelqu'un en gardant ses parts puis
+   redeclarer le meme nom redonnerait le meme identifiant, et ses anciennes parts
+   ressusciteraient sans un mot — un montant qui revient tout seul est exactement
+   ce que ce fichier traque. */
+function identifiantPersonne(nom) {
+  const base = String(nom || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '').slice(0, 12) || 'personne';
+  const pris = new Set(contributors().map(g => g.id));
+  for (const c of (B().fixedCharges || [])) {
+    for (const id of Object.keys(c.shares || {})) pris.add(id);
+  }
+  if (!pris.has(base)) return base;
+  let n = 2;
+  while (pris.has(base + n)) n++;
+  return base + n;
+}
+
+function partsDePersonne(id) {
+  const lignes = (B().fixedCharges || []).filter(c => estDeclare((c.shares || {})[id]));
+  return { lignes: lignes.length,
+           mensuel: lignes.reduce((s, c) => s + shareMensuelle(c, id), 0) };
+}
+
+function retirerPersonne(id, { effacerParts = true } = {}) {
+  const gens = B().contributors || [];
+  const i = gens.findIndex(g => g.id === id);
+  if (i < 0) return 0;
+  gens.splice(i, 1);
+  if (!effacerParts) return 0;
+  let touchees = 0;
+  for (const c of (B().fixedCharges || [])) {
+    if (!c.shares || !(id in c.shares)) continue;
+    delete c.shares[id];
+    touchees++;
+  }
+  return touchees;
+}
+
 /* La date au format des cles, sans passer par l'UTC.
 
    `toISOString()` convertit en UTC : a Paris, une date construite a minuit local

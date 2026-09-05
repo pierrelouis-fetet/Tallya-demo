@@ -1951,6 +1951,27 @@ const I18N = {
     "Part de tes revenus qui contribue à l’augmentation de ton patrimoine : ta capacité d’épargne, plus le capital de crédit remboursé.":
       "The share of your income that contributes to growing your wealth: your saving capacity, plus the loan principal repaid.",
     "Partage": "Split",
+    '+ Personne': '+ Person',
+    'Nouvelle personne': 'New person',
+    'Ses parts servent au suivi de la répartition et ne changent pas ton budget':
+      'Their shares are only used to track the split and do not change your budget',
+    'Cette personne est déjà déclarée.': 'This person is already declared.',
+    'entre dans le partage': 'is now in the split',
+    'retiré du partage': 'removed from the split',
+    'Retirer du partage': 'Remove from the split',
+    "Ton budget ne bouge pas : une part n’a jamais réduit une charge. Réversible avec Ctrl+Z.":
+      'Your budget does not move: a share has never reduced a cost. Undo with Ctrl+Z.',
+    '… et ses parts sur {n} charges': '… and their shares on {n} costs',
+    '… et sa part sur {n} charge': '… and their share on {n} cost',
+    "décoche pour les garder dans le fichier : plus rien ne les lira, et son identifiant ne sera jamais redonné":
+      'untick to keep them in the file: nothing will read them any more, and their id will never be handed out again',
+    '{n} charges partagées, {v} par mois de part théorique':
+      '{n} shared costs, {v} a month of theoretical share',
+    '{n} charge partagée, {v} par mois de part théorique':
+      '{n} shared cost, {v} a month of theoretical share',
+    'aucune part ne lui est attribuée pour l’instant': 'no share is attributed to them yet',
+    'parts effacées': 'shares erased',
+    'part effacée': 'share erased',
     'Part de {n} (€)': '{n}\u2019s share (€)',
     "Part théorique de {n} sur cette charge. Elle sert au suivi de la répartition et ne réduit pas le montant compté dans ton budget.":
       '{n}\u2019s theoretical share of this cost. It is only used to track how the cost is split and does not reduce the amount counted in your budget.',

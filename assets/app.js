@@ -2017,6 +2017,11 @@ function sortPositions(entries) {
    Les champs se nomment `part_<id>` : c'est la convention que `validerPartsSaisies`
    et `ecrirePartsSaisies` connaissent, et les deux fenetres de charge la
    partagent. Sans personne declaree, la section n'existe pas. */
+const memeNom = (a, b) => String(a || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  === String(b || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 function champsPartage(charge) {
   const gens = contributors();
   if (!gens.length) return [];
@@ -5970,10 +5975,16 @@ function viewBudget(section = 'depenses') {
         })}`).join('')}
         <dl class="kv repart-pied">
           <dt>${trad('Total / mois')}</dt><dd>${fmtEUR(brut)}</dd>
-          ${sharedTotals().parPersonne.filter(x => x.total > 0.005).map(x => `
-          <dt class="muted">${esc(trad('Part théorique de {n}').replace('{n}', x.nom))}</dt>
+          ${sharedTotals().parPersonne.map(x => `
+          <dt class="muted"><button type="button" class="mois-lien"
+              data-action="editer-personne" data-id="${esc(x.id)}">${
+            esc(trad('Part théorique de {n}').replace('{n}', x.nom))}</button></dt>
           <dd class="muted">${fmtEUR(x.total)}</dd>`).join('')}
         </dl>
+        <p class="hint" style="margin:8px 0 0">
+          <button type="button" class="mois-lien"
+                  data-action="ajouter-personne">${trad('+ Personne')}</button>
+        </p>
       </div>
       </div>
       <div class="table-wrap large-seulement">
@@ -8843,6 +8854,69 @@ const ACTIONS = {
     if (v.bienId !== undefined) c.bienId = v.bienId || null;
     Store.save(); render();
     toast(`${guill(c.label)} · ${fmtEUR(chargeMensuelle(c))} ${trad('/ mois')}`);
+  },
+
+  async 'ajouter-personne'() {
+    const v = await askForm({
+      titre: trad('Nouvelle personne'),
+      sous: trad('Ses parts servent au suivi de la répartition et ne changent pas ton budget'),
+      champs: [
+        { cle: 'nom', label: 'Nom', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
+          exemple: 'ex. Camille' },
+      ],
+      valide: v => (contributors().some(g => memeNom(g.name, v.nom))
+        ? { cle: 'nom', message: trad('Cette personne est déjà déclarée.') } : null),
+    });
+    if (!v) return;
+    const b = Store.state.budget;
+    b.contributors = b.contributors || [];
+    b.contributors.push({ id: identifiantPersonne(v.nom), name: v.nom });
+    Store.save(); render();
+    toast(`${guill(v.nom)} ${trad('entre dans le partage')}`);
+  },
+
+  async 'editer-personne'(btn) {
+    const id = btn.dataset.id;
+    const g = contributors().find(x => x.id === id);
+    if (!g) return;
+    const p = partsDePersonne(id);
+    const v = await askForm({
+      titre: g.name,
+      sous: p.lignes
+        ? trad(p.lignes > 1 ? '{n} charges partagées, {v} par mois de part théorique'
+                            : '{n} charge partagée, {v} par mois de part théorique')
+            .replace('{n}', p.lignes).replace('{v}', fmtEUR0(p.mensuel))
+        : trad('aucune part ne lui est attribuée pour l’instant'),
+      ok: 'Enregistrer',
+      champs: [
+        { cle: 'nom', label: 'Nom', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
+          valeur: g.name },
+        { cle: 'supprimer', label: trad('Retirer du partage'), type: 'case',
+          aide: trad('Ton budget ne bouge pas : une part n’a jamais réduit une charge. Réversible avec Ctrl+Z.') },
+        /* La case des parts n'existe que s'il y en a. Elle ne se cache pas quand
+           la premiere est decochee : `montreSi` masque l'input d'une case sans
+           masquer son intitule, et un libelle orphelin vaut moins qu'une case
+           inerte dont le mot dit deja quand elle agit. */
+        ...(p.lignes ? [{ cle: 'effacerParts', type: 'case', valeur: true,
+          label: trad(p.lignes > 1 ? '… et ses parts sur {n} charges'
+                                   : '… et sa part sur {n} charge').replace('{n}', p.lignes),
+          aide: trad('décoche pour les garder dans le fichier : plus rien ne les lira, et son identifiant ne sera jamais redonné') }] : []),
+      ],
+      valide: v => (contributors().some(x => x.id !== id && memeNom(x.name, v.nom))
+        ? { cle: 'nom', message: trad('Cette personne est déjà déclarée.') } : null),
+    });
+    if (!v) return;
+    if (v.supprimer) {
+      const n = retirerPersonne(id, { effacerParts: !!v.effacerParts });
+      Store.save(); render();
+      toast(`${guill(g.name)} ${trad('retiré du partage')}${n
+        ? ` · ${n} ${trad(n > 1 ? 'parts effacées' : 'part effacée')}` : ''}`,
+        porteDeSortie());
+      return;
+    }
+    g.name = v.nom;
+    Store.save(); render();
+    toast(`${guill(g.name)} ${trad('enregistré')}`);
   },
 
   async 'add-income'() {
