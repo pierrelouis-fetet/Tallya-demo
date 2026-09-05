@@ -9585,7 +9585,7 @@ suite('Un écran ne dit jamais deux vérités sur le même montant', () => {
 
   test('chaque colonne de l’export dit son unité', () => {
     const f = feuille();
-    for (const entete of ["{ h: 'Montant', t: 'eur'", "{ h: 'Facturé', t: 'text'",
+    for (const entete of ["{ h: 'Montant', t: 'eur'", "{ h: 'Période', t: 'text'",
                           "{ h: '€ / mois', t: 'eur'", "{ h: '% des charges', t: 'pct'",
                           "{ h: 'À ma charge / mois', t: 'eur'"]) {
       vrai(f.includes(entete), `la colonne ${entete.slice(6, 24)} est là`);
@@ -9883,6 +9883,316 @@ suite('La convention personnelle se dit là où elle se joue', () => {
     vrai(/Capital restant dû/.test(f), 'le champ de la dette doit être trouvable');
     vrai(/la dette réellement à ta charge/.test(f), 'il porte la convention');
     vrai(/jamais la dette qui se divise/.test(f), 'et dit ce que le partage ne fait pas');
+  });
+});
+
+/* E4 : de locataire a proprietaire, sans laisser le loyer et la mensualite
+   s'additionner dans le dos. */
+suite('Un loyer qu’on paie encore se reconnaît, prudemment', () => {
+
+  const poser = (charges, extra) => Fixture.poser(e => {
+    e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+    e.budget.fixedCharges = charges;
+    if (extra) extra(e);
+  });
+  const noms = () => loyersCourantsProbables().map(x => x.c.label).join(' | ');
+
+  test('le mot ouvre le libellé, dans les deux langues', () => {
+    poser([{ label: 'Loyer', amount: 100, period: 'mois' },
+           { label: 'loyer', amount: 100, period: 'mois' },
+           { label: '  LOYER  ', amount: 100, period: 'mois' },
+           { label: 'Loyer appartement', amount: 100, period: 'mois' },
+           { label: 'Loyer - Paris', amount: 100, period: 'mois' },
+           { label: 'Loyer: Paris', amount: 100, period: 'mois' },
+           { label: 'Loyer maison', amount: 100, period: 'mois' },
+           { label: 'Rent', amount: 100, period: 'mois' },
+           { label: 'Rent apartment', amount: 100, period: 'mois' },
+           { label: 'Monthly rent', amount: 100, period: 'mois' }]);
+    eq(loyersCourantsProbables().length, 10, 'les dix libellés sont reconnus');
+  });
+
+  test('le mot au milieu ne fait pas un loyer', () => {
+    /* La regle qui protege tout le reste : proposer de supprimer la mauvaise
+       charge coute bien plus cher que ne rien proposer. */
+    poser([{ label: 'Garantie loyers impayés', amount: 100, period: 'mois' },
+           { label: 'Assurance loyers impayés', amount: 100, period: 'mois' },
+           { label: 'Gestion locative', amount: 100, period: 'mois' },
+           { label: 'Revenu locatif', amount: 100, period: 'mois' },
+           { label: 'Location de box', amount: 100, period: 'mois' },
+           { label: 'Loyers', amount: 100, period: 'mois' },
+           { label: 'Agence Nexity', amount: 1500, period: 'mois' }]);
+    eq(noms(), '', 'aucun n’est proposé, « Agence Nexity » compris');
+  });
+
+  test('un lien structurel l’emporte sur le libellé', () => {
+    /* Une charge qui rembourse un credit est la mensualite que la transition
+       vient d'ajouter ; une charge rattachee a un bien est une charge de
+       proprietaire. Ni l'une ni l'autre n'est un loyer qu'on paie. */
+    poser([{ label: 'Loyer', amount: 1000, period: 'mois', creditId: 'd_pret' },
+           { label: 'Loyer du studio', amount: 1000, period: 'mois', bienId: 'c_immo' }]);
+    eq(noms(), '', 'une mensualité et une charge de propriétaire n’en sont pas');
+  });
+
+  test('un loyer entièrement payé par quelqu’un d’autre ne dérange pas', () => {
+    poser([{ label: 'Loyer', amount: 1500, period: 'mois', shares: { p1: 1500 } }]);
+    eq(noms(), '', 'il ne coûte rien : il ne crée pas le double coût qu’on prévient');
+  });
+
+  test('un loyer partagé se présente pour ce qu’il coûte', () => {
+    poser([{ label: 'Loyer', amount: 2000, period: 'mois', shares: { p1: 800 } }]);
+    const l = loyersCourantsProbables();
+    eq(l.length, 1, 'il est proposé');
+    pres(l[0].mensuel, 1200, 'pour 1 200 €, pas 2 000');
+    pres(num(l[0].c.amount), 2000, 'et son montant facturé reste lisible à côté');
+  });
+
+  test('la quote-part d’un bien ne touche pas au montant du loyer', () => {
+    poser([{ label: 'Loyer', amount: 1500, period: 'mois' }], e => {
+      for (const l of e.comptes.find(c => c.id === 'c_immo').lignes) l.part = 50;
+    });
+    pres(loyersCourantsProbables()[0].mensuel, 1500,
+      'elle découpe la valeur d’un bien, jamais une charge');
+  });
+
+  test('un revenu nommé « Loyer » est ignoré', () => {
+    poser([], e => {
+      e.budget.income = [{ label: 'Loyer studio Lyon', amount: 600, period: 'mois' }];
+    });
+    eq(noms(), '', 'un loyer reçu n’est pas un loyer payé');
+    const src = lireSource('assets/store.js');
+    const f = src.slice(src.indexOf('function loyersCourantsProbables()'),
+                        src.indexOf('function chargesOrdonnees()'));
+    vrai(f.length > 100, 'la fonction doit être trouvable');
+    vrai(!/income/.test(f), 'et elle ne lit même pas les revenus');
+  });
+
+  test('le rang réel accompagne chaque candidat', () => {
+    poser([{ label: 'Internet', amount: 30, period: 'mois' },
+           { label: 'Loyer', amount: 1000, period: 'mois' }]);
+    const l = loyersCourantsProbables();
+    eq(l[0].i, 1, 'c’est le rang dans les charges fixes');
+    eq(Store.state.budget.fixedCharges[l[0].i].label, 'Loyer', 'il désigne la bonne ligne');
+  });
+
+  test('plusieurs loyers se rendent tous, et lire n’en retire aucun', () => {
+    poser([{ label: 'Loyer Paris', amount: 1500, period: 'mois' },
+           { label: 'Loyer studio', amount: 500, period: 'mois' }]);
+    eq(loyersCourantsProbables().length, 2, 'les deux sont candidats');
+    loyersCourantsProbables(); loyersCourantsProbables();
+    eq(Store.state.budget.fixedCharges.length, 2, 'et rien ne se retire tout seul');
+  });
+
+  test('les périodes se ramènent au mois', () => {
+    poser([{ label: 'Loyer garage', amount: 1200, period: 'an' },
+           { label: 'Loyer box', amount: 300, period: 'trimestre' }]);
+    const l = loyersCourantsProbables();
+    pres(l[0].mensuel, 100, '1 200 € l’an font 100 € par mois');
+    pres(l[1].mensuel, 100, '300 € par trimestre aussi');
+  });
+});
+
+suite('La transition vers la résidence principale demande, elle ne décide pas', () => {
+
+  const app = () => lireSource('assets/app.js');
+  /* Les bornes sont du CODE : la banniere de commentaire qui suit disparait sur
+     l'arbre publie, et la tranche courrait alors bien au-dela. */
+  const fenetre = () => { const s = app();
+    const i = s.indexOf('async function proposerTransitionLoyer()');
+    return s.slice(i, s.indexOf('function focusLast(', i)); };
+  /* Le CODE seul : le commentaire de la fonction NOMME les collections qu'elle
+     ne touche pas, et un controle pose sur le texte brut s'y accrocherait. */
+  const codeSeul = s => s.replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+  test('le bien est créé et enregistré AVANT la question', () => {
+    /* Fermer la fenetre ne doit laisser aucun etat a moitie ecrit : le credit
+       porte ses liens, la charge de mensualite existe, tout est sauvegarde. */
+    const s = app();
+    const i = s.indexOf("if (bien && e3.usageBien === 'principale') await proposerTransitionLoyer();");
+    vrai(i > 0, 'la création d’un bien déclaré principale ouvre la transition');
+    const avant = s.lastIndexOf('refreshAccounts(); Store.save(); render();', i);
+    vrai(avant > 0 && avant < i, 'et l’état est rafraîchi, enregistré et rendu avant');
+  });
+
+  test('un changement explicite d’usage vers principale l’ouvre aussi', () => {
+    const s = app();
+    vrai(/if \(v\.usage === 'principale' && u\.usage !== 'principale'\)\s*\n\s*await proposerTransitionLoyer\(\);/.test(s),
+      'le geste explicite ouvre la transition, et seulement s’il change l’usage');
+  });
+
+  test('rien d’autre ne l’ouvre', () => {
+    /* Ni une valeur corrigee, ni un credit modifie, ni l'ouverture de la fiche,
+       ni un rendu : le detenteur serait harcele a chaque saisie. */
+    const s = app();
+    eq(s.split('proposerTransitionLoyer()').length - 1, 3,
+      'la fonction est définie une fois et appelée deux fois, pas davantage');
+    const f = fenetre();
+    vrai(/if \(!loyers\.length\) return;/.test(f),
+      'et sans candidat, elle ne montre rien du tout');
+  });
+
+  test('la fenêtre dit ce qu’elle propose, et rien d’anxiogène', () => {
+    const f = fenetre();
+    vrai(/Tu as déjà un loyer dans ton budget/.test(f), 'le titre au singulier');
+    vrai(/Tu as plusieurs loyers dans ton budget/.test(f), 'et au pluriel');
+    vrai(/Ce loyer est toujours compté dans tes charges fixes/.test(f), 'le texte');
+    vrai(/Que veux-tu en faire \?/.test(f), 'la question');
+    for (const mot of ['Le conserver', 'Le terminer', 'Plus tard']) {
+      vrai(f.includes(`trad('${mot}')`), `« ${mot} » est proposé`);
+    }
+    vrai(/Garde-le si tu paies encore ton ancien logement/.test(f), 'et l’aide rassure');
+    vrai(!/Attention|Incohérence|Erreur|Double prélèvement/.test(f), 'aucun mot alarmant');
+  });
+
+  test('le défaut ne détruit rien', () => {
+    const f = fenetre();
+    vrai(/valeur: 'garder'/.test(f), '« Le conserver » est présélectionné');
+    vrai(/if \(!v \|\| v\.quoi !== 'terminer'\) return;/.test(f),
+      'fermer, conserver ou remettre à plus tard ne touchent à rien');
+  });
+
+  test('« Le terminer » ne retire qu’une ligne, et laisse une porte de sortie', () => {
+    const f = fenetre();
+    vrai(/const cible = plusieurs \? loyers\.find\(x => String\(x\.i\) === String\(v\.quel\)\) : loyers\[0\];/.test(f),
+      'la cible est celle que le choix désigne');
+    vrai(/if \(!cible\) return;/.test(f), '« Aucun » ne désigne rien, donc rien ne part');
+    vrai(/fixedCharges\.splice\(cible\.i, 1\)/.test(f), 'une seule ligne est retirée');
+    vrai(!/filter\(|forEach\(/.test(f.slice(f.indexOf('const cible'))),
+      'jamais un retrait groupé');
+    vrai(/Store\.save\(\); render\(\);/.test(f), 'l’état est enregistré et l’écran refait');
+    vrai(/toast\(.*retiré du budget.*porteDeSortie\(\)\)/.test(f),
+      'et « Annuler » rend la charge entière');
+  });
+
+  test('la transition ne touche qu’aux charges fixes courantes', () => {
+    /* L'historique vit ailleurs : `budget.expenses` porte les mois saisis et
+       `monthly` les releves. Aucune fausse chronologie n'est fabriquee. */
+    /* Sur le CODE seul : le commentaire de la fonction NOMME les collections
+       qu'elle ne touche pas, et le controle s'y serait accroche. */
+    const f = codeSeul(fenetre());
+    vrai(!/expenses|monthly|sales|positions|comptes|etabs|contributors/.test(f),
+      'aucune autre collection n’est approchée');
+    vrai(!/income/.test(f), 'les revenus non plus');
+  });
+
+  test('aucune date de fin n’a été inventée sur les charges', () => {
+    /* Le modele n'en a pas, et cette etape n'en cree pas : « terminer » veut
+       dire quitter le budget COURANT. `echeanceLe` reste la prochaine echeance,
+       elle ne devient pas une fin. */
+    const store = lireSource('assets/store.js');
+    vrai(!/finLe: v\.|dateFin|debutLe|termineeLe/.test(store),
+      'aucun champ de fin sur une charge fixe');
+    Fixture.poser(e => {
+      e.budget.fixedCharges = [{ label: 'Loyer', amount: 1000, period: 'mois' }];
+    });
+    const avant = JSON.stringify(Store.state.budget.fixedCharges[0]);
+    loyersCourantsProbables();
+    eq(JSON.stringify(Store.state.budget.fixedCharges[0]), avant,
+      'et la charge n’est pas annotée au passage');
+  });
+
+  test('retirer la ligne courante ne réécrit aucun mois passé', () => {
+    /* La preuve par les nombres : on retire comme la fenetre le fait, et on
+       mesure l'historique des deux cotes. */
+    Fixture.poser(e => {
+      e.budget.fixedCharges = [{ label: 'Loyer Paris', amount: 1500, period: 'mois' },
+                               { label: 'Internet', amount: 30, period: 'mois' }];
+    });
+    const moisAvant = JSON.stringify(Store.state.monthly);
+    const depAvant = JSON.stringify(Store.state.budget.expenses || []);
+    const brutAvant = round2(patrimoine().brut);
+    const netAvant = round2(patrimoine().net);
+    const detteAvant = round2(patrimoine().dettes);
+
+    const cible = loyersCourantsProbables()[0];
+    Store.state.budget.fixedCharges.splice(cible.i, 1);
+
+    eq(JSON.stringify(Store.state.monthly), moisAvant, 'les relevés mensuels sont intacts');
+    eq(JSON.stringify(Store.state.budget.expenses || []), depAvant,
+      'les dépenses des mois passés aussi');
+    pres(round2(patrimoine().brut), brutAvant, 'le patrimoine brut ne bouge pas');
+    pres(round2(patrimoine().net), netAvant, 'ni le net');
+    pres(round2(patrimoine().dettes), detteAvant, 'ni la dette');
+    eq(Store.state.budget.fixedCharges.map(c => c.label).join(' | '), 'Internet',
+      'seule la ligne visée est partie');
+    pres(fixedTotal(), 30, 'et le budget courant se recalcule');
+    pres(budgetFrame().fixed, fixedTotal(), 'le cadre lit le même total');
+  });
+
+  test('retirer un loyer ne touche ni aux personnes ni aux autres partages', () => {
+    Fixture.poser(e => {
+      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+      e.budget.fixedCharges = [
+        { label: 'Loyer', amount: 2000, period: 'mois', shares: { p1: 800 } },
+        { label: 'Internet', amount: 40, period: 'mois', shares: { p1: 20 } }];
+    });
+    const cible = loyersCourantsProbables()[0];
+    pres(cible.mensuel, 1200, 'la fenêtre annonce 1 200 € à ma charge');
+    Store.state.budget.fixedCharges.splice(cible.i, 1);
+    eq(contributors().length, 1, 'la personne reste disponible pour les autres charges');
+    pres(shareOf(Store.state.budget.fixedCharges[0], 'p1'), 20, 'et sa part sur elles aussi');
+    pres(fixedTotal(), 20, 'le budget ne compte plus que ma part de l’internet');
+  });
+
+  test('deux loyers : en retirer un laisse l’autre', () => {
+    const dHabitude = () => Fixture.poser(e => {
+      e.budget.fixedCharges = [{ label: 'Loyer Paris', amount: 1500, period: 'mois' },
+                               { label: 'Loyer studio', amount: 500, period: 'mois' }];
+    });
+    for (const [choisi, reste] of [[0, 'Loyer studio'], [1, 'Loyer Paris']]) {
+      dHabitude();
+      const l = loyersCourantsProbables();
+      Store.state.budget.fixedCharges.splice(l[choisi].i, 1);
+      eq(Store.state.budget.fixedCharges.map(c => c.label).join(' | '), reste,
+        `en retirant le ${choisi === 0 ? 'premier' : 'second'}, l’autre survit`);
+    }
+    dHabitude();
+    eq(Store.state.budget.fixedCharges.length, 2, 'et ne rien choisir ne retire rien');
+  });
+
+  test('changer d’usage ne supprime ni revenu ni charge du bien', () => {
+    /* Un locatif qui devient residence principale garde ses revenus, ses
+       charges et son credit : le changement d'usage change la PRESENTATION. */
+    Fixture.poser(e => {
+      for (const l of e.comptes.find(c => c.id === 'c_immo').lignes) l.usage = 'locative';
+      e.budget.income = [{ label: 'Loyer reçu', amount: 900, period: 'mois', bienId: 'c_immo' }];
+      e.budget.fixedCharges = [{ label: 'Taxe foncière', amount: 1200, period: 'an',
+                                 bienId: 'c_immo' }];
+    });
+    const revenus = JSON.stringify(Store.state.budget.income);
+    const charges = JSON.stringify(Store.state.budget.fixedCharges);
+    for (const l of compteById('c_immo').lignes) l.usage = 'principale';
+    refreshAccounts();
+    eq(JSON.stringify(Store.state.budget.income), revenus, 'les revenus liés restent');
+    eq(JSON.stringify(Store.state.budget.fixedCharges), charges, 'les charges liées aussi');
+    eq(usageBien(compteById('c_immo')), 'principale', 'et l’usage a bien changé');
+    vrai(poches().mobilisable.habite > 0, 'le logement habité sort des actifs mobilisables');
+  });
+
+  test('les conventions E1 à E3.1 ne bougent pas', () => {
+    Fixture.poser(e => {
+      e.budget.contributors = [{ id: 'p1', name: 'Autre' }];
+      const d = e.etabs.find(x => x.id === 'e_bien').dettes[0];
+      d.montant = 120000; d.taux = 2; d.mensualite = null;
+      for (const l of e.comptes.find(c => c.id === 'c_immo').lignes) l.usage = 'locative';
+      e.budget.income = [{ label: 'Loyer', amount: 900, period: 'mois', bienId: 'c_immo' }];
+      e.budget.fixedCharges = [
+        { label: 'Prêt', amount: 2000, period: 'mois', shares: { p1: 800 },
+          creditId: 'd_pret', bienId: 'c_immo' },
+        { label: 'Copropriété', amount: 300, period: 'mois', shares: { p1: 90 },
+          bienId: 'c_immo' }];
+    });
+    eq(loyersCourantsProbables().length, 0, 'aucune de ces deux charges n’est un loyer');
+    pres(mensualiteCredit(etabById('e_bien').dettes[0]), 1200, 'E3 : mensualité personnelle');
+    pres(num(etabById('e_bien').dettes[0].montant), 120000, 'la dette reste entière');
+    const cf = cashFlowBien(compteById('c_immo'));
+    pres(cf.charges, 210, 'E3 : charges personnelles');
+    pres(coutBien(compteById('c_immo')).totalSorties, 1410, 'E3 : coût personnel');
+    eq(cf.fiscalite.source, 'inconnue', 'E1 : la fiscalité garde son troisième état');
+    vrai(chargesProposees(compteById('c_immo')).map(([x]) => x)
+      .includes('Charges de copropriété non récupérables'), 'E2 : les suggestions tiennent');
+    const st = sharedTotals();
+    pres(st.brut, 2300, 'E3.1 : le total facturé');
+    pres(st.mine, fixedTotal(), 'et le total personnel');
   });
 });
 

@@ -6479,7 +6479,7 @@ function sheetFixedCharges() {
     name: 'Charges fixes',
     cols: [
       { h: 'Poste', t: 'text', w: 32 }, { h: 'Montant', t: 'eur', w: 15 },
-      { h: 'Facturé', t: 'text', w: 13 }, { h: '€ / mois', t: 'eur', w: 15 },
+      { h: 'Période', t: 'text', w: 13 }, { h: '€ / mois', t: 'eur', w: 15 },
       { h: '% des charges', t: 'pct', w: 15 },
       ...gens.map(p => ({ h: `Part de ${p.name} / mois`, t: 'eur', w: 18 })),
       { h: 'À ma charge / mois', t: 'eur', w: 18 }, { h: 'Organisme', t: 'text', w: 24 },
@@ -6493,6 +6493,42 @@ function sheetFixedCharges() {
     total: ['Total', null, '', round2(st.brut), st.brut ? 1 : 0,
       ...st.parPersonne.map(p => round2(p.total)), round2(st.mine), ''],
   };
+}
+
+async function proposerTransitionLoyer() {
+  const loyers = loyersCourantsProbables();
+  if (!loyers.length) return;
+  const plusieurs = loyers.length > 1;
+  const dire = x => `${x.c.label} · ${fmtEUR0(x.mensuel)} ${trad('à ta charge')}`;
+  const v = await askForm({
+    titre: plusieurs ? 'Tu as plusieurs loyers dans ton budget'
+                     : 'Tu as déjà un loyer dans ton budget',
+    sous: trad('Tu viens d’ajouter une résidence principale. Ce loyer est toujours compté dans tes charges fixes.'),
+    ok: 'Enregistrer',
+    champs: [
+      ...(plusieurs
+        ? [{ cle: 'quel', label: trad('Quel loyer correspond au logement que tu quittes ?'),
+             type: 'liste', valeur: '',
+             options: [['', trad('Aucun')], ...loyers.map(x => [String(x.i), dire(x)])] }]
+        : [{ cle: 'seul', label: dire(loyers[0]), type: 'section' }]),
+      { cle: 'quoi', label: trad('Que veux-tu en faire ?'), type: 'liste', valeur: 'garder',
+        options: [['garder', trad('Le conserver')], ['terminer', trad('Le terminer')],
+                  ['plusTard', trad('Plus tard')]],
+        aide: trad('Garde-le si tu paies encore ton ancien logement pendant la transition.') },
+    ],
+  });
+  if (!v || v.quoi !== 'terminer') return;
+  const cible = plusieurs ? loyers.find(x => String(x.i) === String(v.quel)) : loyers[0];
+  if (!cible) return;
+  const nom = cible.c.label;
+  /* La ligne quitte le budget COURANT, et lui seul. Les mois deja saisis vivent
+     dans `budget.expenses` et dans les releves : rien ici ne les approche, et il
+     n'y a pas de fausse chronologie a fabriquer. `Store.save()` empile l'etat
+     d'avant, donc la porte de sortie rend la charge entiere — son montant, sa
+     periode, son organisme, ses parts. */
+  Store.state.budget.fixedCharges.splice(cible.i, 1);
+  Store.save(); render();
+  toast(`${guill(nom)} ${trad('retiré du budget')}`, porteDeSortie());
 }
 
 function focusLast(listPath, field) {
@@ -7600,6 +7636,7 @@ const ACTIONS = {
       cash, lignes,
     });
     refreshAccounts(); Store.save(); render();
+    if (bien && e3.usageBien === 'principale') await proposerTransitionLoyer();
     toast([t.label, nomContenant() || String(e3.nom || '').trim()].filter(Boolean).join(' · ')
       + (t.titres ? trad(', les placements s’ajoutent dans Marchés')
                   : bien ? (num(e3.credit)
@@ -7735,6 +7772,8 @@ const ACTIONS = {
       if ((l.classe || 'immobilier') === 'immobilier') l.usage = v.usage;
     Store.save(); render();
     toast(`${nomCompteV2(c)} · ${trad(USAGE_BIEN_LABEL[v.usage])}`);
+    if (v.usage === 'principale' && u.usage !== 'principale')
+      await proposerTransitionLoyer();
   },
 
   async 'supprimer-compte'(btn) {

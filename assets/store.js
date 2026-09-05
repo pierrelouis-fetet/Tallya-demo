@@ -4269,6 +4269,56 @@ function expenseCategories() {
 /*    Deplace une categorie d'un cran. L'ordre de `budget.categories` EST l'ordre
    des colonnes du detail mensuel, de la fenetre de saisie, des graphiques et
    des exports : une seule liste, donc un seul geste pour tous ces ecrans.*/
+/* --- LE LOYER QU'ON PAIE ENCORE ------------------------------------------
+
+   Le jour ou l'on declare sa residence principale, le loyer d'avant reste dans
+   les charges fixes. Rien ne l'y retient a tort — payer les deux pendant un
+   preavis, des travaux ou un decalage de remise des cles est un cas reel et
+   frequent — mais le budget additionne alors un loyer et une mensualite sans
+   que personne ait tranche.
+
+   LA DETECTION EST PRUDENTE, ET C'EST TOUT SON SUJET. Proposer de supprimer la
+   mauvaise charge coute bien plus cher que ne rien proposer du tout : une
+   absence de suggestion se corrige a la main, une suppression mal visee se
+   decouvre un mois plus tard. Trois filtres, donc.
+
+   LE MOT EN TETE, jamais n'importe ou dans le libelle. « Garantie loyers
+   impayes » et « Assurance loyers impayes » sont des charges de proprietaire,
+   et un `includes('loyer')` les proposerait. Le mot doit ouvrir le libelle et
+   etre suivi de la fin de la chaine ou d'un separateur : « Loyer », « Loyer
+   appartement », « Loyer - Paris » entrent, « Loyers impayes » et « Location »
+   n'entrent pas. La casse et les accents sont normalises, comme partout
+   ailleurs dans ce fichier.
+
+   UN LIEN STRUCTUREL L'EMPORTE SUR LE LIBELLE. Une charge qui rembourse un
+   credit est une mensualite, quel que soit son nom — c'est elle, justement, que
+   la transition vient d'ajouter. Une charge rattachee a un bien est une charge
+   de PROPRIETAIRE : taxe fonciere, copropriete, assurance. Ni l'une ni l'autre
+   n'est un loyer qu'on paie.
+
+   LE COUT PERSONNEL DECIDE. Un loyer de 1 500 EUR entierement verse par
+   quelqu'un d'autre ne coute rien : il ne fait pas le double cout que cette
+   etape cherche a prevenir, et deranger pour lui serait du bruit.
+
+   Ce qui n'est PAS regarde : `budget.income`. Un revenu nomme « Loyer studio »
+   est un loyer RECU, il n'a rien a voir avec ce qu'on paie. */
+const DEBUT_LOYER = /^(loyer|monthly rent|rent)(?:[\s:,\-]|$)/;
+
+function estLoyerProbable(c) {
+  if (!c) return false;
+  if (c.creditId) return false;          // une mensualite, pas un loyer
+  if (c.bienId) return false;            // une charge de proprietaire
+  const mot = String(c.label || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return DEBUT_LOYER.test(mot);
+}
+
+function loyersCourantsProbables() {
+  return (B().fixedCharges || [])
+    .map((c, i) => ({ c, i, mensuel: chargeMensuellePersonnelle(c) }))
+    .filter(x => estLoyerProbable(x.c) && x.mensuel > 0.005);
+}
+
 /* Les charges fixes, de la plus lourde a la plus legere.
 
    IL Y AVAIT DEUX ORDRES, et un commutateur pour passer de l'un a l'autre : le
