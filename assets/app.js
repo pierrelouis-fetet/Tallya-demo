@@ -1456,7 +1456,18 @@ function viewObjective() {
 
   return `
   ${(() => {
-    const verses = Math.max(0, dernier.contributed - g.total);
+    /* CE QUE TU VERSES, ET RIEN D'AUTRE.
+
+       Ce montant valait `contributed - g.total`. Or `contributed` porte aussi la
+       part plate, qui MONTE a mesure que le credit s'amortit : la difference
+       melangeait donc les versements et le capital rembourse. Sur un
+       appartement de 300 000 EUR finance a 200 000, avec « 0 € / mois » ecrit
+       deux lignes plus bas, la carte annoncait « Ce que tu verses : 196 531 € ».
+
+       Les deux effets se separent, et ils s'additionnent toujours exactement au
+       total : depart + versements + capital rembourse + rendement. */
+    const verses = num(dernier.mois) * num(s.monthly);
+    const rembourse = num(dernier.capitalRendu);
     const plat = num(p.plat);
     const parts = [
       { label: trad('Ce que tu as déjà'), value: g.total - plat, couleur: 'var(--series-3)', apercu: 'baseProjection' },
@@ -1468,6 +1479,11 @@ function viewObjective() {
         value: plat, couleur: couleurClasse('immobilier'), apercu: 'immobilierNet',
         aide: trad('Aucun rendement ne lui est appliqué : la projection le porte tel quel') },
       { label: trad('Ce que tu verses'), value: verses, couleur: S1(), apercu: 'horizon' },
+      /* Le desendettement a sa part, sous son nom. Il ne se filtre pas quand il
+         est nul : `filter` s'en charge deja pour toutes les parts. */
+      { label: trad('Ce que ton crédit rembourse'), value: rembourse,
+        couleur: 'var(--series-4)', apercu: 'immobilierNet',
+        aide: trad('La part de tes mensualités qui efface du capital. Elle ne s’investit pas : elle fait monter ton patrimoine net en faisant baisser ta dette.') },
       /* Une seule ligne de rendement, et c'est un choix.
 
          Elle s'est coupee en deux, puis en trois, a mesure que les poches se

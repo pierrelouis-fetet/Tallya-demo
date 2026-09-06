@@ -1643,7 +1643,7 @@ suite('Une bande trop mince ne porte pas de trait', () => {
        demandent une geometrie, et deux ecritures du meme empilement auraient
        fini par ne plus empiler pareil. Le controle la suit : ce qui compte est
        qu'une seule ligne decide de l'epaisseur, et qu'elle prenne un maximum. */
-    const pile = src.slice(src.indexOf('function empiler(valeur, topC, cles)'),
+    const pile = src.slice(src.indexOf('function empiler(valeur, topC, cles'),
                            src.indexOf('const valeurDuPoint'));
     vrai(pile.length > 200, 'la fonction d’empilement doit être trouvable');
     vrai(/epaisseur: Math\.max\(\.\.\./.test(pile),
@@ -19283,7 +19283,7 @@ suite('Changer de périmètre se voit, sans se rejouer tout seul', () => {
     /* 3. Et la geometrie reste celle des points. `empiler()` ne fabrique que des
        couples « x,y » a partir des valeurs recues : aucun point intermediaire,
        aucune moyenne, aucun lissage. */
-    const pile = src.slice(src.indexOf('function empiler(valeur, topC, cles)'),
+    const pile = src.slice(src.indexOf('function empiler(valeur, topC, cles'),
                            src.indexOf('const valeurDuPoint'));
     vrai(/\$\{x\(i\)\},\$\{yC\(v\)\}/.test(pile),
       'chaque sommet est un point reçu, placé tel quel');
@@ -19402,7 +19402,7 @@ suite('Changer de périmètre se voit, sans se rejouer tout seul', () => {
        empilement auraient fini par ne plus empiler pareil, et l'ecart ne se
        verrait que pendant la demi-seconde de la transition — donc jamais. */
     const src = lireSource('assets/charts.js');
-    vrai(/function empiler\(valeur, topC, cles\)/.test(src),
+    vrai(/function empiler\(valeur, topC, cles/.test(src),
       'la géométrie des bandes vit dans une fonction');
     vrai((src.match(/empiler\(/g) || []).length >= 3,
       'et le rendu comme les images de la transition l’appellent');
@@ -34157,5 +34157,620 @@ suite('Un premier compte ne remplit pas l’accueil de zéros', () => {
       s.monthly = [{ date: '2026-08-01', comment: '', v: { c1: 3000 } }];
     });
     eq(pasAFaire('releves'), false, 'et un vrai relevé franchit le dernier');
+  });
+});
+
+/* AUDIT MATHEMATIQUE DE PROJECTION.
+
+   Le moteur est mensuel. Un taux annonce est un taux ANNUEL EFFECTIF, converti
+   par (1+r)^(1/12)-1 : douze mois de rendement redonnent donc exactement le taux
+   affiche. Les versements arrivent en FIN de mois — annuite ordinaire, la plus
+   prudente des deux conventions — et il y en a exactement douze par an.
+
+   La reference de ces controles n'est pas le moteur : c'est la formule fermee de
+   l'annuite, ecrite ici, differente par construction. Un test qui appelle deux
+   fois la meme fonction ne protege rien. */
+suite('Projection : le moteur se réconcilie', () => {
+
+  /* La reference independante : capital compose, plus une annuite ordinaire. */
+  const vfFormule = (capital, versement, tauxAnnuel, mois) => {
+    const r = Math.pow(1 + tauxAnnuel / 100, 1 / 12) - 1;
+    if (Math.abs(r) < 1e-12) return capital + versement * mois;
+    return capital * Math.pow(1 + r, mois)
+         + versement * (Math.pow(1 + r, mois) - 1) / r;
+  };
+
+  const CTO = (lignes, cash) => ({ id: 'c_ct', etabId: 'e', type: 'cto', statut: 'ouvert',
+    libelle: 'CTO', court: 'CTO', ouvertLe: '2020-01-01', numero: '', notes: '', alloc: '',
+    cash: cash || [], lignes: (lignes || []).map((l, i) => ({ id: 'l' + i, classe: l.classe,
+      libelle: l.classe, valeur: l.valeur, prixDeRevient: l.valeur, quantite: 1,
+      dateAcquisition: '', ...(l.projet ? { projet: true } : {}) })) });
+
+  const BIEN = (valeur, extra) => ({ id: 'c_immo', etabId: 'e', type: 'immo', statut: 'ouvert',
+    libelle: 'Appartement', court: 'Appartement', ouvertLe: '2020-01-01', numero: '',
+    notes: '', alloc: '', cash: [], lignes: [{ id: 'lb', classe: 'immobilier',
+      libelle: 'Appartement', valeur, prixDeRevient: valeur, quantite: 1,
+      dateAcquisition: '', usage: 'principale', ...(extra || {}) }] });
+
+  const SCPI = valeur => ({ id: 'c_scpi', etabId: 'e', type: 'scpi', statut: 'ouvert',
+    libelle: 'SCPI', court: 'SCPI', ouvertLe: '2020-01-01', numero: '', notes: '', alloc: '',
+    cash: [], lignes: [{ id: 'ls', classe: 'immobilier', libelle: 'SCPI', valeur,
+      prixDeRevient: valeur, quantite: 1, dateAcquisition: '' }] });
+
+  /* Un etat nu, entierement decrit par ses arguments. Les reglages de projection
+     partent tous a zero : c'est le seul moyen d'isoler ce qu'on mesure. */
+  const etat = ({ comptes = [], dettes = [], meta = {}, budget = {} } = {}) => {
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e', nom: 'Banque', notes: '', dettes }];
+      s.comptes = comptes;
+      s.positions = []; s.monthly = [];
+      s.budget.income = []; s.budget.fixedCharges = []; s.budget.expenses = [];
+      Object.assign(s.meta, { projScenario: 'central', projInflation: 0, projTarget: 0,
+        projHorizon: 20, projMonthly: 0, projMonthlyZeroLu: true }, meta);
+      Object.assign(s.budget, budget);
+    });
+    refreshAccounts();
+  };
+
+  /* --- 1. le point de depart -------------------------------------------- */
+
+  test('t0 vaut exactement le patrimoine net, dans cinq configurations', () => {
+    const cas = [
+      ['cash seul', { comptes: [CTO([], [{ montant: 10000, affectation: 'courant' }])] }, 10000],
+      ['titres et cash', { comptes: [CTO([{ classe: 'actions', valeur: 20000 }],
+        [{ montant: 10000, affectation: 'courant' }])] }, 30000],
+      ['bien financé', { comptes: [BIEN(300000),
+        CTO([], [{ montant: 20000, affectation: 'courant' }])],
+        dettes: [{ id: 'd1', libelle: 'Prêt', montant: 200000, taux: 2, mensualite: 1000 }] }, 120000],
+      ['dette plus grosse que les avoirs', {
+        comptes: [CTO([], [{ montant: 20000, affectation: 'courant' }])],
+        dettes: [{ id: 'd1', libelle: 'Perso', montant: 30000 }] }, -10000],
+    ];
+    for (const [nom, cfg, attendu] of cas) {
+      etat(cfg);
+      pres(patrimoine().net, attendu, `${nom} : le patrimoine net`);
+      const p = capitalisation({ years: 10 });
+      pres(p.points[0].total, attendu, `${nom} : le premier point de la projection`);
+      /* Et la somme des poches redonne ce meme nombre : aucun euro ne se perd
+         ni ne se dedouble en changeant de poche. */
+      const q = pochesProjection();
+      pres(q.placees + q.plat, attendu, `${nom} : la somme des poches`);
+    }
+  });
+
+  test('une quote-part ne divise jamais la dette', () => {
+    etat({ comptes: [BIEN(300000, { part: 50 }),
+                     CTO([], [{ montant: 20000, affectation: 'courant' }])],
+           dettes: [{ id: 'd1', libelle: 'Prêt', montant: 100000, taux: 2, mensualite: 800 }] });
+    pres(patrimoine().brut, 170000, 'la moitié du bien, plus le cash');
+    pres(dettesTotal(), 100000, 'la dette reste entière');
+    pres(patrimoine().net, 70000, '150 000 + 20 000 − 100 000');
+    pres(capitalisation({ years: 10 }).points[0].total, 70000,
+      'et la projection part de la valeur personnelle, jamais de la valeur totale');
+  });
+
+  /* --- 2. le rendement --------------------------------------------------- */
+
+  test('le fil électrique : 100 k, aucun taux, aucun versement, ligne plate', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0 } });
+    const p = capitalisation({ years: 20 });
+    for (const i of [0, 1, 5, 10, 20]) {
+      pres(p.points[i].total, 100000, `année ${i} : rien ne bouge`);
+    }
+  });
+
+  test('douze mois de rendement redonnent le taux annuel affiché', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: null, projRate: 10, projRateAutres: 0, projRateGaranti: 0 } });
+    const p = capitalisation({ years: 20 });
+    pres(p.points[1].total, 110000, 'après un an, +10 %');
+    pres(p.points[2].total, 121000, 'après deux ans, la composition');
+    pres(p.points[20].total, vfFormule(100000, 0, 10, 240),
+      'et vingt ans suivent la formule fermée');
+  });
+
+  test('douze mois de versement font douze versements, pas onze ni treize', () => {
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 1000, projVersementVers: 'marche' } });
+    const p = capitalisation({ years: 10 });
+    pres(p.points[1].total, 12000, 'un an');
+    pres(p.points[10].total, 120000, 'dix ans');
+    eq(projectionSettings().monthly, 1000, 'le versement est bien celui qu’on a réglé');
+  });
+
+  test('capital, versement et rendement suivent la formule fermée', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 10000 }])],
+           meta: { projScenario: null, projRate: 6, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 500, projVersementVers: 'marche' } });
+    const p = capitalisation({ years: 10 });
+    for (const an of [1, 5, 10]) {
+      pres(p.points[an].total, vfFormule(10000, 500, 6, an * 12),
+        `année ${an} : le moteur et l’annuité ordinaire disent la même chose`);
+    }
+  });
+
+  test('le versement arrive en fin de mois, et le premier ne rapporte rien', () => {
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           meta: { projScenario: null, projRate: 12, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 100, projVersementVers: 'marche' } });
+    const un = moteurProjection(Object.assign(configProjection({ years: 1 }), { mois: 1 }));
+    pres(un.final.total, 100, 'un mois, un versement, aucun rendement dessus');
+  });
+
+  /* --- 3. les poches ----------------------------------------------------- */
+
+  test('chaque euro est dans une poche et une seule', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 10000 },
+                          { classe: 'obligations', valeur: 5000 },
+                          { classe: 'crypto', valeur: 3000 },
+                          { classe: 'nonCote', valeur: 4000 },
+                          { classe: 'garanti', valeur: 6000 },
+                          { classe: 'garanti', valeur: 8000, projet: true }],
+                         [{ montant: 2000, affectation: 'courant' },
+                          { montant: 1000, affectation: 'investir' }]),
+                     BIEN(300000)],
+           dettes: [{ id: 'd1', libelle: 'Prêt', montant: 100000 }] });
+    const q = pochesProjection();
+    pres(q.marche, 15000, 'actions et obligations');
+    pres(q.autres, 7000, 'crypto et non coté');
+    pres(q.garanti, 6000, 'le garanti, sa réserve retirée');
+    pres(q.projet, 8000, 'et la réserve, à part');
+    pres(q.liquidites, 3000, 'le cash, courant et à investir');
+    pres(q.plat, 200000, 'le bien moins la dette');
+    pres(q.placees + q.plat, patrimoine().net, 'la somme fait le patrimoine net');
+  });
+
+  test('l’argent réservé à un projet ne capitalise pas, et ne disparaît pas', () => {
+    etat({ comptes: [CTO([{ classe: 'garanti', valeur: 15000, projet: true }],
+                         [{ montant: 5000, affectation: 'investir' }])],
+           meta: { projScenario: 'dynamique' } });
+    const q = pochesProjection();
+    pres(q.projet, 15000, 'la réserve est nommée');
+    pres(q.liquidites, 5000, 'et le cash à investir reste du cash');
+    const p = capitalisation({ years: 10 });
+    pres(p.points[0].total, 20000, 'les vingt mille sont là au départ');
+    pres(p.points[10].total, 20000,
+      'et dix ans de scénario dynamique n’en font pas bouger un centime');
+  });
+
+  test('l’immobilier physique ne reçoit aucun rendement inventé', () => {
+    etat({ comptes: [BIEN(300000)], meta: { projScenario: null, projRate: 10,
+      projRateAutres: 0, projRateGaranti: 0 } });
+    const p = capitalisation({ years: 20 });
+    pres(p.points[20].total, 300000, 'vingt ans plus tard, le mur vaut toujours 300 000 €');
+  });
+
+  test('une SCPI suit la poche plate, comme sa classe l’exige', () => {
+    /* Elle porte la classe `immobilier` : elle est donc rangee avec les murs
+       dans TOUTES les lectures — Allocation l'ecarte du perimetre financier, la
+       projection la porte a plat. La frontiere qui la separe d'un logement est
+       ailleurs : `estBienEnDirect`, qui decide de l'usage et des credits. */
+    etat({ comptes: [SCPI(100000)], meta: { projScenario: 'dynamique' } });
+    eq(estBienEnDirect(compteById('c_scpi')), false, 'une SCPI n’est pas détenue en direct');
+    const q = pochesProjection();
+    pres(q.plat, 100000, 'sa valeur est portée à plat');
+    pres(q.marche, 0, 'et ne reçoit pas le taux du marché');
+    pres(capitalisation({ years: 20 }).points[20].total, 100000, 'vingt ans après, inchangée');
+  });
+
+  /* --- 4. les dettes ----------------------------------------------------- */
+
+  test('un prêt à 0 % déclaré s’amortit, et s’arrête à zéro', () => {
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 12000, taux: 0, mensualite: 1000 }] });
+    pres(patrimoine().net, -12000, 'on part de moins douze mille');
+    const c = configProjection({ years: 3 });
+    const un = moteurProjection(Object.assign({}, c, { mois: 1 }));
+    pres(un.final.total, -11000, 'après un mois');
+    const douze = moteurProjection(Object.assign({}, c, { mois: 12 }));
+    pres(douze.final.total, 0, 'après douze mois, la dette est éteinte');
+    const trente = moteurProjection(Object.assign({}, c, { mois: 36 }));
+    pres(trente.final.total, 0, 'et rien ne continue à « rembourser » après');
+    pres(trente.capitalRendu, 12000, 'le capital rendu vaut exactement la dette');
+  });
+
+  test('un taux absent n’est pas un taux de zéro', () => {
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 12000, mensualite: 1000 }] });
+    eq(tauxCreditDeclare(etabById('e').dettes[0]), null, 'le taux est inconnu');
+    eq(dettesAmortissables().length, 0, 'la dette n’est pas projetable');
+    const p = capitalisation({ years: 10 });
+    pres(p.points[10].total, -12000, 'elle reste donc constante : rien n’est inventé');
+  });
+
+  test('l’assurance ne rembourse pas de capital', () => {
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 100000, taux: 0,
+                      mensualite: 1000, initial: 100000, tauxAssurance: 1.2 }] });
+    const a = assuranceMensuelleCredit(etabById('e').dettes[0]);
+    pres(a, 100, '1,2 % du capital emprunté, au mois');
+    const d = dettesAmortissables()[0];
+    pres(d.mens, 900, 'la part qui rembourse vaut la mensualité moins l’assurance');
+    const c = configProjection({ years: 1 });
+    pres(moteurProjection(Object.assign({}, c, { mois: 1 })).capitalRendu, 900,
+      'et le premier mois rend neuf cents euros de capital, pas mille');
+  });
+
+  test('la dernière mensualité ne rembourse que ce qui reste', () => {
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 500, taux: 0, mensualite: 1000 }] });
+    const c = configProjection({ years: 1 });
+    const un = moteurProjection(Object.assign({}, c, { mois: 1 }));
+    pres(un.capitalRendu, 500, 'cinq cents, pas mille');
+    pres(un.final.total, 0, 'le patrimoine net remonte à zéro');
+    const douze = moteurProjection(Object.assign({}, c, { mois: 12 }));
+    pres(douze.final.total, 0, 'et n’est jamais positif du fait d’une dette éteinte');
+  });
+
+  test('la mensualité libérée ne devient pas un versement', () => {
+    /* Sinon la projection inventerait : « a la fin du pret, tu investiras
+       automatiquement toute ta mensualite ». Ce n'est pas une donnee declaree. */
+    etat({ comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 12000, taux: 0, mensualite: 1000 }] });
+    const p = capitalisation({ years: 10 });
+    pres(p.points[1].total, 0, 'la dette est éteinte au bout d’un an');
+    pres(p.points[10].total, 0, 'et neuf ans plus tard, rien n’a été investi à sa place');
+  });
+
+  test('plusieurs dettes s’additionnent, aucune n’en écrase une autre', () => {
+    etat({ comptes: [BIEN(300000), CTO([], [{ montant: 10000, affectation: 'courant' }])],
+           dettes: [
+             { id: 'd1', libelle: 'Prêt immobilier', montant: 100000, taux: 2,
+               mensualite: 1000, bienId: 'c_immo' },
+             { id: 'd2', libelle: 'Perso', montant: 10000, taux: 0, mensualite: 500 },
+             { id: 'd3', libelle: 'Sans taux', montant: 5000, mensualite: 200 }] });
+    pres(dettesTotal(), 115000, 'les trois dettes comptent');
+    pres(patrimoine().net, 195000, '310 000 − 115 000');
+    pres(capitalisation({ years: 10 }).points[0].total, 195000,
+      'et la projection part de là : un bienId ne retire aucune dette d’ici');
+    eq(dettesAmortissables().length, 2, 'deux sont projetables, celle sans taux ne l’est pas');
+  });
+
+  test('un bien financé monte par sa seule dette qui descend', () => {
+    etat({ comptes: [BIEN(300000), CTO([], [{ montant: 20000, affectation: 'courant' }])],
+           dettes: [{ id: 'd1', libelle: 'Prêt', montant: 200000, taux: 0, mensualite: 2000 }],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0 } });
+    const p = capitalisation({ years: 20 });
+    pres(p.points[0].total, 120000, 'au départ');
+    pres(p.points[10].total, 320000, 'dette éteinte au bout de cent mois : 300 000 + 20 000');
+    pres(p.points[20].total, 320000, 'et pas un euro de plus ensuite');
+  });
+
+  /* --- 5. l'inflation ---------------------------------------------------- */
+
+  test('l’inflation ne touche pas le nominal, et se retire une seule fois', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projInflation: 2 } });
+    const p = capitalisation({ years: 10 });
+    pres(p.points[1].total, 100000, 'le nominal ne bouge pas');
+    pres(p.points[1].real, 100000 / 1.02, 'et le réel se déflate d’une seule année');
+    pres(p.points[10].real, 100000 / Math.pow(1.02, 10), 'de dix, dix ans plus tard');
+  });
+
+  test('rendement et inflation se composent, ils ne se soustraient pas', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: null, projRate: 5, projRateAutres: 0, projRateGaranti: 0,
+                   projInflation: 2 } });
+    const p = capitalisation({ years: 10 });
+    pres(p.points[1].total, 105000, 'nominal');
+    pres(p.points[1].real, 105000 / 1.02, 'réel');
+    vrai(Math.abs(p.points[1].real - 103000) > 50,
+      'et non le nominal moins trois pour cent, qui serait une approximation');
+  });
+
+  test('l’inflation à zéro est une valeur, et ne fait pas basculer le scénario', () => {
+    etat({ meta: { projScenario: 'central', projInflation: 0 } });
+    eq(projectionSettings().inflation, 0, 'zéro se lit tel quel');
+    eq(projectionSettings().scenario, 'central', 'et le scénario reste central');
+    etat({ meta: { projScenario: 'central', projInflation: 3 } });
+    eq(projectionSettings().scenario, 'central',
+      'changer l’inflation ne quitte pas le scénario : elle n’en fait pas partie');
+    vrai(!POCHES_SCENARIO.includes('inflation'),
+      'et la table des scénarios ne la porte pas');
+  });
+
+  /* --- 6. les scenarios -------------------------------------------------- */
+
+  test('chaque scénario applique ses propres taux, lus dans la table', () => {
+    for (const [cle, , preset] of SCENARIOS_PROJECTION) {
+      etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+             meta: { projScenario: cle } });
+      const s = projectionSettings();
+      eq(s.scenario, cle, `« ${cle} » se relit comme lui-même`);
+      pres(s.rate, preset.marche, `le taux du marché de « ${cle} »`);
+      pres(s.rateGaranti, preset.garanti, `celui du garanti`);
+      pres(capitalisation({ years: 1 }).points[1].total,
+        100000 * (1 + preset.marche / 100),
+        `et un an de « ${cle} » donne son taux annoncé`);
+    }
+  });
+
+  test('le scénario ne s’accumule pas : aller et retour donnent la même série', () => {
+    const serie = () => capitalisation({ years: 10 }).points.map(p => round2(p.total)).join('|');
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: 'prudent' } });
+    const depart = serie();
+    for (const cle of ['central', 'dynamique', 'prudent']) {
+      Store.state.meta.projScenario = cle;
+      capitalisation({ years: 10 });
+    }
+    eq(serie(), depart, 'le même état et le même scénario reproduisent la même courbe');
+  });
+
+  /* --- 7. le versement, sa source et son mode ---------------------------- */
+
+  test('le versement automatique vient du budget, et de rien d’autre', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projMonthly: undefined },
+           budget: { income: [{ label: 'Salaire', amount: 4000 }],
+                     fixedCharges: [{ label: 'Loyer', amount: 1500, period: 'mois' }],
+                     expenses: [{ month: '2026-01', v: { Courses: 1500 }, note: '' }],
+                     monthlyTarget: 1500 } });
+    delete Store.state.meta.projMonthly;
+    eq(suggestedMonthly(), 1000, '4 000 − 1 500 − 1 500');
+    eq(projectionSettings().monthly, 1000, 'et la projection le reprend');
+    eq(projectionSettings().monthlyAuto, true, 'en mode automatique');
+  });
+
+  test('un historique patrimonial ne devient jamais un versement', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projMonthly: undefined } });
+    delete Store.state.meta.projMonthly;
+    Store.state.monthly = [{ date: '2026-01-31', comment: '', v: { c_ct: 100000 } },
+                           { date: '2026-02-28', comment: '', v: { c_ct: 105000 } },
+                           { date: '2026-03-31', comment: '', v: { c_ct: 110000 } }];
+    vrai(savingsReconciliation().realPerMonth > 0, 'le patrimoine monte vraiment');
+    eq(suggestedMonthly(), 0, 'et le versement proposé reste nul : le budget ne laisse rien');
+  });
+
+  test('zéro figé, zéro automatique et cinq cents sont trois états distincts', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])], meta: {} });
+    delete Store.state.meta.projMonthly;
+    eq(projectionSettings().monthlyAuto, true, 'clef absente : automatique');
+    Store.state.meta.projMonthly = 0;
+    eq(projectionSettings().monthlyAuto, false, 'zéro réglé : un choix');
+    eq(projectionSettings().monthly, 0, 'et il vaut zéro');
+    Store.state.meta.projMonthly = 500;
+    eq(projectionSettings().monthly, 500, 'cinq cents se lit tel quel');
+    eq(projectionSettings().monthlyAuto, false, 'et reste un choix');
+  });
+
+  test('le capital remboursé n’est jamais un versement', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 0 }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 120000, taux: 0, mensualite: 800 }],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: undefined },
+           budget: { income: [{ label: 'Salaire', amount: 2000 }],
+                     fixedCharges: [{ label: 'Prêt', amount: 800, period: 'mois' }],
+                     expenses: [{ month: '2026-01', v: { Courses: 700 }, note: '' }],
+                     monthlyTarget: 700 } });
+    delete Store.state.meta.projMonthly;
+    eq(suggestedMonthly(), 500, '2 000 − 800 − 700 : le capital remboursé n’y entre pas');
+    const c = configProjection({ years: 1 });
+    pres(c.monthly, 500, 'et le moteur reçoit cinq cents, pas mille trois cents');
+    const un = moteurProjection(Object.assign({}, c, { mois: 12 }));
+    pres(un.capitalRendu, 9600, 'le capital rendu vit à part, 800 × 12');
+    pres(un.final.total - c.marche - c.autres - c.garanti - c.liquidites - c.plat,
+      500 * 12 + 9600, 'les deux effets s’additionnent une fois chacun');
+  });
+
+  /* --- 8. la decomposition ----------------------------------------------- */
+
+  test('la hausse se décompose : versements plus désendettement', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           dettes: [{ id: 'd0', libelle: 'Prêt', montant: 60000, taux: 0, mensualite: 5000 / 12 }],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 1000, projVersementVers: 'marche' } });
+    const p = capitalisation({ years: 1 });
+    pres(p.points[1].total - p.points[0].total, 12000 + 5000,
+      'douze mille de versements et cinq mille de passif disparu');
+    vrai(Math.abs(p.points[1].total - p.points[0].total - 22000) > 100,
+      'et non les deux comptés deux fois');
+    pres(p.points[1].contributed + p.points[1].gains, p.points[1].total,
+      'versé plus gains font le total, à chaque point');
+  });
+
+  /* --- 9. l'horizon, la cible, la bande ---------------------------------- */
+
+  test('un horizon de N années donne 12N périodes, sans off-by-one', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: null, projRate: 10, projRateAutres: 0, projRateGaranti: 0 } });
+    for (const n of [1, 5, 10, 20]) {
+      const p = capitalisation({ years: n });
+      eq(p.points.length, n + 1, `${n} ans : ${n} points annuels plus le départ`);
+      pres(p.points[n].total, vfFormule(100000, 0, 10, 12 * n),
+        `${n} ans : exactement ${12 * n} mois de rendement`);
+    }
+  });
+
+  test('la bande encadre la courbe, et part du même point', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: 'central' } });
+    const s = projectionSettings();
+    const c = capitalisation({ years: 20 });
+    const bas = capitalisation({ years: 20, rate: num(s.rate) - 2 });
+    const haut = capitalisation({ years: 20, rate: num(s.rate) + 2 });
+    eq(bas.points.length, c.points.length, 'les trois séries ont la même longueur');
+    for (let i = 0; i < c.points.length; i++) {
+      vrai(bas.points[i].total <= c.points[i].total + 0.005
+        && c.points[i].total <= haut.points[i].total + 0.005,
+        `année ${i} : bas ≤ central ≤ haut`);
+    }
+    pres(bas.points[0].total, c.points[0].total, 'et le départ est le même');
+    pres(haut.points[0].total, c.points[0].total, 'des trois côtés');
+  });
+
+  test('l’année d’atteinte vient de la série, et une cible nulle n’en est pas une', () => {
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 1000, projVersementVers: 'marche', projTarget: 112000 } });
+    const p = capitalisation({ years: 10 });
+    vrai(p.targetReached, 'la cible est atteinte');
+    eq(p.targetReached.monthsFromNow, 12, 'au douzième mois, comme la série le montre');
+    pres(p.points[1].total, 112000, 'et le point de l’année vaut exactement la cible');
+    Store.state.meta.projTarget = 0;
+    eq(projectionSettings().target, 0, 'zéro veut dire « pas de cible »');
+    eq(capitalisation({ years: 10 }).targetReached, null, 'et rien ne se déclare atteint');
+  });
+
+  /* --- 10. robustesse ---------------------------------------------------- */
+
+  test('aucun NaN, aucun infini, dans les cas limites', () => {
+    const cas = [
+      ['tout à zéro', { comptes: [CTO([], [{ montant: 0, affectation: 'courant' }])] }],
+      ['sans aucun compte', {}],
+      ['net négatif', { comptes: [CTO([], [{ montant: 20000, affectation: 'courant' }])],
+        dettes: [{ id: 'd', libelle: 'Perso', montant: 30000, taux: 0, mensualite: 1000 }] }],
+      ['dette sans mensualité', { comptes: [CTO([{ classe: 'actions', valeur: 1000 }])],
+        dettes: [{ id: 'd', libelle: 'Perso', montant: 5000, taux: 3 }] }],
+    ];
+    for (const [nom, cfg] of cas) {
+      etat(cfg);
+      for (const an of [1, 20]) {
+        const p = capitalisation({ years: an });
+        for (const pt of p.points) {
+          for (const k of ['total', 'contributed', 'gains', 'real', 'plat', 'mois']) {
+            vrai(Number.isFinite(pt[k]), `${nom} · ${an} ans : « ${k} » doit être fini`);
+          }
+        }
+      }
+    }
+  });
+
+  test('un patrimoine net négatif reste négatif, et franchit zéro proprement', () => {
+    etat({ comptes: [CTO([], [{ montant: 20000, affectation: 'courant' }])],
+           dettes: [{ id: 'd', libelle: 'Perso', montant: 30000, taux: 0, mensualite: 1000 }],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 1000, projVersementVers: 'liquidites' } });
+    const p = capitalisation({ years: 5 });
+    pres(p.points[0].total, -10000, 'on part de moins dix mille, sans plancher');
+    const c = configProjection({ years: 5 });
+    /* Mille de versement et mille de capital rembourse par mois : le net monte
+       de deux mille par mois, donc zero se franchit au cinquieme. */
+    for (const [mois, attendu] of [[1, -8000], [5, 0], [12, 14000]]) {
+      pres(moteurProjection(Object.assign({}, c, { mois })).final.total, attendu,
+        `au mois ${mois}`);
+    }
+  });
+
+  /* --- 11. la composition ------------------------------------------------ */
+
+  test('« ce que tu verses » ne compte que ce qu’on verse', () => {
+    /* LE DEFAUT. Le montant valait `contributed - patrimoine net`, et
+       `contributed` porte la part plate, qui MONTE quand le credit s'amortit.
+       Sur un appartement finance, avec « 0 € / mois » ecrit deux lignes plus
+       bas, la carte annoncait donc « Ce que tu verses : 196 531 € ». */
+    etat({ comptes: [BIEN(300000), CTO([], [{ montant: 20000, affectation: 'courant' }])],
+           dettes: [{ id: 'd', libelle: 'Prêt', montant: 200000, taux: 2, mensualite: 1000 }],
+           meta: { projScenario: null, projRate: 0, projRateAutres: 0, projRateGaranti: 0,
+                   projMonthly: 0, projHorizon: 20 } });
+    const p = capitalisation({ years: 20 });
+    const d = p.points[20];
+    eq(projectionSettings().monthly, 0, 'aucun versement n’est réglé');
+    pres(d.mois * projectionSettings().monthly, 0, 'donc rien n’est versé');
+    vrai(d.capitalRendu > 190000, `et le crédit a remboursé ${Math.round(d.capitalRendu)} €`);
+    /* Les quatre parts de la carte, et leur somme exacte. */
+    const base = patrimoine().net - p.plat;
+    const parts = base + p.plat + d.mois * projectionSettings().monthly + d.capitalRendu + d.gains;
+    pres(parts, d.total, 'départ, versements, capital remboursé et rendement font le total');
+    const src = lireSource('assets/app.js');
+    vrai(/const verses = num\(dernier\.mois\) \* num\(s\.monthly\);/.test(src),
+      'le montant versé se compte en mois de versement');
+    vrai(/const rembourse = num\(dernier\.capitalRendu\);/.test(src),
+      'et le désendettement a sa propre part');
+    vrai(!/const verses = Math\.max\(0, dernier\.contributed - g\.total\);/.test(src),
+      'l’ancien calcul, qui mélangeait les deux, est parti');
+    vrai(/Ce que ton crédit rembourse/.test(src), 'et elle porte son nom');
+    vrai(I18N.en['Ce que ton crédit rembourse'], 'traduit');
+  });
+
+  test('chaque point porte la même forme, y compris le premier', () => {
+    /* Une serie dont le point zero n'a pas les champs de ses voisins est un
+       piege : une infobulle qui ventile la composition ne trouve rien a
+       l'annee zero, et rien ne le dit avant l'ecran. */
+    etat({ comptes: [CTO([{ classe: 'actions', valeur: 100000 }])] });
+    const p = capitalisation({ years: 5 });
+    const champs = Object.keys(p.points[5]).sort().join(',');
+    for (let i = 0; i < p.points.length; i++) {
+      eq(Object.keys(p.points[i]).sort().join(','), champs,
+        `le point ${i} porte les mêmes champs que les autres`);
+    }
+    eq(p.points[0].mois, 0, 'et le premier est à zéro mois');
+    pres(p.points[0].capitalRendu, 0, 'sans capital remboursé');
+    pres(p.points[0].poches.marche + p.points[0].poches.autres + p.points[0].poches.garanti
+       + p.points[0].poches.liquidites + p.points[0].poches.plat, p.points[0].total,
+      'ses poches font déjà son total');
+  });
+
+  test('l’aire empilée sait descendre sous zéro', () => {
+    /* Le cadre partait toujours de zero : une courbe negative se dessinait sous
+       lui, invisible, et l'axe annoncait « 0 € » au-dessus d'elle. */
+    const src = lireSource('assets/charts.js');
+    vrai(/function niceTicksSignes\(min, max, count = 4\)/.test(src),
+      'les graduations savent encadrer un intervalle signé');
+    vrai(/if \(min >= 0\) return niceTicks\(max, count\);/.test(src),
+      'et rendent exactement les anciennes quand rien n’est négatif');
+    vrai(/const minV = Math\.min\(0, \.\.\.totals,/.test(src),
+      'le bas du cadre vient de la série, bande comprise');
+    vrai(/const y = v => m\.t \+ ih - \(\(v - bas\) \/ etendue\) \* ih;/.test(src),
+      'et l’échelle part de ce bas');
+    /* L'empilement et l'animation suivent la meme echelle : trois formules
+       pour un seul cadre finiraient par ne plus empiler pareil. */
+    vrai(/function empiler\(valeur, topC, cles, basC = bas\)/.test(src),
+      'l’empilement reçoit le bas du cadre');
+    vrai(/const basC = num\(avant\.bas\) \+ \(bas - num\(avant\.bas\)\) \* e;/.test(src),
+      'et l’animation l’interpole comme le haut');
+    vrai(/^\s+bas,$/m.test(src), 'la mémoire du dessin précédent le garde');
+  });
+
+  /* --- 12. le fixture de reference --------------------------------------- */
+
+  test('le scénario complet se réconcilie à t0, 1, 5 et 10 ans', () => {
+    etat({ comptes: [
+             CTO([{ classe: 'actions', valeur: 50000 }],
+                 [{ montant: 10000, affectation: 'investir' }]),
+             BIEN(300000)],
+           dettes: [{ id: 'd1', libelle: 'Prêt', montant: 180000, taux: 2,
+                      mensualite: 1000, bienId: 'c_immo' }],
+           meta: { projScenario: 'central', projInflation: 2, projMonthly: 500,
+                   projVersementVers: 'marche', projHorizon: 10 } });
+    /* Le cash de projet vit sur une ligne, pas sur du cash : on le pose ici. */
+    Store.state.comptes[0].lignes.push({ id: 'lp', classe: 'garanti', libelle: 'Projet',
+      valeur: 10000, prixDeRevient: 10000, quantite: 1, dateAcquisition: '', projet: true });
+    refreshAccounts();
+
+    const q = pochesProjection();
+    pres(q.marche, 50000, 'les actifs de marché');
+    pres(q.liquidites, 10000, 'le cash');
+    pres(q.projet, 10000, 'la réserve de projet');
+    pres(q.plat, 120000, 'le bien moins sa dette');
+    pres(q.placees + q.plat, patrimoine().net, 'et la somme fait le net : 190 000');
+    pres(patrimoine().net, 190000, 'qui vaut bien 360 000 − 180 000 + 10 000');
+
+    const p = capitalisation({ years: 10 });
+    pres(p.points[0].total, 190000, 't0 = patrimoine net');
+    for (const an of [1, 5, 10]) {
+      const pt = p.points[an];
+      pres(pt.poches.marche + pt.poches.autres + pt.poches.garanti
+         + pt.poches.liquidites + pt.poches.plat, pt.total,
+        `année ${an} : la somme des poches fait le total`);
+      pres(pt.contributed + pt.gains, pt.total, `année ${an} : versé plus gains`);
+      pres(pt.real, pt.total / Math.pow(1.02, an), `année ${an} : le réel se déduit du nominal`);
+      pres(pt.poches.marche, vfFormule(50000, 500, 6, an * 12),
+        `année ${an} : la poche de marché suit la formule`);
+      /* La reserve de projet traverse la projection DANS la poche des
+         liquidites : `configProjection` les additionne, parce que toutes deux
+         sont portees a plat. Les dix mille de cash et les dix mille reserves y
+         sont donc ensemble, et aucun euro ne se perd. */
+      pres(pt.poches.liquidites, 20000,
+        `année ${an} : le cash et la réserve traversent à plat, ensemble`);
+      vrai(pt.plat >= 120000 && pt.plat <= 300000,
+        `année ${an} : la part plate monte avec le désendettement, sans dépasser le bien`);
+    }
+    pres(p.points[10].plat, 120000 + moteurProjection(configProjection({ years: 10 })).capitalRendu,
+      'et la part plate vaut le départ plus le capital rendu');
   });
 });

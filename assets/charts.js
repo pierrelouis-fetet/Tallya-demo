@@ -195,6 +195,31 @@ const Charts = (() => {
     return tip;
   }
 
+  /* Des graduations qui encadrent un intervalle SIGNE, zero tombant toujours
+     sur l'une d'elles.
+
+     `niceTicks` part de zero et monte : c'est tout ce qu'il faut tant qu'aucun
+     total n'est negatif. Un patrimoine net peut l'etre — un achat recent finance
+     a credit — et l'aire empilee se dessinait alors sous le cadre, invisible,
+     avec un axe qui commencait a zero au-dessus de la courbe.
+
+     Quand le minimum est positif ou nul, cette fonction rend exactement ce que
+     rendait l'autre : le dessin de tous les cas deja en place ne bouge pas d'un
+     pixel. */
+  function niceTicksSignes(min, max, count = 4) {
+    if (min >= 0) return niceTicks(max, count);
+    const etendue = Math.max(max, 0) - min;
+    const raw = etendue / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag;
+    const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+    const bas = Math.floor(min / step) * step;
+    const haut = Math.ceil(Math.max(max, 0) / step) * step;
+    const ticks = [];
+    for (let v = bas; v <= haut + step * 1e-9; v += step) ticks.push(v);
+    return ticks;
+  }
+
   function niceTicks(max, count = 4) {
     if (max <= 0) return [0];
     const raw = max / count;
@@ -256,11 +281,15 @@ const Charts = (() => {
       const totals = points.map(p => series.reduce((s, sr) => s + (p[sr.key] || 0), 0));
       const maxV = Math.max(...totals, guide ? guide.value : 0,
         bande ? Math.max(...points.map(p => p[bande.max] || 0)) : 0, 1);
-      const ticks = niceTicks(maxV);
+      const minV = Math.min(0, ...totals,
+        bande ? Math.min(...points.map(p => Number(p[bande.min]) || 0)) : 0);
+      const ticks = niceTicksSignes(minV, maxV);
       const top = ticks[ticks.length - 1];
+      const bas = ticks[0];
+      const etendue = top - bas || 1;
 
       const x = i => m.l + (points.length === 1 ? iw / 2 : i * iw / (points.length - 1));
-      const y = v => m.t + ih - (v / top) * ih;
+      const y = v => m.t + ih - ((v - bas) / etendue) * ih;
 
       /* --- la geometrie des bandes, en un seul endroit ---------------------
 
@@ -274,8 +303,9 @@ const Charts = (() => {
          `valeur(i, cle)` plutot que les points directement : c'est le seul
          point ou l'animation differe, elle interpole entre deux etats. `topC`
          de meme, l'echelle etant ce qui bouge le plus d'une vue a l'autre. */
-      function empiler(valeur, topC, cles) {
-        const yC = v => m.t + ih - (v / topC) * ih;
+      function empiler(valeur, topC, cles, basC = bas) {
+        const etendueC = topC - basC || 1;
+        const yC = v => m.t + ih - ((v - basC) / etendueC) * ih;
         let bas = points.map(() => 0);
         const bandes = [];
         for (const cle of cles) {
@@ -367,6 +397,7 @@ const Charts = (() => {
         cles: series.map(sr => sr.key),
         couleurs: Object.fromEntries(series.map(sr => [sr.key, sr.color])),
         top,
+        bas,
         dates: points.map(p => p.date || p.label).join('|'),
       });
 
@@ -410,8 +441,10 @@ const Charts = (() => {
         const poser = (frac) => {
           const e = 1 - Math.pow(1 - frac, 3);
           const topC = avant.top + (top - avant.top) * e;
+          const basC = num(avant.bas) + (bas - num(avant.bas)) * e;
+          const etendueC = topC - basC || 1;
           const g = empiler((i, cle) => valeurAvant(i, cle)
-            + (valeurApres(i, cle) - valeurAvant(i, cle)) * e, topC, cles);
+            + (valeurApres(i, cle) - valeurAvant(i, cle)) * e, topC, cles, basC);
           g.bandes.forEach(b => {
             const forme = trace.querySelector(`[data-bande="${b.cle}"]`);
             if (forme) forme.setAttribute('points', `${b.haut} ${b.bas}`);
@@ -423,7 +456,7 @@ const Charts = (() => {
           if (ligne) ligne.setAttribute('points', g.total);
           for (const rep of svgEl.querySelectorAll('[data-tick]')) {
             const v = Number(rep.dataset.tick);
-            const yv = m.t + ih - (v / topC) * ih;
+            const yv = m.t + ih - ((v - basC) / etendueC) * ih;
             if (rep.tagName === 'line') { rep.setAttribute('y1', yv); rep.setAttribute('y2', yv); }
             else rep.setAttribute('y', yv + 4);
           }

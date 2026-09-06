@@ -6354,8 +6354,17 @@ function moteurProjection(c) {
   const anneeDebut = aujourdhui.getFullYear();
   const moisDebut = aujourdhui.getMonth();
   const total0 = c.marche + num(c.autres) + c.garanti + c.liquidites + c.plat;
-  const points = [{ year: anneeDebut, label: String(anneeDebut),
-                    contributed: total0, gains: 0, total: total0, real: total0 }];
+  /* Le point de depart passe par le MEME constructeur que les autres.
+
+     Il etait ecrit a la main, et il portait donc quatre champs quand ses voisins
+     en portent treize : ni `mois`, ni `plat`, ni `poches`, ni le detail des gains
+     par poche. Une serie dont le premier point n'a pas la forme des suivants est
+     un piege pose pour le prochain lecteur — une infobulle qui ventile la
+     composition ne trouve rien a l'annee zero, et rien ne le dit avant l'ecran.
+
+     `pointDe(0)` rend exactement les memes nombres : aucun mois n'a tourne, le
+     capital rendu vaut zero, et les poches valent leur depart. */
+  const points = [pointDe(0)];
   let atteinte = c.target > 0 && total0 >= c.target
     ? { dejaAtteinte: true, monthsFromNow: 0, yearsFromNow: 0,
         year: anneeDebut, month: moisDebut + 1 }

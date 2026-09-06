@@ -217,6 +217,9 @@ const I18N = {
     "Après inflation": "After inflation",
     "Aucun rendement ne lui est appliqué : la projection le porte tel quel": "No return is applied to it: the projection carries it as is",
     "Aujourd’hui": "Today",
+    "Ce que ton crédit rembourse": "What your loan pays down",
+    "La part de tes mensualités qui efface du capital. Elle ne s’investit pas : elle fait monter ton patrimoine net en faisant baisser ta dette.":
+      'The share of your instalments that wipes out principal. It is not invested: it raises your net worth by lowering your debt.',
     "Pas assez d'historique": "Not enough history",
     "Auj.": "Now",
     "Base de calcul du rééquilibrage": "Rebalancing basis",
