@@ -2655,6 +2655,40 @@ function dayPerformance() {
   };
 }
 
+/* CE QUI A LE PLUS FAIT BOUGER LE PORTEFEUILLE AUJOURD'HUI.
+
+   La carte du jour deballait l'inventaire entier, et l'inventaire est deja en
+   bas de page sous « Lignes de titres ». Neuf titres relus deux fois a trois
+   cents pixels d'intervalle : les deux cartes repondent a deux questions, et
+   elles se lisaient comme un doublon. Celle-ci garde la sienne — qu'est-ce qui
+   a bouge, et de combien — et n'en montre que la reponse courte.
+
+   TRIE PAR L'EFFET EN EUROS, en valeur absolue, et non par la variation. Une
+   ligne a +1 % qui pese la moitie du portefeuille deplace plus d'argent qu'une
+   ligne a +10 % qui en pese trois pour cent : c'est le premier qu'on veut lire.
+   La valeur absolue parce que la question est « ce qui a bouge », pas « ce qui
+   a monte » — une chute de cent euros passe devant une hausse de vingt.
+
+   L'EFFET N'EST PAS RECALCULE : c'est `d.eur` de `posDayChange`, celui-la meme
+   que la colonne « Effet » affiche. Une seconde formule aurait fini par classer
+   dans un ordre que le tableau ne montre pas.
+
+   `horsSeance` ecarte : la ligne a une cloture de reference mais notre cours
+   date d'avant minuit, donc son ecart est nul par ignorance et non par
+   constat. La faire entrer ici la rangerait derniere avec « 0,00 % · 0 € », ce
+   qui est exactement le zero invente que cette carte refuse ailleurs. Elle
+   reste comptee dans l'en-tete, sous « sans cours du jour ».
+
+   Le tri se fait sur une COPIE : `filter` en rend une, et `dayPerformance()`
+   garde son propre ordre pour le tableau complet. */
+const MOUVEMENTS_JOUR = 3;
+function mouvementsDuJour(j = dayPerformance(), n = MOUVEMENTS_JOUR) {
+  return j.lignes
+    .filter(l => !l.horsSeance)
+    .sort((a, b) => Math.abs(num(b.eur)) - Math.abs(num(a.eur)))
+    .slice(0, n);
+}
+
 function holdingsOf(accountId) {
   return Store.state.positions.filter(p => p.account === accountId);
 }

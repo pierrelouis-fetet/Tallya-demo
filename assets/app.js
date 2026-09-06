@@ -2099,6 +2099,24 @@ function ligneListe({ action, index, titre, sous, valeur, second, classeSecond, 
    `suffixe` porte l'unite (« dev. »), qui fait partie de l'intitule et reste
    donc dans la zone cliquable. */
 let jourSort = null;
+/* Repliee par defaut, et sur tous les ecrans. Le doublon avec « Lignes de
+   titres » existe aussi sur grand ecran : y derouler neuf lignes parce qu'il y
+   a la place ne repond a aucune question.
+
+   Une variable de vue et rien d'autre : l'etat ne va pas dans `Store`, il ne se
+   migre pas, et un rechargement retrouve la carte courte. C'est le meme choix
+   que `jourSort` et `evoNet` juste a cote. */
+let jourDeplie = false;
+
+function jourCompact(j) {
+  return mouvementsDuJour(j).map(l => `
+        <button type="button" class="jour-mouv" data-action="open-position" data-i="${l.index}"
+          title="${esc(l.name)} · ${trad('voir la fiche complète')}">
+          <span class="jm-nom">${esc(l.name)}</span>
+          <span class="jm-eur ${cls(l.eur)}">${fmtSigned(l.eur)}</span>
+          <span class="jm-pct ${cls(l.pct)}">${fmtSignedPct(l.pct, 2)}</span>
+        </button>`).join('');
+}
 
 function triJourTh(key, label, explication = '') {
   const on = jourSort && jourSort.key === key;
@@ -2287,13 +2305,15 @@ function viewPositions() {
       </div>`}
 
       <div class="jour-lignes">
+        ${jourDeplie ? '' : jourCompact(j)}
+        ${!jourDeplie ? '' : `
         <div class="jour-ligne entete">
           ${triJourTh('nom', 'Ligne')}
           ${triJourTh('poids', 'Poids', 'Part de cette ligne dans l’ensemble de ton portefeuille Marchés, cash à investir inclus. Elle dit laquelle compte vraiment quand elle bouge : 1 % sur une ligne qui pèse la moitié du portefeuille déplace plus d’argent que 10 % sur une ligne à 3 %.')}
           ${triJourTh('pct', 'Var.', 'La variation du titre depuis la clôture de la veille, dans sa propre devise : le mouvement affiché est celui du titre, pas celui du change. Les deux cours qui la produisent sont écrits sous le nom de la ligne, clôture de la veille puis cours du jour. Une ligne achetée aujourd’hui se compare à ton prix d’achat, et le dit sous son nom : tu ne la détenais pas hier soir.')}
           ${triJourTh('eur', 'Effet', 'Ce que cette variation pèse sur ton patrimoine, convertie au taux du jour. C’est la colonne qui dit combien tu as gagné ou perdu, là où la variation ne dit qu’un pourcentage.')}
-        </div>
-        ${trierJour(j.lignes).map(l => `
+        </div>`}
+        ${(jourDeplie ? trierJour(j.lignes) : []).map(l => `
           <div class="jour-ligne">
             <span class="jl-nom"><button type="button" class="mois-lien"
               data-action="open-position" data-i="${l.index}"
@@ -2330,6 +2350,12 @@ function viewPositions() {
                  : trad('pas coté aujourd’hui')}</span>` : ''}</span>
           </div>`).join('')}
       </div>
+      ${!j.lignes.length ? '' : `
+      <button type="button" class="jour-plus" data-action="jour-detail"
+              aria-expanded="${jourDeplie ? 'true' : 'false'}">${jourDeplie
+        ? trad('Réduire')
+        : (j.lignes.length > 1 ? trad('Voir les {n} lignes') : trad('Voir la ligne'))
+            .replace('{n}', j.lignes.length)}</button>`}
     </div>`;
   })()}
 
@@ -7049,6 +7075,10 @@ const ACTIONS = {
     const v = sel?.value ?? sel?.dataset?.year;
     if (v == null || v === posCompte) return;
     posCompte = v; render();
+  },
+  'jour-detail'() {
+    jourDeplie = !jourDeplie;
+    render();
   },
   'sort-jour'(btn) {
     const key = btn.dataset.key;

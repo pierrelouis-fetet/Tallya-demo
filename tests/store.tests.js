@@ -18708,6 +18708,279 @@ suite('Le deux-points se traduit comme le reste', () => {
    Ces tests additionnent : ils ne lisent presque aucune source. Un perimetre se
    prouve par des totaux qui se recomposent, pas par une expression rationnelle
    sur un filtre. */
+/* --- « Aujourd'hui » n'est plus un second inventaire ---------------------
+
+   LE DEFAUT ETAIT VISUEL, et il n'en etait pas moins reel. La carte du jour
+   deroulait chaque ligne du portefeuille — nom, poids, variation, effet — et
+   trois cents pixels plus bas, « Lignes de titres » redonnait les memes neuf
+   titres avec leur valeur et leur performance depuis l'achat. Les deux cartes
+   repondent a deux questions differentes, et sur un telephone elles se lisaient
+   comme un doublon : on relisait neuf noms pour retrouver le seul qui avait
+   bouge.
+
+   Le partage est desormais net. « Aujourd'hui » dit ce qui a bouge et ce que
+   cela a change ; « Lignes de titres » dit ce qu'on possede et ce que cela vaut.
+   Aucune metrique de marche n'a bouge : ces controles verifient un CHOIX et un
+   ORDRE, jamais un calcul. */
+suite('Aujourd’hui montre ce qui a bougé, pas l’inventaire', () => {
+
+  /* Quantite 100 et change 1 : l'effet en euros vaut cent fois l'ecart de prix,
+     donc chaque cas se lit de tete. C'est le meme montage que les suites du
+     jour deja en place. */
+  const secondes = (iso, heure = '14:00:00') =>
+    Math.floor(new Date(iso + 'T' + heure).getTime() / 1000);
+  const veille = iso => {
+    const d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const poser = (jour, lignes) => Fixture.poser(e => {
+    e.positions = lignes.map((l, i) => ({
+      id: `p_${i}`, name: l.nom || `Ligne ${i}`, isin: '', symbol: `SYM${i}`,
+      currency: 'EUR', qty: 100, buyPrice: 5, price: l.prix, fx: 1, fxBuy: 1,
+      account: 'c_pea', manual: false, assetClass: 'actions', role: 'core',
+      prevClose: l.veille,
+      /* Sans heure, la ligne a cote aujourd'hui ; avec l'heure de la veille,
+         elle se tait. C'est la seule difference entre un mouvement et une ligne
+         « sans cours du jour ». */
+      quoteTime: l.hier ? secondes(veille(jour), '22:00:00') : secondes(jour, '11:00:00'),
+    }));
+  });
+  const noms = xs => xs.map(l => l.name).join(',');
+
+  /* --- 1. le choix des mouvements --------------------------------------- */
+
+  test('neuf lignes, un seul mouvement : un seul mouvement montré', () => {
+    /* Le cas de la capture, exactement. Huit lignes n'ont pas coté depuis
+       minuit et occupaient chacune une rangée pour répéter « cours du 4 sept. à
+       22:00 ». Elles restent comptées en tête de carte et rendues au dépliage. */
+    auJour('2026-08-06', () => {
+      poser('2026-08-06', [{ nom: 'Solana USD', prix: 10.06, veille: 10 }].concat(
+        Array.from({ length: 8 }, (_, i) => ({ nom: `Fige ${i}`, prix: 20, veille: 19, hier: true }))));
+      const j = dayPerformance();
+      eq(j.lignes.length, 9, 'les neuf lignes ont une clôture de référence');
+      eq(j.horsSeance, 8, 'huit se taisent');
+      const m = mouvementsDuJour(j);
+      eq(m.length, 1, 'un seul mouvement exploitable');
+      eq(m[0].name, 'Solana USD', 'et c’est celui qui a coté');
+      pres(m[0].eur, 6, 'son effet, six euros');
+      vrai(!m.some(l => l.horsSeance),
+        'aucune ligne sans cours du jour ne se glisse parmi les mouvements');
+    });
+  });
+
+  test('cinq mouvements : les trois plus gros, et pas les cinq', () => {
+    auJour('2026-08-06', () => {
+      poser('2026-08-06', [
+        { nom: 'A', prix: 1.10, veille: 1 },        // +10 €
+        { nom: 'B', prix: 25.50, veille: 25 },      // +50 €
+        { nom: 'C', prix: 99, veille: 100 },        // -100 €
+        { nom: 'D', prix: 1.20, veille: 1 },        // +20 €
+        { nom: 'E', prix: 5.05, veille: 5 },        // +5 €
+      ].concat(Array.from({ length: 4 }, (_, i) =>
+        ({ nom: `Fige ${i}`, prix: 20, veille: 19, hier: true }))));
+      const j = dayPerformance();
+      eq(j.lignes.length, 9, 'neuf lignes en tout');
+      eq(mouvementsDuJour(j).length, 3, 'trois mouvements montrés, pas cinq');
+    });
+  });
+
+  test('trois lignes, trois mouvements : les trois', () => {
+    auJour('2026-08-06', () => {
+      poser('2026-08-06', [{ nom: 'A', prix: 1.10, veille: 1 },
+                           { nom: 'B', prix: 25.50, veille: 25 },
+                           { nom: 'C', prix: 99, veille: 100 }]);
+      eq(mouvementsDuJour().length, 3, 'aucune n’est écartée');
+    });
+  });
+
+  test('aucun cours du jour : aucun faux mouvement à zéro', () => {
+    /* La convention de la maison, appliquée ici aussi : un titre qui n'a pas
+       coté ne fait pas 0 %, il ne dit rien. Le ranger dernier avec
+       « 0,00 % · 0 € » serait exactement le zéro inventé que cette carte refuse
+       déjà dans ses colonnes. */
+    auJour('2026-08-06', () => {
+      poser('2026-08-06', Array.from({ length: 9 }, (_, i) =>
+        ({ nom: `Fige ${i}`, prix: 20, veille: 19, hier: true })));
+      const j = dayPerformance();
+      eq(j.toutHorsSeance, true, 'rien n’a coté depuis minuit');
+      eq(mouvementsDuJour(j).length, 0, 'donc aucun mouvement n’est montré');
+      /* Et la carte a de quoi le dire : le total se déclare au lieu de
+         s’afficher, ce qui existait déjà et ne change pas. */
+      eq(j.eur, 0, 'le total est nul, ce qui est juste');
+    });
+  });
+
+  /* --- 2. l'ordre ------------------------------------------------------- */
+
+  test('le classement suit l’effet en euros, pas la variation', () => {
+    /* « Qu'est-ce qui a le plus fait bouger mon portefeuille aujourd'hui ? » Une
+       ligne à +1 % qui pèse la moitié du portefeuille déplace plus d'argent
+       qu'une ligne à +10 % qui en pèse trois pour cent. Trier par pourcentage
+       aurait donné D, A, B — l'ordre des petites lignes agitées. */
+    auJour('2026-08-06', () => {
+      poser('2026-08-06', [
+        { nom: 'A', prix: 1.10, veille: 1 },        // +10 %  → +10 €
+        { nom: 'B', prix: 25.50, veille: 25 },      //  +2 %  → +50 €
+        { nom: 'C', prix: 99, veille: 100 },        //  -1 %  → -100 €
+        { nom: 'D', prix: 1.20, veille: 1 },        // +20 %  → +20 €
+      ]);
+      const j = dayPerformance();
+      /* Les effets d'abord, sinon le reste du contrôle ne prouve rien. */
+      const par = Object.fromEntries(j.lignes.map(l => [l.name, Math.round(l.eur)]));
+      eq(`${par.A},${par.B},${par.C},${par.D}`, '10,50,-100,20', 'les quatre effets');
+      eq(noms(mouvementsDuJour(j)), 'C,B,D',
+        'la plus grosse perte passe devant, et la plus forte hausse ferme la marche');
+      /* La valeur absolue, et non le signe : sans elle, C partirait en dernier. */
+      vrai(noms(mouvementsDuJour(j)) !== 'D,A,B', 'ce n’est pas le classement par pourcentage');
+      vrai(noms(mouvementsDuJour(j)) !== 'B,D,A', 'ni celui de l’effet signé');
+    });
+  });
+
+  test('l’effet montré est celui de la colonne, pas un second calcul', () => {
+    const src = lireSource('assets/store.js');
+    const fn = src.slice(src.indexOf('function mouvementsDuJour('),
+                         src.indexOf('function holdingsOf('));
+    vrai(/Math\.abs\(num\(b\.eur\)\) - Math\.abs\(num\(a\.eur\)\)/.test(fn),
+      'le tri lit `eur`, celui que dayPerformance rend déjà');
+    vrai(!/prevClose|posValue|posPerf/.test(fn),
+      'et ne recalcule aucune variation');
+    vrai(/\.filter\(l => !l\.horsSeance\)/.test(fn),
+      'les lignes sans cours du jour sont écartées du choix');
+  });
+
+  /* --- 3. ce que la carte rend ------------------------------------------ */
+
+  test('la carte est repliée par défaut, et sur tous les écrans', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/\nlet jourDeplie = false;/.test(src), 'l’état part replié');
+    /* Aucune donnée persistée : c'est un état de vue, pas un réglage. */
+    vrai(!/jourDeplie/.test(lireSource('assets/store.js')),
+      'et il ne descend pas dans le modèle');
+    for (const interdit of ['marketsTodayExpanded', 'todayCollapsed', 'showAllDaily'])
+      vrai(!new RegExp(interdit).test(src), `${interdit} n’existe pas`);
+    /* Aucune règle de largeur ne le déplie : le doublon existe aussi sur grand
+       écran, et y dérouler neuf lignes parce qu'il y a la place ne répond à
+       aucune question. */
+    vrai(!/min-width[^;]*jourDeplie|jourDeplie[^;]*innerWidth/.test(src),
+      'aucun seuil de largeur ne décide à sa place');
+  });
+
+  test('le tableau complet ne se rend qu’une fois déplié', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    vrai(/\$\{jourDeplie \? '' : jourCompact\(j\)\}/.test(vue),
+      'la version compacte prend la place du tableau');
+    vrai(/\$\{\(jourDeplie \? trierJour\(j\.lignes\) : \[\]\)\.map/.test(vue),
+      'et les rangées détaillées ne sortent que dépliées');
+    vrai(/\$\{!jourDeplie \? '' : `/.test(vue), 'l’en-tête des colonnes suit');
+  });
+
+  test('le bouton porte le compte des lignes qu’il ouvre', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    vrai(/data-action="jour-detail"/.test(vue), 'un vrai bouton, et une action');
+    vrai(/<button type="button" class="jour-plus"/.test(vue), 'un `button`, pas un lien');
+    vrai(/aria-expanded="\$\{jourDeplie \? 'true' : 'false'\}"/.test(vue),
+      'et il annonce son état');
+    vrai(/trad\('Voir les \{n\} lignes'\)/.test(vue) && /trad\('Voir la ligne'\)/.test(vue),
+      'le nombre est dynamique, et le singulier existe');
+    vrai(/trad\('Réduire'\)/.test(vue), 'et il sait se refermer');
+    vrai(I18N.en['Voir les {n} lignes'] && I18N.en['Voir la ligne'] && I18N.en['Réduire'],
+      'les trois sont traduites');
+    /* Il déplie la carte, il ne navigue pas : renvoyer vers « Lignes de titres »
+       aurait ouvert l'inventaire, qui ne dit rien du jour. */
+    const action = src.slice(src.indexOf("'jour-detail'()"), src.indexOf("'sort-jour'("));
+    vrai(/jourDeplie = !jourDeplie;/.test(action), 'il bascule');
+    vrai(/render\(\);/.test(action) && !/setView|location|scroll/.test(action),
+      'et redessine la même carte');
+  });
+
+  test('chaque ligne montrée ouvre la même fiche', () => {
+    /* Compacte ou détaillée, c'est la même action et le même index : deux
+       chemins vers deux fiches se seraient contredits le jour où l'une des deux
+       change. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function jourCompact('),
+                         src.indexOf('function triJourTh('));
+    vrai(/data-action="open-position" data-i="\$\{l\.index\}"/.test(fn),
+      'la ligne compacte ouvre la fiche de sa position');
+    vrai(/<button type="button" class="jour-mouv"/.test(fn),
+      'et c’est un bouton, donc utilisable au clavier');
+    /* Le même couple action/index que la rangée détaillée, inchangée. */
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    vrai(/data-action="open-position" data-i="\$\{l\.index\}"/.test(vue),
+      'la rangée détaillée n’a pas changé de chemin');
+  });
+
+  test('la version compacte montre l’effet avant la variation, sans le poids', () => {
+    /* « Meta +0,5 % » ne dit pas ce que la journée a changé ; « Meta +11 € » le
+       dit. Le poids explique pourquoi une ligne pèse, ce qui est une question
+       secondaire : il reste dans le détail, sous son intitulé. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('function jourCompact('),
+                         src.indexOf('function triJourTh('));
+    vrai(fn.indexOf('jm-eur') < fn.indexOf('jm-pct'), 'l’effet vient avant le pourcentage');
+    vrai(!/poids|jm-poids/.test(fn), 'et le poids n’est pas dans la version compacte');
+    const css = lireSource('assets/styles.css');
+    const bloc = css.slice(css.indexOf('.jour-mouv {'), css.indexOf('.jour-plus {'));
+    vrai(/grid-template-columns: minmax\(0, 1fr\) auto;/.test(bloc),
+      'deux colonnes, pas quatre : quatre redonneraient le tableau replié');
+    vrai(/text-overflow: ellipsis/.test(bloc), 'un nom long se coupe proprement');
+    vrai(/font-size: 15px/.test(bloc.slice(bloc.indexOf('.jm-eur'))),
+      'et l’effet est le plus gros des deux chiffres');
+  });
+
+  test('« sans cours du jour » ne se dit qu’une fois', () => {
+    /* Le compte vit en tête de carte, à côté du total. Le répéter en pied
+       recréerait la redondance qu'on vient de retirer. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    const rendus = vue.split(`trad('sans cours du jour')`).length - 1;
+    eq(rendus, 1, 'une seule occurrence rendue dans la vue Marchés');
+    vrai(vue.indexOf(`trad('sans cours du jour')`) < vue.indexOf('class="jour-plus"'),
+      'et c’est en tête, pas sous le bouton');
+  });
+
+  /* --- 4. l'inventaire reste l'inventaire ------------------------------- */
+
+  test('« Lignes de titres » ne reçoit aucune variation du jour', () => {
+    /* Une troisième métrique par ligne — « +5 % depuis achat · +0,4 %
+       aujourd'hui » — recréerait la surcharge qu'on retire. La variation du jour
+       vit dans « Aujourd'hui », et nulle part ailleurs. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    const titres = vue.slice(vue.indexOf('data-anchor="titres"'));
+    for (const marque of ['posDayChange', 'dayPerformance', 'prevClose', 'horsSeance'])
+      vrai(!new RegExp(marque).test(titres),
+        `le tableau des lignes ne parle pas de ${marque}`);
+    /* Et il garde ce qu'il portait : filtres, actions, valeur, performance. */
+    for (const garde of ['sortableTh', 'open-position', 'Vendre'])
+      vrai(new RegExp(garde).test(titres), `${garde} est toujours là`);
+  });
+
+  test('aucune métrique de marché n’a changé', () => {
+    /* Cette passe est de rendu. Les fonctions qui produisent les chiffres du
+       jour sont lues, jamais réécrites : ce contrôle épingle leur forme. */
+    const src = lireSource('assets/store.js');
+    const fn = src.slice(src.indexOf('function posDayChange('),
+                         src.indexOf('function marketStatus('));
+    vrai(/pct: \(num\(p\.price\) \/ prev - 1\) \* 100,/.test(fn), 'la variation du jour');
+    vrai(/eur: \(num\(p\.price\) - prev\) \* q \* fx,/.test(fn), 'l’effet, change compris');
+    vrai(/if \(!coteAujourdhui\(p\)\) return \{ pct: 0, eur: 0, prev, price: num\(p\.price\), horsSeance: true \};/
+      .test(fn), 'et la borne hors séance');
+    Fixture.poser();
+    const j = dayPerformance();
+    pres(j.eur, j.lignes.reduce((s, l) => s + l.eur, 0),
+      'le total reste la somme de ses parts');
+  });
+});
+
 suite('Un mur n’est pas de la pierre papier', () => {
 
   const ligne = (id, classe, valeur, extra) => ({ id, classe, libelle: classe,
