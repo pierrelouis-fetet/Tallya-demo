@@ -2265,6 +2265,45 @@ function viewPositions() {
   ${barreEtatCours()}
 
   ${(() => {
+    const st = stockTotals();
+    const parts = [
+      { label: 'Titres', value: st.invested, couleur: 'var(--series-2)', apercu: 'portefeuille' },
+      /* La teinte des liquidites, celle de « Liquidites » sur l'accueil et dans
+         Allocation : le cash a investir est du cash. Il portait `series-4`, la
+         teinte de l'immobilier, et un studio et une poche d'especes se
+         peignaient donc pareil d'un ecran a l'autre. */
+      { label: BASES.cashPlacer.nom, value: st.cashToInvest, couleur: 'var(--series-1)', apercu: 'cashInvestir' },
+    ].filter(x => Math.abs(num(x.value)) > 0.005)
+     .map(x => ({ ...x, pct: st.balance ? num(x.value) / st.balance * 100 : 0 }));
+    if (!parts.length) return '';
+    return `
+  <div class="card repart">
+    <div class="card-head"><h2>${trad('Portefeuille')}</h2></div>
+    ${parts.map(x => `
+      <button type="button" class="repart-ligne" data-action="apercu"
+              data-apercu="${esc(x.apercu)}"
+              title="${esc(x.aide || `${trad('Voir le détail de')} ${trad(x.label)}`)}">
+        <span class="repart-haut">
+          <span class="dot" style="background:${x.couleur}"></span>
+          <span class="repart-nom">${esc(trad(x.label))}</span>
+          <b>${fmtEUR(x.value)}</b>
+          <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
+        </span>
+        <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
+      </button>`).join('')}
+    <dl class="kv repart-pied">
+      <dt>${trad('Prix de revient des titres')}</dt>
+        <dd><button type="button" class="mois-lien" data-action="apercu" data-apercu="investiTitres"
+                    title="${trad('Voir le prix de revient ligne par ligne')}">${fmtEUR(pnl.invested)}</button></dd>
+      <dt><b>${trad('Plus-value latente')}</b></dt>
+        <dd><button type="button" class="mois-lien ${cls(pnl.pnl)}" data-action="apercu" data-apercu="pnlLatent"
+                    title="${trad('Voir le détail par ligne')}"><b>${fmtSigned(pnl.pnl)}</b>
+              ${pnl.pct == null ? '' : `<span class="muted">·</span> ${fmtSignedPct(pnl.pct)}`}</button></dd>
+    </dl>
+  </div>`;
+  })()}
+
+  ${(() => {
     const j = dayPerformance();
     if (!j.lignes.length) {
       return `<div class="card">
@@ -2359,48 +2398,6 @@ function viewPositions() {
     </div>`;
   })()}
 
-  ${(() => {
-    const st = stockTotals();
-    const parts = [
-      { label: 'Titres', value: st.invested, couleur: 'var(--series-2)', apercu: 'portefeuille' },
-      /* La teinte des liquidites, celle de « Liquidites » sur l'accueil et dans
-         Allocation : le cash a investir est du cash. Il portait `series-4`, la
-         teinte de l'immobilier, et un studio et une poche d'especes se
-         peignaient donc pareil d'un ecran a l'autre. */
-      { label: BASES.cashPlacer.nom, value: st.cashToInvest, couleur: 'var(--series-1)', apercu: 'cashInvestir' },
-    ].filter(x => Math.abs(num(x.value)) > 0.005)
-     .map(x => ({ ...x, pct: st.balance ? num(x.value) / st.balance * 100 : 0 }));
-    if (!parts.length) return '';
-    return `
-  <div class="card repart">
-    ${parts.map(x => `
-      <button type="button" class="repart-ligne" data-action="apercu"
-              data-apercu="${esc(x.apercu)}"
-              title="${esc(x.aide || `${trad('Voir le détail de')} ${trad(x.label)}`)}">
-        <span class="repart-haut">
-          <span class="dot" style="background:${x.couleur}"></span>
-          <span class="repart-nom">${esc(trad(x.label))}</span>
-          <b>${fmtEUR(x.value)}</b>
-          <span class="repart-pct">${fmtPct(x.pct, 1)}</span>
-        </span>
-        <span class="repart-barre"><i style="width:${x.pct.toFixed(1)}%;background:${x.couleur}"></i></span>
-      </button>`).join('')}
-    <dl class="kv repart-pied">
-      <dt>${trad('Prix de revient des titres')}</dt>
-        <dd><button type="button" class="mois-lien" data-action="apercu" data-apercu="investiTitres"
-                    title="${trad('Voir le prix de revient ligne par ligne')}">${fmtEUR(pnl.invested)}</button></dd>
-      <dt><b>${trad('Plus-value latente')}</b></dt>
-        <dd><button type="button" class="mois-lien ${cls(pnl.pnl)}" data-action="apercu" data-apercu="pnlLatent"
-                    title="${trad('Voir le détail par ligne')}"><b>${fmtSigned(pnl.pnl)}</b>
-              ${pnl.pct == null ? '' : `<span class="muted">·</span> ${fmtSignedPct(pnl.pct)}`}</button></dd>
-    </dl>
-  </div>`;
-  })()}
-
-  <div class="reperes-familles" id="reperesFamilles" role="tablist"
-       aria-label="${trad('Familles de repères')}" hidden></div>
-  <div class="reperes" id="reperes" aria-label="${trad('Marchés')}" hidden></div>
-
   <div class="card" data-anchor="titres">
     <div class="card-head">
       <h2>${trad('Lignes de titres')}</h2>
@@ -2473,6 +2470,9 @@ function viewPositions() {
       </table>
     </div>
   </div>
+  <div class="reperes-familles" id="reperesFamilles" role="tablist"
+       aria-label="${trad('Familles de repères')}" hidden></div>
+  <div class="reperes" id="reperes" aria-label="${trad('Marchés')}" hidden></div>
 
   ${symbolSearchCard()}
 

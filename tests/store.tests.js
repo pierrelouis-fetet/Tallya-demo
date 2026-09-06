@@ -13296,19 +13296,77 @@ suite('Une page ne liste pas trois fois les mêmes positions', () => {
      qui a bougé aujourd'hui, et ce que je détiens. La plus-value se lit sur la
      page dont c'est le sujet. */
 
-  test('la carte du jour vient avant le reste', () => {
-    /* « Bonne idée ou pas, positionner la carte ajd en premier dans positions ?
-       C'est ça qui nous intéresse. » Oui : c'est la question qu'on se pose en
-       ouvrant la page. */
+  test('la page se lit du portefeuille vers le marché', () => {
+    /* L'ORDRE A ETE RETOURNE, ET C'EST VOULU. La carte du jour ouvrait la page :
+       « Bonne idée ou pas, positionner la carte ajd en premier dans positions ?
+       C'est ça qui nous intéresse. » La suite a montré la limite — « +127 € »
+       lu avant tout autre chiffre n'a pas de référentiel. On sait maintenant
+       combien on a avant d'apprendre de combien ça a bougé.
+
+       Cinq questions, dans l'ordre où on se les pose :
+         ce que j'ai        → la synthèse du portefeuille
+         ce qui a bougé     → la carte du jour
+         ce que je détiens  → les lignes de titres
+         ce que fait le     → les repères de marché, qui sont du contexte
+           marché             extérieur et ne s'intercalent plus
+         ce que j'ai vendu  → la recherche, puis le journal et le réalisé */
     const src = lireSource('assets/app.js');
-    const vue = src.match(/function viewPositions\(\)[\s\S]*?\n\}/);
-    vrai(vue, 'la vue Marchés doit être trouvable');
-    const jour = vue[0].indexOf('const j = dayPerformance();');
-    const repart = vue[0].indexOf('const st = stockTotals();');
-    const titres = vue[0].indexOf('data-anchor="titres"');
-    vrai(jour > 0 && repart > 0 && titres > 0, 'les trois cartes doivent exister');
-    vrai(jour < repart, 'la carte du jour vient avant la répartition');
-    vrai(repart < titres, 'et le tableau des lignes ferme la page');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    const ou = m => {
+      const i = vue.indexOf(m);
+      vrai(i > 0, `le bloc ${m} doit exister dans la vue Marchés`);
+      return i;
+    };
+    const ordre = [
+      ['état des cours', 'barreEtatCours()'],
+      ['Portefeuille', `trad('Portefeuille')`],
+      ['Aujourd’hui', 'const j = dayPerformance();'],
+      ['Lignes de titres', 'data-anchor="titres"'],
+      ['repères', 'id="reperesFamilles"'],
+      ['recherche', '\n  ${symbolSearchCard()}\n'],
+      ['journal des ventes', '\n  ${salesCard()}\n'],
+    ].map(([nom, m]) => [nom, ou(m)]);
+    for (let k = 1; k < ordre.length; k++) {
+      vrai(ordre[k][1] > ordre[k - 1][1],
+        `${ordre[k - 1][0]} vient avant ${ordre[k][0]} `
+        + `(${ordre[k - 1][1]} < ${ordre[k][1]})`);
+    }
+    /* Le ruban des repères reste d'un seul tenant : ses deux conteneurs se
+       suivent, et le montage les remplit par identifiant. */
+    vrai(ou('id="reperes"') - ou('id="reperesFamilles"') < 300,
+      'les deux conteneurs des repères restent voisins');
+    /* Un déplacement retire de l'ancien endroit. Chaque bloc, une fois. */
+    for (const m of ['class="card jour"', 'data-anchor="titres"', 'id="reperes"',
+                     'id="reperesFamilles"', `trad('Portefeuille')`,
+                     '\n  ${symbolSearchCard()}\n', '\n  ${salesCard()}\n'])
+      eq(vue.split(m).length - 1, 1, `${m} n’apparaît qu’une fois`);
+  });
+
+  test('la synthèse porte enfin son nom, et le même dans les deux langues', () => {
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewPositions('),
+                          src.indexOf('function mountPositions('));
+    /* Depuis le calcul des parts et non depuis le `div` : les apercus se
+       declarent dans le tableau `parts`, au-dessus du gabarit, et une tranche
+       qui commence au `div` ne les voit pas. */
+    const carte = vue.slice(vue.indexOf('const st = stockTotals();'),
+                            vue.indexOf('const j = dayPerformance();'));
+    vrai(/<div class="card-head"><h2>\$\{trad\('Portefeuille'\)\}<\/h2><\/div>/.test(carte),
+      'la carte de synthèse porte un titre');
+    eq(I18N.en['Portefeuille'], 'Portfolio', 'et il est traduit');
+    /* Le titre nomme, il ne décrit pas : la carte est déjà dense. */
+    vrai(!/Résumé du portefeuille|Vue d’ensemble des positions|Investissements actuels/.test(vue),
+      'et le titre reste un nom, pas une description');
+    /* Rien n'est ajouté à son contenu : les deux barres, le prix de revient et
+       la plus-value latente, et pas un indicateur de plus. */
+    vrai(/apercu: 'portefeuille'/.test(carte) && /apercu: 'cashInvestir'/.test(carte),
+      'les deux barres et leurs aperçus sont intacts');
+    vrai(/Prix de revient des titres/.test(carte) && /Plus-value latente/.test(carte),
+      'le pied de carte aussi');
+    /* Et elle ne s'affiche pas vide : sans part, elle ne se rend pas. */
+    vrai(/if \(!parts\.length\) return '';/.test(vue),
+      'une carte sans part ne se rend pas');
   });
 
 });

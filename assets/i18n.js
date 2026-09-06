@@ -1560,6 +1560,7 @@ const I18N = {
     "Compte-titres (CTO)": "Brokerage account (CTO)",
     "Assurance-vie": "Life insurance",
     "Plan d’épargne retraite (PER)": "Retirement savings plan (PER)",
+    "Portefeuille": "Portfolio",
     "Portefeuille de cryptomonnaies": "Cryptocurrency portfolio",
     "Prêt participatif": "Crowdlending",
     "Bien de valeur": "Valuable item",
