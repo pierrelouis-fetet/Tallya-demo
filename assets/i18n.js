@@ -192,7 +192,7 @@ const I18N = {
     'Dettes hors biens immobiliers directs': 'Debt outside directly owned property',
     "Un crédit explicitement rattaché à un logement détenu en direct est écarté avec lui. Toutes les autres dettes restent ici : une marge de courtier, un prêt personnel, un crédit dont le bien n’est pas renseigné.":
       'A loan explicitly linked to a directly owned home is set aside with it. Every other debt stays here: a broker margin, a personal loan, a loan whose asset is not filled in.',
-    'immobilier et biens de valeur écartés, avec leurs crédits': 'property and valuables set aside, with their loans',
+    'immobilier en direct et biens de valeur écartés, avec leurs crédits': 'directly owned property and valuables set aside, with their loans',
     'Il te reste': 'Left to run',
     'échéances': 'instalments',
     'Assurance restante': 'Insurance still to pay',
@@ -1329,7 +1329,7 @@ const I18N = {
     "Le délai vient de la classe de la ligne et du type de compte qui la porte, jamais d’une supposition sur ton projet. Tes murs et tes objets de valeur sont écartés de cette vue, et c’est ce qui fait disparaître le palier du logement que tu habites.": "The delay comes from the holding’s asset class and from the account that holds it, never from a guess about your plans. Your property and valuables are excluded from this view, which is what makes the tier for the home you live in disappear.",
     " :": ":",
     "immobilier et biens de valeur écartés": "property and valuables excluded",
-    "Les biens immobiliers détenus en direct et les biens de valeur sont écartés, et les crédits qui leur sont explicitement rattachés le sont avec eux. Les autres dettes, une marge ou un prêt personnel, se déduisent du patrimoine financier net, annoncé en tête dès qu’il en existe une. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Les répartitions ci-dessous portent toutes sur tes avoirs financiers : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.": "Directly owned property and valuables are excluded, and the loans explicitly linked to them are excluded with them. Other debts, a margin or a personal loan, are deducted from financial net worth, announced at the top as soon as one exists. Unlisted assets stay: you choose whether to put more in, whereas you do not sell three square metres of living room. The allocations below are all based on your financial assets: debt is not spread across your accounts or your asset classes.",
+    "Les biens immobiliers détenus en direct et les biens de valeur sont écartés, et les crédits qui leur sont explicitement rattachés le sont avec eux. La pierre papier reste : une SCPI, ou le support immobilier d’une assurance-vie, s’arbitre comme un fonds. C’est un placement, pas un mur. Les autres dettes, une marge ou un prêt personnel, se déduisent du patrimoine financier net, annoncé en tête dès qu’il en existe une. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Les répartitions ci-dessous portent toutes sur tes avoirs financiers : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.": "Directly owned property and valuables are excluded, and the loans explicitly linked to them are excluded with them. Property investments stay: an SCPI fund, or a real-estate holding inside an investment wrapper, is traded like a fund. It is an investment, not a wall. Other debts, a margin or a personal loan, are deducted from financial net worth, announced at the top as soon as one exists. Unlisted assets stay: you choose whether to put more in, whereas you do not sell three square metres of living room. The allocations below are all based on your financial assets: debt is not spread across your accounts or your asset classes.",
     "dont": "of which",
     "à investir": "to invest",
     "Tous les comptes": "All accounts",
@@ -1900,8 +1900,8 @@ const I18N = {
     "elle situe l’entrée dans ton historique": "it places the inflow in your history",
     "La somme de tes entrées et de tes sorties exceptionnelles sur l’année affichée. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution.":
       "The sum of your one-off inflows and outflows over the year shown. It adds to no wealth total: these amounts have already passed through your accounts, it is their origin this log keeps. The accumulation pace uses it to tell what you set aside from what fell from the sky, or left in one go. A big expense is noted here and not in the month's spending: there it would inflate your average all year, and with it the cost of living used for your financial runway and your emergency fund target.",
-    "de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux et le non coté sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.":
-      "of listed financial portfolio, to which Tallya applies the scenario's return. Crypto, precious metals and private assets are grouped under the “Other assets” assumption, just below.",
+    "de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.":
+      "of listed financial portfolio, to which Tallya applies the scenario's return. Crypto, precious metals, private assets and property funds are grouped under the “Other assets” assumption, just below.",
     "Avec ±2 points sur le rendement des actifs de marché": "With ±2 points on the market-assets return",
     "de fonds euros et de supports garantis. Le scénario y applique une hypothèse prudente, que tu peux changer ici":
       "in euro funds and guaranteed vehicles. The scenario applies a prudent assumption here, which you can change",
@@ -1921,8 +1921,8 @@ const I18N = {
     "selon tes hypothèses": "per your assumptions",
     "Chaque poche capitalise à son propre taux : déplie « Personnaliser les hypothèses » pour les voir":
       "Each pocket compounds at its own rate: open “Customise the assumptions” to see them",
-    "de crypto, de métaux précieux et de non coté. Valeur constante par défaut : trop incertains pour une hypothèse standard":
-      "of crypto, precious metals and private assets. Value held constant by default: too uncertain for a standard assumption",
+    "de crypto, de métaux précieux, de non coté et de pierre papier. Valeur constante par défaut : trop incertains pour une hypothèse standard, et aucun rendement de SCPI ne s’invente ici":
+      "of crypto, precious metals, private assets and property funds. Value held constant by default: too uncertain for a standard assumption, and no SCPI return is invented here",
     "Rendement des autres actifs": "Other assets return",
     "Crypto": "Crypto",
     "{n} montants déjà répartis, {v}": "{n} amounts already split, {v}",

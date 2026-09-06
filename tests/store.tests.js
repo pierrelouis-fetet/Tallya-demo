@@ -18671,12 +18671,364 @@ suite('Le deux-points se traduit comme le reste', () => {
        change, ce controle tombe et force a relire la phrase. C'est ce qui
        manquait — elle disait « l'immobilier est ecarte » alors que les objets
        de valeur sortaient aussi, et rien ne le signalait. */
-    eq(CLASSES_HORS_FINANCIER.join(','), 'immobilier,bienValeur',
-      'la liste des classes écartées a changé : la phrase du préambule doit '
+    /* L'ancre etait `CLASSES_HORS_FINANCIER`, une liste de CLASSES. Elle a
+       disparu avec le defaut qu'elle portait : la frontiere se lit sur le
+       CONTENANT. L'enumeration reste ecrite a la main, et c'est desormais le
+       predicat qui l'epingle — le jour ou un type detenu en direct s'ajoute, ce
+       controle tombe et force a relire la phrase. */
+    const dedans = TYPES_COMPTE.filter(t => !estHorsPerimetreFinancier({ type: t.id }));
+    const dehors = TYPES_COMPTE.filter(t => estHorsPerimetreFinancier({ type: t.id }));
+    eq(dehors.map(t => t.id).join(','), 'immo,bienValeur',
+      'la liste des types écartés a changé : la phrase du préambule doit '
       + 'être relue, elle les énumère à la main');
+    vrai(dedans.some(t => t.id === 'scpi'), 'la pierre papier n’en fait pas partie');
     const src = lireSource('assets/app.js');
-    vrai(/immobilier et biens de valeur écartés/.test(src),
-      'le préambule doit nommer les deux classes, pas seulement l’immobilier');
+    vrai(/immobilier en direct et biens de valeur écartés/.test(src),
+      'le préambule doit dire « en direct » : sans ce mot il annonce que la SCPI '
+      + 'sort, alors qu’elle reste');
+  });
+});
+
+/* --- un mur n'est pas de la pierre papier -------------------------------
+
+   LE DEFAUT. Le perimetre financier se lisait sur la CLASSE de la ligne :
+   `['immobilier', 'bienValeur']` sortait, le reste restait. La classe
+   `immobilier` couvre l'appartement qu'on habite ET la part de SCPI, et le
+   support immobilier qu'une assurance-vie propose a cote de son fonds euros.
+   Trois choses sans rapport sous un seul mot, et la vue financiere les jetait
+   toutes les trois : un contrat de cent mille euros en annonçait cinquante
+   parce qu'il portait de la pierre papier.
+
+   La question n'etait pas « de quelle classe est cette ligne ? » mais « est-ce
+   un mur qu'on detient soi-meme ? ». Le modele savait deja repondre — le
+   drapeau `direct` de `TYPES_COMPTE`, que `estBienEnDirect` lit depuis toujours
+   pour decider si l'on demande son usage a un bien. `estHorsPerimetreFinancier`
+   pose la meme question pour le perimetre, et rien d'autre ne la pose.
+
+   Ces tests additionnent : ils ne lisent presque aucune source. Un perimetre se
+   prouve par des totaux qui se recomposent, pas par une expression rationnelle
+   sur un filtre. */
+suite('Un mur n’est pas de la pierre papier', () => {
+
+  const ligne = (id, classe, valeur, extra) => ({ id, classe, libelle: classe,
+    valeur, prixDeRevient: valeur, quantite: 1, dateAcquisition: '', ...(extra || {}) });
+  const compte = (id, type, lignes, cash) => ({ id, etabId: 'e', type, statut: 'ouvert',
+    libelle: id, court: id, ouvertLe: '2020-01-01', numero: '', notes: '', alloc: '',
+    cash: cash || [], lignes: lignes || [] });
+
+  const APPART = v => compte('c_immo', 'immo',
+    [ligne('l_a', 'immobilier', v, { usage: 'locative' })]);
+  const SCPI = v => compte('c_scpi', 'scpi', [ligne('l_s', 'immobilier', v)]);
+  const ETF = v => compte('c_cto', 'cto', [ligne('l_e', 'actions', v)]);
+  const CASH = v => compte('c_bq', 'courant', [], [{ montant: v, affectation: 'courant' }]);
+  const MONTRE = v => compte('c_bv', 'bienValeur', [ligne('l_m', 'bienValeur', v)]);
+  const AV = (g, a, i) => compte('c_av', 'av', [ligne('l_g', 'garanti', g),
+    ligne('l_x', 'actions', a), ligne('l_i', 'immobilier', i)]);
+  const PER = i => compte('c_per', 'per', [ligne('l_p', 'immobilier', i)]);
+
+  const poser = ({ comptes = [], dettes = [], positions = [] } = {}) => {
+    Fixture.poser(s => {
+      s.etabs = [{ id: 'e', nom: 'Banque', notes: '', dettes }];
+      s.comptes = comptes;
+      s.positions = positions;
+      s.monthly = [];
+      Object.assign(s.meta, { projScenario: 'central', projInflation: 0, projTarget: 0,
+        projHorizon: 20, projMonthly: 0, projMonthlyZeroLu: true });
+    });
+    refreshAccounts();
+  };
+
+  const somme = xs => xs.reduce((s, x) => s + num(x.value), 0);
+
+  /* --- 1. la frontiere elle-meme ---------------------------------------- */
+
+  test('la question se pose une fois, et sur le contenant', () => {
+    /* La table entiere, type par type : c'est elle qui decide, et une seule
+       fonction la lit. Un `type === 'scpi'` recopie ailleurs aurait laisse le
+       prochain support de pierre papier du mauvais cote. */
+    const dehors = TYPES_COMPTE.filter(t => estHorsPerimetreFinancier({ type: t.id }))
+      .map(t => t.id);
+    eq(dehors.join(','), 'immo,bienValeur',
+      'un appartement et un bien de valeur sortent, et eux seuls');
+    for (const type of ['scpi', 'av', 'per', 'cto', 'pea', 'courant', 'livret'])
+      eq(estHorsPerimetreFinancier({ type }), false, `${type} reste dans le périmètre`);
+    /* Un type inconnu — cree par son detenteur, ou herite d'une migration —
+       reste financier : on n'invente pas un mur. */
+    eq(estHorsPerimetreFinancier({ type: 'levier' }), false,
+      'un type inconnu ne devient pas un mur par défaut');
+  });
+
+  test('les drapeaux de la SCPI ne bougent pas', () => {
+    /* La tentation etait de lui poser `direct: true` pour la faire passer. Elle
+       aurait alors recu le questionnaire d'un appartement : usage, adresse,
+       surface, lots, loyers. La frontiere physique est utile ailleurs, et elle
+       reste ou elle est. */
+    const t = typeCompte('scpi');
+    eq(!!t.bienImmo, true, 'une SCPI pèse comme de la pierre');
+    eq(!!t.direct, false, 'et ne se détient pas en direct');
+    eq(estDetenuEnDirect(t), false, 'le prédicat le dit aussi');
+    poser({ comptes: [SCPI(100000)] });
+    eq(estBienEnDirect(compteById('c_scpi')), false, 'donc ce n’est pas un bien en direct');
+    eq(usageEffectifBien(compteById('c_scpi')).source, 'inconnu',
+      'et on ne lui demande pas si on l’habite');
+  });
+
+  /* --- 2. les scenarios, un par un -------------------------------------- */
+
+  test('une SCPI seule est un patrimoine financier entier', () => {
+    poser({ comptes: [SCPI(100000)] });
+    pres(patrimoine().brut, 100000, 'brut');
+    pres(patrimoine().net, 100000, 'net');
+    pres(totalFinancier(), 100000, 'avoirs financiers');
+    pres(netFinancier(), 100000, 'patrimoine financier net');
+    pres(horsFinancierTotal(), 0, 'rien n’est écarté');
+    eq(horsFinancierExiste(), false,
+      'et le commutateur Tout / Financier ne s’affiche pas : il ne retirerait rien');
+    const cls = repartitionClasses({ financier: true });
+    pres(somme(cls), 100000, 'la répartition par classe fait les avoirs');
+    pres(num(cls.find(c => c.classe === 'immobilier')?.value), 100000,
+      'sous la classe Immobilier, qui désigne ici la pierre papier');
+    pres(capitalisation({ years: 20 }).points[0].total, 100000, 'projection t0');
+  });
+
+  test('un appartement seul n’est pas un patrimoine financier', () => {
+    poser({ comptes: [APPART(300000)] });
+    pres(patrimoine().brut, 300000, 'brut');
+    pres(totalFinancier(), 0, 'aucun avoir financier');
+    pres(horsFinancierTotal(), 300000, 'tout est écarté');
+    eq(horsFinancierExiste(), true, 'et le commutateur a un sens');
+    const q = pochesProjection();
+    pres(q.plat, 300000, 'la projection le porte à plat');
+    pres(q.placees, 0, 'et rien ne capitalise');
+  });
+
+  test('un appartement et une SCPI ne partent pas du même côté', () => {
+    poser({ comptes: [APPART(300000), SCPI(100000)] });
+    pres(patrimoine().brut, 400000, 'le patrimoine global les porte tous deux');
+    pres(totalFinancier(), 100000, 'la SCPI, et elle seule, est un avoir financier');
+    pres(horsFinancierTotal(), 300000, 'le mur, et lui seul, est écarté');
+    const q = pochesProjection();
+    pres(q.plat, 300000, 'le mur est gelé');
+    pres(q.autres, 100000, 'la SCPI est dans la poche sans hypothèse');
+    pres(q.placees + q.plat, 400000, 'et chaque euro apparaît une fois');
+    pres(capitalisation({ years: 20 }).points[0].total, 400000, 'projection t0');
+  });
+
+  test('le crédit du mur part avec le mur, la SCPI reste', () => {
+    poser({ comptes: [APPART(300000), SCPI(100000)],
+            dettes: [{ id: 'd_m', libelle: 'Prêt', montant: 200000, bienId: 'c_immo' }] });
+    pres(patrimoine().net, 200000, 'patrimoine global net');
+    pres(totalFinancier(), 100000, 'avoirs financiers');
+    pres(dettesFinancieresTotal(), 0, 'le mortgage n’est pas une dette du périmètre');
+    pres(netFinancier(), 100000, 'patrimoine financier net');
+  });
+
+  test('un crédit personnel, lui, reste financier', () => {
+    poser({ comptes: [APPART(300000), SCPI(100000)],
+            dettes: [{ id: 'd_m', libelle: 'Prêt', montant: 200000, bienId: 'c_immo' },
+                     { id: 'd_p', libelle: 'Conso', montant: 20000 }] });
+    pres(patrimoine().net, 180000, 'patrimoine global net');
+    pres(totalFinancier(), 100000, 'avoirs financiers');
+    pres(dettesFinancieresTotal(), 20000, 'seule la dette sans bien reste');
+    pres(netFinancier(), 80000, 'patrimoine financier net');
+  });
+
+  test('une dette rattachée à une SCPI reste dans le périmètre', () => {
+    /* Aucune heuristique : la SCPI n'est pas un bien en direct, donc rien ne
+       sort avec elle. `detteLieeBienDirect` lit le lien et le mode de detention,
+       jamais un libelle. */
+    poser({ comptes: [SCPI(100000)],
+            dettes: [{ id: 'd_s', libelle: 'Prêt SCPI', montant: 20000, bienId: 'c_scpi' }] });
+    pres(dettesFinancieresTotal(), 20000, 'elle compte comme dette financière');
+    pres(totalFinancier(), 100000, 'les avoirs ne bougent pas');
+    pres(netFinancier(), 80000, 'et le net financier la retranche');
+  });
+
+  test('une assurance-vie qui porte de l’immobilier reste entière', () => {
+    /* LE DEFAUT, dans sa forme la plus chere : le contrat vaut cent mille, la
+       page en annonçait cinquante. La ligne immobiliere disparaissait des
+       avoirs financiers, du camembert et de la base des pourcentages. */
+    poser({ comptes: [AV(20000, 30000, 50000)] });
+    pres(totalFinancier(), 100000, 'le contrat entier');
+    pres(horsFinancierTotal(), 0, 'rien n’en sort');
+    const cls = repartitionClasses({ financier: true });
+    pres(somme(cls), 100000, 'la somme des classes fait les avoirs');
+    pres(num(cls.find(c => c.classe === 'immobilier')?.value), 50000,
+      'et le support immobilier a sa part');
+    pres(num(cls.find(c => c.classe === 'garanti')?.value), 20000, 'le fonds euros aussi');
+    const q = pochesProjection();
+    pres(q.garanti, 20000, 'le fonds euros garde son taux');
+    pres(q.marche, 30000, 'le fonds actions garde le sien');
+    pres(q.autres, 50000, 'et le support immobilier n’en reçoit aucun');
+    pres(q.plat, 0, 'rien n’est gelé comme un mur');
+  });
+
+  test('un PER qui porte de l’immobilier, de même', () => {
+    poser({ comptes: [PER(50000)] });
+    pres(totalFinancier(), 50000, 'le plan entier');
+    pres(pochesProjection().plat, 0, 'aucune part gelée');
+    pres(pochesProjection().autres, 50000, 'le support est un avoir financier');
+  });
+
+  test('un bien de valeur reste dehors', () => {
+    /* La convention ne change pas : une montre est chez soi, on ne l'arbitre
+       pas. Elle est `direct` comme un appartement, et sort par la même porte. */
+    poser({ comptes: [MONTRE(10000), ETF(50000)] });
+    pres(totalFinancier(), 50000, 'seul l’ETF est financier');
+    pres(horsFinancierTotal(), 10000, 'la montre est écartée');
+    pres(pochesProjection().plat, 10000, 'et portée à plat');
+  });
+
+  test('un ETF de foncières suit son chemin de position, pas celui d’une SCPI', () => {
+    /* La preuve vient du modele et non du nom : `POCHE_DE_CLASSE` range
+       `immobilierCote` dans `actions`, donc un REIT est un actif de marche. Rien
+       ici ne regarde un libelle, un ticker ni un ISIN. */
+    poser({ comptes: [compte('c_cto', 'cto', [])],
+            positions: [{ id: 'p1', name: 'ETF Foncières', isin: '', symbol: 'REIT',
+              currency: 'EUR', qty: 100, buyPrice: 100, price: 100, fx: 1, fxBuy: 1,
+              account: 'c_cto', manual: false, assetClass: 'immobilierCote', role: 'core' }] });
+    pres(totalFinancier(), 10000, 'il est financier');
+    pres(patrimoine().classes.actions, 10000, 'et compte dans les actifs de marché');
+    pres(patrimoine().classes.immobilier, 0, 'jamais dans la classe immobilier');
+    pres(pochesProjection().marche, 10000, 'la projection lui applique le taux du marché');
+    pres(pochesProjection().autres, 0, 'et non celui des actifs sans hypothèse');
+  });
+
+  /* --- 3. les invariants ------------------------------------------------ */
+
+  test('ce qui reste et ce qui part recomposent toujours le brut', () => {
+    /* Deux calculs independants : l'un somme les classes des comptes qui
+       restent, l'autre somme la valeur des comptes qui sortent. Ils ne se
+       derivent pas l'un de l'autre, donc leur accord prouve quelque chose. */
+    const cas = [
+      { nom: 'SCPI seule', comptes: [SCPI(100000)] },
+      { nom: 'appartement seul', comptes: [APPART(300000)] },
+      { nom: 'les deux', comptes: [APPART(300000), SCPI(100000)] },
+      { nom: 'tout', comptes: [APPART(300000), SCPI(100000), ETF(50000),
+                               CASH(20000), MONTRE(10000), AV(20000, 30000, 50000)] },
+    ];
+    for (const c of cas) {
+      poser({ comptes: c.comptes });
+      pres(totalFinancier() + horsFinancierTotal(), patrimoine().brut,
+        `${c.nom} : les deux périmètres font le brut`);
+    }
+  });
+
+  test('chaque euro reçoit une classification de projection, et une seule', () => {
+    poser({ comptes: [APPART(300000), SCPI(100000), ETF(50000), CASH(20000),
+                      MONTRE(10000), AV(20000, 30000, 50000)],
+            dettes: [{ id: 'd_m', libelle: 'Prêt', montant: 200000, bienId: 'c_immo' }] });
+    const q = pochesProjection();
+    /* Les poches nommees une a une : une somme globale passerait si deux poches
+       se partageaient les memes euros en s'annulant. */
+    pres(q.marche, 80000, 'ETF et fonds actions');
+    pres(q.autres, 150000, 'la SCPI et le support immobilier du contrat');
+    pres(q.garanti, 20000, 'le fonds euros');
+    pres(q.liquidites, 20000, 'le cash');
+    pres(q.projet, 0, 'rien n’est réservé');
+    pres(q.plat, 110000, 'le mur et la montre, moins le prêt');
+    pres(q.placees + q.plat, patrimoine().net, 'la somme fait le patrimoine net');
+    pres(q.placees, totalFinancier(), 'et ce qui capitalise est exactement le périmètre financier');
+  });
+
+  test('l’allocation se réconcilie, carte par carte', () => {
+    poser({ comptes: [APPART(300000), SCPI(100000), ETF(50000), CASH(20000)] });
+    pres(totalFinancier(), 170000, 'avoirs financiers : 100 000 + 50 000 + 20 000');
+    const cls = repartitionClasses({ financier: true });
+    pres(somme(cls), 170000, 'par classe');
+    pres(num(cls.find(c => c.classe === 'immobilier')?.value), 100000, 'Immobilier : la SCPI');
+    pres(num(cls.find(c => c.classe === 'actions')?.value), 50000, 'Actifs de marché : l’ETF');
+    pres(num(cls.find(c => c.classe === 'liquidites')?.value), 20000, 'Liquidités : le cash');
+    eq(cls.some(c => c.classe === 'bienValeur'), false, 'aucune ligne de biens de valeur');
+    const cpt = allocationByAccount({ financier: true });
+    pres(somme(cpt), 170000, 'par compte');
+    eq(cpt.some(r => r.id === 'c_immo'), false, 'l’appartement n’a pas de ligne');
+    eq(cpt.some(r => r.id === 'c_scpi'), true, 'la SCPI en a une');
+    pres(somme(byAccountType({ financier: true })), 170000, 'par type de détention');
+    pres(somme(allocationParDisponibilite({ financier: true })), 170000, 'par disponibilité');
+    pres(somme(allocationByAsset({ credits: false, financier: true })), 170000, 'par ligne');
+    pres(somme(poidsPoches({ financier: true })), 170000, 'et par poche du patrimoine');
+    /* La poche `immo` reste, reduite a sa pierre papier : la retirer aurait fait
+       une carte dont les parts ne font pas la base annoncee au-dessus d'elles. */
+    pres(num(poidsPoches({ financier: true }).find(p => p.key === 'immo')?.value), 100000,
+      'la poche Immobilier porte la SCPI');
+  });
+
+  test('le mode Tout ne change pas de sens', () => {
+    poser({ comptes: [APPART(300000), SCPI(100000), ETF(50000), CASH(20000)],
+            dettes: [{ id: 'd_m', libelle: 'Prêt', montant: 200000, bienId: 'c_immo' }] });
+    pres(patrimoine().brut, 470000, 'le brut porte tout');
+    pres(dettesTotal(), 200000, 'et toutes les dettes');
+    pres(patrimoine().net, 270000, 'le net global');
+    pres(somme(repartitionClasses({ net: true })), 270000,
+      'la répartition globale fait le net, dette comprise');
+    pres(somme(poidsPoches({ net: true })), 270000, 'et les poches aussi');
+  });
+
+  test('la disponibilité d’une SCPI ne change pas', () => {
+    /* Entrer dans le perimetre financier ne rend rien liquide : le delai de
+       sortie vient du type et de la classe, et ces deux-la n'ont pas bouge. */
+    poser({ comptes: [SCPI(100000)] });
+    const avant = mobiliteLigne(lignesDe(compteById('c_scpi'))[0], compteById('c_scpi'));
+    eq(avant, mobilisabilite('immobilier', 'scpi'),
+      'sa mobilisabilité vient de sa classe et de son type, comme avant');
+    const dispo = allocationParDisponibilite({ financier: true });
+    pres(somme(dispo), 100000, 'et elle apparaît une fois dans les paliers');
+    eq(num(dispo.find(d => d.cle === 'immediat')?.value), 0,
+      'jamais en disponible tout de suite');
+  });
+
+  test('la base des cibles ne dépend pas de ce périmètre', () => {
+    /* Elle se calcule sur les POSITIONS de marche, jamais sur les lignes
+       saisies a la main : une SCPI n'y entrait pas hier et n'y entre pas
+       aujourd'hui. Le controle est ici pour que le lien soit dit, et non
+       redecouvert la prochaine fois. */
+    poser({ comptes: [SCPI(100000), CASH(20000)] });
+    const sans = rebalanceRows().base;
+    poser({ comptes: [SCPI(100000), CASH(20000), APPART(300000)] });
+    pres(rebalanceRows().base, sans, 'ajouter un mur ne bouge pas la base des cibles');
+  });
+
+  /* --- 4. ce que la page en dit ----------------------------------------- */
+
+  test('le texte nomme la pierre papier, dans les deux langues', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/La pierre papier reste/.test(src),
+      'l’aide du périmètre dit ce qui reste, pas seulement ce qui part');
+    vrai(!/\bimmobilier et biens de valeur écartés, avec leurs crédits/.test(src),
+      'et la mention courte ne promet plus que tout l’immobilier sort');
+    for (const cle of Object.keys(I18N.en)) {
+      if (!/La pierre papier reste/.test(cle)) continue;
+      vrai(/Property investments stay/.test(I18N.en[cle]), 'traduite');
+    }
+    vrai(Object.keys(I18N.en).some(k => /La pierre papier reste/.test(k)),
+      'la clef existe dans le dictionnaire');
+    vrai(I18N.en['immobilier en direct et biens de valeur écartés, avec leurs crédits'],
+      'la mention courte aussi');
+    /* UNE CLEF DECALEE NE SE VOIT PAS. L'arbre prive portait la traduction de
+       cette longue aide accrochee a la clef voisine : en anglais, la carte des
+       delais de sortie rendait le perimetre entier, et le perimetre rendait un
+       paragraphe d'une version disparue. Les deux etaient de l'anglais, donc
+       aucun controle de langue ne les attrapait. Une phrase courte doit le
+       rester : c'est ce qui distingue un couple droit d'un couple decale. */
+    const dispo = I18N.en['Quand cet argent peut redevenir disponible.'];
+    vrai(dispo && dispo.length < 80,
+      `la clef voisine garde sa propre traduction, courte (${(dispo || '').length} caractères)`);
+    vrai(!/property|valuables/i.test(dispo || ''),
+      'et ne porte pas celle du périmètre');
+  });
+
+  test('la fiche de la part plate ne liste que ce qu’elle gèle', () => {
+    /* Elle enumerait les lignes de classe `immobilier` : une SCPI y apparaissait
+       sous « Ton immobilier net », dans une fiche dont le total est `partPlate()`
+       — qui ne la porte plus. La somme des parts aurait cesse d'egaler le total. */
+    const src = lireSource('assets/app.js');
+    const fn = src.slice(src.indexOf('immobilierNet: () => {'),
+                         src.indexOf('capaciteEpargne: () => {'));
+    vrai(/if \(!estHorsPerimetreFinancier\(c\)\) continue;/.test(fn),
+      'la fiche parcourt les comptes que le périmètre écarte');
+    vrai(!/\['immobilier', 'bienValeur'\]\.includes/.test(fn),
+      'et non les lignes d’une classe');
   });
 });
 
@@ -25232,8 +25584,17 @@ suite('Projection tient sur quatre hypothèses', () => {
       'la définition par la négociabilité s’en va');
     vrai(/de portefeuille financier coté, auquel Tallya applique le rendement du scénario/
       .test(src), 'la poche se dit par ce qu’elle est');
-    vrai(/de crypto, de métaux précieux et de non coté/.test(src),
+    /* La pierre papier a rejoint cette poche : l'enumeration doit la nommer,
+       sinon elle decrit une poche qui n'est plus celle du calcul. */
+    vrai(/de crypto, de métaux précieux, de non coté et de pierre papier/.test(src),
       'et l’autre poche dit ce qu’elle regroupe');
+    vrai(/aucun rendement de SCPI ne s’invente ici/.test(src),
+      'et dit pourquoi elle reste constante');
+    /* La bulle voisine, celle du marche, enumere la MEME poche pour dire ou va
+       ce qu'elle ne couvre pas. Deux enumerations d'un seul ensemble : les
+       corriger separement, c'est en oublier une. */
+    vrai(/La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés/
+      .test(src), 'et la bulle du marché renvoie vers la même poche, entière');
   });
 });
 
@@ -34342,17 +34703,35 @@ suite('Projection : le moteur se réconcilie', () => {
     pres(p.points[20].total, 300000, 'vingt ans plus tard, le mur vaut toujours 300 000 €');
   });
 
-  test('une SCPI suit la poche plate, comme sa classe l’exige', () => {
-    /* Elle porte la classe `immobilier` : elle est donc rangee avec les murs
-       dans TOUTES les lectures — Allocation l'ecarte du perimetre financier, la
-       projection la porte a plat. La frontiere qui la separe d'un logement est
-       ailleurs : `estBienEnDirect`, qui decide de l'usage et des credits. */
+  test('une SCPI est un placement, et reste constante faute d’hypothèse', () => {
+    /* Elle etait rangee dans la poche PLATE, avec les murs, parce qu'elle
+       partage leur classe. Le resultat chiffre etait le meme — cent mille euros
+       constants — et le sens etait faux : la part plate est « ton immobilier
+       net », une fiche qui la deballe ligne a ligne, et la projection annoncait
+       donc une SCPI comme un bien gele. Elle est desormais dans « autres
+       actifs », la poche de ce dont Tallya ne sait rien : crypto, metaux, non
+       cote. Zero par defaut, donc constante — mais du bon cote de la frontiere,
+       et prete a recevoir une hypothese le jour ou il en existe une. */
     etat({ comptes: [SCPI(100000)], meta: { projScenario: 'dynamique' } });
     eq(estBienEnDirect(compteById('c_scpi')), false, 'une SCPI n’est pas détenue en direct');
     const q = pochesProjection();
-    pres(q.plat, 100000, 'sa valeur est portée à plat');
+    pres(q.plat, 0, 'aucune valeur n’est gelée comme un mur');
+    pres(q.autres, 100000, 'elle est dans la poche des actifs sans hypothèse');
     pres(q.marche, 0, 'et ne reçoit pas le taux du marché');
-    pres(capitalisation({ years: 20 }).points[20].total, 100000, 'vingt ans après, inchangée');
+    pres(q.placees + q.plat, patrimoine().net, 'elle est comptée une fois, et une seule');
+    pres(capitalisation({ years: 20 }).points[20].total, 100000,
+      'vingt ans de scénario dynamique n’inventent aucun rendement');
+  });
+
+  test('un mur reste plat, une SCPI ne l’est pas pour la même raison', () => {
+    /* Le test qui compte : les deux valent cent mille, les deux sont de classe
+       `immobilier`, et ils ne prennent pas le meme chemin. */
+    etat({ comptes: [BIEN(100000)], meta: { projScenario: 'dynamique' } });
+    pres(pochesProjection().plat, 100000, 'le mur est gelé');
+    pres(pochesProjection().autres, 0, 'et n’entre dans aucune poche financière');
+    etat({ comptes: [SCPI(100000)], meta: { projScenario: 'dynamique' } });
+    pres(pochesProjection().plat, 0, 'la SCPI n’est pas gelée comme un mur');
+    pres(pochesProjection().autres, 100000, 'elle est un avoir financier');
   });
 
   /* --- 4. les dettes ----------------------------------------------------- */

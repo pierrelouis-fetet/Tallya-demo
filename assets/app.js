@@ -1473,8 +1473,9 @@ function viewObjective() {
       { label: trad('Ce que tu as déjà'), value: g.total - plat, couleur: 'var(--series-3)', apercu: 'baseProjection' },
       { label: plat < 0 ? trad('Tes crédits')
              : num(nowTotals().biens) > 0.005
-               ? (num(nowTotals().immo) > 0.005 ? trad('Ton immobilier et tes biens, nets')
-                                                : trad('Tes biens de valeur, nets'))
+               ? (num(nowTotals().immoDirect) > 0.005
+                    ? trad('Ton immobilier et tes biens, nets')
+                    : trad('Tes biens de valeur, nets'))
                : trad('Ton immobilier net'),
         value: plat, couleur: couleurClasse('immobilier'), apercu: 'immobilierNet',
         aide: trad('Aucun rendement ne lui est appliqué : la projection le porte tel quel') },
@@ -1615,7 +1616,7 @@ function viewObjective() {
         <div class="modal-champs" style="margin-top:8px">
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux et le non coté sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.')} `
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'),
                 /* Le taux EN VIGUEUR, et non celui qui dort dans l'etat.
                    Ces trois champs lisaient `meta.projRate` et compagnie, alors
@@ -1626,7 +1627,7 @@ function viewObjective() {
                 s.rate)}
         ${champ('Rendement des autres actifs', 'meta.projRateAutres', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.autres)} ${trad('de crypto, de métaux précieux et de non coté. Valeur constante par défaut : trop incertains pour une hypothèse standard')}`,
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.autres)} ${trad('de crypto, de métaux précieux, de non coté et de pierre papier. Valeur constante par défaut : trop incertains pour une hypothèse standard, et aucun rendement de SCPI ne s’invente ici')}`,
                 s.rateAutres)}
         ${champ('Rendement du capital garanti', 'meta.projRateGaranti', paliers(8, 0.5),
                 v => `${fmtPct(v, 1)} ${trad('par an')}`,
@@ -1713,8 +1714,16 @@ function viewObjective() {
       ${(() => {
         const t0 = nowTotals();
         const plat = num(p.plat), dettes = num(t0.dettes);
-        const bien = num(t0.immo) + num(t0.biens);
-        const aImmo = num(t0.immo) > 0.005, aBiens = num(t0.biens) > 0.005;
+        const bien = num(t0.horsFinancier);
+        /* La part plate porte l'immobilier ET les biens de valeur : la phrase
+           doit nommer ce qu'elle couvre, sinon une montre seule ferait dire
+           « ton immobilier » a quelqu'un qui n'en a pas.
+
+           `immoDirect` et non `immo` : la classe couvre aussi la pierre papier,
+           qui n'est plus gelee. Sans ca, quelqu'un dont tout l'immobilier est en
+           SCPI lisait « Ton immobilier est porte a sa valeur d'aujourd'hui » sous
+           une courbe ou cette SCPI n'a jamais ete portee a plat. */
+        const aImmo = num(t0.immoDirect) > 0.005, aBiens = num(t0.biens) > 0.005;
         const sujet = aImmo && aBiens ? trad('Ton immobilier et tes biens sont portés à leur')
                     : aBiens ? trad('Tes biens de valeur sont portés à leur')
                     : trad('Ton immobilier est porté à sa');
@@ -3143,10 +3152,10 @@ function viewAllocation() {
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
-      ? trad('immobilier et biens de valeur écartés, avec leurs crédits')
+      ? trad('immobilier en direct et biens de valeur écartés, avec leurs crédits')
       : trad('tes crédits sont déduits')}</b>${deuxPoints()}
     ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
-      ? trad("Les biens immobiliers détenus en direct et les biens de valeur sont écartés, et les crédits qui leur sont explicitement rattachés le sont avec eux. Les autres dettes, une marge ou un prêt personnel, se déduisent du patrimoine financier net, annoncé en tête dès qu’il en existe une. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Les répartitions ci-dessous portent toutes sur tes avoirs financiers : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.")
+      ? trad("Les biens immobiliers détenus en direct et les biens de valeur sont écartés, et les crédits qui leur sont explicitement rattachés le sont avec eux. La pierre papier reste : une SCPI, ou le support immobilier d’une assurance-vie, s’arbitre comme un fonds. C’est un placement, pas un mur. Les autres dettes, une marge ou un prêt personnel, se déduisent du patrimoine financier net, annoncé en tête dès qu’il en existe une. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Les répartitions ci-dessous portent toutes sur tes avoirs financiers : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.")
       : trad("Deux bases sur cette page, et chaque carte annonce la sienne. « Patrimoine net » pour la répartition : tout ce que tu possèdes moins ce que tu dois encore, un bien financé y comptant pour sa valeur moins son crédit. « Tes avoirs » pour les cartes qui disent où ton argent est posé et en combien de temps il ressort : une dette n’est posée sur aucun compte et n’a pas de délai de sortie, elle ne s’y retranche donc pas. Chaque total redonne la base annoncée juste au-dessus de lui."))}.</span></p>
 
   ${allocFinancier && dettesFinancieresTotal() > 0.005 ? `
@@ -11184,7 +11193,7 @@ const APERCUS = {
     const tauxG = num(s.rateGaranti) ? `${fmtPct(s.rateGaranti, 1)} ${trad('par an')}` : A_PLAT;
     return {
       titre: trad('Ce que tu as déjà'),
-      sous: trad('La base de la projection') + (num(t.immo) ? trad(', ton immobilier à part') : ''),
+      sous: trad('La base de la projection') + (num(t.immoDirect) ? trad(', ton immobilier à part') : ''),
       total: q.placees,
       totalNote: trad('chaque ligne porte le taux qui lui est appliqué'),
       /* Une ligne par poche que la projection distingue, et la liste doit les
@@ -11213,9 +11222,16 @@ const APERCUS = {
     const lignes = [];
     for (const c of (Store.state.comptes || [])) {
       if (c.statut === 'archive') continue;
+      /* Les comptes que le perimetre financier ecarte, et eux seuls : c'est
+         mot pour mot ce que `partPlate()` gele, donc les lignes font le total.
+         Le filtre portait sur la CLASSE de la ligne, et cette fiche listait donc
+         une SCPI sous « ton immobilier net » alors que la projection ne la gele
+         plus : le total et ses parts ne se seraient plus accordes. Les biens de
+         valeur restent ici avec l'immobilier — une montre comptee dans le total
+         sans ligne en face etait deja le defaut qu'on repare. */
+      if (!estHorsPerimetreFinancier(c)) continue;
       for (const l of (c.lignes || [])) {
-        if (!['immobilier', 'bienValeur'].includes(l.classe || 'immobilier')
-            || !num(l.valeur)) continue;
+        if (!num(l.valeur)) continue;
         lignes.push({ label: l.libelle || c.libelle, meta: trad('valeur estimée'),
                       valeur: num(l.valeur) });
       }
@@ -11229,7 +11245,7 @@ const APERCUS = {
     }
     const plat = partPlate();
     const aUnBien = lignes.some(l => l.valeur > 0);
-    const aImmo = num(nowTotals().immo) > 0.005, aBiens = num(nowTotals().biens) > 0.005;
+    const aImmo = num(nowTotals().immoDirect) > 0.005, aBiens = num(nowTotals().biens) > 0.005;
     return {
       titre: !aUnBien ? trad('Tes crédits')
            : aImmo && aBiens ? trad('Ton immobilier et tes biens, nets')

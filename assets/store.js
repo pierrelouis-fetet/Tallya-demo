@@ -600,6 +600,28 @@ function estBienEnDirect(compte) {
   return !!t.bienImmo && estDetenuEnDirect(t);
 }
 
+/* Ce que le perimetre financier ecarte, et la SEULE question qui le decide.
+
+   Elle ne porte pas sur la classe. `immobilier` couvre a la fois un appartement
+   et une SCPI, et la question posee ici n'est pas « de quoi est-ce fait » mais
+   « est-ce un mur qu'on detient soi-meme ». Le filtre par classe repondait donc
+   faux deux fois : il sortait la pierre papier des avoirs financiers, et avec
+   elle le support immobilier d'une assurance-vie — cinquante mille euros
+   quittaient Allocation parce qu'un contrat propose ce support, alors que
+   l'argent y est aussi pilotable que le fonds actions d'a cote.
+
+   `estDetenuEnDirect` et rien d'autre : le contenant EST la chose. Un
+   appartement et une montre le sont ; une SCPI ne l'est pas, ni une enveloppe
+   qui accepte de l'immobilier — elle ne devient pas un mur pour autant.
+
+   Une question metier, une fonction. La frontiere ne se redecrit nulle part
+   ailleurs, et surtout pas par un `type === 'scpi'` recopie : le principe est
+   NON DIRECT et non « SCPI », et le prochain support de pierre papier tombera
+   du bon cote sans qu'on y pense. */
+function estHorsPerimetreFinancier(compte) {
+  return estDetenuEnDirect(typeCompte(compte?.type));
+}
+
 /* L'usage d'un bien, et D'OU IL VIENT. La seule porte.
 
    Trois questions vivaient eparpillees dans les vues — « l'usage est-il
@@ -949,11 +971,15 @@ function mobilisabilite(classe, typeId) {
 }
 
 /* `financier` : la meme boucle, sans les murs ni les objets.
-   Le filtre porte sur la LIGNE et non sur le compte, parce que les paliers de
-   disponibilite se construisent ligne par ligne : une SCPI logee dans une
-   assurance-vie sort, le fonds actions du meme contrat reste. C'est aussi ce
-   qui fait disparaitre le palier « le logement que tu habites » tout seul, sans
-   qu'une seule ligne le nomme ici. */
+
+   Le filtre porte sur le CONTENANT, et il portait sur la classe de la ligne.
+   « Cette ligne est-elle de classe immobilier ? » n'est pas la question :
+   `immobilier` couvre l'appartement et la SCPI, et la seconde est un placement
+   qu'on arbitre. Un compte detenu en direct sort donc tout entier, cash compris,
+   et rien d'autre ne sort — voir `estHorsPerimetreFinancier`.
+
+   C'est aussi ce qui fait disparaitre le palier « le logement que tu habites »
+   tout seul, sans qu'une seule ligne le nomme ici. */
 function poches({ financier = false } = {}) {
   const p = { courant: 0, precaution: 0, projet: 0, investir: 0,
               classes: Object.fromEntries(Object.keys(CLASSES_ACTIFS).map(k => [k, 0])),
@@ -963,6 +989,7 @@ function poches({ financier = false } = {}) {
               mobilisable: Object.fromEntries(
                 Object.keys(MOBILISABLE_LABEL).map(k => [k, 0])) };
   for (const c of comptesOuverts()) {
+    if (financier && estHorsPerimetreFinancier(c)) continue;
     for (const e of (c.cash || [])) {
       const m = num(e.montant);
       p[e.affectation] = (p[e.affectation] || 0) + m;
@@ -970,7 +997,6 @@ function poches({ financier = false } = {}) {
       p.mobilisable[mobilisabilite('liquidites', c.type)] += m;
     }
     for (const l of lignesDe(c)) {
-      if (financier && horsFinancier(l.classe)) continue;
       p.classes[l.classe] = (p.classes[l.classe] || 0) + l.valeur;
       p.mobilisable[mobiliteLigne(l, c)] += l.valeur;
     }
@@ -1349,25 +1375,36 @@ const CLASSE_COULEURS = new Proxy({}, {
    camembert. La page cesse alors de montrer ce qu'on pilote, alors que c'est sa
    seule raison d'exister : personne ne reequilibre un mur.
 
-   Deux classes sortent, et pas trois : l'immobilier et les biens de valeur. Le
-   non cote reste, parce qu'il se pilote — on choisit d'y remettre ou non, alors
-   qu'on ne vend pas trois metres carres de salon.
+   Ce qui sort, c'est ce qu'on detient EN DIRECT : le mur qu'on habite ou qu'on
+   loue, la montre, la voiture. Une liste de CLASSES a exclure vivait ici, et
+   elle disait autre chose : `['immobilier', 'bienValeur']` sortait aussi la
+   pierre papier et le support immobilier d'une assurance-vie, qui sont du
+   placement. Le non cote restait, lui, par la meme logique qu'on lui refusait —
+   on choisit d'y remettre ou non, alors qu'on ne vend pas trois metres carres de
+   salon. La constante est partie plutot que d'etre corrigee : elle repondait a
+   la mauvaise question, et une constante qui ment coute plus qu'elle ne sert.
+
+   Les cinq sources de la page Allocation appellent donc toutes
+   `estHorsPerimetreFinancier`, sur le compte.
 
    Les DETTES de cette vue se choisissent, elles aussi, et par le lien qu'elles
    portent : voir `detteLieeBienDirect`. Un credit rattache a un mur part avec le
-   mur ; toute autre dette reste, et le net financier la retranche.
+   mur ; toute autre dette reste — celle d'une SCPI comme celle d'une marge —
+   et le net financier la retranche. */
 
-   La regle vit ici et nulle part ailleurs : cinq sources alimentent la page
-   Allocation, et cinq listes de classes a exclure auraient fini par ne plus dire
-   la meme chose. */
-const CLASSES_HORS_FINANCIER = ['immobilier', 'bienValeur'];
-const horsFinancier = classe => CLASSES_HORS_FINANCIER.includes(classe);
+/* Les poches que la COURBE D'HISTORIQUE ecarte, et elles ne recouvrent pas
+   exactement le perimetre d'aujourd'hui.
 
-/* Les memes exclusions dans l'autre vocabulaire. Cette base de code en porte deux
-   — les classes fines et les poches du graphique — et c'est deja le cas de
-   `POCHE_DE_CLASSE`. Deriver l'une de l'autre demanderait une table de
-   correspondance de plus ; les ecrire toutes deux et verifier qu'elles designent
-   le meme argent coute moins et se prouve. Un test somme les deux cotes. */
+   `estHorsPerimetreFinancier` tranche sur le compte, et un releve n'a pas de
+   compte : il porte une ventilation par poche, calculee le jour ou il a ete
+   enregistre. Aucun releve deja ecrit ne sait dire quelle part de son
+   immobilier etait de la pierre papier, et rien ne permet de le decouper apres
+   coup. La poche `immo` de l'historique melange donc les deux, et la vue
+   financiere de la courbe la retire entiere.
+
+   Le present, lui, sait : `poidsPoches()` lit l'etat du jour et garde `immo`
+   reduite a sa pierre papier. Les deux lectures different parce que les deux
+   questions different, et c'est dit ici plutot que devine. */
 const SERIES_HORS_FINANCIER = ['immo', 'biens'];
 const serieHorsFinancier = cle => SERIES_HORS_FINANCIER.includes(cle);
 
@@ -1386,33 +1423,40 @@ function pochesEvolution({ financier = false } = {}) {
   return POCHES_EVOLUTION.filter(cle => !financier || !serieHorsFinancier(cle));
 }
 
+/* La part financiere d'un compte : tout, ou rien.
+
+   Elle retranchait ligne a ligne ce qui etait de classe `immobilier`, et vidait
+   ainsi une assurance-vie de son support pierre. Un compte EST dedans ou dehors :
+   ce qui sort, c'est le bien detenu en direct, et un bien detenu en direct ne
+   porte rien d'autre que lui-meme. */
 function valeurFinanciere(compte) {
-  const dehors = lignesDe(compte)
-    .filter(l => horsFinancier(l.classe))
-    .reduce((s, l) => s + num(l.valeur), 0);
-  return valeurCompte(compte) - dehors;
+  return estHorsPerimetreFinancier(compte) ? 0 : valeurCompte(compte);
 }
 
 function horsFinancierExiste() {
-  const p = patrimoine();
-  return CLASSES_HORS_FINANCIER.some(c => Math.abs(num(p.classes[c])) > 0.005);
+  return comptesOuverts().some(c => estHorsPerimetreFinancier(c)
+    && Math.abs(valeurCompte(c)) > 0.005);
 }
 
 function totalFinancier() {
-  const p = patrimoine();
-  return Object.keys(CLASSES_ACTIFS)
-    .filter(c => !horsFinancier(c))
-    .reduce((s, c) => s + num(p.classes[c]), 0);
+  const p = poches({ financier: true });
+  return Object.values(p.classes).reduce((s, v) => s + num(v), 0);
 }
 
 /* Ce que la vue financiere retire, en un nombre. `totalFinancier()` dit ce qui
    reste ; celui-ci dit ce qui part. Les deux existent parce que « place » ne se
    filtre pas par classe : il vaut le brut moins le cash, et sa version
-   financiere est donc une soustraction, pas un filtre. Un test exige que les
-   deux se recomposent. */
+   financiere est donc une soustraction, pas un filtre.
+
+   DEUX CALCULS INDEPENDANTS, et non l'un moins l'autre : celui-ci somme la
+   valeur des comptes qui sortent, `totalFinancier()` somme les classes des
+   comptes qui restent, et un test exige que les deux fassent le brut. Une
+   soustraction ne prouverait rien — elle serait vraie meme si les deux cotes
+   s'accordaient sur un perimetre faux. */
 function horsFinancierTotal() {
-  const p = patrimoine();
-  return CLASSES_HORS_FINANCIER.reduce((s, c) => s + num(p.classes[c]), 0);
+  return comptesOuverts()
+    .filter(c => estHorsPerimetreFinancier(c))
+    .reduce((s, c) => s + valeurCompte(c), 0);
 }
 
 /* --- quelles dettes sortent du perimetre financier ? --------------------
@@ -1477,14 +1521,14 @@ function repartitionClasses({ net = false, financier = false } = {}) {
   const base = financier ? totalFinancier() : num(p.brut) - dettes;
   const porteuse = ['immobilier', 'bienValeur'].find(c => Math.abs(num(p.classes[c])) > 0.005)
     || (dettes ? 'immobilier' : null);
+  const classes = financier ? poches({ financier: true }).classes : p.classes;
   return Object.entries(CLASSES_ACTIFS)
     .map(([classe, label]) => {
-      const value = (p.classes[classe] || 0) - (classe === porteuse ? dettes : 0);
+      const value = (classes[classe] || 0) - (classe === porteuse ? dettes : 0);
       return { classe, label, couleur: CLASSE_COULEURS[classe], value,
                pct: base ? value / base * 100 : 0 };
     })
-    .filter(x => Math.abs(x.value) > 0.005)
-    .filter(x => !financier || !horsFinancier(x.classe));
+    .filter(x => Math.abs(x.value) > 0.005);
 }
 
 function refreshAccounts() {
@@ -2644,14 +2688,46 @@ function nowByGroup() {
   };
 }
 
+/* L'immobilier coupe en deux par son mode de detention.
+
+   La classe `immobilier` porte le mur et le papier, et deux lecteurs ont besoin
+   de les separer : la projection, qui gele les murs et ne gele pas un placement,
+   et la carte des poids, qui garde la pierre papier en vue financiere.
+
+   UNE POCHE DE PLUS dans `POCHES_EVOLUTION` aurait paru plus propre et aurait
+   coute cher : les releves deja enregistres portent leur ventilation, aucun ne
+   sait dire quelle part de son immobilier etait du papier, et on aurait gagne
+   une bande vide sur tout le passe avec une couture au dernier releve. Deux
+   champs a cote, calcules sur l'etat du jour, ne touchent a aucun releve.
+
+   Les positions de marche n'y entrent pas d'elles-memes : un REIT cote a la
+   classe `actions` par `POCHE_DE_CLASSE`, et il garde son chemin de position.
+   Rien ici ne regarde un nom, un ticker ni un ISIN. */
+function immobilierParDetention() {
+  let direct = 0, papier = 0;
+  for (const c of comptesOuverts()) {
+    const hors = estHorsPerimetreFinancier(c);
+    for (const l of lignesDe(c)) {
+      if (l.classe !== 'immobilier') continue;
+      if (hors) direct += num(l.valeur); else papier += num(l.valeur);
+    }
+  }
+  return { direct, papier };
+}
+
 /* Ce qui est reserve a un projet, et depuis quelle poche de projection.
 
    Une ligne marquee quitte la poche qui la portait pour etre portee a plat :
    il faut donc savoir de laquelle elle vient, sinon la soustraction se ferait
    au hasard et un total cesserait d'egaler la somme de ses parts.
 
-   L'immobilier et les biens n'y entrent pas : ils sont deja portes a plat par
-   `partPlate()`, et les marquer ne changerait rien qu'un double comptage. */
+   L'immobilier et les biens n'y entrent pas. Pour un mur et une montre c'est
+   qu'ils sont deja portes a plat par `partPlate()`, et les marquer ne changerait
+   rien qu'un double comptage. Pour la pierre papier, qui rejoint desormais la
+   poche « autres actifs », c'est que cette poche vaut zero par defaut : la
+   reserver la laisserait plate de toute facon. Le jour ou quelqu'un affirme un
+   rendement sur ses autres actifs, une SCPI marquee « projet » suivrait ce taux
+   — connu, et laisse tel quel plutot que corrige a moitie. */
 function reserveProjet() {
   /* Les poches sont celles de `nowByGroup`, une par une, et non la poche
      « marche » de la projection qui en fusionne deux : la fenetre de la base
@@ -2679,6 +2755,7 @@ function nowTotals() {
   const p = patrimoine();
   const g = nowByGroup();
   const reserve = reserveProjet();
+  const immo = immobilierParDetention();
   const brut = p.brut;
   return { ...g, brut, dettes: p.dettes, net: brut - p.dettes,
            total: brut - p.dettes,          // « total » = patrimoine net, partout
@@ -2693,6 +2770,12 @@ function nowTotals() {
            /* Deux formes du meme fait : le total pour l'afficher, le detail par
               poche pour que `pochesProjection` sache ou soustraire. */
            projet: reserve.total, projetParPoche: reserve,
+           /* Le perimetre, en trois faits, calcules une fois pour les six
+              lecteurs qui les demandaient chacun a sa facon. `immo` garde son
+              sens de CLASSE — c'est la somme de POCHES_EVOLUTION qui doit faire
+              le brut, et un test l'exige. */
+           horsFinancier: horsFinancierTotal(),
+           immoDirect: immo.direct, immoPapier: immo.papier,
            invested: brut - g.cash };
 }
 
@@ -3073,11 +3156,17 @@ function poidsPoches({ financier = false, net = false } = {}) {
     ? (POCHES_EVOLUTION.filter(serieHorsFinancier)
         .find(k => Math.abs(num(t[k])) > 0.005) || 'immo')
     : null;
-  const valeur = k => num(t[k]) - (k === porteuse ? dettes : 0);
+  /* En vue financiere, `immo` se reduit a sa pierre papier : une SCPI et le
+     support immobilier d'une assurance-vie sont des avoirs financiers, et la
+     carte doit les montrer sous le nom de leur classe. Le mur, lui, est parti
+     avec le compte. La lecture d'aujourd'hui peut faire ce partage ; la courbe
+     d'historique ne le peut pas — voir `SERIES_HORS_FINANCIER`. */
+  const valeur = k => (financier && k === 'immo' ? num(t.immoPapier) : num(t[k]))
+    - (k === porteuse ? dettes : 0);
   const base = financier ? totalFinancier() : num(t.brut) - dettes;
   return POCHES_EVOLUTION
     .filter(k => Math.abs(valeur(k)) > 0.005 || k === porteuse)
-    .filter(k => !financier || !serieHorsFinancier(k))
+    .filter(k => !financier || k === 'immo' || !serieHorsFinancier(k))
     /* `null` et non zero quand la base ne se divise pas : un patrimoine net
        negatif retournerait tous les signes. */
     .map(k => ({ key: k, value: valeur(k),
@@ -3375,6 +3464,7 @@ function allocationByAsset({ credits = true, financier = false, net = false } = 
     if (poche.value) add(poche.nom, poche.value, CLASSE_COULEURS.liquidites, 'liquidites');
   }
   for (const c of comptesOuverts()) {
+    if (financier && estHorsPerimetreFinancier(c)) continue;
     for (const l of (c.lignes || [])) {
       add(c.alloc || l.libelle, valeurNette(c, l),
           CLASSE_COULEURS[l.classe] || CLASSE_COULEURS.nonCote,
@@ -3400,7 +3490,6 @@ function allocationByAsset({ credits = true, financier = false, net = false } = 
     return bouts.join(' · ');
   };
   return [...map.entries()]
-    .filter(([label]) => !financier || !horsFinancier(poches.get(label)))
     .map(([label, value]) => ({ label, value, couleur: teintes.get(label),
                                 sous: sousTitre(label),
                                 pct: total ? value / total * 100 : 0 }))
@@ -6177,8 +6266,20 @@ function suggestedMonthly() {
    La part plate peut etre negative : un credit a la consommation sans bien en
    face, ou un bien qui vaut moins que son pret. C'est honnete, et ca evite
    surtout de faire fondre une dette au rythme des marches. */
+/* Les biens de valeur y rejoignent l'immobilier : une montre ne capitalise
+   pas, elle est posee — la faire fructifier au taux du non cote serait le
+   mensonge que cette poche refuse a un compte courant. Et sans elle nulle
+   part, la somme des poches de projection cessait de faire le patrimoine
+   net, la regle que ce fichier teste.
+
+   LA PART GELEE EST EXACTEMENT CE QUE LE PERIMETRE FINANCIER ECARTE, moins
+   toutes les dettes. Elle se lisait `immo + biens`, donc par les classes, et
+   gelait ainsi une SCPI et le support immobilier d'une assurance-vie : cent
+   mille euros de placement portes a plat pendant vingt ans, sans qu'un mot le
+   dise. Les deux ecrans partagent un seul perimetre desormais, et la somme des
+   poches fait le patrimoine net par construction plutot que par coincidence. */
 function partPlate(t = nowTotals()) {
-  return num(t.immo) + num(t.biens) - num(t.dettes);
+  return num(t.horsFinancier) - num(t.dettes);
 }
 
 /* Les trois poches de la projection, chacune avec son sort.
@@ -6233,6 +6334,7 @@ function pochesProjection(t = nowTotals()) {
     marche: num(t.bourse) - num(t.projetParPoche?.bourse) - metaux,
     autres: num(t.crypto) - num(t.projetParPoche?.crypto)
           + num(t.pe) - num(t.projetParPoche?.nonCote)
+          + num(t.immoPapier)
           + metaux,
     liquidites: num(t.cash),
     garanti: num(t.garanti) - num(t.projetParPoche?.garanti),
