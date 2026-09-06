@@ -3202,6 +3202,57 @@ function prixParPart(ligne) {
   return u;
 }
 
+/* CE QU'UN PLACEMENT A GAGNE OU PERDU DEPUIS SON ACHAT.
+
+   Deux montants, une seule source : la valeur d'aujourd'hui et le cout
+   d'acquisition, tous deux saisis. Rien n'est deduit d'ailleurs — surtout pas
+   des notes, qui sont du texte libre et le restent.
+
+   `null` PLUTOT QUE ZERO, et la distinction porte tout le sens de cette
+   fonction. Sans cout d'acquisition, la plus-value n'est pas nulle : elle est
+   inconnue, et « 0 EUR » se lirait comme un placement qui n'a rien fait. Deux
+   montants connus et egaux, eux, font un vrai zero, qui s'affiche.
+
+   MAIS LA QUESTION NE SE POSE PAS AUX CHAMPS DE LA LIGNE. `lignesDe` rend
+   `valeur` et `prixDeRevient` toujours numeriques — `num(l.valeur) * q` et
+   `(acq.total || 0) * q` — donc un cout jamais renseigne arrive ici en zero,
+   indiscernable d'un cout nul. Tester la presence de ces deux champs ne pouvait
+   rien attraper. C'est `acquisitionLigne` qui detient la reponse : elle seule
+   separe un zero tape d'un champ vide, et elle rend `total: null` quand le cout
+   n'est pas connu.
+
+   Le MONTANT employe reste celui de la ligne, deja ramene a la quote-part
+   comme l'est `valeur`. Comparer un cout de bien entier a une valeur en
+   quote-part donnerait une moins-value a qui n'a rien perdu. Et une quote-part
+   invalide ecarte la ligne entierement : ses deux montants valent alors zero
+   pour ne pas polluer les totaux, et zero moins zero ferait un placement
+   parfaitement plat.
+
+   LA VALEUR se lit au meme seuil que `prixParPart`, qui remplit la ligne juste
+   au-dessus dans la meme carte. Le modele ramene a zero un champ vide comme un
+   zero saisi, et rien ne les separe. Un placement reellement tombe a zero ne
+   verra donc pas son moins cent pour cent s'afficher — mais un placement dont
+   la valeur n'est pas encore saisie ne s'entendra pas dire qu'il a tout perdu,
+   et des deux erreurs c'est la seconde qui coute. Le prix d'achat reste ecrit
+   au-dessus : la perte se lit, elle n'est simplement pas chiffree a la place du
+   proprietaire.
+
+   Le POURCENTAGE se separe du montant, et pas par gout : un cout nul declare —
+   une part recue, une attribution gratuite — donne une plus-value en euros
+   parfaitement calculable et un pourcentage qui ne l'est pas. Diviser rendrait
+   `Infinity`, que rien n'affiche correctement. Les deux champs sont donc
+   independants, et chacun se tait quand il ne sait pas. */
+function perfLigne(ligne) {
+  if (!ligne || ligne.partInvalide) return { pnl: null, pct: null };
+  const coutConnu = ligne.acquisition ? ligne.acquisition.total != null
+                                      : num(ligne.prixDeRevient) > 0;
+  const valeur = num(ligne.valeur);
+  if (!coutConnu || !(valeur > 0.005)) return { pnl: null, pct: null };
+  const revient = num(ligne.prixDeRevient);
+  const pnl = round2(valeur - revient);
+  return { pnl, pct: revient > 0 ? (pnl / revient) * 100 : null };
+}
+
 /* Le poids de chaque poche du patrimoine, et la base qui les rapporte a cent.
 
    Ce calcul vivait dans la vue, avec les couleurs et les libelles. Il n'y etait

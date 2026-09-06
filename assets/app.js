@@ -3889,11 +3889,78 @@ function ligneCompte(c, avecEtab = true) {
 
 function espaceTerminal(c, idx, t, seule) {
   if (!seule) return '';
+  /* Les actifs comptes EN PARTS ont leur propre carte, qui absorbe
+     « Informations » : voir `detailsPlacement`. Les autres actifs terminaux
+     gardent celle-ci — un pret participatif ou un bien de valeur n'ont ni parts
+     ni prix unitaire, et leur fiche n'a pas la meme question a poser. */
+  if (t.parts) return detailsPlacement(c, idx, t, seule);
   return `
   <div class="card">
     <div class="card-head"><h2>${trad('Le placement')}</h2>
       <span class="hint">${esc(trad(t.label))}</span></div>
     ${lignePlacement(seule, c, true, true)}
+  </div>`;
+}
+
+/* UNE SEULE CARTE POUR « QU'EST-CE QUE JE DETIENS EXACTEMENT ? ».
+
+   La fiche d'une participation posait la question deux fois. « Le placement »
+   redonnait la classe et le montant que le bandeau venait d'ecrire ;
+   « Informations » redonnait le nom et le type que le bandeau ecrivait aussi.
+   Le meme nom trois fois, le meme montant deux fois, la meme classe deux fois,
+   et deux boutons « Modifier » que rien ne distinguait. Sur un telephone, c'est
+   un ecran de defilement pour zero information de plus.
+
+   Ce qui manquait, en revanche, c'est ce qu'on vient reellement verifier sur un
+   placement en parts : combien j'en ai, ce que vaut une part aujourd'hui, ce que
+   je l'ai payee, et ce que cela fait. Les trois premiers existaient dans le
+   modele sans jamais s'afficher cote a cote.
+
+   TOUT EST DERIVE. `parts`, `valeur` et `prixDeRevient` sont les seules donnees
+   saisies ; les prix unitaires et la plus-value se recalculent a chaque rendu.
+   Rien de nouveau n'est persiste, et le total reste la valeur saisie — le
+   reconstruire depuis un prix unitaire arrondi ferait un ecart de centimes. */
+function detailsPlacement(c, idx, t, l) {
+  const u = prixParPart(l);
+  const perf = perfLigne(l);
+  const nonRenseigne = `<span class="muted">${trad('à renseigner')}</span>`;
+  const ligne = (dt, dd) => (dd == null || dd === '' ? ''
+    : `<dt>${dt}</dt><dd>${dd}</dd>`);
+  const plusValue = perf.pnl == null ? null
+    : `<span class="${cls(perf.pnl)}">${fmtSigned(perf.pnl)}</span>`
+      + (perf.pct == null ? '' : ` <span class="muted">·</span> `
+         + `<span class="${cls(perf.pnl)}">${fmtSignedPct(perf.pct)}</span>`);
+
+  return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Détails du placement')}</h2>
+      <button class="btn sm ghost" data-action="editer-placement"
+              data-id="${esc(c.id)}" data-i="${l.ref}">${trad('Modifier')}</button></div>
+    <dl class="kv">
+      ${ligne(trad('Parts détenues'), u ? fmtNombre(u.parts) : null)}
+      ${ligne(trad('Valeur estimée / part') + aide(trad('La valeur que tu as déclarée, divisée par le nombre de parts. Ce placement n’est pas coté : c’est une estimation, pas un cours.')),
+              u && u.valeur != null ? fmtPart(u.valeur) : null)}
+      ${ligne(trad('Prix d’achat / part'),
+              u && u.revient != null ? fmtPart(u.revient)
+                : (u ? nonRenseigne : null))}
+      ${ligne(trad('Valeur actuelle'), fmtEUR(l.valeur))}
+      ${ligne(trad('Plus-value latente') + aide(trad('La valeur d’aujourd’hui moins ce que tu as payé. Latente : elle n’est encaissée qu’à la revente, et la valeur d’un placement non coté est une estimation.')),
+              plusValue)}
+      ${ligne(trad('Liquidité'), badgeMobilisable(mobiliteLigne(l, c)))}
+      ${t.dateSensible || !c.ouvertLe ? '' :
+        `<dt>${motDateCompte(t)}</dt><dd>${esc(fmtDate(c.ouvertLe))}</dd>`}
+      ${c.statut === 'archive' ? `<dt>${trad('Date de clôture')}</dt>
+        <dd>${c.clotureLe ? esc(fmtDate(c.clotureLe))
+              : `<span class="muted">${trad('non renseignée')}</span>`}</dd>` : ''}
+      ${!t.interne && c.numero ? `<dt>${trad('Numéro de compte')}</dt><dd>${esc(c.numero)}</dd>` : ''}
+    </dl>
+    ${!c.notes ? '' : `
+    <div class="fiche-note">
+      <span class="sub">${trad('Notes')}</span>
+      <p>${esc(c.notes)}</p>
+    </div>`}
+    <button type="button" class="lien-nu fiche-plus" data-action="modifier-compte"
+            data-id="${esc(c.id)}">${trad('Nom, dates et notes')}</button>
   </div>`;
 }
 
@@ -5323,6 +5390,7 @@ function viewFicheCompte(id) {
   </div>`;
   })()}
 
+  ${t.parts && seule ? '' : `
   <div class="card">
       <div class="card-head"><h2>${trad('Informations')}</h2>
         <button class="btn sm ghost" data-action="modifier-compte" data-id="${esc(c.id)}">${trad('Modifier')}</button></div>
@@ -5362,7 +5430,7 @@ function viewFicheCompte(id) {
         <input data-path="comptes.${idx}.notes" value="${esc(c.notes || '')}"
                placeholder="${trad('facultatif')}" style="text-align:left"></div>
       ${barreValiderFiche()}
-    </div>
+    </div>`}
     <div class="card">
       <div class="card-head"><h2>${trad('actions.fiche', 'Actions')}</h2></div>
       <div class="fiche-actes">

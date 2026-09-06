@@ -522,6 +522,10 @@ body {
 .sb-delta.down { color: var(--critical); }
 .saved { font-size: 10.5px; color: #5d6875; text-align: center; transition: color .2s; }
 .saved.flash { color: var(--good); }
+.fiche-note { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.fiche-note p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+                overflow-wrap: anywhere; }
+.fiche-plus { display: block; margin-top: 12px; font-size: 12.5px; }
 .saved.ko { color: var(--critical); font-weight: 650; }
 
 .burger, .nav-backdrop, .tabbar { display: none; }

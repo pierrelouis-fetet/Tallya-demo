@@ -3546,6 +3546,252 @@ suite('Parts de société : un nombre saisi, deux prix déduits', () => {
 });
 
 /* ------------------------------------------------------------------
+   Une plus-value se calcule sur deux montants connus, ou ne se dit pas
+   ------------------------------------------------------------------ */
+suite('Plus-value latente : deux montants connus, ou rien', () => {
+
+  /* Le fixture ne porte pas de participation : celle-ci est montee ici, avec
+     des montants inventes pour l'occasion. */
+  const placement = ligne => {
+    Fixture.poser();
+    const c = { id: 'pe_test', etabId: Store.state.etabs[0].id, type: 'pe',
+      statut: 'ouvert', libelle: 'Participation', court: 'Participation',
+      ouvertLe: '2025-01-01', numero: '', notes: '', alloc: '', cash: [],
+      lignes: [Object.assign({ id: 'lg', classe: 'nonCote',
+                               libelle: 'Parts' }, ligne)] };
+    Store.state.comptes.push(c);
+    return lignesDe(c)[0];
+  };
+
+  test('un gain se dit en euros et en pourcentage', () => {
+    const p = perfLigne(placement({ parts: 7529, valeur: 10000, prixDeRevient: 9000 }));
+    pres(p.pnl, 1000, 'mille euros de plus qu’à l’achat');
+    pres(p.pct, 11.1111, 'soit onze pour cent');
+  });
+
+  test('une perte garde son signe, des deux côtés', () => {
+    const p = perfLigne(placement({ parts: 7529, valeur: 10000, prixDeRevient: 12000 }));
+    pres(p.pnl, -2000, 'deux mille euros de moins');
+    pres(p.pct, -16.6667, 'et le pourcentage est négatif lui aussi');
+  });
+
+  test('un coût jamais renseigné ne fait pas un gain égal à toute la valeur', () => {
+    /* LA REGRESSION QUE CE TEST TIENT. Le garde d'origine cherchait `null` et
+       chaine vide sur les champs de la ligne. Or `lignesDe` les rend toujours
+       numeriques : un cout absent arrive ici en zero, et la soustraction
+       annoncait dix mille euros de plus-value sur un placement dont personne
+       n'a dit ce qu'il avait coute. */
+    const l = placement({ parts: 7529, valeur: 10000 });
+    eq(num(l.prixDeRevient), 0, 'le modèle rend bien zéro, et non une absence');
+    eq(l.acquisition.total, null, 'mais l’acquisition, elle, dit que le coût est inconnu');
+    const p = perfLigne(l);
+    eq(p.pnl, null, 'aucune plus-value ne s’affiche');
+    eq(p.pct, null, 'ni aucun pourcentage');
+  });
+
+  test('une valeur pas encore saisie ne s’entend pas dire qu’elle a tout perdu', () => {
+    /* Meme cause, autre sens : zero en valeur donnerait moins cent pour cent. */
+    const p = perfLigne(placement({ parts: 7529, prixDeRevient: 9000 }));
+    eq(p.pnl, null, 'rien tant que la valeur du jour n’est pas connue');
+    eq(p.pct, null, 'et surtout pas −100 %');
+  });
+
+  test('deux montants connus et égaux font un vrai zéro, qui s’affiche', () => {
+    const p = perfLigne(placement({ parts: 7529, valeur: 9000, prixDeRevient: 9000 }));
+    eq(p.pnl, 0, 'zéro se dit, parce qu’il est mesuré');
+    eq(p.pct, 0, 'et le pourcentage aussi');
+  });
+
+  test('un coût nul déclaré donne un montant, jamais un pourcentage', () => {
+    /* Une part recue, une attribution gratuite : la plus-value en euros est
+       parfaitement calculable, le pourcentage ne l'est pas. Diviser rendrait
+       `Infinity`, que rien n'affiche. */
+    const p = perfLigne({ acquisition: { total: 0 }, prixDeRevient: 0, valeur: 5000 });
+    pres(p.pnl, 5000, 'cinq mille euros gagnés sur une part reçue');
+    eq(p.pct, null, 'et aucun pourcentage inventé');
+    vrai(Number.isFinite(p.pnl), 'le montant reste un nombre fini');
+  });
+
+  test('une quote-part invalide écarte la ligne au lieu de l’aplatir', () => {
+    /* Hors de [0, 100], la part detenue n'est pas connue : `lignesDe` met
+       alors valeur et cout a zero pour ne pas polluer les totaux, et zero moins
+       zero ferait un placement parfaitement plat. */
+    const l = placement({ parts: 7529, valeur: 10000, prixDeRevient: 9000, part: 150 });
+    vrai(l.partInvalide, 'la quote-part n’est pas lisible');
+    eq(perfLigne(l).pnl, null, 'donc aucune plus-value ne se calcule');
+  });
+
+  test('une ligne de marché se juge sur le coût rendu par le courtier', () => {
+    /* Ces lignes-la n'ont pas de detail d'acquisition : zero y vaut absence. */
+    pres(perfLigne({ prixDeRevient: 800, valeur: 1000 }).pnl, 200, 'deux cents de plus');
+    eq(perfLigne({ prixDeRevient: 0, valeur: 1000 }).pnl, null, 'et sans coût, rien');
+    eq(perfLigne(null).pnl, null, 'aucune ligne, aucune plus-value');
+  });
+
+  test('le calcul vit dans le modèle, la vue ne le refait pas', () => {
+    const app = lireSource('assets/app.js');
+    const d = app.slice(app.indexOf('function detailsPlacement'),
+                        app.indexOf('\n}', app.indexOf('function detailsPlacement')));
+    eq((d.match(/perfLigne\(l\)/g) || []).length, 1, 'la vue demande, une fois');
+    vrai(!/valeur\s*-\s*.*prixDeRevient/.test(d), 'et ne soustrait rien elle-même');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Le prix d'une part s'affiche arrondi, le total reste celui qui est saisi
+   ------------------------------------------------------------------ */
+suite('Parts de société : le total saisi ne se reconstruit jamais', () => {
+
+  test('les deux prix unitaires se déduisent du même nombre de parts', () => {
+    const u = prixParPart({ parts: 7529, valeur: 10000, prixDeRevient: 9000 });
+    pres(u.parts, 7529, 'le nombre de parts');
+    pres(u.valeur, 1.3282, 'un peu plus d’un euro trente la part');
+    pres(u.revient, 1.1954, 'contre un euro dix-neuf payés');
+  });
+
+  test('le prix unitaire s’écrit au centime, comme partout ailleurs', () => {
+    /* `fmtPart` est la regle deja en place : deux decimales au-dessus du
+       centime, quatre en dessous. Une part a 1,3282 EUR s'ecrit donc 1,33 EUR,
+       et c'est precisement pourquoi le total ne se reconstruit pas depuis
+       elle : 7 529 fois 1,33 fait 10 013 EUR, et non les 10 000 saisis. */
+    const u = prixParPart({ parts: 7529, valeur: 10000, prixDeRevient: 9000 });
+    vrai(/1[.,]33/.test(fmtPart(u.valeur)), 'arrondi au centime : ' + fmtPart(u.valeur));
+    vrai(Math.abs(7529 * 1.33 - 10000) > 10, 'le produit arrondi s’écarte du montant saisi');
+  });
+
+  test('la carte affiche le montant saisi, pas le produit du prix unitaire', () => {
+    const app = lireSource('assets/app.js');
+    const d = app.slice(app.indexOf('function detailsPlacement'),
+                        app.indexOf('\n}', app.indexOf('function detailsPlacement')));
+    vrai(/fmtEUR\(l\.valeur\)/.test(d), '« Valeur actuelle » rend la valeur de la ligne');
+    vrai(!/u\.valeur\s*\*|u\.parts\s*\*/.test(d), 'et rien ne multiplie un prix unitaire');
+  });
+
+  test('zéro part ne produit ni division ni ligne vide', () => {
+    eq(prixParPart({ parts: 0, valeur: 10000, prixDeRevient: 9000 }), null,
+      'aucun prix unitaire sans parts');
+    const p = perfLigne({ acquisition: { total: 9000 }, prixDeRevient: 9000, valeur: 10000 });
+    pres(p.pnl, 1000, 'la plus-value, elle, n’a pas besoin des parts');
+  });
+
+  test('une part à moins d’un centime garde ses quatre décimales dans la carte', () => {
+    const u = prixParPart({ parts: 2000000, valeur: 2400, prixDeRevient: 2400 });
+    vrai(/0[.,]0012/.test(fmtPart(u.valeur)), 'lisible au dix-millième : ' + fmtPart(u.valeur));
+  });
+});
+
+/* ------------------------------------------------------------------
+   Une seule carte pose la question de ce qu'on detient
+   ------------------------------------------------------------------ */
+suite('Fiche d’une participation : une carte, pas deux', () => {
+
+  const vue = () => lireSource('assets/app.js');
+  const corps = () => {
+    const app = vue();
+    return app.slice(app.indexOf('function detailsPlacement'),
+                     app.indexOf('\n}', app.indexOf('function detailsPlacement')));
+  };
+
+  test('le type décide, pas un identifiant écrit dans la vue', () => {
+    /* Deux types portent le drapeau, et la carte les sert tous les deux. */
+    const avecParts = TYPES_COMPTE.filter(t => t.parts).map(t => t.id).sort();
+    eq(avecParts.join(','), 'fondsNonCote,pe', 'les deux types qui se divisent en parts');
+    vrai(/if \(t\.parts\) return detailsPlacement\(c, idx, t, seule\);/.test(vue()),
+      'l’aiguillage lit le drapeau du type');
+  });
+
+  test('les actifs terminaux sans parts gardent « Le placement »', () => {
+    /* Un pret participatif ou un bien de valeur n'ont ni parts ni prix
+       unitaire : leur fiche n'a pas la meme question a poser. */
+    const app = vue();
+    const e = app.slice(app.indexOf('function espaceTerminal'),
+                        app.indexOf('\n}', app.indexOf('function espaceTerminal')));
+    vrai(/lignePlacement\(seule, c, true, true\)/.test(e),
+      'l’ancienne carte reste servie aux autres');
+    const pret = TYPES_COMPTE.find(t => t.id === 'crowdfunding');
+    vrai(pret.terminal && !pret.parts, 'et un prêt participatif est bien de ceux-là');
+  });
+
+  test('« Informations » se tait quand la carte fusionnée a pris sa place', () => {
+    vrai(/\$\{t\.parts && seule \? '' : `/.test(vue()),
+      'la carte doublon est conditionnée, pas supprimée');
+  });
+
+  test('un seul bouton « Modifier », et un lien qui dit ce qu’il ouvre', () => {
+    /* Deux boutons identiques que rien ne distinguait, c'etait le defaut de
+       depart. Le second geste existe toujours, mais il s'annonce. */
+    const d = corps();
+    eq((d.match(/class="btn sm ghost"/g) || []).length, 1, 'un seul bouton');
+    eq((d.match(/data-action="editer-placement"/g) || []).length, 1,
+      'qui ouvre le formulaire du placement');
+    eq((d.match(/data-action="modifier-compte"/g) || []).length, 1,
+      'et un second chemin, qui n’est pas un bouton');
+    vrai(/class="lien-nu fiche-plus"/.test(d), 'le nom et les dates passent par un lien');
+  });
+
+  test('le nom, le type et la classe ne se répètent pas sous le bandeau', () => {
+    const d = corps();
+    vrai(!/c\.libelle|c\.court/.test(d), 'le nom du compte n’est pas réécrit');
+    vrai(!/trad\(t\.label\)/.test(d), 'ni son type');
+  });
+
+  test('la note se lit, elle ne s’édite pas dans la fiche', () => {
+    /* Un champ de saisie ouvert donnait a une fiche en lecture l'air d'un
+       formulaire a moitie rempli. */
+    const d = corps();
+    vrai(!/<input|<textarea/.test(d), 'aucun champ de saisie dans la carte');
+    vrai(/\$\{!c\.notes \? '' :/.test(d), 'et une note vide ne laisse pas de cadre');
+    vrai(/esc\(c\.notes\)/.test(d), 'la note s’échappe avant de s’afficher');
+  });
+
+  test('une ligne sans réponse ne se rend pas', () => {
+    /* « 0 EUR la part » sur un placement sans parts serait une mesure
+       inventee ; l'absence de ligne, elle, ne dit rien de faux. */
+    const d = corps();
+    vrai(/const ligne = \(dt, dd\) => \(dd == null \|\| dd === '' \? ''/.test(d),
+      'le rendu d’une ligne dépend de sa valeur');
+  });
+
+  test('le coût inconnu se dit, il ne s’affiche pas en zéro', () => {
+    const d = corps();
+    vrai(/trad\('à renseigner'\)/.test(d), 'le prix d’achat manquant s’annonce');
+    vrai(!/fmtEUR\(0\)|fmtPart\(0\)/.test(d), 'et aucun zéro n’est écrit à la place');
+  });
+
+  test('les deux mesures déduites disent qu’elles sont des estimations', () => {
+    /* Ce placement n'est pas cote : un prix unitaire y est une division, pas
+       un cours, et une plus-value latente n'est pas encaissee. */
+    const d = corps();
+    eq((d.match(/aide\(trad\(/g) || []).length, 2, 'deux bulles, deux mesures déduites');
+    vrai(/n’est pas coté/.test(d), 'la première rappelle que rien n’est coté');
+    vrai(/à la revente/.test(d), 'la seconde, que rien n’est encaissé');
+  });
+
+  test('le financement reste une carte à part', () => {
+    /* Une dette n'est pas un detail du placement : elle se lit et se saisit
+       ailleurs, et la fusion ne l'a pas absorbee. */
+    const app = vue();
+    vrai(!/Financement/.test(corps()), 'la carte fusionnée ne parle pas de crédit');
+    vrai(/trad\('Financement'\)/.test(app), 'mais la fiche, elle, en parle toujours');
+  });
+
+  test('la liquidité et les dates viennent du modèle, sans être recalculées', () => {
+    const d = corps();
+    vrai(/badgeMobilisable\(mobiliteLigne\(l, c\)\)/.test(d), 'la liquidité est demandée');
+    vrai(/motDateCompte\(t\)/.test(d), 'et le mot de la date suit le type');
+    vrai(/t\.dateSensible \|\| !c\.ouvertLe \? '' :/.test(d),
+      'un type à date sensible ne l’affiche pas');
+  });
+
+  test('tout ce qui s’affiche est traduit', () => {
+    /* La regle de la maison : une chaine nait dans `trad()`. */
+    const d = corps();
+    const nus = d.match(/<dt>(?!\$\{)[^<]+<\/dt>/g) || [];
+    eq(nus.length, 0, 'aucun intitulé écrit en dur : ' + nus.join(' | '));
+  });
+});
+
+/* ------------------------------------------------------------------
    Les fiches d'Apercu disent la categorie, pas l'inventaire
    ------------------------------------------------------------------ */
 suite('Fiches d’Aperçu : une catégorie se lit sans dérouler son inventaire', () => {
