@@ -20591,6 +20591,35 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     }
   });
 
+  test('le préambule d’Allocation n’annonce pas un écart inexistant', () => {
+    /* Le commutateur Financier / Tout se tait quand rien ne sort du périmètre :
+       `horsFinancierExiste()` décide, et sans mur ni bien de valeur les deux
+       lectures donnent la même page. Le préambule, lui, annonçait toujours
+       « immobilier en direct et biens de valeur écartés ». L'écran retirait le
+       choix parce qu'il n'y a rien à écarter, et disait dans la même respiration
+       ce qu'il écarte. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('function viewAllocation()'),
+                          src.indexOf('function mountAllocation'));
+    const i = vue.indexOf('perimetre-tete');
+    const bloc = vue.slice(i, i + 1400);
+    vrai(/horsFinancierExiste\(\)/.test(bloc),
+      'la phrase demande si quelque chose sort vraiment du périmètre');
+    vrai(/: trad\('tes avoirs'\)/.test(bloc),
+      'et nomme simplement la base quand rien ne sort');
+    vrai(/allocFinancier && !horsFinancierExiste\(\)/.test(bloc),
+      'l’aide suit la même condition');
+    /* La branche « Tout » ne bouge pas : sa base est le patrimoine net, et
+       « tes crédits sont déduits » reste vrai avec ou sans mur. */
+    vrai(/trad\('tes crédits sont déduits'\)/.test(bloc), 'le mode Tout garde sa phrase');
+    eq(I18N.en['tes avoirs'], 'your holdings', 'la base se traduit');
+    const aide = Object.keys(I18N.en).find(k => /Rien n’est écarté ici/.test(k));
+    vrai(aide && /Nothing is set aside here/.test(I18N.en[aide]), 'l’aide courte aussi');
+    /* Et le commutateur garde la même garde : les deux ne peuvent pas diverger. */
+    vrai(/\$\{horsFinancierExiste\(\) \? barreCommutateur\(/.test(vue),
+      'le commutateur lit le même prédicat');
+  });
+
   test('le premier écran n’annonce pas un patrimoine de zéro', () => {
     /* Sans un seul compte, « PATRIMOINE 0,00 € » s'affichait en gros au-dessus
        de l'invitation à en créer un : le chiffre se lit comme une mesure alors

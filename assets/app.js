@@ -3188,9 +3188,13 @@ function viewAllocation() {
   ], allocFinancier ? 'financier' : 'tout', 'alloc-base', 'base') : ''}
 
   <p class="perimetre perimetre-tete">${trad('Ici,')} <b>${allocFinancier
-      ? trad('immobilier en direct et biens de valeur écartés, avec leurs crédits')
+      ? (horsFinancierExiste()
+          ? trad('immobilier en direct et biens de valeur écartés, avec leurs crédits')
+          : trad('tes avoirs'))
       : trad('tes crédits sont déduits')}</b>${deuxPoints()}
-    ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier
+    ${fmtEUR0(valeurBaseAlloc())}, <span class="sans-veuve">${trad('non coté compris')}${aide(allocFinancier && !horsFinancierExiste()
+      ? trad("Rien n’est écarté ici : tu n’as ni bien immobilier détenu en direct, ni bien de valeur. Le non coté reste, lui aussi. Les répartitions ci-dessous portent toutes sur ces avoirs : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.")
+      : allocFinancier
       ? trad("Les biens immobiliers détenus en direct et les biens de valeur sont écartés, et les crédits qui leur sont explicitement rattachés le sont avec eux. La pierre papier reste : une SCPI, ou le support immobilier d’une assurance-vie, s’arbitre comme un fonds. C’est un placement, pas un mur. Les autres dettes, une marge ou un prêt personnel, se déduisent du patrimoine financier net, annoncé en tête dès qu’il en existe une. Le non coté reste : on choisit d’y remettre ou non, alors qu’on ne vend pas trois mètres carrés de salon. Les répartitions ci-dessous portent toutes sur tes avoirs financiers : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.")
       : trad("Deux bases sur cette page, et chaque carte annonce la sienne. « Patrimoine net » pour la répartition : tout ce que tu possèdes moins ce que tu dois encore, un bien financé y comptant pour sa valeur moins son crédit. « Tes avoirs » pour les cartes qui disent où ton argent est posé et en combien de temps il ressort : une dette n’est posée sur aucun compte et n’a pas de délai de sortie, elle ne s’y retranche donc pas. Chaque total redonne la base annoncée juste au-dessus de lui."))}.</span></p>
 

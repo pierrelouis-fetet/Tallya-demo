@@ -193,6 +193,9 @@ const I18N = {
     "Un crédit explicitement rattaché à un logement détenu en direct est écarté avec lui. Toutes les autres dettes restent ici : une marge de courtier, un prêt personnel, un crédit dont le bien n’est pas renseigné.":
       'A loan explicitly linked to a directly owned home is set aside with it. Every other debt stays here: a broker margin, a personal loan, a loan whose asset is not filled in.',
     'immobilier en direct et biens de valeur écartés, avec leurs crédits': 'directly owned property and valuables set aside, with their loans',
+    'tes avoirs': 'your holdings',
+    "Rien n’est écarté ici : tu n’as ni bien immobilier détenu en direct, ni bien de valeur. Le non coté reste, lui aussi. Les répartitions ci-dessous portent toutes sur ces avoirs : une dette ne se répartit pas entre tes comptes ni entre tes classes d’actifs.":
+      "Nothing is set aside here: you own no directly held property and no valuables. Unlisted assets stay too. The breakdowns below are all based on these holdings: debt is not spread across your accounts or your asset classes.",
     'Il te reste': 'Left to run',
     'échéances': 'instalments',
     'Assurance restante': 'Insurance still to pay',
