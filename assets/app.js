@@ -19,6 +19,21 @@ const monthsLeftInYear = () => monthsToObjective();
 function arrow(v) { return v > 0 ? '▲' : v < 0 ? '▼' : '•'; }
 
 let savedTimer = null;
+function signalerEcritureVue(ok, premierEchec) {
+  const f = $('#savedFlag');
+  if (f) {
+    f.classList.toggle('ko', !ok);
+    if (!ok) f.textContent = trad('Non enregistré');
+    else f.textContent = trad('Sauvegardé localement');
+  }
+  if (!ok && premierEchec) {
+    toast(trad('Impossible d’enregistrer sur cet appareil. Exporte une sauvegarde.'));
+  } else if (ok) {
+    toast(trad('Enregistrement rétabli.'));
+  }
+}
+if (typeof poserSignalEcriture === 'function') poserSignalEcriture(signalerEcritureVue);
+
 function flashSaved() {
   const f = $('#savedFlag');
   if (!f) return;
@@ -6309,16 +6324,46 @@ function mountData() {
     if (!await askConfirm(`${trad('Importer')} ${guill(file.name)} ?\n\n${trad('Cela remplacera toutes les données actuellement enregistrées dans ce navigateur.')}`)) {
       f.value = ''; return;
     }
+    /* LIRE, VALIDER, SAUVEGARDER L'ANCIEN, PUIS SEULEMENT REMPLACER.
+
+       L'ordre etait l'inverse : `Store.state = data` s'executait avant
+       `Store.migrate()`, et un fichier qui passait la garde sommaire —
+       `{ positions: [], monthly: [] }` la passe — faisait echouer la migration
+       APRES avoir remplace l'etat. L'ecran annonçait « Import impossible » et
+       le patrimoine etait deja perdu : zero compte, zero releve, zero euro.
+
+       La migration s'execute donc sur un candidat, l'etat courant revient si
+       elle echoue, et une sauvegarde est posee avant de toucher a quoi que ce
+       soit. C'est le geste le plus destructeur de l'application ; il est le
+       seul a n'avoir eu aucun filet. */
     try {
-      const data = JSON.parse(await file.text());
-      if (!data.positions || !data.monthly) throw new Error('Format inattendu');
+      const brut = await file.text();
+      let data;
+      try { data = JSON.parse(brut); }
+      catch (e) { throw new Error(trad('Ce fichier n’est pas un JSON lisible.')); }
+      if (!data || typeof data !== 'object' || Array.isArray(data)
+          || !Array.isArray(data.positions) || !Array.isArray(data.monthly)
+          || !data.budget || typeof data.budget !== 'object')
+        throw new Error(trad('Ce fichier n’a pas la forme d’une sauvegarde Tallya.'));
+
+      const avant = Store.state;
+      const filet = Store.addBackup('avant import');
       Store.state = data;
-      Store.migrate();
+      try {
+        Store.migrate();
+        refreshAccounts();
+      } catch (e) {
+        Store.state = avant;
+        refreshAccounts();
+        throw new Error(trad('Cette sauvegarde n’a pas pu être relue : tes données n’ont pas bougé.'));
+      }
       Store.save();
       render();
-      toast(trad('Import réussi'));
+      toast(filet ? trad('Import réussi')
+                  : trad('Import réussi, sans copie de secours'));
     } catch (e) {
-      alert('Import impossible : ' + e.message);
+      await askConfirm(trad('Import impossible') + '\n\n' + e.message,
+        { ok: 'Compris', danger: false });
     }
   });
 }

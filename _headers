@@ -3,6 +3,27 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()
+  # Tout vient d'ici, et rien d'autre n'a le droit d'entrer.
+  #
+  # `script-src 'self'` sans `unsafe-inline` : les neuf fichiers de l'app sont
+  # servis depuis cette origine, et aucune balise <script> de la page n'execute
+  # de code — la seule qui reste porte du JSON-LD, que le navigateur n'execute
+  # pas. C'est la ligne qui compte : une chaine importee qui parviendrait a
+  # devenir une balise ne pourrait toujours pas s'executer.
+  #
+  # `style-src 'unsafe-inline'` est une concession, et elle se dit : l'interface
+  # pose des centaines d'attributs `style=""` — largeurs de jauges, teintes de
+  # series — calcules a chaque rendu. Les retirer demanderait de reecrire
+  # l'interface, ce qui n'est pas le sujet de cette passe. Le risque residuel est
+  # l'exfiltration par CSS, tres loin derriere l'execution de script.
+  #
+  # `connect-src 'self'` : tout passe par /api/ sur la meme origine, y compris
+  # les cours — le Worker parle aux fournisseurs, jamais le navigateur.
+  #
+  # `frame-ancestors 'none'` double X-Frame-Options : le premier est la regle
+  # moderne, le second le repli des navigateurs qui l'ignorent. Ils disent la
+  # meme chose, ils ne se contredisent pas.
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
 # Les fichiers d'assets portent un numero de version dans leur URL
 # (`?v=...`) : une adresse qui change est une adresse que le navigateur

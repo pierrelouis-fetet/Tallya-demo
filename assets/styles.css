@@ -522,6 +522,7 @@ body {
 .sb-delta.down { color: var(--critical); }
 .saved { font-size: 10.5px; color: #5d6875; text-align: center; transition: color .2s; }
 .saved.flash { color: var(--good); }
+.saved.ko { color: var(--critical); font-weight: 650; }
 
 .burger, .nav-backdrop, .tabbar { display: none; }
 

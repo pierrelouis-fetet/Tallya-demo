@@ -279,8 +279,22 @@ const MAX_BYTES = 2 * 1024 * 1024;
 
 const keyFor = email => `state:${email || 'default'}`;
 
-async function handleState(request, env, email) {
+async function handleState(request, env, email, identifie) {
   if (!env.WEALTH) return json({ error: 'stockage non configuré' }, 501);
+  /* UN VISITEUR ANONYME N'A PAS D'ETAT, ET NE PEUT PAS PRENDRE CELUI DES AUTRES.
+
+     La cle retombe sur `state:default` quand aucune adresse n'est prouvee. C'est
+     le cas voulu d'un proprietaire unique derriere un mot de passe : un seul
+     etat, une seule cle. Ce n'est pas le cas d'un site ouvert — demonstration
+     publique, ou ALLOW_PUBLIC — ou chaque visiteur anonyme tomberait sur la
+     MEME cle et lirait, ecraserait ou effacerait ce que le precedent y a mis.
+
+     Aujourd'hui la demonstration n'a aucun espace KV lie, donc la question ne se
+     pose pas : `/api/state` y repond deja « stockage non configure ». Ce refus
+     est la pour le jour ou quelqu'un en lie un — une case cochee dans un tableau
+     de bord ne doit pas suffire a transformer une demonstration en boite aux
+     lettres commune. La porte est fermee dans le code, la ou elle se relit. */
+  if (!identifie) return json({ error: 'identité requise' }, 403);
   const key = keyFor(email);
 
   if (request.method === 'GET') {
@@ -551,6 +565,18 @@ export default {
       'Referrer-Policy': 'no-referrer',
       'Permissions-Policy':
         'geolocation=(), camera=(), microphone=(), interest-cohort=()',
+      /* La meme CSP que `_headers`, et pour la meme raison que les quatre
+         au-dessus : ces reponses sont construites ici, donc les regles de
+         Cloudflare Pages ne les touchent pas. La page de connexion est celle
+         ou l'on tape un mot de passe ; elle ne peut pas etre la moins
+         protegee des trois. Elle n'a ni style en ligne ni script, mais la
+         liste se recopie entiere : deux CSP differentes sur un meme site
+         finiraient par diverger sur la seule qui compte. */
+      'Content-Security-Policy':
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        + "img-src 'self' data:; font-src 'self'; connect-src 'self'; "
+        + "manifest-src 'self'; worker-src 'self'; object-src 'none'; "
+        + "base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     };
 
     if (path === '/api/login' && request.method === 'POST') {
@@ -585,11 +611,12 @@ export default {
     const PUBLIC = ['/icon-192.png', '/apple-touch-icon.png'];
 
     const email = await accessEmail(request, env);
+    const identifie = !!email
+      || (pwd && await tokenIsValid(cookieValue(request, 'wd_session'), pwd));
     const authorised = PUBLIC.includes(path)
       || (DEMO_PUBLIQUE && !pwd)
       || env.ALLOW_PUBLIC === '1'
-      || !!email
-      || (pwd && await tokenIsValid(cookieValue(request, 'wd_session'), pwd));
+      || identifie;
 
     if (!authorised) {
       if (path.startsWith('/api/')) {
@@ -635,7 +662,7 @@ export default {
         return json({ results: out });
       }
 
-      if (path === '/api/state') return handleState(request, env, email);
+      if (path === '/api/state') return handleState(request, env, email, identifie);
 
       return json({ error: 'route inconnue' }, 404);
     } catch (e) {

@@ -27783,6 +27783,114 @@ suite('Les réponses du worker sont aussi protégées que les fichiers', () => {
      Le controle ne recopie pas la liste : il la LIT dans `_headers`, le fichier
      qui la possede. Ajouter une protection la-bas la rend exigible ici sans
      toucher a ce test. */
+  test('un import ne remplace rien avant d’avoir validé', () => {
+    /* LE DEFAUT, ET C'ETAIT UNE PERTE DE DONNEES. L'ordre etait :
+       `Store.state = data` PUIS `Store.migrate()`. Un fichier qui passait la
+       garde sommaire — elle ne testait que la presence de `positions` et
+       `monthly` — faisait echouer la migration APRES le remplacement. L'ecran
+       annonçait « Import impossible » et le patrimoine etait deja parti : zero
+       compte, zero relevé, zero euro. Le geste le plus destructeur de
+       l'application etait le seul sans filet. */
+    const src = lireSource('assets/app.js');
+    const bloc = src.slice(src.indexOf('function mountData()'),
+                           src.indexOf('function download('));
+    /* La validation vient avant toute affectation. */
+    /* La forme EXECUTABLE, avec son point-virgule : le commentaire au-dessus
+       cite le code fautif entre accents graves, et une recherche naive le
+       trouvait en premier. Un controle qui mesure la prose ne mesure rien. */
+    const iValide = bloc.indexOf('n’a pas la forme d’une sauvegarde Tallya.');
+    const iRemplace = bloc.indexOf('Store.state = data;');
+    vrai(iValide > 0 && iRemplace > 0, 'les deux étapes doivent exister');
+    vrai(iValide < iRemplace, 'on valide avant de remplacer');
+    /* La forme est verifiee, pas seulement la presence de deux clefs. */
+    for (const garde of ['Array.isArray(data.positions)', 'Array.isArray(data.monthly)',
+                         'typeof data.budget'])
+      vrai(bloc.includes(garde), `la validation vérifie ${garde}`);
+    /* Une sauvegarde est posée avant de toucher à quoi que ce soit. */
+    const iBackup = bloc.indexOf("Store.addBackup('avant import')");
+    vrai(iBackup > 0 && iBackup < iRemplace, 'une copie de secours précède le remplacement');
+    /* Et la migration se rejoue en arrière si elle refuse. */
+    vrai(/Store\.state = avant;/.test(bloc), 'l’état revient si la migration échoue');
+    vrai(!/alert\(/.test(bloc), 'les erreurs passent par la fenêtre de l’app, pas par alert()');
+  });
+
+  test('une écriture impossible ne se tait pas', () => {
+    /* `flashSaved()` vivait deja dans le `try`, donc « Sauvegardé ✓ » ne
+       s'affichait pas a tort. Mais rien ne s'affichait non plus : quota plein ou
+       stockage refuse, la modification vivait en memoire et disparaissait au
+       rechargement, sans un mot. Le pire des silences est celui qui ressemble a
+       un succes. */
+    const store = lireSource('assets/store.js');
+    const bloc = store.slice(store.indexOf('  save(opts = {})'),
+                             store.indexOf('  canUndo()'));
+    vrai(/signalerEcriture\(false, nouveau\)/.test(bloc),
+      'un échec d’écriture remonte à la vue');
+    vrai(/signalerEcriture\(true\)/.test(bloc), 'et le rétablissement aussi');
+    vrai(bloc.indexOf('flashSaved()') < bloc.indexOf('catch'),
+      '« Sauvegardé » reste dans le try : jamais affiché après un échec');
+    /* Un seul message par bascule, pas un par frappe. */
+    const app = lireSource('assets/app.js');
+    const vue = app.slice(app.indexOf('function signalerEcritureVue'),
+                          app.indexOf('function flashSaved'));
+    vrai(/if \(!ok && premierEchec\)/.test(vue), 'le message ne se répète pas à chaque frappe');
+    vrai(/classList\.toggle\('ko', !ok\)/.test(vue), 'mais le témoin, lui, reste');
+    vrai(/\.saved\.ko/.test(lireSource('assets/styles.css')), 'et il se voit');
+    for (const clef of ['Non enregistré', 'Impossible d’enregistrer sur cet appareil. Exporte une sauvegarde.',
+                        'Enregistrement rétabli.'])
+      vrai(I18N.en[clef], `« ${clef.slice(0, 24)} » est traduite`);
+  });
+
+  test('un état sans identité prouvée n’a pas de clef par défaut', () => {
+    /* `state:default` est le cas voulu d'un propriétaire unique derrière un mot
+       de passe. Ce n'est pas celui d'un site ouvert : chaque visiteur anonyme y
+       tomberait sur la MEME clef. La démonstration n'a aujourd'hui aucun espace
+       KV lié — `/api/state` y répond « stockage non configuré » — mais une case
+       cochée dans un tableau de bord ne doit pas suffire à transformer une
+       démonstration en boîte aux lettres commune. */
+    const w = lireSource('_worker.js');
+    const fn = w.slice(w.indexOf('async function handleState('),
+                       w.indexOf('const key = keyFor(email);'));
+    vrai(/if \(!identifie\) return json\(\{ error: 'identité requise' \}, 403\);/.test(fn),
+      'sans identité prouvée, /api/state refuse');
+    /* L'identité vient du serveur, jamais d'un en-tête que la requête se donne. */
+    vrai(/const identifie = !!email/.test(w), 'elle descend de l’adresse validée');
+    vrai(/tokenIsValid\(cookieValue\(request, 'wd_session'\), pwd\)/.test(w),
+      'ou du cookie de session signé');
+    /* Le garde-fou d'entrée et celui de l'état sont deux questions distinctes :
+       `authorised` dit qui peut ENTRER, `identifie` dit qui possède un état. Ce
+       dépôt-ci peut être ouvert (démonstration) ou fermé par défaut (dépôt
+       principal) — la constante n'existe que dans le premier, et le contrôle ne
+       l'exige donc pas. Ce qui vaut des deux côtés : une ouverture, quelle
+       qu'elle soit, passe l'entrée et jamais l'état. */
+    vrai(/\|\| identifie;/.test(w), 'le garde-fou d’entrée réutilise le même calcul');
+    for (const ouverture of ['DEMO_PUBLIQUE && !pwd', "env.ALLOW_PUBLIC === '1'"]) {
+      const i = w.indexOf(ouverture);
+      if (i < 0) continue;                       // cette ouverture n'existe pas ici
+      vrai(i < w.indexOf('|| identifie;'),
+        `« ${ouverture} » ouvre l’entrée, et reste hors du calcul d’identité`);
+    }
+    vrai(w.includes("env.ALLOW_PUBLIC === '1'"), 'au moins une ouverture explicite existe');
+  });
+
+  test('la CSP dit ce que l’application a réellement le droit de faire', () => {
+    const h = lireSource('_headers');
+    const csp = (h.match(/Content-Security-Policy: ([^\n]*)/) || [])[1] || '';
+    vrai(csp, '_headers porte une CSP');
+    for (const regle of ["default-src 'self'", "script-src 'self'", "object-src 'none'",
+                         "base-uri 'self'", "frame-ancestors 'none'", "connect-src 'self'"])
+      vrai(csp.includes(regle), `la CSP porte « ${regle} »`);
+    /* La concession, et elle est nommée : des centaines d'attributs style="" que
+       l'interface calcule à chaque rendu. Le script, lui, ne cède pas. */
+    vrai(csp.includes("style-src 'self' 'unsafe-inline'"), 'les styles en ligne sont admis');
+    vrai(!/script-src[^;]*unsafe-inline/.test(csp), 'le script, lui, ne l’est pas');
+    vrai(!/script-src[^;]*unsafe-eval/.test(csp), 'ni eval');
+    /* L'app n'a aucun script en ligne exécutable : la règle est tenable. */
+    const html = lireSource('index.html');
+    const enLigne = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>/g)]
+      .filter(m => !/type="application\/ld\+json"/.test(m[0]));
+    eq(enLigne.length, 0, 'aucun script en ligne exécutable dans la page');
+  });
+
   test('chaque protection de _headers vaut aussi pour le worker', () => {
     const entetes = lireSource('_headers');
     const worker = lireSource('_worker.js');

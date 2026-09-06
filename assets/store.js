@@ -37,6 +37,14 @@ function rechargerDemo() {
   refreshAccounts();
   Store.save();
 }
+/* La vue apprend que l'ecriture a echoue, ou qu'elle remarche.
+
+   Une fonction plutot qu'un evenement : le modele ne connait pas le DOM, et
+   `app.js` la remplace au chargement. Sans lui, le modele reste utilisable seul
+   — c'est ce que fait le harnais de tests, qui ne charge pas la vue. */
+let signalerEcriture = () => {};
+const poserSignalEcriture = fn => { signalerEcriture = fn; };
+
 const BACKUP_KEY = 'wealth-dashboard:backups';
 const UNDO_LIMIT = 40;
 const BACKUP_LIMIT = 8;
@@ -2351,11 +2359,27 @@ const Store = {
     }
     this.state.meta.savedAt = new Date().toISOString();   // arbitre les conflits de synchro
     this._prev = structuredClone(this.state);
+    /* UN ECHEC D'ECRITURE NE PEUT PAS RESTER SILENCIEUX.
+
+       Il ne l'etait qu'a moitie : `flashSaved()` vit dans le `try`, donc
+       « Sauvegardé ✓ » ne s'affichait pas a tort. Mais rien ne s'affichait non
+       plus. Quota plein, navigation privee restrictive, stockage refuse par le
+       navigateur : la modification vivait en memoire, l'ecran ne disait rien, et
+       elle disparaissait au rechargement. Le pire des silences est celui qui
+       ressemble a un succes.
+
+       Le signal passe par la vue, qui sait le montrer sans repeter : un temoin
+       permanent tant que l'ecriture echoue, et un seul message au moment ou la
+       situation change. `console.warn` reste, pour la trace technique. */
     try {
       localStorage.setItem(cleStockage(), JSON.stringify(this.state));
+      if (this._ecritureKo) { this._ecritureKo = false; signalerEcriture(true); }
       flashSaved();
     } catch (e) {
-      console.warn('Sauvegarde impossible', e);
+      console.warn('Sauvegarde impossible', e && e.name);
+      const nouveau = !this._ecritureKo;
+      this._ecritureKo = true;
+      signalerEcriture(false, nouveau);
     }
 
     /* Le cloud reçoit tout de suite, sauf pendant une frappe.
