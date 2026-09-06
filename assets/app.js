@@ -916,7 +916,7 @@ function viewOverview() {
             <dd><button type="button" class="mois-lien ${cls(p.apports)}" data-action="goto" data-view="history"
                         data-anchor="" title="${trad('Voir le journal des entrées et sorties exceptionnelles')}"
                 >${fmtSigned(p.apports)}</button></dd>` : ''}
-          <dt>${trad('Moyenne mensuelle du patrimoine')}${aide(trad("Moyenne des variations du patrimoine net d’un mois sur l’autre, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Le mois en cours reste dehors : il est incomplet."))}
+          <dt>${trad('Moyenne mensuelle du patrimoine')}${aide(trad("Ce que ton patrimoine net gagne ou perd par mois, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Un mois sans relevé n’est pas oublié : l’écart entre deux relevés éloignés se répartit sur les mois qu’il a vraiment mis à arriver. Le mois en cours reste dehors : il est incomplet."))}
             <span class="sub">${trad('marchés et apports compris')}</span></dt><dd class="${cls(p.average)}">${fmtSigned(p.average)}</dd>
           <dt>${trad('Mois en hausse')}</dt><dd>${p.positive} / ${p.count}</dd>
           ${p.best ? `<dt>${trad('Meilleur mois')}</dt><dd>${esc(p.best.label)} · ${fmtSigned(p.best.delta)}</dd>` : ''}
@@ -3572,7 +3572,8 @@ function viewHistory() {
     if (rowIsEmpty(r)) continue;
     const net = rowNet(r), total = rowTotal(r);
     const avant = tous[tous.length - 1];
-    tous.push({ r, i, net, total, dlt: avant ? net - avant.net : 0 });
+    tous.push({ r, i, net, total, dlt: avant ? net - avant.net : 0,
+                mois: avant ? moisEntre(avant.r.date, r.date) : 0 });
   }
 
   const anneeDernier = tous.length
@@ -3649,11 +3650,12 @@ function viewHistory() {
       <button type="button" class="lien-nu" data-action="ajouter-releve"
               >${trad('+ Ajouter le relevé')}</button></p>` : ''}
     <div class="liste-principale">
-      ${lignes.map(({ r, i, net, dlt }) => ligneListe({
+      ${lignes.map(({ r, i, net, dlt, mois }) => ligneListe({
         action: 'voir-releve', index: i,
         classe: r.date === attente.key ? 'mois-courant' : '',
         titre: fmtMonth(r.date),
-        sous: r.comment || '',
+        sous: [r.comment || '', mois > 1
+          ? trad('écart sur {n} mois').replace('{n}', mois) : ''].filter(Boolean).join(' · '),
         valeur: fmtEUR0(net),
         second: dlt ? fmtSigned(dlt) : '', classeSecond: cls(dlt),
         jauge: jaugeDe(dlt),
@@ -10823,7 +10825,15 @@ function askMonthlySnapshot(index) {
     if ($('#relPhoto')) $('#relPhoto').onclick = () => {
       for (const c of champs) {
         const v = nowValue(c.dataset.compte);
-        c.value = v ? round2(v) : '';
+        /* Un compte ouvert a zero se photographie A ZERO : c'est ce que la photo
+           voit, et le laisser vide ferait passer pour non renseigne un compte
+           qu'on vient justement de regarder.
+
+           Un compte CLOTURE a zero reste vide, lui : il n'existe plus, et
+           l'ecrire a zero chaque mois remplirait le releve de comptes morts. Le
+           cadre `data-cloture` est precisement ceux-la. */
+        const cloture = c.closest('[data-cloture]');
+        c.value = (v || !cloture) ? round2(v) : '';
         const boite = v ? c.closest('[data-cloture]') : null;
         if (boite) boite.style.display = '';
       }
@@ -10842,7 +10852,20 @@ function askMonthlySnapshot(index) {
     const enregistrer = async () => {
       const v = {};
       for (const [k, val] of Object.entries(r.v || {})) if (!montres.has(k)) v[k] = val;
-      for (const c of champs) if (num(c.value)) v[c.dataset.compte] = round2(num(c.value));
+      /* LE CHAMP VIDE SE TAIT, LE ZERO SE DECLARE. Le test portait sur le
+         MONTANT — `if (num(c.value))` — donc un zero tape a la main ne
+         s'ecrivait jamais : le compte qu'on vient de vider ressortait comme un
+         compte auquel on n'a pas repondu, et le releve entier passait pour vide
+         s'il n'y avait que ca. C'est la seule saisie capable de declarer un
+         compte a zero, et elle ne savait pas l'entendre.
+
+         La question porte donc sur le REMPLISSAGE du champ, et le montant
+         suit. */
+      for (const c of champs) {
+        const brut = String(c.value ?? '').trim();
+        if (brut === '') continue;
+        v[c.dataset.compte] = round2(num(brut));
+      }
 
       if (!revolu && !await askConfirm(
           trad('Enregistrer un relevé pour {m} ?').replace('{m}', fmtMonth(r.date)) + '\n\n'

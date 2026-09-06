@@ -10991,8 +10991,16 @@ suite('Une rentrée exceptionnelle se garde en mémoire', () => {
     pres(st.apports, 10000, 'la succession tombe dans la fenêtre affichée');
     vrai(st.average > st.averageHorsApports,
       'la moyenne brute est plus flatteuse que le rythme propre');
-    pres(st.average - st.averageHorsApports, st.apports / st.count,
-      'et l’écart vaut exactement les apports répartis sur les points');
+    /* LE COMMENTAIRE DE CE FIXTURE DISAIT DEJA LE BON CHIFFRE — « le rythme
+       propre est de 1 000 EUR par mois, pas 6 000 » — et l'assertion divisait
+       par le nombre d'ECARTS, qui vaut un pour deux mois. Elle rendait donc
+       2 000. La prose avait raison, le calcul non. */
+    eq(st.count, 1, 'un seul écart mesuré');
+    eq(st.mois, 2, 'mais il couvre deux mois');
+    pres(st.average, 6000, 'douze mille sur deux mois');
+    pres(st.averageHorsApports, 1000, 'et mille par mois une fois l’héritage retiré');
+    pres(st.average - st.averageHorsApports, st.apports / st.mois,
+      'l’écart vaut les apports répartis sur les mois, pas sur les écarts');
   });
 
   test('sans apport, la ligne n’existe pas', () => {
@@ -25175,6 +25183,212 @@ suite('Le net dit la vérité, même sous zéro', () => {
     pres(num(pt.immo), 0, 'et rien n’est allé chercher la dette sur une poche');
   });
 
+  test('un mois sans relevé compte pour le temps qu’il a pris', () => {
+    /* LE DEFAUT. La moyenne valait `somme / nombre d'ecarts`. Tant qu'on saisit
+       tous les mois les deux coincident, et c'est pour ca qu'il a tenu. Un mois
+       saute, et ils divergent : janvier 100 000, avril 106 000, un seul ecart de
+       +6 000, donc « 6 000 EUR par mois » pour un rythme reel de 2 000. Le
+       chiffre nourrit le rythme d'accumulation, la trajectoire vers l'objectif
+       et l'ecart au budget : trois lectures triplees d'un coup, du cote
+       flatteur. */
+    poser(releve(100000, 0, '2026-01-01'), releve(106000, 0, '2026-04-01'));
+    const p = monthlyPace();
+    eq(p.count, 1, 'deux relevés, un seul écart');
+    eq(p.mois, 3, 'mais trois mois se sont écoulés');
+    eq(p.points[0].mois, 3, 'et l’écart le porte lui-même');
+    pres(p.points[0].delta, 6000, 'le delta brut reste le delta brut');
+    pres(p.average, 2000, 'la moyenne mensuelle vaut deux mille, pas six');
+    /* Février et mars ne sont pas inventés pour autant. */
+    eq(historySeries({ includeNow: false }).length, 2, 'deux points, et deux seulement');
+    eq(p.positive, 1, 'une hausse observée');
+  });
+
+  test('sans mois manqué, la moyenne ne bouge pas d’un centime', () => {
+    /* La correction ne doit rien changer au cas ordinaire : douze relevés
+       mensuels, douze écarts, douze mois. */
+    const lignes = [];
+    for (let m = 1; m <= 12; m++)
+      lignes.push(releve(100000 + m * 500, 0, `2026-${String(m).padStart(2, '0')}-01`));
+    poser(...lignes);
+    const p = monthlyPace();
+    eq(p.count, 11, 'onze écarts');
+    eq(p.mois, 11, 'et onze mois : les deux coïncident');
+    pres(p.average, 500, 'cinq cents par mois');
+    pres(p.average, p.points.reduce((s, x) => s + x.delta, 0) / p.count,
+      'la moyenne par écart et la moyenne par mois donnent le même nombre');
+  });
+
+  test('le journal dit quand un écart couvre plusieurs mois', () => {
+    /* Le chiffre de droite ne change pas : c'est le delta brut entre deux
+       relevés. Mais « +2 850 EUR » sous « juil. 26 » se lit comme un mois
+       exceptionnel quand mai et juin manquent, et trois mois ordinaires
+       l'expliquent. La mention se tait dans le cas ordinaire. */
+    const src = lireSource('assets/app.js');
+    const vue = src.slice(src.indexOf('const lignes = tous.filter'),
+                          src.indexOf('Entrées et sorties exceptionnelles'));
+    vrai(/mois: avant \? moisEntre\(avant\.r\.date, r\.date\) : 0/.test(src),
+      'chaque ligne du journal sait sur combien de mois porte son écart');
+    vrai(/trad\('écart sur \{n\} mois'\)/.test(vue),
+      'la ligne du journal porte la mention');
+    vrai(/mois > 1/.test(vue), 'et ne la pose qu’au-dessus d’un mois');
+    vrai(I18N.en['écart sur {n} mois'], 'la mention est traduite');
+  });
+
+  test('la moyenne se divise par des mois, jusque dans la réconciliation', () => {
+    /* `savingsReconciliation` annonce « N derniers mois clos » : elle lisait le
+       nombre d'écarts, donc « 1 dernier mois clos » pour une période de trois. */
+    poser(releve(100000, 0, '2026-01-01'), releve(106000, 0, '2026-04-01'));
+    const rec = savingsReconciliation();
+    eq(rec.monthsSpan, 3, 'trois mois clos, et non un écart');
+    pres(rec.realPerMonth, 2000, 'et le rythme réel suit la même division');
+  });
+
+  test('deux relevés du même mois ne divisent pas par zéro', () => {
+    /* Une clôture au 31/12 est une deuxième photo de décembre. `monthlyPace`
+       l'écarte déjà ; la borne à un mois est la ceinture. */
+    eq(moisEntre('2026-12-01', '2026-12-31'), 1, 'le même mois vaut un');
+    eq(moisEntre('2026-12-01', '2027-01-01'), 1, 'décembre à janvier vaut un');
+    eq(moisEntre('2026-01-01', '2027-01-01'), 12, 'et une année en vaut douze');
+    eq(moisEntre('2026-04-01', '2026-01-01'), 1, 'un ordre inversé ne rend jamais zéro');
+  });
+
+  test('le passé ne se recalcule pas avec les comptes d’aujourd’hui', () => {
+    /* Trois faits d'un coup, et ils tiennent tous : un compte créé plus tard
+       n'apparaît pas dans le passé, un compte archivé n'efface pas le passé, et
+       un compte renommé garde son montant parce que la clef est son identifiant. */
+    Fixture.poser(e => {
+      e.comptes = [
+        { id: 'c_a', etabId: 'e_b', type: 'courant', statut: 'ouvert', libelle: 'Mon compte',
+          court: 'Mon compte', numero: '', notes: '', alloc: '', ouvertLe: '2019-01-01',
+          cash: [{ montant: 0, affectation: 'courant' }], lignes: [] },
+        { id: 'c_b', etabId: 'e_b', type: 'livret', statut: 'ouvert', libelle: 'Livret',
+          court: 'Livret', numero: '', notes: '', alloc: '', ouvertLe: '2019-01-01',
+          cash: [{ montant: 0, affectation: 'precaution' }], lignes: [] },
+      ];
+      e.etabs = [{ id: 'e_b', nom: 'Banque', notes: '', dettes: [] }];
+      e.monthly = [{ date: '2026-01-01', comment: '', dettes: 0, v: { c_a: 10000, c_b: 20000 } }];
+    });
+    refreshAccounts();
+    const janvier = () => historySeries({ includeNow: false })[0].total;
+    pres(janvier(), 30000, 'janvier vaut trente mille');
+    /* Archivage : le passé ne bouge pas. */
+    compteById('c_b').statut = 'archive';
+    refreshAccounts();
+    pres(janvier(), 30000, 'archiver le livret n’efface pas les vingt mille de janvier');
+    /* Renommage : le montant suit l'identifiant, jamais le libellé. */
+    compteById('c_a').libelle = 'Compte courant principal';
+    compteById('c_a').court = 'Compte courant principal';
+    refreshAccounts();
+    pres(janvier(), 30000, 'renommer un compte ne casse pas son historique');
+    pres(num(Store.state.monthly[0].v.c_a), 10000, 'le montant reste rattaché à son identifiant');
+  });
+
+  test('un compte créé plus tard n’apparaît pas dans le passé', () => {
+    /* Les deux comptes existent aujourd'hui ; seul le relevé de février porte le
+       second. C'est la question posée : le passé connaît-il un compte ouvert
+       après lui ? */
+    Fixture.poser(e => {
+      e.comptes = [
+        { id: 'c_courant', etabId: 'e_b', type: 'courant', statut: 'ouvert', libelle: 'Courant',
+          court: 'Courant', numero: '', notes: '', alloc: '', ouvertLe: '2019-01-01',
+          cash: [{ montant: 0, affectation: 'courant' }], lignes: [] },
+        { id: 'c_pea', etabId: 'e_b', type: 'pea', statut: 'ouvert', libelle: 'PEA',
+          court: 'PEA', numero: '', notes: '', alloc: '', ouvertLe: '2026-02-01',
+          cash: [], lignes: [] },
+      ];
+      e.etabs = [{ id: 'e_b', nom: 'Banque', notes: '', dettes: [] }];
+      e.monthly = [
+        { date: '2026-01-01', comment: '', dettes: 0, v: { c_courant: 10000 } },
+        { date: '2026-02-01', comment: '', dettes: 0, v: { c_courant: 7000, c_pea: 5000 } },
+      ];
+    });
+    refreshAccounts();
+    const pts = historySeries({ includeNow: false });
+    pres(pts[0].total, 10000, 'janvier ne connaît pas le PEA');
+    pres(pts[1].total, 12000, 'février le connaît');
+    pres(monthlyPace().points[0].delta, 2000, 'et l’écart vaut deux mille');
+    vrai(!('c_pea' in Store.state.monthly[0].v), 'aucun PEA rétroactif n’a été posé');
+  });
+
+  test('supprimer un compte laisse une pierre tombale, et le passé avec', () => {
+    /* Un relevé ancien n'a pas de ventilation `parts` : son total se recompose
+       en parcourant les comptes CONNUS. Un compte retiré de la liste emporterait
+       donc ses montants passés. L'application ne le retire pas vraiment : elle
+       pose d'abord une pierre tombale dans `accounts`, invisible partout, et
+       c'est elle qui garde son sens à la colonne du relevé. */
+    Fixture.poser(e => {
+      e.comptes = [
+        { id: 'c_a', etabId: 'e_b', type: 'courant', statut: 'ouvert', libelle: 'A', court: 'A',
+          numero: '', notes: '', alloc: '', ouvertLe: '2019-01-01',
+          cash: [{ montant: 0, affectation: 'courant' }], lignes: [] },
+        { id: 'c_b', etabId: 'e_b', type: 'livret', statut: 'ouvert', libelle: 'B', court: 'B',
+          numero: '', notes: '', alloc: '', ouvertLe: '2019-01-01',
+          cash: [{ montant: 0, affectation: 'precaution' }], lignes: [] },
+      ];
+      e.etabs = [{ id: 'e_b', nom: 'Banque', notes: '', dettes: [] }];
+      /* Sans `parts` : la forme des relevés écrits avant qu'elle existe. */
+      e.monthly = [{ date: '2026-01-01', comment: '', dettes: 0, v: { c_a: 10000, c_b: 20000 } }];
+    });
+    refreshAccounts();
+    pres(historySeries({ includeNow: false })[0].total, 30000, 'janvier vaut trente mille');
+    const c = compteById('c_b');
+    Store.state.accounts.push({ id: c.id, label: nomCompteV2(c), short: c.court || '',
+      broker: nomEtabDe(c), type: c.type, group: typeCompte(c.type).groupe, legacy: true });
+    Store.state.comptes = Store.state.comptes.filter(x => x.id !== c.id);
+    refreshAccounts();
+    pres(historySeries({ includeNow: false })[0].total, 30000,
+      'et il les vaut toujours une fois le livret supprimé');
+    vrai(ACCOUNTS.some(a => a.id === 'c_b' && a.legacy),
+      'la pierre tombale porte le drapeau qui la rend invisible ailleurs');
+  });
+
+  test('corriger un mois ne touche aucun autre', () => {
+    poser(releve(100000, 0, '2026-01-01'), releve(103000, 0, '2026-02-01'),
+          releve(105000, 0, '2026-03-01'));
+    Store.state.monthly[0].v.c_courant = 101000;
+    eq(Store.state.monthly.map(r => num(r.v.c_courant)).join(','), '101000,103000,105000',
+      'seule la valeur corrigée a changé');
+    eq(monthlyPace().points.map(p => p.delta).join(','), '2000,2000',
+      'et les écarts se recalculent des deux côtés');
+  });
+
+  test('supprimer le dernier relevé rouvre l’état vide', () => {
+    poser(releve(100000, 0, '2026-01-01'));
+    vrai(aUnRelevePatrimonial(), 'un relevé existe');
+    clearMonthRow(Store.state.monthly[0], 'comment');
+    eq(aUnRelevePatrimonial(), false, 'il n’en reste aucun');
+    eq(historySeries({ includeNow: false }).length, 0, 'la série est vide');
+    const p = monthlyPace();
+    eq(p.count, 0, 'aucun écart');
+    eq(p.average, 0, 'et aucune moyenne inventée');
+    vrai(Number.isFinite(p.average) && Number.isFinite(p.averageHorsApports),
+      'rien ne rend NaN');
+  });
+
+  test('dépenses et relevé ne se valident jamais l’un l’autre', () => {
+    /* Deux notions, deux questions : un flux du mois et un stock à une date. */
+    poser();
+    Store.state.budget.expenses = [{ date: '2026-09-01', v: { courses: 600 } }];
+    eq(aUnRelevePatrimonial(), false, 'des dépenses ne font pas un relevé');
+    eq(aDesDepensesSaisies(), true, 'mais elles se comptent comme dépenses');
+    eq(historySeries({ includeNow: false }).length, 0, 'et l’historique n’invente pas septembre');
+    poser(releve(5000, 0, '2026-09-01'));
+    Store.state.budget.expenses = [];
+    eq(aUnRelevePatrimonial(), true, 'un relevé se compte comme relevé');
+    eq(aDesDepensesSaisies(), false, 'et ne ferme pas l’étape des dépenses');
+  });
+
+  test('la performance de marché n’est pas une capacité d’épargne', () => {
+    /* Non-regression : dix mille de hausse entre deux relevés ne deviennent ni
+       du budget investissable, ni un versement suggéré. */
+    poser(releve(100000, 0, '2026-01-01'), releve(110000, 0, '2026-02-01'));
+    Store.state.budget.income = []; Store.state.budget.fixedCharges = [];
+    pres(monthlyPace().points[0].delta, 10000, 'le patrimoine a bien monté de dix mille');
+    pres(suggestedMonthly(), 0, 'et le versement suggéré reste à zéro');
+    const rec = savingsReconciliation();
+    vrai(rec.investable <= 0, 'aucun euro investissable n’est né de la hausse');
+  });
+
   test('un relevé qui ne porte qu’une dette n’est pas vide', () => {
     /* Zero avoir, vingt mille de dette : `rowIsEmpty` ne regardait que les
        montants par compte, donc ce relevé disparaissait du journal, des années
@@ -25189,14 +25403,41 @@ suite('Le net dit la vérité, même sous zéro', () => {
     vrai(historyYears().includes('2026'), 'et son année est offerte au sélecteur');
   });
 
-  test('un relevé sans avoir ni dette reste vide', () => {
+  test('une ligne du calendrier reste vide', () => {
     /* L'autre moitie : la definition ne s'est pas seulement elargie, elle est
-       restee juste. Une ligne du calendrier ne devient pas un releve. */
-    poser(releve(0, 0, '2026-01-01'));
-    vrai(rowIsEmpty(Store.state.monthly[0]), 'ni avoir ni dette : vide');
+       restee juste. Une ligne du calendrier ne devient pas un releve.
+
+       Le fixture disait `v: { c_courant: 0 }`, ce qui n'est PAS une ligne de
+       calendrier mais un zero declare — et un zero declare est desormais un
+       fait. Une ligne du calendrier ne porte aucune clef : c'est ce que
+       `clearMonthRow` ecrit, et ce que le calendrier ouvre. */
+    poser({ date: '2026-01-01', comment: '', v: {}, dettes: 0 });
+    vrai(rowIsEmpty(Store.state.monthly[0]), 'aucun champ rempli : vide');
     Store.state.monthly[0].dettes = undefined;
     vrai(rowIsEmpty(Store.state.monthly[0]), 'et une dette absente vaut une dette nulle');
     eq(historySeries({ includeNow: false }).length, 0, 'la série ne le compte pas');
+    /* Les deux formes vides d'un ancien etat comptent pour absentes. */
+    for (const rien of [null, '']) {
+      Store.state.monthly[0].v = { c_courant: rien };
+      vrai(rowIsEmpty(Store.state.monthly[0]),
+        `un champ à ${JSON.stringify(rien)} n’est pas une réponse`);
+    }
+  });
+
+  test('un compte déclaré à zéro est un relevé, et un vrai', () => {
+    /* LE DEFAUT. « Vide » se lisait `every(x => !num(x))` : un releve ou chaque
+       compte est declare a zero passait pour vide. Le cas est reel — on vide un
+       compte, on solde un livret — et c'est meme le moment ou la photo compte le
+       plus. Janvier 1 000, fevrier 0 : fevrier disparaissait du journal, de la
+       courbe et des variations, et l'ecart de -1 000 avec lui. La photo disait
+       « mon compte est vide », l'application comprenait « je n'ai pas repondu ». */
+    poser(releve(1000, 0, '2026-01-01'), releve(0, 0, '2026-02-01'));
+    vrai(!rowIsEmpty(Store.state.monthly[1]), 'février porte une réponse : zéro');
+    eq(historySeries({ includeNow: false }).length, 2, 'la série compte les deux mois');
+    pres(rowNet(Store.state.monthly[1]), 0, 'et février vaut zéro, ce qui est un fait');
+    const pace = monthlyPace();
+    eq(pace.count, 1, 'un écart mesuré');
+    pres(pace.points[0].delta, -1000, 'et il vaut moins mille, jamais rien');
   });
 
   test('effacer un relevé le fait vraiment quitter le journal', () => {

@@ -2902,9 +2902,23 @@ function rowNet(row) {
    tout ce qui derive de cette notion -- le journal, les annees offertes au
    selecteur, la courbe, les variations, le rythme. Son patrimoine net vaut
    -20 000 EUR, ce qui est un fait, et le taire etait le seul moyen d'afficher
-   zero a la place. */
+   zero a la place.
+
+   VIDE N'EST PAS ZERO, et la nuance se lisait a l'envers. Le test valait
+   `every(x => !num(x))` : un releve ou chaque compte est declare a zero passait
+   donc pour vide lui aussi. Le cas est reel — on vide un compte, on solde un
+   livret — et c'est meme le seul moment ou la photo compte vraiment. Janvier
+   1 000, fevrier 0 : fevrier disparaissait du journal, de la courbe et des
+   variations, et l'ecart de -1 000 avec lui. La photo declarait un compte a
+   zero, l'application y lisait une absence de reponse.
+
+   La presence de la CLEF tranche desormais, et non la valeur : un champ jamais
+   rempli n'ecrit rien, un champ rempli ecrit ce qu'on y a mis, zero compris.
+   Les deux formes vides d'un ancien etat — `null` et la chaine vide — comptent
+   pour absentes, ce qu'elles ont toujours voulu dire. */
 function rowIsEmpty(row) {
-  return Object.values(row.v || {}).every(x => !num(x)) && !num(row.dettes);
+  const v = row.v || {};
+  return !Object.keys(v).some(k => v[k] != null && v[k] !== '') && !num(row.dettes);
 }
 
 const moisRevolu = (date, aujourdhui = todayISO()) =>
@@ -5032,8 +5046,8 @@ function savingsReconciliation() {
   const theoretical = investable + capital;
 
   const rythme = paceRecent();
-  const monthsSpan = rythme.count;
-  const realPerMonth = monthsSpan ? rythme.average : null;
+  const monthsSpan = rythme.mois;
+  const realPerMonth = rythme.count ? rythme.average : null;
 
   return {
     income: f.income, fixed: f.fixed, spend, spendObserved,
@@ -5713,9 +5727,28 @@ function runway() {
   };
 }
 
+/* LA MOYENNE SE DIVISE PAR DES MOIS, PAS PAR DES ECARTS.
+
+   Elle valait `somme / n`, ou `n` compte les INTERVALLES entre releves. Tant
+   qu'on saisit tous les mois les deux coincident, et c'est pour ca que le
+   defaut a tenu. Un mois saute, et ils divergent : un releve de janvier a
+   100 000 et un d'avril a 106 000 font UN intervalle de +6 000, donc une
+   « moyenne mensuelle » de 6 000 EUR pour un rythme reel de 2 000. Le chiffre
+   sert de rythme d'accumulation, il nourrit la trajectoire vers l'objectif et
+   l'ecart au budget : trois lectures triplees d'un coup, du cote flatteur.
+
+   Chaque point porte donc le nombre de MOIS que son ecart couvre, et la moyenne
+   les additionne. Le mois, et non le jour : les releves sont des photos
+   mensuelles, datees du premier du mois, et compter en jours donnerait une
+   precision que la donnee n'a pas. Un intervalle vaut au moins un mois.
+
+   `count` reste le nombre d'ecarts mesures : c'est lui que « mois en hausse »
+   compte, et deux releves separes de trois mois ne donnent qu'une hausse
+   observee — les deux mois du milieu, personne ne sait. */
 function statsRythme(points) {
   const n = points.length;
   const somme = points.reduce((s, p) => s + p.delta, 0);
+  const mois = points.reduce((s, p) => s + Math.max(1, num(p.mois) || 1), 0);
   /* Ce qui est entre du dehors sur la periode affichee. Un heritage fait monter
      le patrimoine sans que personne ait mis de cote : la moyenne mensuelle le
      compte, et elle doit pouvoir le dire.
@@ -5731,13 +5764,31 @@ function statsRythme(points) {
   const apports = n ? apportsTotal(debut, fin) : 0;
   return {
     points, count: n,
-    average: n ? somme / n : 0,
+    mois,
+    average: mois ? somme / mois : 0,
     apports,
-    averageHorsApports: n ? (somme - apports) / n : 0,
+    averageHorsApports: mois ? (somme - apports) / mois : 0,
     positive: points.filter(p => p.delta > 0).length,
     best: points.reduce((a, o) => (!a || o.delta > a.delta) ? o : a, null),
     worst: points.reduce((a, o) => (!a || o.delta < a.delta) ? o : a, null),
   };
+}
+
+/* Combien de mois separent deux releves, au sens du calendrier.
+
+   Les dates sont des clefs de mois — le premier du mois pour une ligne du
+   calendrier — et la difference se lit donc sur l'annee et le mois. Compter les
+   jours donnerait 89 ou 92 selon les mois traverses pour la meme reponse
+   « trois mois », une precision que la donnee n'a pas.
+
+   Un minimum d'un mois : deux photos du meme mois — une cloture au 31/12 a cote
+   du releve de decembre — ne doivent pas diviser par zero. `monthlyPace` ecarte
+   deja ce doublon, la borne est une ceinture. */
+function moisEntre(a, b) {
+  const [ya, ma] = String(a).slice(0, 7).split('-').map(Number);
+  const [yb, mb] = String(b).slice(0, 7).split('-').map(Number);
+  const n = (yb - ya) * 12 + (mb - ma);
+  return Number.isFinite(n) ? Math.max(1, n) : 1;
 }
 
 function monthlyPace() {
@@ -5748,6 +5799,7 @@ function monthlyPace() {
   for (let i = 1; i < pts.length; i++) {
     out.push({ label: pts[i].label, date: pts[i].date, note: pts[i].comment,
                depuis: prochainJour(pts[i - 1].date),
+               mois: moisEntre(pts[i - 1].date, pts[i].date),
                delta: num(pts[i].net) - num(pts[i - 1].net), total: pts[i].total });
   }
   return statsRythme(out);
