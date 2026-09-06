@@ -777,6 +777,7 @@ function viewOverview() {
 
   <div class="hero">
     <div>
+      ${!aUnComptePropre() ? '' : `
       <div class="hero-label">
         <span>${trad('Patrimoine')}</span>
         ${basculesAffichees().netBrut ? `<span class="segmented seg-mini">
@@ -786,7 +787,7 @@ function viewOverview() {
                   title="${trad('La valeur de tes avoirs, crédits non déduits')}">${trad('Brut')}</button>
         </span>` : ''}
       </div>
-      <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>
+      <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>`}
       ${!evoNet && patrimoine().dettes ? `<div class="hero-sous muted">
         dont ${fmtEUR0(patrimoine().dettes)} de crédits à rembourser</div>` : ''}
       ${invitePremierPas('comptes')}
@@ -803,8 +804,12 @@ function viewOverview() {
     })()}
   </div>
 
+  ${(() => {
+    const classes = repartitionClasses({ net: evoNet });
+    if (!classes.length) return '';
+    return `
   <div class="card repart">
-    ${repartitionClasses({ net: evoNet }).map(x => `
+    ${classes.map(x => `
       <button type="button" class="repart-ligne" data-action="apercu"
               data-apercu="classe" data-arg="${esc(x.classe)}"
               title="${trad('Voir le détail de')} ${esc(trad(x.label))}">
@@ -839,7 +844,8 @@ function viewOverview() {
         <span class="ml-chev" aria-hidden="true">›</span>
       </button>`;
     })()}
-  </div>
+  </div>`;
+  })()}
 
   ${pasAFaire('comptes') ? `
   <div class="card">
@@ -918,9 +924,13 @@ function viewOverview() {
                 >${fmtSigned(p.apports)}</button></dd>` : ''}
           <dt>${trad('Moyenne mensuelle du patrimoine')}${aide(trad("Ce que ton patrimoine net gagne ou perd par mois, sur la période affichée. Elle comprend les mouvements de marché et les apports, pas seulement ton épargne. Un mois sans relevé n’est pas oublié : l’écart entre deux relevés éloignés se répartit sur les mois qu’il a vraiment mis à arriver. Le mois en cours reste dehors : il est incomplet."))}
             <span class="sub">${trad('marchés et apports compris')}</span></dt><dd class="${cls(p.average)}">${fmtSigned(p.average)}</dd>
-          <dt>${trad('Mois en hausse')}</dt><dd>${p.positive} / ${p.count}</dd>
-          ${p.best ? `<dt>${trad('Meilleur mois')}</dt><dd>${esc(p.best.label)} · ${fmtSigned(p.best.delta)}</dd>` : ''}
-          ${p.worst ? `<dt>${trad('Pire mois')}</dt><dd>${esc(p.worst.label)} · ${fmtSigned(p.worst.delta)}</dd>` : ''}
+          ${(() => {
+            const trou = num(p.mois) > p.count;
+            return `
+          <dt>${trad(trou ? 'Variations en hausse' : 'Mois en hausse')}</dt><dd>${p.positive} / ${p.count}</dd>
+          ${p.best ? `<dt>${trad(trou ? 'Meilleure variation' : 'Meilleur mois')}</dt><dd>${esc(p.best.label)} · ${fmtSigned(p.best.delta)}</dd>` : ''}
+          ${p.worst ? `<dt>${trad(trou ? 'Pire variation' : 'Pire mois')}</dt><dd>${esc(p.worst.label)} · ${fmtSigned(p.worst.delta)}</dd>` : ''}`;
+          })()}
         </dl>`;
       })()}
     </div>
@@ -7494,18 +7504,21 @@ const ACTIONS = {
         ...ETABS().filter(e => aDesComptes(e) && memeFamille(e)),
         ...ETABS().filter(e => !aDesComptes(e)),
       ];
-      const e2 = await askForm({
-        titre: trad(mot.titre),
-        sous: `${trad('Étape')} 2 ${trad('sur.etape', 'sur')} ${etapes}`,
-        ok: 'Continuer',
-        champs: [{ cle: 'etab', label: mot.question, type: 'liste', aide: mot.aide,
-          options: [...proposables.map(e => [e.id,
-            aDesComptes(e) ? e.nom : `${e.nom} (aucun compte)`]),
-            ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
-          valeur: proposables.find(e => aDesComptes(e) && memeFamille(e))?.id || '__nouveau' }],
-      });
-      if (!e2) return;
-      etabId = e2.etab;
+      if (!proposables.length) etabId = '__nouveau';
+      else {
+        const e2 = await askForm({
+          titre: trad(mot.titre),
+          sous: `${trad('Étape')} 2 ${trad('sur.etape', 'sur')} ${etapes}`,
+          ok: 'Continuer',
+          champs: [{ cle: 'etab', label: mot.question, type: 'liste', aide: mot.aide,
+            options: [...proposables.map(e => [e.id,
+              aDesComptes(e) ? e.nom : `${e.nom} (aucun compte)`]),
+              ['__nouveau', `+ ${trad(mot.nouveau)}…`]],
+            valeur: proposables.find(e => aDesComptes(e) && memeFamille(e))?.id || '__nouveau' }],
+        });
+        if (!e2) return;
+        etabId = e2.etab;
+      }
     }
     if (etabId === '__nouveau') {
       const nom = await askText(trad(mot.nouveau),

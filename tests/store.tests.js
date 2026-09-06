@@ -20571,6 +20571,63 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     eq(montantSigne(0, v => String(v)), '0', 'et zéro n’en porte jamais');
   });
 
+  test('les compteurs du rythme disent ce qu’ils comptent', () => {
+    /* Ils comptent des ECARTS entre relevés, et un écart vaut un mois tant
+       qu'aucun ne manque. Dès qu'il en manque un, les deux cessent de coïncider :
+       « Meilleur mois : avr. 26 · +6 000 € » attribue à avril seul ce que trois
+       mois ont mis à arriver. Le nombre ne change pas — le moteur divise déjà
+       par les mois réels — c'est le mot qui suit. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf("trad('Rythme d\\'accumulation')");
+    const bloc = src.slice(i, src.indexOf("trad('Autonomie financière')"));
+    vrai(/const trou = num\(p\.mois\) > p\.count;/.test(bloc),
+      'la carte sait si un mois manque sur la période affichée');
+    for (const [normal, trou] of [['Mois en hausse', 'Variations en hausse'],
+                                  ['Meilleur mois', 'Meilleure variation'],
+                                  ['Pire mois', 'Pire variation']]) {
+      vrai(bloc.includes(`trad(trou ? '${trou}' : '${normal}')`),
+        `« ${normal} » devient « ${trou} » quand un mois manque`);
+      vrai(I18N.en[trou], `« ${trou} » est traduite`);
+    }
+  });
+
+  test('le premier écran n’annonce pas un patrimoine de zéro', () => {
+    /* Sans un seul compte, « PATRIMOINE 0,00 € » s'affichait en gros au-dessus
+       de l'invitation à en créer un : le chiffre se lit comme une mesure alors
+       qu'il est inconnu. La convention de cette base de code est déjà celle-là
+       ailleurs — les écarts du hero ne s'affichent pas faute de relevé. */
+    const src = lireSource('assets/app.js');
+    const hero = src.slice(src.indexOf('<div class="hero">'),
+                           src.indexOf("invitePremierPas('comptes')"));
+    vrai(/\$\{!aUnComptePropre\(\) \? '' : `/.test(hero),
+      'le montant et son intitulé attendent le premier compte');
+    vrai(hero.indexOf('hero-value') > hero.indexOf('aUnComptePropre'),
+      'la garde vient avant le montant');
+    /* Et l'invitation, elle, reste : une seule, et toujours là. */
+    vrai(/invitePremierPas\('comptes'\)/.test(src), 'l’invitation demeure');
+  });
+
+  test('un contenant qui n’a rien à proposer ne pose pas la question', () => {
+    /* Le tout premier compte tombait sur « Dans quelle banque le tenir ? » avec
+       une seule entrée : « + Nouvelle banque ou courtier… ». Une question posée
+       à quelqu'un qui n'a pas le choix, au moment où il découvre l'application. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('const proposables = [');
+    const bloc = src.slice(i, src.indexOf("if (etabId === '__nouveau')", i));
+    vrai(/if \(!proposables\.length\) etabId = '__nouveau';/.test(bloc),
+      'sans rien à proposer, on passe directement au nom');
+    vrai(/else \{/.test(bloc), 'et la liste ne se pose que s’il y a un choix');
+  });
+
+  test('« + Ligne » des charges fixes n’est pas une ligne de titres', () => {
+    /* Le bouton ouvre une charge fixe et se traduisait « + Holding », le mot que
+       Marchés emploie pour un titre. Deux vocabulaires pour un seul mot français,
+       et c'est celui de l'autre écran qui gagnait. */
+    eq(I18N.en['+ Ligne'], '+ Cost', 'le bouton des charges parle de coûts');
+    eq(I18N.en['+ Ajouter une ligne'], '+ Add a holding',
+      'et celui de Marchés garde le sien');
+  });
+
   test('« Rythme d’accumulation » garde ce qui lui appartient', () => {
     /* Il perd la ligne qui a demenage, et rien d'autre : sa courbe, sa plage,
        sa moyenne constatee, ses apports exceptionnels et ses trois compteurs. */
@@ -20578,9 +20635,13 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     const i = src.indexOf("trad('Rythme d\\'accumulation')");
     vrai(i > 0, 'la carte existe toujours');
     const bloc = src.slice(i, src.indexOf("trad('Autonomie financière')"));
+    /* Les trois compteurs se nomment desormais selon qu'un mois manque ou non
+       — « Mois en hausse » ou « Variations en hausse » — donc on cherche le
+       LIBELLE et non la forme exacte de l'appel. Ce que le controle protege est
+       la presence de la ligne, pas la facon de la traduire. */
     for (const garde of ["rangeControl('pace-range', paceRange)", 'id="chartPace"',
-                         "trad('Moyenne mensuelle du patrimoine')", "trad('Mois en hausse')",
-                         "trad('Meilleur mois')", "trad('Pire mois')"]) {
+                         "trad('Moyenne mensuelle du patrimoine')", "'Mois en hausse'",
+                         "'Meilleur mois'", "'Pire mois'"]) {
       vrai(bloc.includes(garde), `« ${garde} » appartient au rythme et y reste`);
     }
     vrai(!/savingsReconciliation/.test(bloc),
