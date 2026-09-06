@@ -1010,7 +1010,7 @@ const Charts = (() => {
       const H = opts.height || 220;
       const m = { t: 14, r: 12, b: 30, l: 56 };
       const iw = W - m.l - m.r, ih = H - m.t - m.b;
-      if (!items.length) { el.innerHTML = '<p class="empty">Pas assez d\'historique</p>'; return; }
+      if (!items.length) { el.innerHTML = `<p class="empty">${trad('Pas assez d\'historique')}</p>`; return; }
 
       const vals = items.map(i => i.value);
       const hi = Math.max(...vals, average || 0, 0);

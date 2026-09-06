@@ -217,6 +217,8 @@ const I18N = {
     "Après inflation": "After inflation",
     "Aucun rendement ne lui est appliqué : la projection le porte tel quel": "No return is applied to it: the projection carries it as is",
     "Aujourd’hui": "Today",
+    "Pas assez d'historique": "Not enough history",
+    "Auj.": "Now",
     "Base de calcul du rééquilibrage": "Rebalancing basis",
     "Ce crédit finance": "This loan finances",
     "sans lui, ce prêteur tenant plusieurs comptes, aucune fiche ne peut savoir lequel porte cette dette": "without it, this lender holding several accounts, no sheet can know which one carries this debt",
@@ -2428,6 +2430,11 @@ const I18N = {
     "Le reste de cette page se remplit tout seul : la courbe de ton patrimoine, ton rythme d’accumulation, ce que tu tiendrais sans revenus, ton portefeuille. Tout part des comptes que tu déclares.": "The rest of this page fills itself in: the curve of your wealth, your saving pace, how long you would last without income, your portfolio. It all starts from the accounts you declare.",
     "Enregistre ton premier relevé mensuel : c’est la photo de tes comptes à une date. Il en faut deux pour que la courbe et le rythme d’accumulation aient une pente à montrer.": "Record your first monthly statement: it is a snapshot of your accounts on a date. Two are needed before the curve and the accumulation pace have a slope to show.",
     "Aucun compte pour l’instant.": "No account yet.",
+    "Ce chiffre compare ton argent disponible à ce que te coûte un mois. Il attend donc tes charges fixes.":
+      'This figure compares the money you can reach with what a month costs you. So it waits on your fixed costs.',
+    'Déclare ton salaire et tes autres rentrées : c’est d’elles que partent ta capacité d’épargne, ton budget et ce qu’il te reste à vivre.':
+      'Declare your salary and your other income: they are what your saving capacity, your budget and what is left to live on all start from.',
+    'Aucun objectif fixé pour {a}': 'No target set for {a}',
     "Ce chiffre compare ton argent disponible à ce que te coûte un mois. Il attend donc deux choses : un compte avec du cash, et tes charges fixes.": "This figure compares the money you can reach with what a month costs you. So it waits on two things: an account with cash in it, and your fixed costs.",
     "Entrer ton salaire": "Enter your salary",
     "Entrer tes dépenses": "Enter your spending",

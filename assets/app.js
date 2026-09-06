@@ -660,6 +660,11 @@ function carteAccumulation() {
   /* Un montant dans une AIDE ne se formate pas comme a l'ecran : l'aide range
      son texte dans un attribut, ou le masque des montants s'imprimerait en
      clair, balise SVG comprise. `fmtEUR0Texte` y rend « ••• € ». */
+  if (!(rec.income > 0) && !(rec.fixed > 0) && !(rec.spend > 0)) return `
+  <div class="card">
+    <div class="card-head"><h2>${trad('Accumulation ce mois-ci')}</h2></div>
+    ${invitePremierPas('revenus')}
+  </div>`;
   const aEcran = v => montantSigne(v);
   const enTexte = v => montantSigne(v, fmtEUR0Texte);
   /* Le troisieme terme porte le nom de la branche prise : `savingsReconciliation`
@@ -902,6 +907,7 @@ function viewOverview() {
       <div class="chart" id="chartPace"></div>
       ${(() => {
         const p = statsRythme(limitRange(monthlyPace().points, paceRange, { ecarts: true }));
+        if (!p.count) return '';
         return `<dl class="kv" style="margin-top:12px">
           ${p.apports ? `
           <dt>${trad('Dont')} ${p.apports < 0 ? trad('sorties exceptionnelles') : trad('entrées extérieures')}${aide(
@@ -925,12 +931,15 @@ function viewOverview() {
       const r = runway();
       const pk = poches();
       const ep = pk.precaution + pk.courant;
-      const cover = r.burn ? ep / r.burn : 0;
+      const cover = ep / r.burn;
       const state = cover >= 3 ? 'up' : cover >= 1.5 ? '' : 'down';
-      if (!ep && !r.burn) return `
-        <p class="empty" style="margin:0">${trad('Ce chiffre compare ton argent disponible '
-          + 'à ce que te coûte un mois. Il attend donc deux choses : un compte avec du '
-          + 'cash, et tes charges fixes.')}</p>`;
+      if (!r.burn) return `
+        <p class="empty" style="margin:0 0 4px">${trad(ep
+          ? 'Ce chiffre compare ton argent disponible à ce que te coûte un mois. Il attend donc tes charges fixes.'
+          : 'Ce chiffre compare ton argent disponible '
+            + 'à ce que te coûte un mois. Il attend donc deux choses : un compte avec du '
+            + 'cash, et tes charges fixes.')}</p>
+`;
       return `
         <div class="goal-top goal-top-empile" style="margin-bottom:8px">
           <b class="${state}">${fmtMois(cover)} ${trad('mois')}</b>
@@ -1350,12 +1359,12 @@ const carteObjectif = () => {
        réglage, la faire disparaître entièrement enfermerait dehors quiconque
        change d'avis. Il reste donc une ligne, discrète, qui ouvre la même
        fenêtre. */
-    if (!(num(g.obj) > 0)) return `
+    if (!(num(g.obj) > 0)) return aUnComptePropre() ? `
   <button type="button" class="card goal card-link goal-vide" data-action="apercu"
           data-apercu="objectif" title="${trad('Fixer un objectif de patrimoine')}">
-    <span>Aucun objectif fixé pour ${esc(an)}</span>
+    <span>${trad('Aucun objectif fixé pour {a}').replace('{a}', esc(an))}</span>
     <span class="muted">${trad('En poser un →')}</span>
-  </button>`;
+  </button>` : '';
 
     return `
   <button type="button" class="card goal card-link" data-action="apercu" data-apercu="objectif"
@@ -5649,6 +5658,7 @@ function viewBudget(section = 'depenses') {
   </div>`}
 
   ${cadre ? '' : `
+  ${aDesDepensesSaisies() ? `
   <div class="grid g-4 g-tuiles">
     ${tile(`${trad('Dépenses')} ${year}`, stats.total, null, 'var(--series-2)',
            `${stats.months} ${trad('mois · hors charges fixes')}`, 'depensesAnnee')}
@@ -5731,7 +5741,8 @@ function viewBudget(section = 'depenses') {
           <td>${fmtEUR0(stats.average)}</td><td></td></tr></tfoot>
       </table>
     </details>
-  </div>`}
+  </div>`}` : ''}
+
   <div class="card" data-anchor="detail-mensuel">
     <div class="card-head">
       <h2>${trad('Détail mensuel')}</h2>

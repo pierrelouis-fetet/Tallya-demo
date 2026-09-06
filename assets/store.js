@@ -2881,7 +2881,7 @@ function historySeries({ includeNow = true } = {}) {
     /* `total` doit egaler la somme des trois poches, comme pour un releve
        passe : la courbe suit la valeur des avoirs, les credits se lisent
        dans le patrimoine net du bandeau. */
-    pts.push({ label: "Auj.", date: todayISO(), cash: t.cash, bourse: t.bourse,
+    pts.push({ label: trad('Auj.'), date: todayISO(), cash: t.cash, bourse: t.bourse,
                garanti: t.garanti,
                crypto: t.crypto, pe: t.pe, immo: t.immo, biens: t.biens,
                total: t.brut, comment: 'Photo actuelle' });
@@ -3163,9 +3163,10 @@ const aUnComptePropre = () =>
 const aUnRelevePatrimonial = () =>
   (Store.state.monthly || []).some(r => !rowIsEmpty(r));
 
-const aDejaServi = () =>
-  (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0))
-  || aUnRelevePatrimonial();
+const aDesDepensesSaisies = () =>
+  (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0));
+
+const aDejaServi = () => aDesDepensesSaisies() || aUnRelevePatrimonial();
 
 function currentMonthPending() {
   const key = currentMonthKey();
@@ -5391,7 +5392,7 @@ const PREMIERS_PAS = [
     bouton: 'Entrer tes comptes', action: 'ajouter-compte',
     fait: () => aUnComptePropre() },
   { cle: 'revenus',
-    quoi: 'Sans revenu déclaré, cette carte n’a pas de total à partager.',
+    quoi: 'Déclare ton salaire et tes autres rentrées : c’est d’elles que partent ta capacité d’épargne, ton budget et ce qu’il te reste à vivre.',
     bouton: 'Entrer ton salaire', action: 'toggle-revenus',
     fait: () => (B().income || []).length > 0 },
   /* Le releve arrive apres les comptes, et il n'est « a faire » que lorsqu'il
@@ -5417,8 +5418,7 @@ const PREMIERS_PAS = [
     quoi: 'Ajoute tes loyers, assurances et abonnements : ce sont eux qui décident '
         + 'de ce qu’il te reste à vivre chaque mois.',
     bouton: 'Entrer tes dépenses', action: 'add-charge',
-    fait: () => (B().fixedCharges || []).length > 0
-      || (B().expenses || []).some(r => Object.values(r.v || {}).some(v => num(v) !== 0)) },
+    fait: () => (B().fixedCharges || []).length > 0 || aDesDepensesSaisies() },
 ];
 const PAS_PAR_CLE = Object.fromEntries(PREMIERS_PAS.map(p => [p.cle, p]));
 
@@ -6817,7 +6817,12 @@ function healthChecks() {
      avait déjà. Même définition que `rebalanceRows()` — une classe mise hors
      jeu ne compte pas, son encours a quitté la base. */
   const sum = sommeCibles();
-  if (sum > 0 && Math.abs(sum - 100) > 0.05 && patrimoine().brut > 0.005)
+  /* `rebalanceRows().base` et non le brut : le commentaire ci-dessus dit « tant
+     qu'aucun euro n'est place », et le brut compte le cash. Quelqu'un qui venait
+     de declarer son compte courant recevait donc un avertissement sur des cibles
+     par defaut qu'il n'avait jamais choisies, le premier jour. La base des cibles
+     est ce que ces cibles repartissent : c'est elle qui dit s'il y a matiere. */
+  if (sum > 0 && Math.abs(sum - 100) > 0.05 && rebalanceRows().base > 0.005)
     add('warn', trad('Cibles d’allocation à {v}').replace('{v}', fmtPct(sum, 1)),
       trad('La somme devrait faire 100 % pour que les montants cibles aient un sens'),
       'rebalance');

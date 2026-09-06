@@ -17628,8 +17628,10 @@ suite('Une application vide dit quoi faire', () => {
     vrai(/invitePremierPas\('releves'\)/.test(evo),
       'la carte d’évolution demande le relevé qui lui manque');
     /* L'autonomie : un rapport entre deux vides n'accuse personne de rien. */
-    vrai(/if \(!ep && !r\.burn\) return/.test(src),
-      '« 0,0 mois » en rouge sur 0 € et 0 € de coût laisse place à une phrase');
+    vrai(/if \(!r\.burn\) return/.test(src),
+      'sans coût de la vie, aucune autonomie ne se mesure, quel que soit le coussin');
+    vrai(/const cover = ep \/ r\.burn;/.test(src),
+      'et le rapport ne se replie plus sur zéro faute de dénominateur');
   });
 
   test('chaque pas porte son bouton, son action et sa raison', () => {
@@ -19850,8 +19852,16 @@ suite('La synthèse d’accumulation a changé d’écran, pas de calcul', () =>
     vrai((c.match(/\$\{aide\(/g) || []).length >= 6,
       'les aides de la cascade et de la confrontation doivent être trouvables');
     /* Les aides composees vivent dans des constantes au-dessus du gabarit : on
-       controle donc la carte entiere, hors du rendu des `<dd>`. */
-    const composition = c.slice(0, c.indexOf('return `'));
+       controle donc la carte entiere, hors du rendu des `<dd>`.
+
+       La region part de `const aEcran` et non du debut de la fonction : la carte
+       rend desormais un ecran vide AVANT ses constantes, quand rien n'est encore
+       declare, et son `return` est le premier du corps. Prendre le premier
+       laissait une region qui ne contient plus une seule aide, donc un controle
+       qui passe sans rien controler. */
+    const debut = c.indexOf('const aEcran');
+    vrai(debut > 0, 'les formateurs d’aide doivent être trouvables');
+    const composition = c.slice(debut, c.indexOf('return `', debut));
     vrai(!/fmtEUR0\((?!0\))/.test(composition.replace(/fmtEUR0Texte\(/g, '')),
       'aucune aide ne compose un montant avec le formateur qui rend du balisage');
     vrai(!/fmtSigned\(/.test(composition),
@@ -33996,5 +34006,156 @@ suite('Charges fixes : une carte pèse, l’autre gère', () => {
     pres(Store.state.budget.fixedCharges.reduce((s, c) => s + chargeMensuelle(c), 0), 1920,
       'et le pied de la liste somme exactement les mêmes lignes');
     pres(fixedTotal() * 12, 23040, 'le total à l’année suit le même chemin');
+  });
+});
+
+/* PREMIER USAGE. Un compte, un montant, et rien d'autre : l'accueil affichait
+   huit zeros repartis sur trois cartes, dont « 0,0 mois d'autonomie » en rouge
+   au-dessus de 3 000 EUR de liquidites. Une carte qui ne peut rien mesurer dit ce
+   qui la remplirait, elle n'imprime pas un zero a la place. */
+suite('Un premier compte ne remplit pas l’accueil de zéros', () => {
+
+  /* Un compte courant que quelqu'un a cree, et rien d'autre au monde. */
+  const premierCompte = (extra) => {
+    Fixture.poser(s => {
+      s.comptes = [{ id: 'c1', etabId: null, type: 'courant', statut: 'ouvert',
+        libelle: 'Compte courant', court: 'Compte courant', ouvertLe: '2026-01-01',
+        numero: '', notes: '', alloc: '',
+        cash: [{ montant: 3000, affectation: 'courant' }], lignes: [] }];
+      s.etabs = []; s.positions = []; s.monthly = [];
+      s.budget.income = []; s.budget.fixedCharges = []; s.budget.expenses = [];
+      s.budget.monthlyTarget = 0;
+      if (extra) extra(s);
+    });
+    refreshAccounts();
+  };
+
+  test('sans coût de la vie, l’autonomie ne vaut pas zéro mois', () => {
+    /* LE DEFAUT. `cover = r.burn ? ep / r.burn : 0` rendait zero faute de
+       denominateur, et la carte peignait « 0,0 mois » en rouge sur un coussin de
+       3 000 EUR : l'inverse exact de la situation, le premier jour. */
+    premierCompte();
+    const p = poches();
+    pres(p.courant + p.precaution, 3000, 'le coussin existe');
+    eq(runway().burn, 0, 'et le coût de la vie est inconnu');
+    const src = lireSource('assets/app.js');
+    vrai(/if \(!r\.burn\) return/.test(src),
+      'la carte se tait dès que le dénominateur manque, quel que soit le coussin');
+    vrai(!/const cover = r\.burn \? ep \/ r\.burn : 0;/.test(src),
+      'le rapport ne se replie plus sur zéro');
+    /* Et elle dit ce qui lui manque, precisement : les charges seules ici. */
+    const cle = 'Ce chiffre compare ton argent disponible à ce que te coûte un mois. '
+      + 'Il attend donc tes charges fixes.';
+    vrai(src.includes(cle), 'avec un coussin, elle n’attend plus que les charges');
+    vrai(I18N.en[cle], 'et la phrase a sa traduction');
+  });
+
+  test('l’autonomie revient dès qu’une charge existe', () => {
+    premierCompte(s => {
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1000, period: 'mois' }];
+    });
+    pres(runway().burn, 1000, 'le coût de la vie est connu');
+    pres(poches().courant / runway().burn, 3, 'et le coussin vaut trois mois');
+  });
+
+  test('l’accumulation ne s’affiche pas comme une équation à zéro', () => {
+    premierCompte();
+    const rec = savingsReconciliation();
+    eq(rec.income, 0, 'aucun revenu');
+    eq(rec.fixed, 0, 'aucune charge');
+    eq(rec.spend, 0, 'aucune dépense');
+    const src = lireSource('assets/app.js');
+    vrai(/if \(!\(rec\.income > 0\) && !\(rec\.fixed > 0\) && !\(rec\.spend > 0\)\) return/.test(src),
+      'les trois termes absents, la carte dit ce qui la remplirait');
+    /* Elle parle par la TABLE, d'une seule voix : sa propre phrase plus celle du
+       pas en aurait fait deux, dont l'une ecrite pour une autre carte. */
+    vrai(/<h2>\$\{trad\('Accumulation ce mois-ci'\)\}<\/h2><\/div>\s*\$\{invitePremierPas\('revenus'\)\}/
+      .test(src), 'la carte vide porte l’invite de la table, et rien d’autre');
+    const quoi = 'Déclare ton salaire et tes autres rentrées : c’est d’elles que partent ta capacité d’épargne, ton budget et ce qu’il te reste à vivre.';
+    eq(PAS_PAR_CLE.revenus.quoi, quoi, 'le pas dit ce qu’il apporte');
+    vrai(I18N.en[quoi], 'et il a sa traduction');
+    vrai(!/Sans revenu déclaré, cette carte/.test(src),
+      'l’ancien texte, écrit pour la barre du budget, ne s’affiche plus sur celle-ci');
+    /* Un seul des trois suffit a la reveiller : declarer ses charges avant son
+       salaire donne bien un mouvement a suivre, et un solde negatif est un fait. */
+    premierCompte(s => {
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1000, period: 'mois' }];
+    });
+    vrai(savingsReconciliation().fixed > 0, 'une charge seule réveille la carte');
+    pres(savingsReconciliation().investable, -1000, 'et le solde négatif est un résultat');
+  });
+
+  test('le rythme ne chiffre pas une série vide', () => {
+    premierCompte();
+    const p = statsRythme(limitRange(monthlyPace().points, 'ytd', { ecarts: true }));
+    eq(p.count, 0, 'aucun mois clos à comparer');
+    vrai(/if \(!p\.count\) return '';/.test(lireSource('assets/app.js')),
+      '« +0 € » et « 0 / 0 » ne contredisent plus le « pas assez d’historique » du graphique');
+  });
+
+  test('l’objectif ne se réclame pas avant le premier compte, et il se traduit', () => {
+    const src = lireSource('assets/app.js');
+    vrai(/if \(!\(num\(g\.obj\) > 0\)\) return aUnComptePropre\(\) \?/.test(src),
+      'rien à viser tant qu’il n’y a rien à compter');
+    vrai(!/<span>Aucun objectif fixé pour \$\{esc\(an\)\}<\/span>/.test(src),
+      'la phrase n’est plus écrite en français dans le balisage');
+    vrai(/trad\('Aucun objectif fixé pour \{a\}'\)/.test(src), 'elle passe par le dictionnaire');
+    eq(I18N.en['Aucun objectif fixé pour {a}'], 'No target set for {a}',
+      'et un lecteur anglais ne lit plus du français');
+  });
+
+  test('des cibles jamais choisies ne reprochent rien au premier jour', () => {
+    /* Les cibles par defaut somment 98 %. Le controle se gardait sur le BRUT,
+       qui compte le cash : declarer son compte courant suffisait donc a recevoir
+       un avertissement sur un reglage qu'on n'avait jamais ouvert. */
+    premierCompte(s => {
+      s.targets = { cashToInvest: 5, classes: { actions: 60, obligations: 33 }, exclues: [] };
+    });
+    pres(sommeCibles(), 98, 'la somme des cibles par défaut');
+    pres(patrimoine().brut, 3000, 'et le patrimoine brut compte le cash');
+    eq(rebalanceRows().base, 0, 'mais rien n’est encore placé');
+    vrai(!healthChecks().some(h => /Cibles d’allocation/.test(h.title)),
+      'aucun avertissement sur des cibles qui ne répartissent rien');
+    /* Des qu'un euro est place, le controle reprend son sens. */
+    premierCompte(s => {
+      s.targets = { cashToInvest: 5, classes: { actions: 60, obligations: 33 }, exclues: [] };
+      s.comptes.push({ id: 'c2', etabId: null, type: 'cto', statut: 'ouvert',
+        libelle: 'CTO', court: 'CTO', ouvertLe: '2026-01-01', numero: '', notes: '',
+        alloc: '', cash: [], lignes: [{ id: 'l1', classe: 'actions', libelle: 'ETF',
+          valeur: 10000, prixDeRevient: 10000, quantite: 1, dateAcquisition: '' }] });
+    });
+    vrai(rebalanceRows().base > 0.005, 'il y a désormais matière à répartir');
+    vrai(healthChecks().some(h => /Cibles d’allocation/.test(h.title)),
+      'et l’avertissement reprend son sens');
+  });
+
+  test('les premiers pas suivent l’état, un par un', () => {
+    /* L'ordre est un ordre de faisabilite : le releve n'a de sens qu'apres un
+       compte, et il ne se valide que par une vraie photo. */
+    Fixture.poser(s => {
+      s.comptes = []; s.etabs = []; s.positions = []; s.monthly = [];
+      s.budget.income = []; s.budget.fixedCharges = []; s.budget.expenses = [];
+    });
+    refreshAccounts();
+    eq(['comptes', 'revenus', 'depenses'].map(c => pasAFaire(c)).join(','), 'true,true,true',
+      'tout reste à faire sur un état vierge');
+    eq(pasAFaire('releves'), false, 'sauf le relevé, qui attend un compte');
+
+    premierCompte();
+    eq(pasAFaire('comptes'), false, 'le premier compte franchit le premier pas');
+    eq(pasAFaire('releves'), true, 'et rend le relevé demandable');
+
+    premierCompte(s => { s.budget.income = [{ label: 'Salaire', amount: 3500 }]; });
+    eq(pasAFaire('revenus'), false, 'le salaire franchit le sien');
+
+    premierCompte(s => {
+      s.budget.fixedCharges = [{ label: 'Loyer', amount: 1200, period: 'mois' }];
+    });
+    eq(pasAFaire('depenses'), false, 'une charge fixe franchit celui des dépenses');
+
+    premierCompte(s => {
+      s.monthly = [{ date: '2026-08-01', comment: '', v: { c1: 3000 } }];
+    });
+    eq(pasAFaire('releves'), false, 'et un vrai relevé franchit le dernier');
   });
 });
