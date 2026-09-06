@@ -3546,6 +3546,140 @@ suite('Parts de société : un nombre saisi, deux prix déduits', () => {
 });
 
 /* ------------------------------------------------------------------
+   Le prix d'une part se saisit, et le total reste la verite
+   ------------------------------------------------------------------ */
+suite('Saisie par part : trois règles, jamais quatre', () => {
+
+  const vue = () => lireSource('assets/app.js');
+  /* Le bloc de cablage, isole par son entete. Les regles se lisent la, et non
+     dans le commentaire qui les annonce. */
+  const cablage = () => {
+    const app = vue();
+    const d = app.indexOf("for (const c of champs.filter(x => x.parPart))");
+    return app.slice(d, app.indexOf('\n    }', d));
+  };
+  const champs = () => {
+    const app = vue();
+    return app.slice(app.indexOf('function champsPlacement'),
+                     app.indexOf('function litPlacement'));
+  };
+
+  test('taper un prix par part écrit le total', () => {
+    /* C'est le geste qui manquait : une société qui lève annonce un prix par
+       part, pas la valeur d'un bloc. */
+    const c = cablage();
+    vrai(/unite\.addEventListener\('input', versTotal\)/.test(c),
+      'le champ unitaire écrit le total');
+    vrai(/total\.value = String\(round2\(num\(unite\.value\) \* n\(\)\)\)/.test(c),
+      'et le total vaut le prix multiplié par la quantité');
+  });
+
+  test('taper un total recalcule le prix par part', () => {
+    vrai(/total\.addEventListener\('input', versUnite\)/.test(cablage()),
+      'les deux sens fonctionnent');
+  });
+
+  test('changer le nombre de parts ne touche JAMAIS au total', () => {
+    /* LA REGLE QUI COMPTE. Recalculer le total ferait bouger un montant qu'on
+       n'a pas touché, au moment précis où l'on corrige une quantité — et ce
+       montant est celui que le patrimoine additionne. */
+    const c = cablage();
+    vrai(/combien\.addEventListener\('input', versUnite\)/.test(c),
+      'corriger la quantité recalcule le prix par part');
+    vrai(!/combien\.addEventListener\('input', versTotal\)/.test(c),
+      'et surtout pas le total');
+  });
+
+  test('le prix par part ne se stocke pas', () => {
+    /* Deux champs pour une même valeur finissent toujours par diverger. Le
+       champ unitaire n'a pas de `cle`, il n'entre donc pas dans `champs`, et
+       `valeurs()` ne parcourt que les champs déclarés. */
+    vrai(!/cle: 'parPart'/.test(champs()), 'ce n’est pas un champ déclaré');
+    vrai(/id="\$\{id\}_part"/.test(vue()), 'il vit sous un identifiant dérivé');
+    const app = vue();
+    const lit = app.slice(app.indexOf('function litPlacement'),
+                          app.indexOf('\n}', app.indexOf('function litPlacement')));
+    vrai(!/parPart|_part|prixUnitaire/.test(lit), 'et rien de tel n’est enregistré');
+  });
+
+  test('un total arrondi ne se reconstruit pas depuis un prix arrondi', () => {
+    /* Quatre décimales au prix par part, deux au total : 7 529 fois 1,33 fait
+       10 013 et non les 10 000 saisis, et c'est le total qui fait foi. */
+    vrai(/\* 10000\) \/ 10000/.test(cablage()), 'le prix par part garde quatre décimales');
+    pres(Math.round((10000 / 7529) * 10000) / 10000, 1.3282, 'le prix affiché à l’ouverture');
+    pres(round2(2 * 7529), 15058, 'et deux euros la part refont le total');
+  });
+
+  test('seuls les types qui se divisent en parts ont ce champ', () => {
+    const c = champs();
+    eq((c.match(/parPart: 'parts'/g) || []).length, 2,
+      'la valeur du jour et le montant investi, pas un de plus');
+    vrai(/type && type\.parts\n?\s*\? \{ parPart: 'parts'/.test(c),
+      'le champ suit le drapeau du type');
+    const pret = TYPES_COMPTE.find(t => t.id === 'crowdfunding');
+    vrai(!pret.parts, 'un prêt participatif n’en a donc pas');
+  });
+
+  test('le nombre de parts passe devant les montants qu’il divise', () => {
+    /* Il commandait deux prix unitaires depuis le bas du formulaire : les
+       champs qui le divisent se remplissaient avant que la quantité existe. */
+    const c = champs();
+    const parts = c.indexOf("cle: 'parts'");
+    const valeur = c.indexOf("cle: 'valeur'");
+    const revient = c.indexOf("cle: 'prixDeRevient'");
+    vrai(parts > 0 && valeur > 0 && revient > 0, 'les trois champs sont là');
+    vrai(parts < valeur && parts < revient, 'et la quantité vient en premier');
+  });
+
+  test('le bloc unitaire ne reprend pas un nom de classe déjà pris', () => {
+    /* `champ-unite` porte deja le petit « € » colle a droite d'un montant : un
+       div qui reprend ce nom hérite de sa couleur grisée et de sa taille. */
+    const css = lireSource('assets/styles.css');
+    vrai(/\.champ-par-part \{/.test(css), 'le bloc a son propre style');
+    vrai(/\.champ-unite \{/.test(css), 'et l’ancien nom reste ce qu’il était');
+    vrai(/class="champ-par-part"/.test(vue()), 'la vue emploie le nouveau');
+  });
+});
+
+/* ------------------------------------------------------------------
+   Un intitule compose se traduit comme les autres
+   ------------------------------------------------------------------ */
+suite('Formulaire de placement : les intitulés composés sont traduits aussi', () => {
+
+  test('le montant et ses trois aides existent dans le dictionnaire', () => {
+    /* CE QUE LE TEST DE COMPLETUDE NE PEUT PAS VOIR. Il cherche des appels
+       `trad('...')` litteraux dans la vue. Ces cinq chaines-la n'existent
+       qu'apres evaluation — un gabarit dont le debut depend d'un ternaire, et
+       les trois branches d'un autre — donc elles lui sont invisibles, et elles
+       s'affichaient en francais a un lecteur anglophone.
+
+       Elles se verifient ici une par une, en clair. Une liste ecrite a la main
+       est ce qu'on peut faire de mieux tant que la vue compose ses intitules :
+       c'est aussi le rappel que composer un intitule le sort du filet. */
+    /* Les deux styles de guillemets, parce que le dictionnaire emploie les
+       deux. Ne chercher que le double donne une clef presente pour absente, et
+       la declarer une seconde fois la ferait gagner en silence sur la
+       premiere — exactement ce que le controle des doublons interdit. */
+    const dico = lireSource('assets/i18n.js');
+    const declaree = cle => dico.includes('"' + cle + '":')
+      || dico.includes("'" + cle + "':");
+    for (const cle of ['Valeur aujourd’hui (€)', 'Valeur estimée (€)',
+                       'ce que la ligne vaut, capital et intérêts courus compris',
+                       'ce que tu en tirerais en le vendant aujourd’hui',
+                       'la dernière valeur liquidative publiée, pour les parts que tu détiens'])
+      vrai(declaree(cle), 'traduit : ' + cle.slice(0, 40));
+  });
+
+  test('les deux intitulés composés sont bien ceux que la vue fabrique', () => {
+    /* Une clef recopiee de travers ne casse rien de visible : elle rend juste
+       le francais en anglais. Le test relit donc la vue plutot que sa memoire. */
+    const app = lireSource('assets/app.js');
+    vrai(app.includes("${estime ? 'Valeur estimée' : 'Valeur aujourd’hui'} (€)"),
+      'le gabarit du montant n’a pas changé de forme');
+  });
+});
+
+/* ------------------------------------------------------------------
    Une plus-value se calcule sur deux montants connus, ou ne se dit pas
    ------------------------------------------------------------------ */
 suite('Plus-value latente : deux montants connus, ou rien', () => {

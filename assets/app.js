@@ -6835,18 +6835,24 @@ function champsPlacement(classe, l = null, prete = false, type = null) {
     { cle: 'libelle', label: 'Intitulé', type: 'texte', requis: true, max: NOM_LIGNE_MAX,
       valeur: l ? (l.libelle || '') : '',
       exemple: EXEMPLE_PLACEMENT[classe] || 'ex. Projet Bordeaux' },
+    ...(type && type.parts ? [{ cle: 'parts', label: trad('Nombre de parts'),
+      type: 'nombre', valeur: l ? (num(l.parts) || '') : '', exemple: '0',
+      aide: trad('il commande les deux prix par part ci-dessous') }] : []),
     { cle: 'valeur',
       label: `${estime ? 'Valeur estimée' : 'Valeur aujourd’hui'} (€)`, type: 'nombre',
       valeur: l ? num(l.valeur) : '', exemple: '0',
       aide: estime ? 'ce que tu en tirerais en le vendant aujourd’hui'
           : publiee ? 'la dernière valeur liquidative publiée, pour les parts que tu détiens'
-                    : 'ce que la ligne vaut, capital et intérêts courus compris' },
+                    : 'ce que la ligne vaut, capital et intérêts courus compris',
+      /* Le TOTAL reste la donnee stockee, le prix par part n'est qu'une autre
+         facon de l'ecrire. Voir le cablage dans `askForm`. */
+      ...(type && type.parts
+        ? { parPart: 'parts', parPartLabel: 'Prix de la part aujourd’hui (€)' } : {}) },
     { cle: 'prixDeRevient', label: trad('Montant investi (€)'), type: 'nombre',
       valeur: l ? (num(l.prixDeRevient) || '') : '', exemple: '0',
-      aide: trad('facultatif, il donne la plus-value') },
-    ...(type && type.parts ? [{ cle: 'parts', label: trad('Nombre de parts'),
-      type: 'nombre', valeur: l ? (num(l.parts) || '') : '', exemple: '0',
-      aide: trad('facultatif, il donne le prix de la part') }] : []),
+      aide: trad('facultatif, il donne la plus-value'),
+      ...(type && type.parts
+        ? { parPart: 'parts', parPartLabel: 'Prix d’achat de la part (€)' } : {}) },
     { cle: 'dateAcquisition', label: trad('Date d’entrée'), type: 'date',
       valeur: l ? (l.dateAcquisition || '') : todayISO() },
     ...(datee ? [{ cle: 'estimeLe',
@@ -9650,10 +9656,18 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
          datant un mouvement : « ça compte dans quel mois ». Le drapeau est
          explicite, champ par champ : toutes les dates de l'application n'ont
          pas cette question. */
+      /* `parPart` : sous un montant total, le meme montant ramene a une part.
+         Le champ n'a pas de `cle` et n'entre pas dans `champs` : `valeurs()`
+         parcourt les champs declares, donc il ne se lit ni ne se stocke, tout
+         comme le miroir du mois juste au-dessus. */
       return `<div class="field">
         <label for="${id}">${esc(trad(c.label))}${c.aide ? `<span class="sub">${esc(trad(c.aide))}</span>` : ''}</label>
         ${saisie}
         ${c.mois ? `<span class="hint" id="${id}_mois"></span>` : ''}
+        ${!c.parPart ? '' : `<div class="champ-par-part">
+          <label for="${id}_part">${esc(trad(c.parPartLabel))}<span class="sub">${esc(trad('l’un remplit l’autre'))}</span></label>
+          <input id="${id}_part" type="number" step="any" inputmode="decimal" placeholder="0">
+        </div>`}
       </div>`;
     };
 
@@ -9713,6 +9727,47 @@ function askForm({ titre, sous = '', champs, ok = 'Ajouter', lie = null, encore 
       champ.addEventListener('input', maj);
       champ.addEventListener('change', maj);
       maj();
+    }
+
+    /* LE PRIX D'UNE PART SE SAISIT, DANS LES DEUX SENS.
+
+       Une societe qui leve annonce un prix par part, pas la valeur d'un bloc.
+       Saisir le total obligeait a multiplier de tete, et une multiplication de
+       tete est une erreur qui entre dans le patrimoine sans prevenir.
+
+       LE TOTAL RESTE LA VERITE, et ce n'est pas un detail de cablage. Le
+       patrimoine additionne `valeur` ; treize ecrans lisent ce montant. Deux
+       champs pour une meme valeur finissent toujours par diverger, et un prix
+       par part arrondi au centime rendrait un total faux — 7 529 fois 1,33 fait
+       10 013 et non les 10 000 saisis.
+
+       D'ou trois regles et pas quatre : taper le prix par part ECRIT le total ;
+       taper le total recalcule le prix par part ; changer le nombre de parts
+       recalcule le prix par part, JAMAIS le total. La derniere est celle qui
+       compte — recalculer le total ferait bouger un montant qu'on n'a pas
+       touche, au moment ou l'on corrige une quantite.
+
+       Quatre decimales au prix par part : une part vaut souvent quelques euros,
+       et deux decimales suffiraient a l'affichage mais pas a la relecture d'un
+       montant qu'on vient de saisir. */
+    for (const c of champs.filter(x => x.parPart)) {
+      const total = $(`#f_${c.cle}`);
+      const unite = $(`#f_${c.cle}_part`);
+      const combien = $(`#f_${c.parPart}`);
+      if (!total || !unite || !combien) continue;
+      const n = () => num(combien.value);
+      const versUnite = () => {
+        unite.value = n() > 0 && total.value !== ''
+          ? String(Math.round((num(total.value) / n()) * 10000) / 10000) : '';
+      };
+      const versTotal = () => {
+        if (n() > 0 && unite.value !== '')
+          total.value = String(round2(num(unite.value) * n()));
+      };
+      unite.addEventListener('input', versTotal);
+      total.addEventListener('input', versUnite);
+      combien.addEventListener('input', versUnite);
+      versUnite();
     }
 
     const premier = $('#modalBody').querySelector('input, select');

@@ -807,6 +807,9 @@ textarea { resize: vertical; line-height: 1.45; }
 
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 11.5px; color: var(--text-secondary); font-weight: 550; }
+.champ-par-part { display: flex; flex-direction: column; gap: 4px; margin-top: 7px;
+                  padding-left: 10px; border-left: 2px solid var(--grid); }
+.champ-par-part input { font-size: 13px; padding: 6px 8px; }
 .valeur-figee {
   margin: 0; align-self: start; padding: 7px 0;
   font-size: 13px; color: var(--text-secondary); font-style: italic;
