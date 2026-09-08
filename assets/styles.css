@@ -2782,6 +2782,34 @@ select.annee {
 .jm-eur.down, .jm-pct.down { color: var(--critical); }
 .jm-eur.flat, .jm-pct.flat { color: var(--text-secondary); }
 
+/* LE DEROULEMENT DE LA CARTE DU JOUR.
+
+   `overflow: hidden` n'est pose QUE pendant le mouvement, et c'est important :
+   en permanence, il rognerait une infobulle de colonne qui deborde du cadre.
+   Il vit donc sur la classe, que la vue retire des la fin.
+
+   La HAUTEUR N'EST PAS ANIMEE ICI. Elle l'a ete, et la regle ne servait a
+   rien : la vue se redessine en entier a chaque clic, et une transition ne
+   demarre pas sur un element qui vient d'etre insere. C'est la vue qui mene le
+   mouvement, par l'API d'animation, qui n'a pas besoin d'un etat d'avant. La
+   duree et la courbe vivent donc a cote du geste, dans `deroulerJour`. */
+.jour-lignes.jl-deroule { overflow: hidden; }
+
+@keyframes jour-entre {
+  from { opacity: 0; transform: translate3d(0, -6px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+.jour-lignes.jl-deroule > * {
+  animation: jour-entre .3s cubic-bezier(.22, .61, .36, 1) backwards;
+}
+.jour-lignes.jl-deroule > :nth-child(2) { animation-delay: 40ms; }
+.jour-lignes.jl-deroule > :nth-child(3) { animation-delay: 80ms; }
+.jour-lignes.jl-deroule > :nth-child(n+4) { animation-delay: 110ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jour-lignes.jl-deroule > * { animation: none; }
+}
+
 .jour-plus {
   display: block; width: 100%; margin-top: 10px; padding: 9px 8px;
   background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);

@@ -3680,6 +3680,105 @@ suite('Formulaire de placement : les intitulés composés sont traduits aussi', 
 });
 
 /* ------------------------------------------------------------------
+   La carte du jour se deroule, elle ne saute pas
+   ------------------------------------------------------------------ */
+suite('Carte du jour : le dépliement se voit', () => {
+
+  const vue = () => lireSource('assets/app.js');
+  const corps = () => {
+    const app = vue();
+    return app.slice(app.indexOf('function deroulerJour'),
+                     app.indexOf('\n}', app.indexOf('function deroulerJour')));
+  };
+
+  test('la hauteur d’avant se relève avant le rendu, jamais après', () => {
+    /* C'EST TOUT LE PROBLEME. La vue se redessine en entier a chaque geste :
+       l'element mesure disparait avec elle. Relever la hauteur apres le rendu
+       ne rendrait que celle d'arrivee, et il n'y aurait plus rien a relier. */
+    const app = vue();
+    const i = app.indexOf("'jour-detail'()");
+    const act = app.slice(i, app.indexOf('\n  },', i));
+    const iMesure = act.indexOf('hauteurJourLignes()');
+    const iBascule = act.indexOf('jourDeplie = !jourDeplie');
+    const iRendu = act.indexOf('render()');
+    const iAnim = act.indexOf('deroulerJour(avant)');
+    vrai(iMesure > 0, 'la hauteur se relève');
+    vrai(iMesure < iBascule, 'avant que l’état ne bascule');
+    vrai(iBascule < iRendu && iRendu < iAnim, 'puis on rend, puis on anime');
+  });
+
+  test('le mouvement passe par l’API d’animation, pas par une transition', () => {
+    /* La vue se redessine en entier a chaque geste : aucun element ne persiste
+       d'un etat a l'autre, et une transition a besoin d'une valeur d'avant que
+       le moteur ait resolue. L'API recoit ses deux bornes en argument, et son
+       deroulement se pilote — c'est ainsi qu'il a ete verifie, en posant
+       `currentTime` plutot qu'en regardant passer. */
+    const c = corps();
+    vrai(/box\.animate\(/.test(c), 'la vue anime elle-même');
+    vrai(/height: `\$\{hAvant\}px`/.test(c) && /height: `\$\{hApres\}px`/.test(c),
+      'entre deux hauteurs mesurées');
+    const css = lireSource('assets/styles.css');
+    const regle = css.slice(css.indexOf('.jour-lignes.jl-deroule'));
+    vrai(!/^\s*\.jour-lignes\.jl-deroule \{[^}]*transition/m.test(regle),
+      'et aucune transition de hauteur ne prétend le faire à sa place');
+  });
+
+  test('le réglage système du mouvement réduit arrête tout', () => {
+    const c = corps();
+    vrai(/matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/.test(c),
+      'la vue le consulte');
+    /* Elle sort AVANT de poser la classe : sans mouvement, pas de rognage ni
+       de cascade non plus. */
+    const iMedia = c.indexOf('prefers-reduced-motion');
+    const iClasse = c.indexOf("classList.add('jl-deroule')");
+    vrai(iMedia > 0 && iClasse > iMedia, 'et sort avant de poser la classe');
+    const css = lireSource('assets/styles.css');
+    vrai(/@media \(prefers-reduced-motion: reduce\) \{\s*\.jour-lignes\.jl-deroule > \* \{ animation: none; \}/.test(css),
+      'la feuille de style le dit aussi, pour l’entrée des lignes');
+  });
+
+  test('la carte est remise d’aplomb même si l’animation est annulée', () => {
+    /* Un second clic pendant le mouvement annule le premier, et `finished`
+       rejette. Sans le rattrapage, la classe resterait — donc `overflow:
+       hidden` sur une carte a hauteur libre, c'est-a-dire rognee. */
+    const c = corps();
+    vrai(/anim\.finished\.catch\(\(\) => \{\}\)\.then\(/.test(c),
+      'le rejet est rattrapé, et le nettoyage a lieu quand même');
+    vrai(/classList\.remove\('jl-deroule'\)/.test(c), 'la classe part');
+  });
+
+  test('le rognage ne vit que pendant le mouvement', () => {
+    /* En permanence, `overflow: hidden` couperait l'infobulle d'une colonne qui
+       deborde du cadre. Il est donc sur la classe, que la vue retire. */
+    const css = lireSource('assets/styles.css');
+    vrai(/\.jour-lignes\.jl-deroule \{ overflow: hidden; \}/.test(css),
+      'le rognage est porté par la classe');
+    const base = css.match(/\.jour-lignes \{[^}]*\}/);
+    vrai(base && !/overflow/.test(base[0]), 'et pas par la règle de base');
+  });
+
+  test('la cascade des lignes s’arrête, elle ne suit pas les vingt lignes', () => {
+    /* Un decalage par ligne sur vingt lignes durerait plus longtemps que le
+       depliement qu'il accompagne : les dernieres arriveraient apres que le
+       bord s'est arrete. */
+    const css = lireSource('assets/styles.css');
+    vrai(/:nth-child\(n\+4\) \{ animation-delay: 110ms; \}/.test(css),
+      'au-delà de la troisième, toutes partagent le même retard');
+    vrai(/@keyframes jour-entre/.test(css), 'et l’entrée existe');
+  });
+
+  test('rien ne bouge quand la hauteur ne change pas', () => {
+    /* Le bouton reste affiche meme quand tout est deja montre : le detail
+       porte des colonnes que la version compacte n'a pas. Si les deux hauteurs
+       se valent, animer de x a x poserait la classe pour rien. */
+    vrai(/Math\.abs\(hApres - hAvant\) < 1\) return;/.test(corps()),
+      'un écart nul ne déclenche pas d’animation');
+    vrai(/typeof box\.animate !== 'function'/.test(corps()),
+      'et un navigateur sans l’API se contente du saut');
+  });
+});
+
+/* ------------------------------------------------------------------
    Une plus-value se calcule sur deux montants connus, ou ne se dit pas
    ------------------------------------------------------------------ */
 suite('Plus-value latente : deux montants connus, ou rien', () => {

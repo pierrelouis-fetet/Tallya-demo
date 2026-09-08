@@ -2144,6 +2144,64 @@ function jourCompact(j) {
         </button>`).join('');
 }
 
+/* LE DEPLIEMENT SE VOIT, PARCE QUE LA CARTE CHANGE DE TAILLE SOUS LE DOIGT.
+
+   Trois lignes deviennent vingt d'un coup, et tout ce qui suit dans la page
+   descend d'un bloc dans la meme image. L'oeil n'a rien pour relier l'avant et
+   l'apres : on ne voit pas la carte s'ouvrir, on voit une autre page. Le pouce
+   est encore sur le bouton, et le bouton a change de place.
+
+   LA HAUTEUR EST MESUREE DES DEUX COTES, et c'est le seul moyen ici. La vue se
+   redessine entierement a chaque geste : l'element d'avant n'existe plus, donc
+   aucune transition CSS ne peut le suivre — elle a besoin d'un meme noeud qui
+   change de valeur. On releve donc la hauteur AVANT le rendu, on pose celle
+   d'apres, et la transition relie les deux sur un noeud neuf.
+
+   `auto` NE S'ANIME PAS. C'est la raison du detour par deux nombres, et de la
+   hauteur en ligne effacee a la fin : la laisser figerait la carte a la taille
+   qu'elle avait, et un cours qui rallonge une ligne serait rogne.
+
+   POURQUOI L'API D'ANIMATION ET NON UNE TRANSITION CSS. La vue se redessine en
+   entier a chaque geste : il n'y a pas d'element qui persiste d'un etat a
+   l'autre, seulement un noeud neuf portant deja sa hauteur d'arrivee. Une
+   transition a besoin d'une valeur d'avant que le moteur ait resolue ; ici elle
+   n'existe pas, et c'est le trou que `@starting-style` a ete invente pour
+   combler. L'API, elle, recoit ses deux bornes en argument : rien a deduire
+   d'un etat anterieur.
+
+   Elle rend aussi une promesse, ce qui remplace le guetteur d'evenement, son
+   filet de securite et le drapeau qui empechait de nettoyer deux fois. Et son
+   deroulement se pilote (`currentTime`), donc il se verifie autrement qu'a
+   l'oeil.
+
+   Les LIGNES, elles, gardent leurs images-clefs CSS : une animation, au
+   contraire d'une transition, joue sur un element qui vient d'apparaitre —
+   c'est deja ce que fait l'entree des reperes. */
+const JOUR_DEROULE_MS = 340;
+const JOUR_DEROULE_COURBE = 'cubic-bezier(.22, .61, .36, 1)';
+
+function hauteurJourLignes() {
+  const box = $('.jour-lignes');
+  return box ? box.getBoundingClientRect().height : null;
+}
+
+function deroulerJour(hAvant) {
+  const box = $('.jour-lignes');
+  if (!box || hAvant == null || typeof box.animate !== 'function') return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const hApres = box.getBoundingClientRect().height;
+  if (Math.abs(hApres - hAvant) < 1) return;
+
+  box.classList.add('jl-deroule');
+  const anim = box.animate(
+    [{ height: `${hAvant}px` }, { height: `${hApres}px` }],
+    { duration: JOUR_DEROULE_MS, easing: JOUR_DEROULE_COURBE });
+  /* `finished` rejette quand l'animation est annulee — un second clic pendant
+     le mouvement, ou la vue qui change. Dans les deux cas le nettoyage doit
+     avoir lieu quand meme, sans quoi la carte resterait rognee. */
+  anim.finished.catch(() => {}).then(() => box.classList.remove('jl-deroule'));
+}
+
 function triJourTh(key, label, explication = '') {
   const on = jourSort && jourSort.key === key;
   const sens = !on ? trad('décroissant')
@@ -7213,8 +7271,10 @@ const ACTIONS = {
     posCompte = v; render();
   },
   'jour-detail'() {
+    const avant = hauteurJourLignes();
     jourDeplie = !jourDeplie;
     render();
+    deroulerJour(avant);
   },
   'sort-jour'(btn) {
     const key = btn.dataset.key;
