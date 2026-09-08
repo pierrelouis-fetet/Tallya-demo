@@ -4047,6 +4047,175 @@ suite('Fiches d’Aperçu : une catégorie se lit sans dérouler son inventaire'
 });
 
 /* ------------------------------------------------------------------
+   Le bandeau mesure la grandeur qu'il affiche, et rien d'autre
+   ------------------------------------------------------------------ */
+suite('Bandeau de l’Aperçu : net ou brut, jusqu’au bout', () => {
+
+  const AUJ = '2026-08-30';
+  /* Une scene entierement maitrisee : un compte, une dette d'etablissement,
+     des releves. Les montants sont inventes pour l'occasion. */
+  const scene = ({ brut, dette = 0, releves = [] }) => Fixture.poser(s => {
+    s.etabs = [{ id: 'e', nom: 'Banque', notes: '',
+      dettes: dette ? [{ id: 'd', libelle: 'Prêt', montant: dette, note: '' }] : [] }];
+    s.comptes = [{ id: 'c', etabId: 'e', type: 'courant', statut: 'ouvert',
+      ouvertLe: '2020-01-01', numero: '', notes: '', libelle: 'Compte',
+      court: 'Compte', alloc: '', cash: [{ montant: brut, affectation: 'courant' }],
+      lignes: [] }];
+    s.positions = [];
+    s.monthly = releves.map(([date, avoirs, d]) =>
+      ({ date, comment: '', dettes: d || 0, v: { c: avoirs } }));
+  });
+
+  const vue = () => lireSource('assets/app.js');
+  const bandeau = () => {
+    const app = vue();
+    return app.slice(app.indexOf('<div class="hero">'),
+                     app.indexOf('${blocVariation}'));
+  };
+
+  test('A. en brut, l’intitulé dit « patrimoine brut » et rien ne parle de dette', () => {
+    const h = bandeau();
+    vrai(/trad\(evoNet \? 'Patrimoine net' : 'Patrimoine brut'\)/.test(h),
+      'les deux intitulés sont là, commandés par la bascule');
+    /* UN FAIT, UN ENDROIT. Une ligne « dont X de credits a rembourser » vivait
+       sous le grand chiffre en mode brut. Elle disait vrai, et la carte de
+       repartition juste dessous le disait deja. */
+    vrai(!/crédits à rembourser|hero-sous/.test(h), 'aucune dette sous le grand chiffre');
+    vrai(!/patrimoine\(\)\.dettes/.test(h), 'et le bandeau ne va même plus la chercher');
+    const dico = lireSource('assets/i18n.js');
+    vrai(dico.includes('"Patrimoine brut": "Total assets"'),
+      'l’anglais dit « Total assets », pas « wealth »');
+  });
+
+  test('B. en net, l’intitulé dit « patrimoine net »', () => {
+    const dico = lireSource('assets/i18n.js');
+    vrai(dico.includes('"Patrimoine net": "Net worth"'), 'et l’anglais dit « Net worth »');
+    vrai(/hero-value">\$\{fmtEUR\(evoNet \? t\.total : t\.brut\)\}/.test(bandeau()),
+      'le grand chiffre reste celui qui existait, sans recalcul');
+  });
+
+  test('C. le delta brut se compte sur les avoirs, et son pourcentage avec', () => {
+    scene({ brut: 453770, releves: [['2025-08-01', 390656]] });
+    const v = variationAn(AUJ, false);
+    pres(v.eur, 63114, 'la variation des avoirs');
+    pres(v.avant, 390656, 'depuis les avoirs de l’époque');
+    pres(v.pct, 16.1556, 'et le pourcentage suit la même base');
+    eq(v.mois, 12, 'douze mois pleins');
+  });
+
+  test('D. le delta net diffère du delta brut dès qu’un crédit se rembourse', () => {
+    /* 50 000 d'avoirs en plus et 40 000 de capital rembourse : le brut monte de
+       ce que valent les actifs, le net monte aussi de ce qu'on ne doit plus.
+       Reutiliser le meme nombre pour les deux attribuerait aux marches ce que
+       le remboursement a fait. */
+    scene({ brut: 453770, dette: 60000, releves: [['2025-08-01', 390656, 100000]] });
+    const brut = variationAn(AUJ, false);
+    const net = variationAn(AUJ, true);
+    pres(brut.eur, 63114, 'le brut ne voit que les avoirs');
+    pres(net.eur, 103114, 'le net y ajoute les 40 000 de capital remboursé');
+    vrai(Math.abs(net.eur - brut.eur) > 1, 'les deux ne se confondent pas');
+    pres(net.avant, 290656, 'la base nette est celle du relevé, crédits déduits');
+    vrai(/variationAn\(todayISO\(\), evoNet\)/.test(vue()),
+      'et la vue demande bien celle de la grandeur affichée');
+  });
+
+  test('E. une base à zéro donne un montant, jamais un pourcentage', () => {
+    /* Diviser par zero rendrait l'infini, que rien n'affiche. Le montant, lui,
+       est parfaitement mesure. */
+    scene({ brut: 10000, releves: [['2025-08-01', 0]] });
+    const v = variationAn(AUJ, false);
+    pres(v.eur, 10000, 'le montant se dit');
+    eq(v.pct, null, 'le pourcentage se tait');
+  });
+
+  test('F. une base négative ne produit pas de pourcentage trompeur', () => {
+    /* Un patrimoine net sous l'eau apres un achat a credit : le rapport change
+       de signe, et un redressement s'afficherait comme une baisse. */
+    scene({ brut: 200000, releves: [['2025-08-01', 100000, 150000]] });
+    const v = variationAn(AUJ, true);
+    pres(v.avant, -50000, 'la base nette était négative');
+    pres(v.eur, 250000, 'le redressement se dit en euros');
+    eq(v.pct, null, 'et aucun pourcentage ne vient le contredire');
+  });
+
+  test('G. moins de douze mois d’historique : la période réelle s’affiche', () => {
+    /* « 12 derniers mois » sous une comparaison qui en couvre six serait le
+       meme mensonge que sous quatre. L'age du releve retenu est ce qui
+       s'ecrit, et la tolerance de plus ou moins trois mois le rend necessaire :
+       un point de quinze mois ne s'annonce pas comme douze. */
+    scene({ brut: 10000, releves: [['2026-02-01', 8000]] });
+    eq(variationAn(AUJ, false).mois, 6, 'six mois, et l’intitulé le dira');
+    scene({ brut: 10000, releves: [['2025-05-01', 8000]] });
+    eq(variationAn(AUJ, false).mois, 15, 'quinze mois retenus dans la tolérance');
+    const app = vue();
+    vrai(/trad\(varAn\.mois > 1 \? '\{n\} derniers mois' : '\{n\} dernier mois'\)/.test(app),
+      'la vue écrit le nombre de mois qu’on lui donne');
+    vrai(/\.replace\('\{n\}', varAn\.mois\)/.test(app), 'et le substitue');
+    const dico = lireSource('assets/i18n.js');
+    vrai(dico.includes('"{n} derniers mois": "Last {n} months"'),
+      'l’anglais compte derrière, le français devant');
+  });
+
+  test('H. aucun historique exploitable, aucun faux zéro', () => {
+    scene({ brut: 10000, releves: [] });
+    eq(variationAn(AUJ, false), null, 'rien à comparer');
+    eq(variationAn(AUJ, true), null, 'dans les deux modes');
+    scene({ brut: 10000, releves: [['2026-08-01', 9000]] });
+    eq(variationAn(AUJ, false), null, 'un relevé du mois en cours ne mesure rien');
+  });
+
+  test('I et J. la couleur vient du signe, et le zéro est neutre', () => {
+    scene({ brut: 8000, releves: [['2025-08-01', 10000]] });
+    vrai(variationAn(AUJ, false).eur < 0, 'une baisse est négative');
+    scene({ brut: 10000, releves: [['2025-08-01', 10000]] });
+    eq(variationAn(AUJ, false).eur, 0, 'et un patrimoine stable rend zéro');
+    /* `cls` vit dans la vue, que le harnais ne charge pas : la regle se lit
+       donc a la source, et la palette dans la feuille de style. */
+    const app = vue();
+    vrai(/<b class="\$\{cls\(varAn\.eur\)\}">/.test(app), 'le signe commande la classe');
+    const css = lireSource('assets/styles.css');
+    for (const r of [/^\.up \{ color: var\(--good-text\); \}/m,
+                     /^\.down \{ color: var\(--critical\); \}/m,
+                     /^\.flat \{ color: var\(--muted\); \}/m])
+      vrai(r.test(css), 'la palette existante sert : ' + r.source.slice(0, 12));
+  });
+
+  test('K. les quatre chaînes du bandeau se traduisent', () => {
+    const dico = lireSource('assets/i18n.js');
+    const declaree = cle => dico.includes('"' + cle + '":') || dico.includes("'" + cle + "':");
+    for (const cle of ['{n} derniers mois', '{n} dernier mois',
+                       'Patrimoine net', 'Patrimoine brut'])
+      vrai(declaree(cle), 'traduit : ' + cle);
+    /* L'infobulle nomme ce qui fait bouger le chiffre, et le mot qui ne doit
+       pas y etre n'y est pas : ce nombre n'est pas une performance. */
+    const app = vue();
+    const i = app.indexOf('const blocVariation = !varAn');
+    const bloc = app.slice(i, app.indexOf('`;', app.indexOf('</div>`', i)));
+    vrai(/remboursement du capital des crédits/.test(bloc),
+      'le net cite le remboursement du capital');
+    const iBrut = bloc.indexOf('Variation du patrimoine brut');
+    vrai(iBrut > 0, 'le texte du brut existe');
+    vrai(!/remboursement du capital/.test(bloc.slice(iBrut)),
+      'le brut ne le cite pas : il ne le mesure pas');
+    for (const en of ['Change in net worth over the period',
+                      'Change in total assets over the period'])
+      vrai(dico.includes(en), 'et l’anglais existe : ' + en.slice(0, 22));
+  });
+
+  test('le moteur patrimonial n’a pas bougé', () => {
+    /* Cette passe touche a l'affichage. La convention reste celle de toute
+       l'application : net = brut moins les dettes, sans fiscalite latente. */
+    scene({ brut: 453770, dette: 60000, releves: [] });
+    const p = patrimoine();
+    pres(p.brut, 453770, 'le brut est la valeur des avoirs');
+    pres(p.dettes, 60000, 'les dettes sont celles des établissements');
+    pres(p.net, 393770, 'et le net est leur différence, rien de plus');
+    pres(nowTotals().total, p.net, '« total » reste le patrimoine net partout');
+    pres(nowTotals().brut, p.brut, 'et « brut » la valeur des avoirs');
+  });
+});
+
+/* ------------------------------------------------------------------
    Une seule variation, sur douze mois glissants
    ------------------------------------------------------------------ */
 suite('Variation du patrimoine : douze mois glissants, ou rien', () => {
@@ -4113,41 +4282,44 @@ suite('Variation du patrimoine : douze mois glissants, ou rien', () => {
       'et la carte ne rend alors aucun bloc');
   });
 
-  test('ni pourcentage ni pastille', () => {
+  test('le pourcentage suit le montant, et la pastille explique', () => {
+    /* La face portait « +63 114 € sur 1 an, apports inclus » : un montant, une
+       fenetre et une reserve se partageaient la meme ligne. La reserve descend
+       dans l'infobulle, ou elle se lit en entier quand on se la demande, au
+       lieu d'etre servie a tout le monde en permanence. */
     const app = lireSource('assets/app.js');
     const i = app.indexOf('const blocVariation = !varAn');
     const bloc = app.slice(i, app.indexOf('`;', app.indexOf('</div>`', i)));
-    vrai(!/fmtPct|fmtSignedPct|%/.test(bloc), 'aucun pourcentage');
-    vrai(!/aide\(/.test(bloc), 'aucune pastille');
-    /* La fenetre est fixe et la reserve est ecrite : il ne reste rien a
-       expliquer au doigt. */
-    vrai(/trad\('apports inclus'\)/.test(bloc), 'la réserve reste, en toutes lettres');
+    vrai(/fmtSignedPct\(varAn\.pct, 1\)/.test(bloc), 'le pourcentage est là, à une décimale');
+    vrai(/varAn\.pct == null \? ''/.test(bloc), 'et il s’efface quand il ne veut rien dire');
+    vrai(/aide\(trad\(evoNet/.test(bloc), 'la pastille suit la grandeur choisie');
+    vrai(!/apports inclus/.test(bloc), 'la réserve n’est plus sur la face');
+    /* Ce nombre melange ce qu'on a verse et ce que les marches ont fait : le
+       nommer performance serait promettre une mesure que rien ne calcule. */
+    vrai(!/performance|rendement/i.test(bloc), 'et il ne s’appelle pas une performance');
   });
 
-  test('les trois parts tiennent sur une ligne, dans l’ordre', () => {
-    /* « +15 287 € sur 1 an, apports inclus » : le montant d'abord parce que
-       c'est lui qu'on lit, sa fenetre ensuite parce qu'elle le qualifie, la
-       reserve en dernier parce qu'elle nuance les deux.
-
-       Sur une seule ligne, et non deux : le bloc en portait une seconde pour la
-       seule reserve, ce qui donnait a trois mots la hauteur d'un chiffre. Une
-       virgule fait le meme travail. */
+  test('deux lignes, et le montant tient la première', () => {
+    /* Le montant d'abord parce que c'est lui qu'on lit ; le pourcentage colle a
+       lui parce qu'il le qualifie ; la fenetre dessous en gris parce qu'elle ne
+       se lit qu'une fois. */
     const app = lireSource('assets/app.js');
     const i = app.indexOf('const blocVariation = !varAn');
     const bloc = app.slice(i, app.indexOf('`;', app.indexOf('</div>`', i)));
     const iMontant = bloc.indexOf('fmtSigned(varAn.eur)');
-    const iFenetre = bloc.indexOf("varAn.sur === 'an' ? 'sur 1 an'");
-    const iReserve = bloc.indexOf("trad('apports inclus')");
-    vrai(iMontant > 0 && iFenetre > iMontant, 'la fenêtre suit le montant');
-    vrai(iReserve > iFenetre, 'et la réserve vient après les deux');
-    /* La virgule les relie, et un seul `span` les porte : un second enfant du
-       bloc les remettrait sur deux lignes. */
-    vrai(/, \$\{\s*trad\('apports inclus'\)\}<\/span>/.test(bloc),
-      'une virgule les relie dans le même span');
-    eq((bloc.match(/<span>/g) || []).length, 1, 'un seul span, donc une seule ligne');
-    /* La composition tient en anglais : « over 1 year, contributions included ». */
-    vrai(I18N.en['sur 1 an'] && I18N.en['apports inclus'],
-      'les deux morceaux se traduisent séparément, la virgule les rejoint');
+    const iPct = bloc.indexOf('fmtSignedPct(varAn.pct');
+    const iFenetre = bloc.indexOf('varAn.mois > 1');
+    vrai(iMontant > 0 && iPct > iMontant, 'le pourcentage suit le montant');
+    vrai(iFenetre > iPct, 'et la fenêtre vient après les deux');
+    /* Le pourcentage vit DANS le `b`, et pas a cote : `.hero-delta span` grise
+       ce qui suit le montant, et un pourcentage gris contre un montant vert
+       dirait deux choses du meme mouvement. */
+    vrai(/<b class="\$\{cls\(varAn\.eur\)\}">[\s\S]*hero-pct[\s\S]*<\/b>/.test(bloc),
+      'le pourcentage est dans le montant, donc de sa couleur');
+    const css = lireSource('assets/styles.css');
+    vrai(/\.hero-delta b \.hero-pct \{[^}]*color: inherit/.test(css),
+      'et la règle le dit explicitement');
+    eq((bloc.match(/<span>/g) || []).length, 1, 'la fenêtre est le seul span de second rang');
   });
 
   test('une seule écriture, et les deux fenêtres se traduisent', () => {
@@ -20177,10 +20349,20 @@ suite('Deux réglages, deux questions, et ils ne se marchent pas dessus', () => 
        longueur a chaque clic. */
     const hero = app.slice(app.indexOf('<div class="hero-label">'),
                            app.indexOf('<div class="hero-value">'));
-    vrai(/<span>\$\{trad\('Patrimoine'\)\}<\/span>/.test(hero),
-      'l’intitulé ne qualifie plus : la bascule s’en charge');
-    vrai(!/Patrimoine brut/.test(hero),
-      'et il ne change plus avec le réglage');
+    /* L'INTITULE NOMME LA GRANDEUR QU'IL SURMONTE.
+
+       Il a dit « Patrimoine » tout court un temps, au motif que la bascule d'a
+       cote disait deja lequel des deux. Le motif tenait devant l'ecran, le
+       bouton actif sous les yeux ; il ne tient ni sur une capture, ni pour une
+       synthese vocale qui lit la carte de haut en bas, ni pour un coup d'oeil
+       de trois secondes. Deux mots disent si les credits sont deduits, et c'est
+       la premiere chose a savoir sur le plus gros chiffre de l'application. */
+    vrai(/<span>\$\{trad\(evoNet \? 'Patrimoine net' : 'Patrimoine brut'\)\}<\/span>/.test(hero),
+      'l’intitulé suit la bascule');
+    /* Sa longueur varie de nouveau, et cela ne coute rien : la bascule est
+       ancree au bord droit, verifie plus haut, donc la fin du mot ne la
+       deplace pas. */
+    vrai(!/min-width/.test(hero), 'aucune largeur réservée à la main');
 
     /* L'oeil du masquage a quitte la carte : l'en-tete le porte sur telephone,
        la barre laterale sur grand ecran. Trois exemplaires a trente pixels les

@@ -755,13 +755,16 @@ function viewOverview() {
      rend `null` quand la base de comparaison est nulle, negative, ou que le
      patrimoine a traverse zero entre les deux dates. L'euro, lui, reste exact
      dans tous les cas. */
-  const varAn = variationAn();
+  const varAn = variationAn(todayISO(), evoNet);
   const blocVariation = !varAn ? '' : `
     <div class="hero-deltas">
       <div class="hero-delta">
-        <b class="${cls(varAn.eur)}">${fmtSigned(varAn.eur)} <span>${
-          trad(varAn.sur === 'an' ? 'sur 1 an' : 'depuis le début')}, ${
-          trad('apports inclus')}</span></b>
+        <b class="${cls(varAn.eur)}">${fmtSigned(varAn.eur)}${varAn.pct == null ? ''
+          : `<span class="hero-pct">· ${fmtSignedPct(varAn.pct, 1)}</span>`}</b>
+        <span>${trad(varAn.mois > 1 ? '{n} derniers mois' : '{n} dernier mois')
+          .replace('{n}', varAn.mois)}${aide(trad(evoNet
+            ? 'Variation du patrimoine net sur la période. Elle inclut les versements, les retraits, le remboursement du capital des crédits et l’évolution de la valeur des actifs.'
+            : 'Variation du patrimoine brut sur la période. Elle inclut les versements, les retraits et l’évolution de la valeur des actifs.'))}</span>
       </div>
     </div>`;
 
@@ -794,7 +797,7 @@ function viewOverview() {
     <div>
       ${!aUnComptePropre() ? '' : `
       <div class="hero-label">
-        <span>${trad('Patrimoine')}</span>
+        <span>${trad(evoNet ? 'Patrimoine net' : 'Patrimoine brut')}</span>
         ${basculesAffichees().netBrut ? `<span class="segmented seg-mini">
           <button data-action="hero-base" data-net="1" class="${evoNet ? 'on' : ''}"
                   title="${trad('Tes avoirs moins tes crédits')}">${trad('Net')}</button>
@@ -803,8 +806,6 @@ function viewOverview() {
         </span>` : ''}
       </div>
       <div class="hero-value">${fmtEUR(evoNet ? t.total : t.brut)}</div>`}
-      ${!evoNet && patrimoine().dettes ? `<div class="hero-sous muted">
-        dont ${fmtEUR0(patrimoine().dettes)} de crédits à rembourser</div>` : ''}
       ${invitePremierPas('comptes')}
     </div>
     ${blocVariation}

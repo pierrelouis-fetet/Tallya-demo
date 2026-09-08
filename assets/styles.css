@@ -1095,6 +1095,20 @@ table .field :is(input, select) { max-width: none; }
 .hero-delta { display: flex; flex-direction: column; gap: 1px; }
 .hero-delta span { font-size: 11px; color: var(--muted); }
 .hero-delta b { font-size: 14px; font-weight: 600; }
+/* Le pourcentage vit DANS le montant, et pas a cote.
+
+   Il y est pour deux raisons. La couleur d'abord : `.hero-delta span` grise
+   tout ce qui suit le montant, et un pourcentage gris a cote d'un montant vert
+   dirait deux choses differentes du meme mouvement. En heritant du `b`, il
+   prend la couleur de hausse, de baisse ou de neutre sans qu'on la repete.
+   Le rang ensuite : l'oeil doit prendre le montant en premier. Un point plus
+   petit, un demi-cran de graisse en moins et un voile d'opacite suffisent a le
+   mettre second sans le rendre secondaire.
+
+   Le selecteur passe par `b` pour battre `.hero-delta span`, qui est plus
+   specifique que la classe seule. */
+.hero-delta b .hero-pct { font-size: 13px; font-weight: 550; color: inherit;
+                          opacity: .82; margin-left: 7px; letter-spacing: 0; }
 
 .up { color: var(--good-text); }
 .down { color: var(--critical); }

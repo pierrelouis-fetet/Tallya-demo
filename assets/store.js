@@ -4282,7 +4282,7 @@ function objectiveStatus() {
    pas varie de zero, il n'a pas de variation connue. */
 const TOLERANCE_AN = 3;                  // mois d'ecart admis autour de douze
 
-function variationAn(aujourdhui = todayISO()) {
+function variationAn(aujourdhui = todayISO(), net = true) {
   const pts = historySeries({ includeNow: false });
   if (!pts.length) return null;
   const enMois = iso => {
@@ -4293,16 +4293,53 @@ function variationAn(aujourdhui = todayISO()) {
   const age = p => maintenant - enMois(p.date);
   const t = nowTotals();
 
+  /* LA VARIATION MESURE LA GRANDEUR QUI EST AFFICHEE, pas une autre.
+
+     Le bandeau bascule entre net et brut, et le chiffre du dessous ne suivait
+     pas : il mesurait toujours le net. Les deux ne bougent pas ensemble des
+     qu'un credit se rembourse — 50 000 EUR d'avoirs en plus et 10 000 EUR de
+     capital rembourse font +50 000 au brut et +60 000 au net. Lire l'un sous
+     l'autre, c'est attribuer aux actifs ce que le remboursement a fait.
+
+     ATTENTION AU MOT `total`, QUI DESIGNE DEUX CHOSES. Sur un releve passe,
+     `total` est la somme des avoirs et `net` en retranche les credits ; sur
+     `nowTotals()`, c'est `brut` qui porte les avoirs et `total` qui vaut le
+     net. Les deux paires sont ici cote a cote pour que l'inversion se voie.
+
+     Aucune des deux valeurs ne se recalcule : elles viennent des memes sources
+     que le grand chiffre et que la courbe. */
+  const actuel = net ? t.total : t.brut;
+  const avantDe = p => num(net ? p.net : p.total);
+
   let choisi = null;
   for (const p of pts) {
     if (Math.abs(age(p) - 12) > TOLERANCE_AN) continue;
     if (!choisi || Math.abs(age(p) - 12) < Math.abs(age(choisi) - 12)) choisi = p;
   }
-  if (choisi) return { eur: t.total - num(choisi.net), depuis: choisi.date, sur: 'an' };
+
+  /* `mois` EST L'AGE REEL DU POINT RETENU, et c'est lui qui s'affiche.
+
+     La tolerance admet neuf a quinze mois autour de douze : ecrire « 12 mois »
+     sous une comparaison qui en couvre quinze serait le meme mensonge que
+     l'ecrire sous quatre. Le repli sur le plus ancien releve n'a plus besoin
+     d'un intitule a lui non plus — son age le dit.
+
+     LE POURCENTAGE SE TAIT DES QUE SA BASE N'EN PORTE PAS UN. Base a zero :
+     diviser rendrait l'infini. Base negative — un patrimoine net sous l'eau
+     apres un achat a credit — : le rapport change de signe et un redressement
+     s'afficherait en baisse. Le montant, lui, reste juste dans les deux cas et
+     se suffit. */
+  const depuisLe = (p, sur) => {
+    const avant = avantDe(p);
+    const eur = actuel - avant;
+    return { eur, avant, pct: avant > 0 ? (eur / avant) * 100 : null,
+             depuis: p.date, mois: age(p), sur };
+  };
+  if (choisi) return depuisLe(choisi, 'an');
 
   const premier = pts[0];
   if (age(premier) < 1) return null;
-  return { eur: t.total - num(premier.net), depuis: premier.date, sur: 'debut' };
+  return depuisLe(premier, 'debut');
 }
 
 function deltas() {
