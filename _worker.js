@@ -479,33 +479,76 @@ function cookieValue(request, name) {
   return hit ? hit.slice(name.length + 1) : null;
 }
 
+/* LA PORTE D'ENTREE MERITE LE SOIN DU RESTE.
+
+   C'est le premier ecran, et longtemps le seul qu'un visiteur non autorise
+   voyait : un logo, un champ et un bouton gris sur du noir. Tout ce que
+   l'application soigne ensuite commencait par un formulaire de dépannage.
+
+   TOUT EST EN LIGNE, ET C'EST OBLIGE. Cette page est construite par le Worker,
+   qui n'a ni la feuille de styles ni le dictionnaire : elle ne peut appeler ni
+   `trad()` ni une variable CSS. Les couleurs sont donc ecrites en dur, et c'est
+   le seul endroit du projet ou ce soit acceptable. Elles valent celles du theme
+   sombre — #9A63FF est l'accent de la marque, #0A0A0C son noir.
+
+   AUCUN SCRIPT, et ce n'est pas un oubli : la CSP servie avec cette reponse
+   porte `script-src 'self'` sans `unsafe-inline`. Un oeil qui devoile le mot de
+   passe demanderait un script en ligne, donc il serait bloque sans un mot. Le
+   style en ligne, lui, passe : `style-src` l'autorise.
+
+   `error` ne porte que des chaines fixes de ce fichier, jamais une entree du
+   visiteur. Si cela devait changer un jour, il faudrait l'echapper ici. */
 const LOGIN_PAGE = (error) => `<!DOCTYPE html><html lang="fr"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Longward</title>
 <style>
- body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#0d0d0d;color:#eceadf;
-      margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}
- form{width:min(22em,100%);display:flex;flex-direction:column;gap:12px}
- .mark{width:52px;height:52px;border-radius:23%;display:block;margin-bottom:6px;
-       object-fit:cover}
- h1{font-size:19px;margin:0} p{color:#898781;font-size:13px;margin:0 0 8px}
- p b{color:#9a72e8;font-weight:620}
- input{font:inherit;font-size:16px;padding:11px 13px;border-radius:10px;border:1px solid #383835;
-       background:#1a1a19;color:#fff}
- input:focus{outline:2px solid #3987e5;outline-offset:-1px}
- button{font:inherit;font-size:15px;font-weight:600;padding:11px;border-radius:10px;border:0;
-        background:#eceadf;color:#0d0d0d;cursor:pointer}
- button:hover{opacity:.88}
- .err{color:#e66767;font-size:13px}
+ *{box-sizing:border-box}
+ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+      background:#08080A;color:#ECEADF;margin:0;min-height:100dvh;
+      display:grid;place-items:center;padding:24px;
+      background-image:radial-gradient(60em 40em at 20% -10%,rgba(126,77,255,.16),transparent 60%),
+                       radial-gradient(50em 34em at 90% 110%,rgba(58,120,255,.12),transparent 60%)}
+ form{width:min(24em,100%);background:#121216;border:1px solid #23232A;
+      border-radius:18px;padding:28px 26px 22px;
+      box-shadow:0 20px 60px rgba(0,0,0,.55);
+      display:flex;flex-direction:column;gap:0}
+ .tete{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+ .mark{width:34px;height:34px;border-radius:23%;display:block;object-fit:cover}
+ .nom{font-size:15px;font-weight:650;letter-spacing:-.01em}
+ h1{font-size:25px;line-height:1.2;font-weight:640;letter-spacing:-.02em;margin:0 0 6px}
+ h1 em{font-style:italic;font-weight:640;
+       background:linear-gradient(100deg,#B98CFF,#7E4DFF);
+       -webkit-background-clip:text;background-clip:text;color:transparent}
+ .sous{color:#8B8992;font-size:13.5px;margin:0 0 22px}
+ .sous b{color:#9A63FF;font-weight:620}
+ label{display:block;font-size:12.5px;font-weight:560;color:#B9B7B0;margin:0 0 7px}
+ input{width:100%;font:inherit;font-size:16px;padding:13px 14px;border-radius:11px;
+       border:1px solid #2C2C34;background:#0E0E12;color:#fff}
+ input::placeholder{color:#5C5A63}
+ input:focus{outline:0;border-color:#7E4DFF;box-shadow:0 0 0 3px rgba(126,77,255,.22)}
+ button{width:100%;font:inherit;font-size:15px;font-weight:640;padding:13px;
+        margin-top:18px;border-radius:11px;border:0;cursor:pointer;color:#fff;
+        background:linear-gradient(135deg,#7E4DFF,#9A63FF)}
+ button:hover{filter:brightness(1.08)}
+ button:active{transform:scale(.99)}
+ button:focus-visible{outline:2px solid #B98CFF;outline-offset:2px}
+ .err{display:block;color:#E0574F;font-size:13px;margin-top:10px}
+ .pied{color:#6F6D76;font-size:11.5px;line-height:1.5;margin:18px 0 0;text-align:center}
+ @media (prefers-reduced-motion:reduce){button:active{transform:none}}
 </style>
 <form method="POST" action="/api/login">
- <img class="mark" src="/icon-192.png" alt="">
- <h1>Longward</h1>
- <p>Vois clair. <b>Avance.</b> Cet espace est privé.</p>
- <input type="password" name="password" placeholder="Mot de passe" autofocus required
-        autocomplete="current-password">
- <button type="submit">Entrer</button>
+ <div class="tete">
+   <img class="mark" src="/icon-192.png" alt="" width="34" height="34">
+   <span class="nom">Longward</span>
+ </div>
+ <h1>Entre dans <em>ton espace</em></h1>
+ <p class="sous">Vois clair. <b>Avance.</b></p>
+ <label for="mdp">Mot de passe</label>
+ <input id="mdp" type="password" name="password" placeholder="Ton mot de passe" autofocus
+        required autocomplete="current-password">
  ${error ? `<span class="err">${error}</span>` : ''}
+ <button type="submit">Entrer</button>
+ <p class="pied">Cet espace est privé. Tes données restent les tiennes.</p>
 </form></html>`;
 
 const LOCKED_PAGE = `<!DOCTYPE html><html lang="fr"><meta charset="utf-8">
