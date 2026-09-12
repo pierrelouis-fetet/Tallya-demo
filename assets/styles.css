@@ -4196,8 +4196,6 @@ td .empty, th .empty { background: none; border: none; }
      poser depuis le script, donc rien qui puisse se desaccorder de la classe
      `.on`. Le quatrieme onglet ne peut pas etre actif quand il est masque, donc
      sa regle n'a pas de jumelle. */
-  .tabbar:has(> [hidden]) { --n-onglets: 4; }
-  .tabbar:has(> [hidden]):has(> :nth-child(5).on) { --onglet: 3; }
   .tabbar:not(:has(> .on))::before { opacity: 0; }
   @media (prefers-reduced-motion: reduce) {
     .tabbar::before { transition: none; }

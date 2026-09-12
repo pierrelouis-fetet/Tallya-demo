@@ -12173,8 +12173,7 @@ function openApercu(cle, arg) {
   const saisissable = $$('#modalBody [data-path]').length > 0;
   $('#modalBody').dataset.differe = saisissable ? 'propre' : '';
   if (!saisissable) delete $('#modalBody').dataset.differe;
-  const ailleurs = a.vue && a.vue !== currentView() && !saisissable
-    && (a.vue !== 'positions' || aDesPositionsMarche());
+  const ailleurs = a.vue && a.vue !== currentView() && !saisissable;
   $('#modalFoot').innerHTML =
     `<button class="btn ghost" data-action="modal-close">${trad('Fermer')}</button>
      ${saisissable ? `<button class="btn" data-action="apercu-enregistrer">${trad('Enregistrer')}</button>` : ''}
@@ -12325,11 +12324,6 @@ function render() {
   document.body.dataset.vue = key;
   const bandeau = $('#bandeauDemo');
   if (bandeau) bandeau.hidden = !modeDemo();
-
-  /* Avant le chevron de retour, qui lit la barre : une entree masquee n'y est
-     plus une place, donc la vue qu'elle desservait devient orpheline et gagne
-     son chevron. Pose ici plutot que dans `majOnglets()`, qui vient apres. */
-  majVisibiliteMarches();
 
   /* Le retour de l'en-tête. Deux sortes d'écrans le portent, et leur retour n'est
      pas le même.
@@ -12546,29 +12540,27 @@ function basculeNotifs() {
 
 /* Marches ne se montre qu'a qui a des titres.
 
-   Les deux barres portent la meme entree, ecrite en dur dans `index.html` :
-   c'est ici qu'on la fait paraitre ou non, au meme endroit et sur la meme
-   condition. Sans cela il y aurait deux conditions a tenir d'accord, et la
-   barre du bas et le menu lateral finiraient par se contredire.
+   MARCHES EST UN ONGLET PERMANENT, et il l'est redevenu.
 
-   La ROUTE, elle, reste ouverte, et ce n'est pas un oubli : le bouton
-   « + Titre cote » de la fiche d'un compte a titres mene a `#/positions` pour
-   y poser la ligne. Rediriger cette adresse fermerait la seule porte vers la
-   premiere position, et l'onglet ne reapparaitrait donc jamais. Qui y arrive
-   ainsi y arrive volontairement, et le chevron de retour l'en sort — la vue ne
-   figure plus dans la barre, elle est donc traitee comme une page orpheline. */
-function majVisibiliteMarches() {
-  const montrer = aDesPositionsMarche();
-  for (const a of $$('#nav a[data-view="positions"], #tabbar a[data-view="positions"]'))
-    a.hidden = !montrer;
-  return montrer;
-}
+   Il disparaissait pour qui n'avait aucune ligne cotee. Le motif tenait a
+   moitie : une page de zeros n'est pas un resultat. Mais un onglet absent ne
+   s'explique pas, et il ne se cherche pas non plus — on ne peut pas vouloir ce
+   dont on ignore l'existence. Quelqu'un qui ouvre un tableau de bord de
+   patrimoine cherche justement ou poser ses titres ; lui retirer l'entree
+   repond qu'il n'y a pas d'endroit.
+
+   Ce que le masquage evitait reste evite, et sans rien ecrire de neuf : la vue
+   sortait deja par un `return` des que `positions` est vide, sur une carte qui
+   explique la frontiere avec Actifs et propose de creer le compte quand aucun
+   ne peut porter un titre. C'est cet ecran-la que le masquage rendait
+   inatteignable. */
 
 function majOnglets() {
   const barre = $('#tabbar');
   if (!barre) return;
-  majVisibiliteMarches();
   const key = currentView();
+  /* `:not([hidden])` reste, et ce n'est plus pour Marches : aucune entree n'est
+     masquee aujourd'hui, mais la barre ne doit compter que ce qu'elle rend. */
   const directs = [...barre.querySelectorAll('a:not([hidden])')].map(a => a.dataset.view);
   const ouvert = document.body.classList.contains('nav-open');
 

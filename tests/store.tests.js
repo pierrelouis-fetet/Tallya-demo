@@ -30455,7 +30455,7 @@ suite('Deux champs de la fiche d’une ligne', () => {
   });
 });
 
-suite('Marchés n’existe que pour qui a des titres', () => {
+suite('Marchés s’ouvre à tout le monde, et dit ce qui la remplirait', () => {
 
   /* Un compte n'est jamais un argument : on en pose de toutes sortes, vides,
      pour verifier qu'aucun ne fait apparaitre l'onglet a lui seul. */
@@ -30524,37 +30524,72 @@ suite('Marchés n’existe que pour qui a des titres', () => {
     vrai(aDesPositionsMarche(), 'et la première revenue le ramène');
   });
 
-  test('une seule condition, lue par tout ce qui en dépend', () => {
-    /* Cinq surfaces la lisent. Cinq `positions.length` recopies finiraient par
-       ne plus dire la meme chose : c'est le defaut qui revient le plus souvent
-       dans cette base de code. */
-    const store = lireSource('assets/store.js');
+  test('l’onglet ne se masque plus, et rien ne le masque plus', () => {
+    /* IL A DISPARU UN TEMPS pour qui n'avait aucune ligne cotee, et le motif
+       tenait a moitie : une page de zeros n'est pas un resultat. Mais un onglet
+       absent ne s'explique pas, et il ne se cherche pas — on ne peut pas vouloir
+       ce dont on ignore l'existence. Quelqu'un qui ouvre un tableau de bord de
+       patrimoine cherche justement ou poser ses titres.
+
+       Ce qui est verifie ici, c'est qu'il ne reste RIEN du mecanisme : une porte
+       de masquage oubliee dans un coin finirait par se rouvrir. */
     const src = lireSource('assets/app.js');
-    vrai(/function aDesPositionsMarche\(\) \{/.test(store),
-      'la condition vit dans le modèle');
-    vrai(/function majVisibiliteMarches\(\) \{/.test(src),
-      'et les écrans passent par une seule porte');
-
-    const f = src.slice(src.indexOf('function majVisibiliteMarches()'),
-                        src.indexOf('function majOnglets()'));
-    vrai(/aDesPositionsMarche\(\)/.test(f), 'qui lit la condition du modèle');
-    vrai(/#nav a\[data-view="positions"\], #tabbar a\[data-view="positions"\]/.test(f),
-      'et vise les deux barres du même geste : deux conditions se désaccordent');
-
-    vrai(/\$\{!aDesPositionsMarche\(\) \? '' : `/.test(src),
-      'la carte de l’accueil lit la même condition');
-    vrai(!/!Store\.state\.positions\.length \? '' :/.test(src),
-      'et plus une variante locale');
-    vrai(/a\.vue !== 'positions' \|\| aDesPositionsMarche\(\)/.test(src),
-      'aucun panneau ne renvoie vers un onglet absent de la barre');
+    vrai(!/majVisibiliteMarches/.test(src), 'plus de porte de masquage');
+    vrai(!/a\.hidden = /.test(src), 'et plus rien qui masque une entrée de barre');
+    const css = lireSource('assets/styles.css');
+    vrai(!/--n-onglets: 4/.test(css), 'la barre ne prévoit plus quatre colonnes');
+    vrai(!/tabbar:has\(> \[hidden\]\)/.test(css), 'ni de règle pour un onglet absent');
   });
 
-  test('un onglet masqué ne laisse ni trou ni place réservée', () => {
+  test('la condition reste, et ne sert plus qu’à la carte de l’accueil', () => {
+    /* `aDesPositionsMarche()` n'a pas disparu avec le masquage : une carte de
+       portefeuille sur l'accueil n'a rien a montrer sans une seule ligne, et une
+       page qui ne peut rien montrer ne montre rien. La condition change donc de
+       portee, elle ne change pas de sens. */
+    const store = lireSource('assets/store.js');
+    const src = lireSource('assets/app.js');
+    vrai(/function aDesPositionsMarche\(\) \{/.test(store), 'la condition vit dans le modèle');
+    vrai(/\$\{!aDesPositionsMarche\(\) \? '' : `/.test(src),
+      'la carte de l’accueil la lit');
+    vrai(!/!Store\.state\.positions\.length \? '' :/.test(src),
+      'et aucune variante locale ne la double');
+    /* Le renvoi d'un apercu vers Marches n'a plus de garde : il n'y a plus
+       d'onglet absent vers lequel renvoyer. */
+    vrai(!/a\.vue !== 'positions' \|\| aDesPositionsMarche\(\)/.test(src),
+      'et plus aucun panneau ne se demande si l’onglet existe');
+  });
+
+  test('la page porte déjà son écran vide, et c’est lui qu’on rendait inatteignable', () => {
+    /* LE DEFAUT N'ETAIT PAS L'ABSENCE DE MESSAGE. `viewPositions()` sort par un
+       `return` des que `positions` est vide et rend une carte complete : elle
+       explique la frontiere avec Actifs — ici ce dont le cours tombe tout seul,
+       la-bas ce dont on donne soi-meme la valeur — et propose de creer le compte
+       quand aucun ne peut porter un titre. Elle etait simplement inatteignable,
+       l'onglet disparaissant avant qu'on puisse y arriver.
+
+       Une carte de plus aurait ete un doublon, et c'est la faute qui revient le
+       plus souvent ici : deux ecrans pour une seule question, celui qu'on oublie
+       de corriger disant le contraire de l'autre. */
+    const src = lireSource('assets/app.js');
+    const i = src.indexOf('if (!Store.state.positions.length) {');
+    vrai(i > 0, 'la vue sort tôt quand il n’y a rien à montrer');
+    const vide = src.slice(i, src.indexOf('\n  }', i));
+    vrai(/trad\('Aucun titre coté'\)/.test(vide), 'et la carte se nomme');
+    vrai(/Créer un compte-titres|data-action="ajouter-compte"/.test(vide),
+      'sans compte éligible, elle propose d’en créer un');
+    /* Les types se derivent de leur table : celui qu'on ajoutera demain entre
+       dans la phrase sans qu'on y pense. */
+    vrai(/TYPES_COMPTE\.filter/.test(vide),
+      'les enveloppes qui peuvent porter un titre se dérivent, elles ne se recopient pas');
+    vrai(!/carteSansTitres/.test(src), 'et aucune seconde carte ne la double');
+  });
+
+  test('la barre compte ses colonnes sur ce qu’elle rend', () => {
     const css = lireSource('assets/styles.css');
     vrai(css, 'assets/styles.css doit être lisible pour ce contrôle');
-    /* Les colonnes se derivent des enfants rendus : un onglet en `display: none`
-       n'est pas un element de grille. `repeat(5, 1fr)` gardait un cinquieme de
-       barre en noir. */
+    /* Les colonnes se derivent des enfants rendus, et non d'un nombre ecrit en
+       dur. La regle survit au masquage qu'elle servait : elle vaut pour toute
+       barre, et un nombre fige redeviendrait faux au premier onglet ajoute. */
     vrai(/grid-auto-flow: column; grid-auto-columns: 1fr;/.test(css),
       'la barre compte ses colonnes sur ce qu’elle rend');
     /* L'assertion porte sur la DECLARATION et non sur le motif seul : celui-ci
@@ -30565,15 +30600,6 @@ suite('Marchés n’existe que pour qui a des titres', () => {
       'et non sur un nombre écrit en dur');
     vrai(/width: calc\(100% \/ var\(--n-onglets, 5\) - 4px\)/.test(css),
       'la pastille mesure une case, quel que soit leur nombre');
-    vrai(/\.tabbar:has\(> \[hidden\]\) \{ --n-onglets: 4; \}/.test(css),
-      'et le nombre se lit dans le DOM');
-    vrai(/\.tabbar:has\(> \[hidden\]\):has\(> :nth-child\(5\)\.on\) \{ --onglet: 3; \}/
-      .test(css), 'le dernier onglet devient le quatrième quand Marchés part');
-
-    const src = lireSource('assets/app.js');
-    vrai(/\$\$\('#tabbar a:not\(\[hidden\]\)'\)/.test(src),
-      'un onglet masqué n’est plus une place dans la barre : la vue qu’il '
-      + 'desservait devient orpheline et gagne son chevron de retour');
   });
 
   test('la porte vers la première position reste ouverte', () => {
