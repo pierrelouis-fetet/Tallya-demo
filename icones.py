@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Les quatre icones de Longward, tirees du logo source.
+"""Les quatre icones de Longward, composees a partir du logo source.
 
-    python icones.py "C:/Users/admin/Desktop/logo longward.png"
+    python icones.py "logo.png"
 
 Pourquoi un script et non quatre exports a la main : le jour ou le dessin change,
 les quatre fichiers doivent se refaire avec les memes cadrages, sinon l'icone du
@@ -10,79 +10,134 @@ qu'on sache lequel des deux est le bon. Les mesures et les raisons sont dans
 ICONES.md ; le seul prerequis est Pillow, et il ne sert qu'ici — l'application,
 elle, n'a aucune dependance.
 
-Trois fichiers sont la tuile telle quelle, reduite : c'est le dessin de l'auteur,
-coins arrondis compris, et iOS applique son propre arrondi par-dessus.
+LA SOURCE EST UNE LETTRE, PAS UNE TUILE, et c'est le changement qui a rendu
+cette version necessaire. L'ancien logo arrivait deja mis en tuile : carre a
+coins arrondis, degrade, liseré. Le script n'avait qu'a en trouver les bords et
+la reduire. Il cherchait donc le premier pixel non noir sur les axes medians —
+sur une lettre nue, cette recherche tombe sur la lettre elle-meme et rend une
+icone collee aux quatre bords.
 
-Le quatrieme, « maskable », suit ce que dit ICONES.md : Android recadre l'icone
-dans la forme du lanceur, souvent un cercle, ce qui couperait le cadre de la
-tuile. Le T y est donc seul, sur un fond plein bord a bord.
+LA TUILE SE COMPOSE DONC ICI. Le fond, ses coins, son degrade et la place de la
+lettre sont des mesures de ce fichier, pas des proprietes du dessin recu. Un
+logo redessine demain n'a plus qu'a etre une lettre centree sur du noir, et les
+quatre fichiers restent identiques de cadrage.
+
+ET LA LETTRE SE DETACHE PAR SA LUMINANCE. L'ancienne version la separait par son
+canal bleu, avec des seuils cales sur les couleurs exactes du dessin d'alors :
+un degrade qui vire au violet en haut — donc pauvre en bleu — passait a travers.
+La luminance ne suppose aucune teinte, et le fond d'une source reste noir quel
+que soit le logo qu'on y pose.
 """
 import sys
-from PIL import Image
+from PIL import Image, ImageDraw
 
-DEFAUT = 'C:/Users/admin/Desktop/logo longward.png'
-FOND = (10, 10, 12)          # #0A0A0C, le noir de la palette
+DEFAUT = 'logo.png'
 CIBLE = 512
 
+# Le fond de la tuile, mesure sur l'icone precedente : un degre vertical, clair
+# en haut, presque noir en bas. C'est ce qui lui donne son relief sans ombre.
+FOND_HAUT = (29, 28, 31)
+FOND_BAS = (8, 8, 9)
+# Le noir de la palette, pour la variante maskable qui n'a pas de degrade : un
+# fond plein bord a bord, donc rien qui puisse se faire couper.
+FOND_PLEIN = (10, 10, 12)
 
-def bords_de_la_tuile(im):
-    """Les bords de la tuile, balayes sur les axes medians du fichier.
+RAYON = 0.23                 # du cote de la tuile, comme l'icone precedente
+PART_LETTRE = 0.55           # hauteur de la lettre dans la tuile
+PART_MASKABLE = 0.50         # hauteur de la lettre sur le fond plein
 
-    Le logo arrive centre sur du noir, avec un halo : on cherche donc le premier
-    pixel non noir, et non le premier pixel de la tuile — le halo est en dessous
-    du seuil, le liseré au-dessus."""
-    W, H = im.size
-    px = im.load()
-    gauche = next(x for x in range(W) if sum(px[x, H // 2]) > 12)
-    droite = next(x for x in range(W - 1, -1, -1) if sum(px[x, H // 2]) > 12)
-    haut = next(y for y in range(H) if sum(px[W // 2, y]) > 12)
-    return gauche, haut, droite - gauche + 1
+# Le seuil qui separe le dessin du noir. Deux valeurs, et l'ecart entre elles
+# est la rampe : en dessous c'est du fond, au-dessus c'est du trait, entre les
+# deux c'est le bord adouci que le dessin porte lui-meme. Un seuil unique
+# rendrait une lettre aux bords crenelles une fois reduite a 180 pixels.
+SEUIL_BAS, SEUIL_HAUT = 8, 30
+
+
+def lettre_seule(source):
+    """Le dessin, detache de son fond noir, reduit a sa boite."""
+    im = Image.open(source).convert('RGB')
+    gris = im.convert('L')
+    # La boite se mesure sur TOUTE l'image, pas sur les axes medians : la barre
+    # basse d'un L ne croise pas l'axe vertical du milieu, et un balayage en
+    # croix la manquerait.
+    boite = gris.point(lambda v: 255 if v > SEUIL_HAUT else 0).getbbox()
+    if not boite:
+        raise SystemExit('aucun dessin trouve : la source est-elle bien '
+                         'une lettre claire sur du noir ?')
+    alpha = gris.point(lambda v: 0 if v <= SEUIL_BAS else
+                       (255 if v >= SEUIL_HAUT else
+                        int((v - SEUIL_BAS) * 255 / (SEUIL_HAUT - SEUIL_BAS))))
+    im.putalpha(alpha)
+    return im.crop(boite)
+
+
+def posee(lettre, cote, part, fond):
+    """La lettre centree sur un fond, a la hauteur voulue."""
+    hauteur = int(cote * part)
+    echelle = hauteur / lettre.size[1]
+    petite = lettre.resize((max(1, round(lettre.size[0] * echelle)), hauteur),
+                           Image.LANCZOS)
+    fond = fond.copy()
+    fond.paste(petite, ((cote - petite.size[0]) // 2,
+                        (cote - petite.size[1]) // 2), petite)
+    return fond, petite.size
+
+
+def tuile(cote):
+    """Le carre sombre a coins arrondis, avec son degrade vertical."""
+    degrade = Image.new('RGB', (1, cote))
+    px = degrade.load()
+    for y in range(cote):
+        t = y / (cote - 1)
+        px[0, y] = tuple(round(h + (b - h) * t)
+                         for h, b in zip(FOND_HAUT, FOND_BAS))
+    degrade = degrade.resize((cote, cote))
+
+    # Les coins sont dessines sur du noir, et non rendus transparents : les
+    # trois fichiers sont opaques, iOS et Android posant leur propre masque
+    # par-dessus. Un PNG a coins transparents y donnerait un halo clair.
+    masque = Image.new('L', (cote, cote), 0)
+    ImageDraw.Draw(masque).rounded_rectangle(
+        (0, 0, cote - 1, cote - 1), radius=int(cote * RAYON), fill=255)
+    plaque = Image.new('RGB', (cote, cote), (0, 0, 0))
+    plaque.paste(degrade, (0, 0), masque)
+    return plaque
 
 
 def main(source):
-    im = Image.open(source).convert('RGB')
-    gauche, haut, cote = bords_de_la_tuile(im)
-    tuile = im.crop((gauche, haut, gauche + cote, haut + cote))
-    print('tuile %d x %d en (%d, %d)' % (cote, cote, gauche, haut))
+    lettre = lettre_seule(source)
+    print('lettre %d x %d, decoupee de %s' % (lettre.size + (source,)))
 
-    for nom, taille in [('icon-512.png', 512), ('icon-192.png', 192),
-                        ('apple-touch-icon.png', 180)]:
-        tuile.resize((taille, taille), Image.LANCZOS).save(nom, optimize=True)
-        print('ecrit %s (%d px)' % (nom, taille))
+    grande, taille = posee(lettre, CIBLE, PART_LETTRE, tuile(CIBLE))
+    print('tuile %d px, lettre %d x %d dedans' % ((CIBLE,) + taille))
+    for nom, cote in [('icon-512.png', 512), ('icon-192.png', 192),
+                      ('apple-touch-icon.png', 180)]:
+        grande.resize((cote, cote), Image.LANCZOS).save(nom, optimize=True)
+        print('ecrit %s (%d px)' % (nom, cote))
 
-    # --- le T seul, pour la variante maskable ------------------------------
-    # C'est le canal bleu qui separe, pas la luminance : la tuile porte un reflet
-    # violet dont la luminance monte a 79, au-dessus du seuil qu'on aurait
-    # choisi, si bien que le « T » detache emportait un quart de la tuile. Le
-    # bleu du T ne descend jamais sous 233, celui du liseré ne monte jamais
-    # au-dessus de 175 : la rampe passe entre les deux.
-    bleu = tuile.getchannel('B')
-    alpha = bleu.point(
-        lambda v: 0 if v <= 185 else (255 if v >= 225 else int((v - 185) * 255 / 40)))
-    # Le cadre se mesure sur un seuil franc, et non sur la rampe : une rangee de
-    # soixante pixels du liseré passe a 186, un de plus que le pied de la rampe,
-    # et le cadre montait alors jusqu'au bord haut de la tuile — le T ressortait
-    # ecrase.
-    franc = bleu.point(lambda v: 255 if v >= 210 else 0).getbbox()
-    bbox = (max(0, franc[0] - 3), max(0, franc[1] - 3),
-            min(cote, franc[2] + 3), min(cote, franc[3] + 3))
-    t = tuile.copy()
-    t.putalpha(alpha)
-    t = t.crop(bbox)
+    # --- la variante maskable ----------------------------------------------
+    # Android recadre l'icone dans la forme du lanceur, souvent un cercle, ce
+    # qui couperait les coins de la tuile et son degrade. La lettre y est donc
+    # seule, sur un fond plein bord a bord, et assez petite pour tenir dans le
+    # cercle central de 80 % que la specification garantit.
+    plein = Image.new('RGB', (CIBLE, CIBLE), FOND_PLEIN)
+    masquable, taille = posee(lettre, CIBLE, PART_MASKABLE, plein)
+    masquable.save('icon-maskable-512.png', optimize=True)
+    print('ecrit icon-maskable-512.png, lettre %d x %d' % taille)
 
-    # Le T doit tenir dans le cercle central de 80 %, soit un rayon de 205 px. A
-    # 50 % de haut il fait 282 x 256, et le coin de sa barre tombe a 192 px du
-    # centre : il reste dedans. A 55 %, il en sortait de cinq pixels.
-    hauteur = int(CIBLE * 0.50)
-    echelle = hauteur / t.size[1]
-    t = t.resize((max(1, int(t.size[0] * echelle)), hauteur), Image.LANCZOS)
-    fond = Image.new('RGB', (CIBLE, CIBLE), FOND)
-    fond.paste(t, ((CIBLE - t.size[0]) // 2, (CIBLE - t.size[1]) // 2), t)
-    fond.save('icon-maskable-512.png', optimize=True)
-    print('ecrit icon-maskable-512.png, T de %d x %d' % t.size)
+    # Le coin le plus eloigne du centre doit rester dans le cercle de 80 %.
+    demi = (taille[0] / 2, taille[1] / 2)
+    rayon = (demi[0] ** 2 + demi[1] ** 2) ** 0.5
+    limite = CIBLE * 0.40
+    print('coin a %.0f px du centre, limite %.0f px : %s'
+          % (rayon, limite, 'dedans' if rayon <= limite else 'DEHORS'))
+    if rayon > limite:
+        raise SystemExit('la lettre deborde du cercle sur : baisser '
+                         'PART_MASKABLE')
+
     print('\nPenser a changer la version des balises ?v= dans index.html et '
-          'tests.html : sans ça, un navigateur qui a deja vu le site garde '
-          'l\'ancienne icone.')
+          'tests.html, et a recopier les quatre fichiers dans la demonstration : '
+          'sans ça, un navigateur qui a deja vu le site garde l\'ancienne icone.')
 
 
 if __name__ == '__main__':
