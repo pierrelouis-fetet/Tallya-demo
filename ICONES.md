@@ -1,10 +1,10 @@
-# Icônes Tallya — d'où elles viennent, et comment les refaire
+# Icônes Longward — d'où elles viennent, et comment les refaire
 
 Les quatre fichiers sont **produits**, pas dessinés à la main : ils sortent du
 logo source par un script, pour que la prochaine version du dessin donne les
 quatre en une commande, avec les mêmes cadrages.
 
-- **Source** : `logo tallya.png` (1254 × 1254), identité du 4 août 2026,
+- **Source** : `logo longward.png` (1254 × 1254), identité du 4 août 2026,
   direction « 01 T géométrique ». Une tuile de 880 px, coins arrondis à 204 px
   de rayon (23 %), posée sur du noir avec un halo.
 - **Script** : voir la section « Comment les régénérer » ci-dessous.
@@ -37,7 +37,7 @@ un bord lissé.
 ## Comment les régénérer
 
 ```bash
-python icones.py "C:/Users/admin/Desktop/logo tallya.png"
+python icones.py "C:/Users/admin/Desktop/logo longward.png"
 ```
 
 `icones.py` vit à la racine, à côté de `serve.py`. Il ne demande que Pillow, et
@@ -84,7 +84,7 @@ bordure de 1 px. Les trois ont été alignés sur le dessin :
   Projection. Elle s'adresse à quelqu'un qui a déjà ouvert l'application et veut
   savoir ce qu'il a devant lui.
 
-  « Finances. Clarté. Progrès. » et son paragraphe (« Tallya est votre cockpit
+  « Finances. Clarté. Progrès. » et son paragraphe (« Longward est votre cockpit
   financier… ») sont pour la page publique et la fiche de la démo : ils doivent
   convaincre quelqu'un qui n'a rien installé. Trois noms, une promesse, et
   « Progrès » promet une chose que l'application ne contrôle pas — c'est bon en

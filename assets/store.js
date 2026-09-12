@@ -191,7 +191,7 @@ const TYPES_COMPTE = [
 
      L'anglais disait deja « Crowdlending », precis. C'est le francais qui
      flottait. « Parts » contre « pret » : la distinction se lit en un coup
-     d'oeil, et l'axe du modele apparait enfin — Tallya ne separe pas par
+     d'oeil, et l'axe du modele apparait enfin — Longward ne separe pas par
      plateforme mais par ce qu'on detient. */
   /* « Parts de société » et non « Placements non cotés » : ce dernier est le nom
      de la CLASSE `nonCote`, et un type de compte qui le reprenait faisait porter

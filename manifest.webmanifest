@@ -1,7 +1,7 @@
 {
-  "name": "Tallya",
-  "short_name": "Tallya",
-  "description": "Track. Steer. Project. Your wealth, all of it.",
+  "name": "Longward",
+  "short_name": "Longward",
+  "description": "See clearly. Move forward. Wealth, all of it.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -137,7 +137,7 @@ def main():
         )
     os.makedirs(DOSSIER, exist_ok=True)
 
-    profil = tempfile.mkdtemp(prefix="tallya-captures-")
+    profil = tempfile.mkdtemp(prefix="longward-captures-")
     chrome = subprocess.Popen(
         [
             CHROME,

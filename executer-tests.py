@@ -55,7 +55,7 @@ for flux in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-PORT = int(os.environ.get("PORT_TALLYA", "8766"))
+PORT = int(os.environ.get("PORT_LONGWARD", "8766"))
 BASE = f"http://localhost:{PORT}"
 RACINE = os.path.dirname(os.path.abspath(__file__))
 
@@ -159,7 +159,7 @@ def main():
             sys.exit(f"Le serveur n'a pas demarre sur {BASE}.")
         print(f"serveur demarre sur {BASE}")
 
-    profil = tempfile.mkdtemp(prefix="tallya-tests-")
+    profil = tempfile.mkdtemp(prefix="longward-tests-")
     chrome = subprocess.Popen(
         [
             captures.CHROME,

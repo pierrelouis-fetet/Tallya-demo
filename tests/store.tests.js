@@ -2955,7 +2955,7 @@ suite('Apport, capital restant et valeur nette ne se mélangent jamais', () => {
   });
 
   test('prix moins apport donne le financement à couvrir, tant qu’aucun crédit n’existe', () => {
-    /* Un montant indicatif, et rien de plus : Tallya ne cree aucun credit. */
+    /* Un montant indicatif, et rien de plus : Longward ne cree aucun credit. */
     Fixture.poser(s => {
       /* On retire le credit du bien pour se placer avant son existence. */
       s.etabs.find(x => x.id === 'e_bien').dettes = [];
@@ -7630,7 +7630,7 @@ suite('L’écart du jour ne compte qu’aujourd’hui', () => {
        pour DCAM.PA, et la serie portait un horodatage pour le 4 sans aucune
        cloture : Yahoo sait qu'il y a eu seance, il n'en a pas le cours. En
        enjambant ce trou on remontait au 3, et l'ecart du jour comptait deux
-       seances — Tallya annonçait +1,93 % quand le courtier disait +0,58 %, soit
+       seances — Longward annonçait +1,93 % quand le courtier disait +0,58 %, soit
        302 EUR de mouvement pour 100 reels.
 
        La bougie de la veille fait donc foi, et son absence aussi : quand elle
@@ -9451,13 +9451,13 @@ suite('La police des titres ne descend pas sur les chiffres', () => {
     /* Le mot-marque est ecrit a deux endroits : l'ecran de lancement, une
        seconde, et la barre laterale, en permanence. La premiere version de
        cette regle n'avait pris que le premier — celui qu'on ne voit
-       pratiquement jamais — et « Tallya » s'affichait en deux polices selon
+       pratiquement jamais — et « Longward » s'affichait en deux polices selon
        l'ecran. Ce controle part du balisage : il trouve ou le nom est ecrit,
        et exige que chaque endroit soit couvert. */
     const idx = (lireSource('index.html') || '').replace(/<!--[\s\S]*?-->/g, ' ');
     vrai(idx, 'index.html doit être lisible pour ce contrôle');
 
-    const porteurs = [...idx.matchAll(/<(span|strong|b)\b[^>]*>\s*Tallya\s*<\/\1>/g)];
+    const porteurs = [...idx.matchAll(/<(span|strong|b)\b[^>]*>\s*Longward\s*<\/\1>/g)];
     vrai(porteurs.length >= 2,
       `le nom devrait être écrit à au moins deux endroits, ${porteurs.length} trouvé(s) : `
       + 'si le balisage a changé, ce contrôle ne prouve plus rien');
@@ -9474,7 +9474,7 @@ suite('La police des titres ne descend pas sur les chiffres', () => {
       const couvert = conteneur.split(/\s+/).filter(Boolean)
         .some(c => cibles.includes('.' + c));
       vrai(couvert,
-        `« Tallya » écrit dans « ${conteneur || '(sans classe)'} » n’est visé par aucun `
+        `« Longward » écrit dans « ${conteneur || '(sans classe)'} » n’est visé par aucun `
         + 'sélecteur de la police des titres : le nom s’afficherait en deux polices '
         + 'selon l’écran');
     }
@@ -26905,7 +26905,7 @@ suite('Projection tient sur quatre hypothèses', () => {
     const src = lireSource('assets/app.js');
     vrai(!/tout ce qui se vend sur un marché/.test(src),
       'la définition par la négociabilité s’en va');
-    vrai(/de portefeuille financier coté, auquel Tallya applique le rendement du scénario/
+    vrai(/de portefeuille financier coté, auquel Longward applique le rendement du scénario/
       .test(src), 'la poche se dit par ce qu’elle est');
     /* La pierre papier a rejoint cette poche : l'enumeration doit la nommer,
        sinon elle decrit une poche qui n'est plus celle du calcul. */
@@ -28414,7 +28414,7 @@ suite('Le manifeste parle la langue de l’application', () => {
        dans une variable. */
     let attendu;
     enLangue(langueParDefaut(), () => {
-      attendu = trad('Suivre. Arbitrer.') + ' ' + trad('Projeter.');
+      attendu = trad('Voyez clair.') + ' ' + trad('Avancez.');
     });
     vrai(manifeste().description.startsWith(attendu),
       `la description devrait commencer par « ${attendu} », elle dit `
@@ -28459,7 +28459,7 @@ suite('Les réponses du worker sont aussi protégées que les fichiers', () => {
     /* La forme EXECUTABLE, avec son point-virgule : le commentaire au-dessus
        cite le code fautif entre accents graves, et une recherche naive le
        trouvait en premier. Un controle qui mesure la prose ne mesure rien. */
-    const iValide = bloc.indexOf('n’a pas la forme d’une sauvegarde Tallya.');
+    const iValide = bloc.indexOf('n’a pas la forme d’une sauvegarde Longward.');
     const iRemplace = bloc.indexOf('Store.state = data;');
     vrai(iValide > 0 && iRemplace > 0, 'les deux étapes doivent exister');
     vrai(iValide < iRemplace, 'on valide avant de remplacer');
@@ -29029,7 +29029,7 @@ suite('Un libellé, un montant', () => {
        financement participatif ? ». Oui, au sens courant — et c'est le probleme.
        Le mot couvrait les deux metiers en n'en nommant qu'un.
 
-       Tallya ne separe pas par plateforme mais par ce qu'on detient : des parts,
+       Longward ne separe pas par plateforme mais par ce qu'on detient : des parts,
        ou une creance. Les deux types partagent la classe `nonCote`, seul
        `prete` les distingue dans le calcul ; leurs noms doivent le dire aussi,
        sinon on range des parts la ou l'application reclame une echeance. */
@@ -33268,7 +33268,7 @@ suite('Un coût d’acquisition se décompose, il ne se devine pas', () => {
   });
 
   test('« plus-value » a laissé la place à un écart comptable', () => {
-    /* Tallya ne calcule ni frais de revente, ni abattement pour duree de
+    /* Longward ne calcule ni frais de revente, ni abattement pour duree de
        detention, ni fiscalite de cession. Appeler ce chiffre une plus-value
        laisserait croire qu'il dit ce qu'on encaisserait. */
     const src = lireSource('assets/app.js');
@@ -33278,7 +33278,7 @@ suite('Un coût d’acquisition se décompose, il ne se devine pas', () => {
     vrai(!/Plus-value latente/.test(haut.replace(/\/\*[\s\S]*?\*\//g, '')),
       'et plus d’une plus-value');
     vrai(/ni les frais de revente ni la fiscalité de cession/.test(haut),
-      'l’aide dit ce que Tallya ne sait pas');
+      'l’aide dit ce que Longward ne sait pas');
   });
 });
 
@@ -33447,7 +33447,7 @@ suite('Le capital emprunté et le capital restant dû sont deux montants', () =>
     const src = lireSource('assets/app.js');
     vrai(/Le capital restant dû dépasse le capital emprunté au départ/.test(src),
       'la carte le nomme');
-    vrai(/Tallya ne tranche pas/.test(src), 'et ne corrige rien');
+    vrai(/Longward ne tranche pas/.test(src), 'et ne corrige rien');
   });
 
   test('aucun crédit, un crédit, plusieurs crédits', () => {
@@ -33483,7 +33483,7 @@ suite('Le capital emprunté et le capital restant dû sont deux montants', () =>
     vrai(!/d\.montant\s*=\s*[^;]*projete|montant:\s*projete/.test(st),
       'rien n’écrit le capital depuis la projection');
     const src = lireSource('assets/app.js');
-    vrai(/Tallya ne l’écrit jamais à ta place/.test(src), 'et la carte le dit');
+    vrai(/Longward ne l’écrit jamais à ta place/.test(src), 'et la carte le dit');
   });
 });
 
@@ -35312,7 +35312,7 @@ suite('Modifier les parts ne change jamais le total des charges', () => {
    releve » se declarait franchi des qu'un mois de depenses etait saisi : il
    interrogeait `aDejaServi`, qui repond a une question plus large — l'application
    a-t-elle deja servi. Quelqu'un pouvait creer ses comptes, declarer son salaire,
-   remplir son budget, ne jamais photographier ses comptes, et Tallya considerait
+   remplir son budget, ne jamais photographier ses comptes, et Longward considerait
    le releve comme fait. La courbe, le rythme d'accumulation et l'autonomie
    sortent pourtant du releve, jamais des depenses. */
 suite('Le premier relevé se demande jusqu’à ce qu’un relevé existe', () => {
@@ -35466,7 +35466,7 @@ suite('Le wording des crédits dit la convention du montant facturé', () => {
     const app = lireSource('assets/app.js');
     for (const debut of ['seulement si tu renseignes une mensualité. Si cette mensualité est ',
                          'seulement si une mensualité est renseignée. Si cette mensualité est ']) {
-      const cle = debut + 'ajoutée aux charges fixes, Tallya compte le montant facturé ; '
+      const cle = debut + 'ajoutée aux charges fixes, Longward compte le montant facturé ; '
         + 'une éventuelle répartition avec une autre personne reste informative.';
       vrai(app.includes(debut), `« ${debut.slice(0, 40)}… » doit être dans la fiche`);
       vrai(I18N.en[cle], 'et la phrase entière doit avoir sa traduction');
@@ -36140,7 +36140,7 @@ suite('Projection : le moteur se réconcilie', () => {
        constants — et le sens etait faux : la part plate est « ton immobilier
        net », une fiche qui la deballe ligne a ligne, et la projection annoncait
        donc une SCPI comme un bien gele. Elle est desormais dans « autres
-       actifs », la poche de ce dont Tallya ne sait rien : crypto, metaux, non
+       actifs », la poche de ce dont Longward ne sait rien : crypto, metaux, non
        cote. Zero par defaut, donc constante — mais du bon cote de la frontiere,
        et prete a recevoir une hypothese le jour ou il en existe une. */
     etat({ comptes: [SCPI(100000)], meta: { projScenario: 'dynamique' } });

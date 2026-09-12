@@ -80,7 +80,7 @@ async function yahooQuote(symbol) {
 
      `meta.previousClose` ment. Mesure : 6,121 pour DCAM.PA quand le courtier
      disait 6,203, et 18,445 pour NATO.PA contre 19,202. L'ecart du
-     jour passait de +0,60 % a +1,99 %, et de +1,25 % a +5,22 % : Tallya
+     jour passait de +0,60 % a +1,99 %, et de +1,25 % a +5,22 % : Longward
      annonçait 302 EUR de mouvement pour 100 reels. Le calcul etait juste, sa
      reference etait fausse.
 
@@ -481,7 +481,7 @@ function cookieValue(request, name) {
 
 const LOGIN_PAGE = (error) => `<!DOCTYPE html><html lang="fr"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tallya</title>
+<title>Longward</title>
 <style>
  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#0d0d0d;color:#eceadf;
       margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}
@@ -500,7 +500,7 @@ const LOGIN_PAGE = (error) => `<!DOCTYPE html><html lang="fr"><meta charset="utf
 </style>
 <form method="POST" action="/api/login">
  <img class="mark" src="/icon-192.png" alt="">
- <h1>Tallya</h1>
+ <h1>Longward</h1>
  <p>Suivre. Arbitrer. <b>Projeter.</b> Cet espace est privé.</p>
  <input type="password" name="password" placeholder="Mot de passe" autofocus required
         autocomplete="current-password">

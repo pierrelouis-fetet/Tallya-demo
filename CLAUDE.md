@@ -1,4 +1,4 @@
-# Tallya — consignes de travail
+# Longward — consignes de travail
 
 Lire `ETAT.md` en premier s'il est présent : il porte l'état réel du projet,
 les décisions prises et les pièges rencontrés. Ce fichier-ci ne dit que les
@@ -20,7 +20,7 @@ c'est normal.
 
    **8766 et non 8765**, et la confusion coûte une demi-heure : 8765 est
    l'origine du dossier principal, `Dashboard wealth`, dont l'application
-   répond aussi et affiche aussi « Tallya ». Une suite verte lue sur 8765
+   répond aussi et affiche aussi « Longward ». Une suite verte lue sur 8765
    n'aura rien vérifié de ce dépôt-ci. La balise `?v=` du fichier servi
    tranche : celle de la démonstration se termine par `-demo`.
 2. **Compléter les tests** avec ce que le changement vient d'introduire. Un

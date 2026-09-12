@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Les quatre icones de Tallya, tirees du logo source.
+"""Les quatre icones de Longward, tirees du logo source.
 
-    python icones.py "C:/Users/admin/Desktop/logo tallya.png"
+    python icones.py "C:/Users/admin/Desktop/logo longward.png"
 
 Pourquoi un script et non quatre exports a la main : le jour ou le dessin change,
 les quatre fichiers doivent se refaire avec les memes cadrages, sinon l'icone du
@@ -20,7 +20,7 @@ tuile. Le T y est donc seul, sur un fond plein bord a bord.
 import sys
 from PIL import Image
 
-DEFAUT = 'C:/Users/admin/Desktop/logo tallya.png'
+DEFAUT = 'C:/Users/admin/Desktop/logo longward.png'
 FOND = (10, 10, 12)          # #0A0A0C, le noir de la palette
 CIBLE = 512
 

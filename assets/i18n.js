@@ -166,8 +166,8 @@ const I18N = {
     "Deux bases sur cette page, et chaque carte annonce la sienne. « Patrimoine net » pour la répartition : tout ce que tu possèdes moins ce que tu dois encore, un bien financé y comptant pour sa valeur moins son crédit. « Tes avoirs » pour les cartes qui disent où ton argent est posé et en combien de temps il ressort : une dette n’est posée sur aucun compte et n’a pas de délai de sortie, elle ne s’y retranche donc pas. Chaque total redonne la base annoncée juste au-dessus de lui.":
       'Two bases on this page, and each card names its own. “Net worth” for the breakdown: everything you own minus what you still owe, a financed asset counting for its value minus its loan. “Your holdings” for the cards that say where your money sits and how long it takes to come back out: a debt sits on no account and has no exit delay, so it is not subtracted there. Every total gives back the base announced just above it.',
     'de ta part arbitrable est en': 'of the part you can steer sits in',
-    ', si tu empruntes le reste. Ajoute le crédit quand il existera : Tallya n’en crée aucun toute seule.':
-      ', if you borrow the rest. Add the loan once it exists: Tallya never creates one on its own.',
+    ', si tu empruntes le reste. Ajoute le crédit quand il existera : Longward n’en crée aucun tout seul.':
+      ', if you borrow the rest. Add the loan once it exists: Longward never creates one on its own.',
     'L’apport et le montant emprunté ne correspondent pas au prix d’acquisition renseigné.':
       'The down payment and the amount borrowed do not add up to the purchase price entered.',
     'Vérifie les montants ou les frais financés.':
@@ -1213,9 +1213,9 @@ const I18N = {
     "Assurance emprunteur incluse : c’est le prélèvement que tu vois sur ton relevé.": "Borrower insurance included: this is the debit you see on your statement.",
     "Capital ce mois": "Principal this month",
     "Capital emprunté au départ": "Original loan amount",
-    "Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Tallya ne tranche pas.": "It may be a redrawable loan or financed fees; it may also be an entry to correct. Tallya does not decide.",
+    "Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Longward ne tranche pas.": "It may be a redrawable loan or financed fees; it may also be an entry to correct. Longward does not decide.",
     "Ce que la banque t’a prêté le jour de la signature. Il ne bouge jamais, contrairement au capital restant dû : c’est lui qui dit quelle part tu as déjà remboursée.": "What the bank lent you on the day you signed. It never moves, unlike the outstanding principal: it is what tells you how much you have already repaid.",
-    "Ce que ton capital restant dû vaudrait si les mensualités s’étaient enchaînées depuis ta dernière vérification. Tallya ne l’écrit jamais à ta place.": "What your outstanding principal would be if the instalments had simply run on since your last check. Tallya never writes it for you.",
+    "Ce que ton capital restant dû vaudrait si les mensualités s’étaient enchaînées depuis ta dernière vérification. Longward ne l’écrit jamais à ta place.": "What your outstanding principal would be if the instalments had simply run on since your last check. Longward never writes it for you.",
     "Ce que tu as engagé pour le mettre en état avant d’y vivre ou de le louer. Les travaux d’entretien qui suivent sont des charges, pas de l’acquisition.": "What you spent getting it ready before living in it or letting it. Later upkeep is a running cost, not part of the acquisition.",
     "Ce que tu as sorti de ta poche le jour de l’achat. C’est un fait historique : il ne s’ajoute pas à ton patrimoine aujourd’hui, il ne se retire pas de ton cash, et il ne change pas la valeur nette du bien. Il sert à lire le financement, et le rendement sur apport d’un locatif.": "What you paid out of your own pocket on the day of purchase. It is a historical fact: it is not added to your net worth today, not deducted from your cash, and it does not change the property's net value. It is there to read the financing, and the return on down payment of a rental.",
     "Ce qui sort de ton compte chaque mois pour ce prêt, assurance emprunteur incluse. C’est ce montant que le budget compte, et il ne se dédouble pas avec une charge d’assurance séparée.": "What leaves your account each month for this loan, borrower insurance included. This is the amount the budget counts, and it is not doubled by a separate insurance cost.",
@@ -1251,8 +1251,8 @@ const I18N = {
     "vérifié le": "checked on",
     "Écart vs coût d’acquisition": "Difference vs acquisition cost",
     "Écart à expliquer": "Difference to explain",
-    "La valeur de ta part moins le coût d’acquisition de ta part. Ce n’est pas une plus-value : Tallya ne connaît ni les frais de revente ni la fiscalité de cession.": "The value of your share less the acquisition cost of your share. It is not a capital gain: Tallya knows neither selling costs nor disposal tax.",
-    "La valeur d’aujourd’hui moins le coût total d’acquisition. Ce n’est pas une plus-value : Tallya ne connaît ni les frais de revente ni la fiscalité de cession.": "Today's value less the total acquisition cost. It is not a capital gain: Tallya knows neither selling costs nor disposal tax.",
+    "La valeur de ta part moins le coût d’acquisition de ta part. Ce n’est pas une plus-value : Longward ne connaît ni les frais de revente ni la fiscalité de cession.": "The value of your share less the acquisition cost of your share. It is not a capital gain: Longward knows neither selling costs nor disposal tax.",
+    "La valeur d’aujourd’hui moins le coût total d’acquisition. Ce n’est pas une plus-value : Longward ne connaît ni les frais de revente ni la fiscalité de cession.": "Today's value less the total acquisition cost. It is not a capital gain: Longward knows neither selling costs nor disposal tax.",
     "ceux du départ, pour le mettre en état": "the ones at the start, to make it habitable",
     "facultatif, ce que tu as sorti de ta poche le jour de l’achat": "optional, what you paid out of your own pocket on the day of purchase",
     "le prix du bien seul, hors frais et hors travaux": "the price of the property alone, excluding costs and renovation",
@@ -1600,8 +1600,8 @@ const I18N = {
     "Devises": "Currencies",
 
     "Aperçu": "Overview",
-    "Suivre. Arbitrer.": "Track. Steer.",
-    "Projeter.": "Project.",
+    "Voyez clair.": "See clearly.",
+    "Avancez.": "Move forward.",
 
     "Voir et modifier les sources de revenus": "See and edit income sources",
     " · une partie est déclarée en montant estimé": " · part of it is declared as an estimate",
@@ -1931,13 +1931,13 @@ const I18N = {
     "elle situe l’entrée dans ton historique": "it places the inflow in your history",
     "La somme de tes entrées et de tes sorties exceptionnelles sur l’année affichée. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution.":
       "The sum of your one-off inflows and outflows over the year shown. It adds to no wealth total: these amounts have already passed through your accounts, it is their origin this log keeps. The accumulation pace uses it to tell what you set aside from what fell from the sky, or left in one go. A big expense is noted here and not in the month's spending: there it would inflate your average all year, and with it the cost of living used for your financial runway and your emergency fund target.",
-    "de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.":
-      "of listed financial portfolio, to which Tallya applies the scenario's return. Crypto, precious metals, private assets and property funds are grouped under the “Other assets” assumption, just below.",
+    "de portefeuille financier coté, auquel Longward applique le rendement du scénario. La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.":
+      "of listed financial portfolio, to which Longward applies the scenario's return. Crypto, precious metals, private assets and property funds are grouped under the “Other assets” assumption, just below.",
     "Avec ±2 points sur le rendement des actifs de marché": "With ±2 points on the market-assets return",
     "de fonds euros et de supports garantis. Le scénario y applique une hypothèse prudente, que tu peux changer ici":
       "in euro funds and guaranteed vehicles. The scenario applies a prudent assumption here, which you can change",
-    "de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux et le non coté sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.":
-      "of listed financial portfolio, to which Tallya applies the scenario's return. Crypto, precious metals and private assets are grouped under the “Other assets” assumption, just below.",
+    "de portefeuille financier coté, auquel Longward applique le rendement du scénario. La crypto, les métaux précieux et le non coté sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.":
+      "of listed financial portfolio, to which Longward applies the scenario's return. Crypto, precious metals and private assets are grouped under the “Other assets” assumption, just below.",
     "sur les actifs de marché, au lieu de": "on market assets, instead of",
     "La somme de tes entrées et de tes sorties exceptionnelles sur l’année affichée. Elle ne s’ajoute à aucun total de patrimoine : ces montants sont déjà passés sur tes comptes, c’est leur origine que ce journal garde en mémoire. Le rythme d’accumulation s’en sert pour distinguer ce que tu as mis de côté de ce qui t’est tombé du ciel, ou de ce qui est parti d’un coup. Une grosse dépense se note ici et non dans les dépenses du mois : là-bas elle gonflerait ta moyenne toute l’année, et avec elle le coût de la vie qui sert à ton autonomie financière et à ta cible d’épargne de précaution.":
       "The sum of your one-off inflows and outflows over the year shown. It adds to no wealth total: these amounts have already passed through your accounts, it is their origin this log keeps. The accumulation pace uses it to tell what you set aside from what fell from the sky, or left in one go. A big expense is noted here and not in the month's spending: there it would inflate your average all year, and with it the cost of living used for your financial runway and your emergency fund target.",
@@ -2202,7 +2202,7 @@ const I18N = {
     "Impossible d’enregistrer sur cet appareil. Exporte une sauvegarde.": "Cannot save on this device. Export a backup.",
     "Enregistrement rétabli.": "Saving is working again.",
     "Ce fichier n’est pas un JSON lisible.": "This file is not readable JSON.",
-    "Ce fichier n’a pas la forme d’une sauvegarde Tallya.": "This file does not have the shape of a Tallya backup.",
+    "Ce fichier n’a pas la forme d’une sauvegarde Longward.": "This file does not have the shape of a Longward backup.",
     "Cette sauvegarde n’a pas pu être relue : tes données n’ont pas bougé.": "This backup could not be read: your data has not changed.",
     "Import réussi, sans copie de secours": "Import done, without a safety copy",
     "Import impossible": "Import failed",
@@ -2497,10 +2497,10 @@ const I18N = {
     "Taxe foncière": "Property tax",
     "La dette qui reste personnellement à ta charge. Elle se déduit de ton patrimoine net et n’est jamais divisée par une quote-part de bien ou une répartition de charge.":
       'The debt you personally still owe. It is deducted from your net worth and is never divided by a property ownership share or a cost split.',
-    "seulement si tu renseignes une mensualité. Si cette mensualité est ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle répartition avec une autre personne reste informative.":
-      'only if you enter a monthly payment. If it is added to fixed costs, Tallya counts the billed amount; any split with another person remains informational.',
-    "seulement si une mensualité est renseignée. Si cette mensualité est ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle répartition avec une autre personne reste informative.":
-      'only if a monthly payment is entered. If it is added to fixed costs, Tallya counts the billed amount; any split with another person remains informational.',
+    "seulement si tu renseignes une mensualité. Si cette mensualité est ajoutée aux charges fixes, Longward compte le montant facturé ; une éventuelle répartition avec une autre personne reste informative.":
+      'only if you enter a monthly payment. If it is added to fixed costs, Longward counts the billed amount; any split with another person remains informational.',
+    "seulement si une mensualité est renseignée. Si cette mensualité est ajoutée aux charges fixes, Longward compte le montant facturé ; une éventuelle répartition avec une autre personne reste informative.":
+      'only if a monthly payment is entered. If it is added to fixed costs, Longward counts the billed amount; any split with another person remains informational.',
     "Charges de copropriété non récupérables": "Non-recoverable service charges",
     "Garantie loyers impayés": "Rent guarantee insurance",
     "Autres charges propriétaire": "Other landlord costs",

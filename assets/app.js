@@ -1642,7 +1642,7 @@ function viewObjective() {
         <div class="modal-champs" style="margin-top:8px">
         ${champ('Rendement des actifs de marché', 'meta.projRate', paliers(20, 1),
                 v => `${fmtPct(v, 0)} ${trad('par an')}`,
-                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de portefeuille financier coté, auquel Tallya applique le rendement du scénario. La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.')} `
+                `${fmtEUR0(capitalisation({ years: 1 }).poches.marche)} ${trad('de portefeuille financier coté, auquel Longward applique le rendement du scénario. La crypto, les métaux précieux, le non coté et la pierre papier sont regroupés dans l’hypothèse « Autres actifs », juste en dessous.')} `
                 + trad('C’est une hypothèse de travail : aucun rendement n’est garanti'),
                 /* Le taux EN VIGUEUR, et non celui qui dort dans l'etat.
                    Ces trois champs lisaient `meta.projRate` et compagnie, alors
@@ -5003,10 +5003,10 @@ function carteCredit(c, d, i, idxEtab) {
         </dl>`}
         ${!prog.incoherent ? '' : `<div class="note" style="margin-top:12px">⚠ <span>${
           trad('Le capital restant dû dépasse le capital emprunté au départ.')} ${
-          trad('Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Tallya ne tranche pas.')}</span></div>`}
+          trad('Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Longward ne tranche pas.')}</span></div>`}
         ${!prog.invalide ? '' : `<div class="note" style="margin-top:12px">⚠ <span>${
           trad('Le capital emprunté au départ est déclaré à zéro alors qu’il reste une dette.')} ${
-          trad('Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Tallya ne tranche pas.')}</span></div>`}
+          trad('Ce peut être un prêt rechargeable ou des frais financés ; ce peut aussi être une saisie à corriger. Longward ne tranche pas.')}</span></div>`}
         ${prog.initial != null || prog.invalide ? '' : `<p class="hint" style="margin:12px 0 0">${
           trad('Renseigne le capital emprunté au départ pour voir ce qui est déjà remboursé.')}</p>`}
         ${taux != null || !num(d.montant) ? '' : `<p class="hint" style="margin:12px 0 0">${
@@ -5033,7 +5033,7 @@ function carteCredit(c, d, i, idxEtab) {
           return `
         <dl class="kv" style="margin-top:12px">
           <dt>${trad('Estimation aujourd’hui')}${
-            aide(trad('Ce que ton capital restant dû vaudrait si les mensualités s’étaient enchaînées depuis ta dernière vérification. Tallya ne l’écrit jamais à ta place.'))}
+            aide(trad('Ce que ton capital restant dû vaudrait si les mensualités s’étaient enchaînées depuis ta dernière vérification. Longward ne l’écrit jamais à ta place.'))}
             <span class="sub">${trad('vérifié le')} ${esc(fmtDate(d.verifieLe))}</span></dt>
             <dd class="muted">${fmtEUR0(pr.projete)}</dd>
         </dl>`;
@@ -5183,8 +5183,8 @@ function espaceBien(c, idx, t) {
       })()}
       ${gain == null ? '' : `<dt>${trad('Écart vs coût d’acquisition')}${
         aide(trad(partagee
-          ? 'La valeur de ta part moins le coût d’acquisition de ta part. Ce n’est pas une plus-value : Tallya ne connaît ni les frais de revente ni la fiscalité de cession.'
-          : 'La valeur d’aujourd’hui moins le coût total d’acquisition. Ce n’est pas une plus-value : Tallya ne connaît ni les frais de revente ni la fiscalité de cession.'))}</dt>
+          ? 'La valeur de ta part moins le coût d’acquisition de ta part. Ce n’est pas une plus-value : Longward ne connaît ni les frais de revente ni la fiscalité de cession.'
+          : 'La valeur d’aujourd’hui moins le coût total d’acquisition. Ce n’est pas une plus-value : Longward ne connaît ni les frais de revente ni la fiscalité de cession.'))}</dt>
         <dd class="${cls(gain)}">${fmtSigned(gain)}
           <span class="muted">${fmtSignedPct((valeur / achat - 1) * 100, 1)}</span></dd>`}
     </dl>
@@ -6471,7 +6471,7 @@ function mountData() {
       if (!data || typeof data !== 'object' || Array.isArray(data)
           || !Array.isArray(data.positions) || !Array.isArray(data.monthly)
           || !data.budget || typeof data.budget !== 'object')
-        throw new Error(trad('Ce fichier n’a pas la forme d’une sauvegarde Tallya.'));
+        throw new Error(trad('Ce fichier n’a pas la forme d’une sauvegarde Longward.'));
 
       const avant = Store.state;
       const filet = Store.addBackup('avant import');
@@ -8439,7 +8439,7 @@ const ACTIONS = {
                    + 'ne peut savoir lequel porte cette dette') }] : [],
         { cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'), type: 'case', valeur: true,
           aide: trad('seulement si tu renseignes une mensualité. Si cette mensualité est '
-            + 'ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle '
+            + 'ajoutée aux charges fixes, Longward compte le montant facturé ; une éventuelle '
             + 'répartition avec une autre personne reste informative.') },
       ],
     });
@@ -8525,7 +8525,7 @@ const ACTIONS = {
         ...(lien ? [] : [{ cle: 'charge', label: trad('Ajouter une charge mensuelle fixe'),
           type: 'case', valeur: true,
           aide: trad('seulement si une mensualité est renseignée. Si cette mensualité est '
-            + 'ajoutée aux charges fixes, Tallya compte le montant facturé ; une éventuelle '
+            + 'ajoutée aux charges fixes, Longward compte le montant facturé ; une éventuelle '
             + 'répartition avec une autre personne reste informative.') }]),
         ...(lien ? [{ cle: 'supprimerCharge',
           label: trad('… et la charge « {l} » qui le rembourse').replace('{l}',
@@ -9356,7 +9356,7 @@ const ACTIONS = {
     render(); toast(trad('Modification annulée'));
   },
   'export-json'() {
-    download(`tallya-${stamp()}.json`, JSON.stringify(Store.state, null, 2));
+    download(`longward-${stamp()}.json`, JSON.stringify(Store.state, null, 2));
     toast(trad('Sauvegarde exportée'));
   },
   'export-xlsx-positions'() {
@@ -9373,7 +9373,7 @@ const ACTIONS = {
       ...(apportsTries().length ? [sheetApports()] : []),
       sheetFixedCharges(),
     ];
-    Xlsx.save(`tallya-${stamp()}.xlsx`, feuilles);
+    Xlsx.save(`longward-${stamp()}.xlsx`, feuilles);
     toast(`${trad('Classeur Excel exporté,')} ${feuilles.length} ${trad('feuilles')}`);
   },
   async 'reset'() {

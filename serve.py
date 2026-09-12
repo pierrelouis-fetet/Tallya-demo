@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Serveur local de Tallya.
+Serveur local de Longward.
 
 Sert les fichiers de l'app ET fait passerelle vers les cours de bourse :
 un navigateur ne peut pas appeler Yahoo Finance directement (CORS), mais
@@ -111,7 +111,7 @@ def yahoo_quote(symbol: str) -> dict:
     # Et previousClose ment. Mesure : Yahoo annonçait 6,121 pour
     # DCAM.PA quand le courtier disait 6,203, et 18,445 pour NATO.PA contre
     # 19,202. L'ecart du jour passait de +0,60 % a +1,99 %, et de +1,25 % a
-    # +5,22 % : Tallya annonçait 302 EUR de mouvement pour 100 reels.
+    # +5,22 % : Longward annonçait 302 EUR de mouvement pour 100 reels.
     #
     # La serie de bougies, elle, ne ment pas : on prend la derniere cloture dont
     # le jour precede celui du cours. C'est une donnee, pas un champ calcule
@@ -426,19 +426,19 @@ def access_key(regenerate: bool = False) -> str:
 
 
 def deja_servi(port: int) -> bool:
-    """Un serveur Tallya repond-il deja sur ce port ?
+    """Un serveur Longward repond-il deja sur ce port ?
 
     On ne se contente pas de constater que le port est occupe : n'importe quel
     programme peut l'avoir pris, et se rattacher a lui serait pire que d'echouer.
     On demande donc la page de tests, qui n'existe que dans ce projet, et on
-    verifie qu'elle parle bien de Tallya.
+    verifie qu'elle parle bien de Longward.
     """
     try:
         with urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/tests.html", timeout=1.5) as r:
             if r.status != 200:
                 return False
-            return b"Tallya" in r.read(4096)
+            return b"Longward" in r.read(4096)
     except Exception:                                   # noqa: BLE001
         return False
 
@@ -570,7 +570,7 @@ def main():
         except (AttributeError, ValueError):
             pass
 
-    ap = argparse.ArgumentParser(description="Tallya - serveur local")
+    ap = argparse.ArgumentParser(description="Longward - serveur local")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--lan", action="store_true",
@@ -602,7 +602,7 @@ def main():
     # fois donne le meme etat, comme les migrations de ce projet.
     if deja_servi(args.port):
         url = f"http://localhost:{args.port}"
-        print(f"Tallya   {url}   (deja servi, on s'y rattache)")
+        print(f"Longward   {url}   (deja servi, on s'y rattache)")
         print("Le serveur en place fait le travail. Ctrl+C pour rendre la main.\n")
         if not args.no_browser:
             threading.Timer(0.6, lambda: webbrowser.open(url)).start()
@@ -617,12 +617,12 @@ def main():
         server = ThreadingHTTPServer((host, args.port), Handler)
     except OSError as e:
         print(f"Impossible d'ouvrir le port {args.port} : {e}")
-        print("Un autre programme l'utilise, et ce n'est pas Tallya.")
+        print("Un autre programme l'utilise, et ce n'est pas Longward.")
         print("Regarde qui ecoute :  netstat -ano | findstr :%d" % args.port)
         return 1
 
     url = f"http://localhost:{args.port}"
-    print(f"Tallya   {url}")
+    print(f"Longward   {url}")
     print("Cours de bourse    actifs (passerelle Yahoo Finance / Stooq)")
 
     if args.lan:

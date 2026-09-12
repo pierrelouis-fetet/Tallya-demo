@@ -1,21 +1,21 @@
-<h1 align="center">Tallya</h1>
+<h1 align="center">Longward</h1>
 
 <p align="center"><b>A personal wealth dashboard.</b> It answers three questions:<br>
 how much do I have, where does it sit, and where is it going?</p>
 
 <p align="center">
-  <a href="https://github.com/pierrelouis-fetet/Tallya-demo/actions/workflows/tests.yml"><img src="https://github.com/pierrelouis-fetet/Tallya-demo/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://github.com/pierrelouis-fetet/Longward-demo/actions/workflows/tests.yml"><img src="https://github.com/pierrelouis-fetet/Longward-demo/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
   <img src="https://img.shields.io/badge/build_step-none-brightgreen" alt="No build step">
   <img src="https://img.shields.io/badge/PWA-installable-8A2BE2" alt="Installable PWA">
 </p>
 
-<p align="center"><a href="https://tallya-demo.pages.dev"><b>Live demo</b></a> : fictional data, nothing to install.</p>
+<p align="center"><a href="https://longward-demo.pages.dev"><b>Live demo</b></a> : fictional data, nothing to install.</p>
 
 <p align="center">Designed and built by <b>Pierre-Louis FETET</b>.</p>
 
-[![Tallya, overview on desktop](docs/desktop-overview.png)](https://tallya-demo.pages.dev)
+[![Longward, overview on desktop](docs/desktop-overview.png)](https://longward-demo.pages.dev)
 
 <p align="center">
   <img src="docs/mobile-overview.png" width="230" alt="Overview on mobile">&nbsp;
@@ -136,7 +136,7 @@ flowchart LR
 
 ## Minimal by design
 
-Tallya has no build step and no runtime dependencies. The application is
+Longward has no build step and no runtime dependencies. The application is
 plain HTML, CSS and JavaScript, served as static files.
 
 This is a deliberate choice, not a limitation:
@@ -214,7 +214,7 @@ hundred-thousand-per-day cap.
 
 ## Author
 
-Tallya is designed, built and maintained by **Pierre-Louis FETET**: the data
+Longward is designed, built and maintained by **Pierre-Louis FETET**: the data
 model, the engineering rules above, and every product decision behind them.
 
 ## License
