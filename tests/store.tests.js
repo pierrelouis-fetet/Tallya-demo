@@ -28404,6 +28404,30 @@ suite('Le manifeste parle la langue de l’application', () => {
       + `« ${langueParDefaut()} »`);
   });
 
+  test('la page de connexion du Worker porte la même devise', () => {
+    /* TROISIEME COPIE DE LA DEVISE, et celle qu'on voit en premier : c'est
+       l'ecran d'accueil d'un visiteur non connecte. Le Worker construit cette
+       page lui-meme, donc il ne peut appeler ni `trad()` ni le dictionnaire —
+       la devise y est recopiee, exactement comme dans le manifeste.
+
+       Elle a deja derive : l'application affichait la nouvelle devise pendant
+       que la page de connexion gardait l'ancienne. Rien ne le disait, parce que
+       rien ne regardait. */
+    let attendu;
+    enLangue('fr', () => {
+      attendu = trad('Vois clair.') + ' <b>' + trad('Avance.') + '</b>';
+    });
+    const w = lireSource('_worker.js');
+    vrai(w.includes(attendu),
+      'la page de connexion devrait porter « ' + attendu + ' »');
+    /* La page de connexion ne se traduit pas : le Worker ne sait pas quelle
+       langue le visiteur a choisie, cette preference vivant dans un stockage
+       auquel il n'a pas acces. Le francais y est donc la seule version, et
+       c'est un fait a connaitre plutot qu'un oubli a corriger. */
+    vrai(!/Suivre\. Arbitrer\.|Projeter\./.test(w),
+      'et plus aucune trace de l’ancienne');
+  });
+
   test('sa description commence par la devise de l’application', () => {
     /* La devise vit dans i18n.js, en deux morceaux que l'en-tete assemble. La
        recopier dans le manifeste en fait une deuxieme source ; ce controle rend

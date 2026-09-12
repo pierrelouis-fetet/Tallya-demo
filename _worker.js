@@ -501,7 +501,7 @@ const LOGIN_PAGE = (error) => `<!DOCTYPE html><html lang="fr"><meta charset="utf
 <form method="POST" action="/api/login">
  <img class="mark" src="/icon-192.png" alt="">
  <h1>Longward</h1>
- <p>Suivre. Arbitrer. <b>Projeter.</b> Cet espace est privé.</p>
+ <p>Vois clair. <b>Avance.</b> Cet espace est privé.</p>
  <input type="password" name="password" placeholder="Mot de passe" autofocus required
         autocomplete="current-password">
  <button type="submit">Entrer</button>
