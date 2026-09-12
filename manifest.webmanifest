@@ -1,7 +1,7 @@
 {
   "name": "Longward",
   "short_name": "Longward",
-  "description": "See clearly. Move forward. Wealth, all of it.",
+  "description": "See clearly. Move forward. Your wealth, all of it.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

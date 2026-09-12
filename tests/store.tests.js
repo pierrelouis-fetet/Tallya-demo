@@ -28414,7 +28414,7 @@ suite('Le manifeste parle la langue de l’application', () => {
        dans une variable. */
     let attendu;
     enLangue(langueParDefaut(), () => {
-      attendu = trad('Voyez clair.') + ' ' + trad('Avancez.');
+      attendu = trad('Vois clair.') + ' ' + trad('Avance.');
     });
     vrai(manifeste().description.startsWith(attendu),
       `la description devrait commencer par « ${attendu} », elle dit `

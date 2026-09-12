@@ -1600,8 +1600,8 @@ const I18N = {
     "Devises": "Currencies",
 
     "Aperçu": "Overview",
-    "Voyez clair.": "See clearly.",
-    "Avancez.": "Move forward.",
+    "Vois clair.": "See clearly.",
+    "Avance.": "Move forward.",
 
     "Voir et modifier les sources de revenus": "See and edit income sources",
     " · une partie est déclarée en montant estimé": " · part of it is declared as an estimate",
