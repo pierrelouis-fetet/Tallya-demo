@@ -19,7 +19,7 @@ c'est normal.
    `python serve.py --port 8766 --no-browser`.
 
    **8766 et non 8765**, et la confusion coûte une demi-heure : 8765 est
-   l'origine du dossier principal, `Dashboard wealth`, dont l'application
+   l'origine du dossier principal, `Longward main`, dont l'application
    répond aussi et affiche aussi « Longward ». Une suite verte lue sur 8765
    n'aura rien vérifié de ce dépôt-ci. La balise `?v=` du fichier servi
    tranche : celle de la démonstration se termine par `-demo`.
